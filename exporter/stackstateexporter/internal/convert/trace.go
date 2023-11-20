@@ -15,7 +15,8 @@ type TraceID uint64
 type Test [16]byte
 
 func ConvertTrace(ctx context.Context, req ptrace.ResourceSpans, logger *zap.Logger) ([]*ststracepb.APITrace, error) {
-	logger.Named("converter").Info("Converting ResourceSpans to APITrace", zap.Any("resource-attributes", req.Resource().Attributes()))
+	l := logger.Named("converter")
+	l.Info("Converting ResourceSpans to APITrace", zap.Any("resource-attributes", convertAttributes(req.Resource().Attributes(), map[string]string{})), zap.Uint32("dropped-attributes", req.Resource().DroppedAttributesCount()))
 
 	traces := map[TraceID]*ststracepb.APITrace{}
 	scopeSpans := req.ScopeSpans()
@@ -24,6 +25,7 @@ func ConvertTrace(ctx context.Context, req ptrace.ResourceSpans, logger *zap.Log
 		spans := ss.Spans()
 		for j := 0; j < spans.Len(); j++ {
 			span := spans.At(j)
+			l.Info("Converting span", zap.String("kind", span.Kind().String()), zap.String("name", span.Name()), zap.String("status-code", span.Status().Code().String()), zap.String("status-message", span.Status().Message()))
 
 			// Group the Spans by their TraceIDs for StS
 			tid := span.TraceID()
