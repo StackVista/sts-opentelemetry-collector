@@ -1,0 +1,9 @@
+type: stackstate
+
+status:
+  class: exporter
+  stability:
+    development: [traces, logs, metrics]
+  codeowners:
+    active: StackState B.V.
+

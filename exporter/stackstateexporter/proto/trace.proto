@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package sts;
+
+import "span.proto";
+
+option go_package = "github.com/stackvista/sts-opentelemetry-collector/exporter/stackstateexporter/proto/sts/trace";
+
+message APITrace {
+	uint64 traceID = 1;
+	repeated Span spans = 2;
+	int64 startTime = 6;
+	int64 endTime = 7;
+}
