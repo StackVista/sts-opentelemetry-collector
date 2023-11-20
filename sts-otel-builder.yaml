@@ -10,6 +10,10 @@ exporters:
 receivers:
   - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.89.0
 
+extensions:
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.89.0
+  - gomod: go.opentelemetry.io/collector/extension/ballastextension v0.89.0
+
 processors:
   - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.89.0
   - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.89.0
