@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/binary"
 
-	"github.com/stackvista/sts-opentelemetry-collector/exporter/stackstateexporter/internal/logger"
 	ststracepb "github.com/stackvista/sts-opentelemetry-collector/exporter/stackstateexporter/proto/sts/trace"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
@@ -15,8 +14,7 @@ type TraceID uint64
 
 type Test [16]byte
 
-func ConvertTrace(ctx context.Context, req ptrace.ResourceSpans) ([]*ststracepb.APITrace, error) {
-	logger := logger.ZapLogger(ctx, "convert-trace")
+func ConvertTrace(ctx context.Context, req ptrace.ResourceSpans, logger *zap.Logger) ([]*ststracepb.APITrace, error) {
 	logger.Debug("Converting ResourceSpans to APITrace", zap.Any("resource-attributes", req.Resource().Attributes()))
 
 	traces := map[TraceID]*ststracepb.APITrace{}

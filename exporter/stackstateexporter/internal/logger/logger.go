@@ -2,16 +2,14 @@ package logger
 
 import (
 	"context"
-	"time"
 
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 type ctxKey struct{}
 
 func ZapLogger(ctx context.Context, name string) *zap.Logger {
-	return ZapFromCtx(ctx).Named(name)
+	return ZapFromCtx(ctx)
 }
 
 func ZapFromCtx(ctx context.Context) *zap.Logger {
@@ -27,12 +25,13 @@ func ZapToCtx(ctx context.Context, logger *zap.Logger) context.Context {
 }
 
 func NewZap() *zap.Logger {
-	core := zapcore.NewSamplerWithOptions(
-		zap.L().Core(),
-		1*time.Second,
-		10,
-		5,
-	)
+	return zap.Must(zap.NewDevelopment())
+	// core := zapcore.NewSamplerWithOptions(
+	// 	zap.L().Core(),
+	// 	1*time.Second,
+	// 	10,
+	// 	5,
+	// )
 
-	return zap.New(core)
+	// return zap.New(core)
 }

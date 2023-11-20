@@ -36,5 +36,5 @@ func createDefaultConfig() component.Config {
 
 var _ exporter.CreateTracesFunc = createTraceExporter // compile-time check
 func createTraceExporter(ctx context.Context, settings exporter.CreateSettings, cfg component.Config) (exporter.Traces, error) {
-	return exporterhelper.NewTracesRequestExporter(ctx, settings, newTraceExporter())
+	return exporterhelper.NewTracesRequestExporter(ctx, settings, newTraceExporter(settings.TelemetrySettings.Logger))
 }
