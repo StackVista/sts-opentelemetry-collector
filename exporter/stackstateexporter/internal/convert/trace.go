@@ -15,7 +15,7 @@ type TraceID uint64
 type Test [16]byte
 
 func ConvertTrace(ctx context.Context, req ptrace.ResourceSpans, logger *zap.Logger) ([]*ststracepb.APITrace, error) {
-	logger.Debug("Converting ResourceSpans to APITrace", zap.Any("resource-attributes", req.Resource().Attributes()))
+	logger.Named("converter").Info("Converting ResourceSpans to APITrace", zap.Any("resource-attributes", req.Resource().Attributes()))
 
 	traces := map[TraceID]*ststracepb.APITrace{}
 	scopeSpans := req.ScopeSpans()
@@ -36,12 +36,6 @@ func ConvertTrace(ctx context.Context, req ptrace.ResourceSpans, logger *zap.Log
 			}
 			stsTrace := traces[traceID]
 
-			if span.ParentSpanID().IsEmpty() {
-				// Root span, this contains the trace start and end times
-				stsTrace.StartTime = int64(span.StartTimestamp())
-				stsTrace.EndTime = int64(span.EndTimestamp())
-			}
-
 			spanID := span.SpanID()
 			stsSpan := &ststracepb.Span{
 				Name:     span.Name(),
@@ -49,7 +43,15 @@ func ConvertTrace(ctx context.Context, req ptrace.ResourceSpans, logger *zap.Log
 				SpanID:   binary.BigEndian.Uint64(spanID[:]),
 				Start:    int64(span.StartTimestamp()),
 				Duration: int64(span.EndTimestamp() - span.StartTimestamp()),
-				Meta:     convertAttributes(span.Attributes()),
+				Meta:     convertAttributes(span.Attributes(), map[string]string{}),
+			}
+
+			if span.ParentSpanID().IsEmpty() {
+				// Root span, this contains the trace start and end times
+				stsTrace.StartTime = int64(span.StartTimestamp())
+				stsTrace.EndTime = int64(span.EndTimestamp())
+				// Add the resource metadata to the root span
+				stsSpan.Meta = convertAttributes(req.Resource().Attributes(), stsSpan.Meta)
 			}
 
 			if !span.ParentSpanID().IsEmpty() {
@@ -70,8 +72,7 @@ func ConvertTrace(ctx context.Context, req ptrace.ResourceSpans, logger *zap.Log
 	return tt, nil
 }
 
-func convertAttributes(attrs pcommon.Map) map[string]string {
-	m := map[string]string{}
+func convertAttributes(attrs pcommon.Map, m map[string]string) map[string]string {
 	attrs.Range(func(k string, v pcommon.Value) bool {
 		m[k] = v.AsString()
 		return true
