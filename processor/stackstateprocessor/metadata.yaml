@@ -1,0 +1,10 @@
+type: stackstate
+
+status:
+  class: processor
+  stability:
+    alpha: [traces]
+  distributions: [contrib]
+  codeowners:
+    active: [hierynomus]
+

@@ -1,0 +1,39 @@
+mode: deployment
+presets:
+  kubernetesAttributes:
+    enabled: true
+
+config:
+  exporters:
+    logging: null
+    stackstate: {}
+  extensions:
+    health_check: {}
+    memory_ballast: {}
+  receivers:
+    zipkin: null
+    jaeger: null
+    prometheus: null
+    otlp:
+      protocols:
+        grpc: {}
+        http: {}
+  processors:
+    batch: {}
+    memory_limiter: null
+  service:
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors: [k8sattributes, batch, memory_limiter]
+        exporters: [stackstate]
+      logs: null
+      metrics: null
+
+image:
+  repository: "ghcr.io/stackvista/sts-opentelemetry-collector"
+  tag: main
+  pullPolicy: Always
+
+command:
+  name: /usr/bin/sts-opentelemetry-collector
