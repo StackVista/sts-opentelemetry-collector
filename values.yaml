@@ -21,11 +21,13 @@ config:
   processors:
     batch: {}
     memory_limiter: null
+    stackstate:
+      cluster_name: rancher-rke2-otel-cluster
   service:
     pipelines:
       traces:
         receivers: [otlp]
-        processors: [k8sattributes, batch, memory_limiter]
+        processors: [k8sattributes, stackstate, batch, memory_limiter]
         exporters: [stackstate]
       logs: null
       metrics: null
