@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/stackvista/sts-opentelemetry-collector/processor/stackstateprocessor/internal/convert"
+	"github.com/stackvista/sts-opentelemetry-collector/common/convert"
+	"github.com/stackvista/sts-opentelemetry-collector/processor/stackstateprocessor/internal/identifier"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.uber.org/zap"
@@ -13,69 +14,49 @@ import (
 // var _ consumer.Traces = (*stackstateprocessor)(nil)  // compile-time type check
 // var _ processor.Traces = (*stackstateprocessor)(nil) // compile-time type check
 
-const (
-	StsServiceName        = "sts.service.name"
-	StSServiceURN         = "sts.service.URN"
-	StsServiceInstanceURN = "sts.service.instanceURN"
-	K8sPodName            = "k8s.pod.name"
-	K8sNamespaceName      = "k8s.namespace.name"
-)
-
 type stackstateprocessor struct {
 	logger      *zap.Logger
+	identifier  identifier.Identifier
 	clusterName string
 }
 
 func newStackstateprocessor(ctx context.Context, logger *zap.Logger, cfg component.Config) (*stackstateprocessor, error) {
-	if c, ok := cfg.(*Config); ok {
-		logger.Info("Configured StackState processor", zap.String("cluster_name", c.ClusterName))
-		return &stackstateprocessor{
-			logger:      logger,
-			clusterName: c.ClusterName,
-		}, nil
+	if _, ok := cfg.(*Config); !ok {
+		return nil, fmt.Errorf("invalid config passed to stackstateprocessor: %T", cfg)
+	}
+	c := cfg.(*Config)
+
+	logger.Info("Configuring StackState processor", zap.String("cluster_name", c.ClusterName))
+
+	id, err := identifier.NewIdentifier(logger, c.ClusterName)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, fmt.Errorf("invalid config passed to stackstateprocessor: %T", cfg)
+	return &stackstateprocessor{
+		logger:      logger,
+		identifier:  id,
+		clusterName: c.ClusterName,
+	}, nil
 }
 
 func (ssp *stackstateprocessor) ProcessTraces(ctx context.Context, traces ptrace.Traces) (ptrace.Traces, error) {
 	for i := 0; i < traces.ResourceSpans().Len(); i++ {
 		rs := traces.ResourceSpans().At(i)
 		resourceAttrs := convert.ConvertCommonMap(rs.Resource().Attributes(), map[string]string{})
-		if _, ok := resourceAttrs[K8sNamespaceName]; !ok {
+
+		// Sanity check the resource attributes to see whether the k8sattributesprocessor has been run
+		if _, ok := resourceAttrs[identifier.K8sNamespaceName]; !ok {
 			ssp.logger.Debug("Skip processing ResourceSpans without k8s.namespace.name")
 			continue
 		}
-		urn := fmt.Sprintf("urn:kubernetes:/%s:%s/pod/%s", ssp.clusterName, resourceAttrs[K8sNamespaceName], resourceAttrs[K8sPodName])
-		rs.Resource().Attributes().PutStr("sts.service.URN", urn)
+
+		// Find the identifiers for the resource
+		identifiers := ssp.identifier.Identify(ctx, resourceAttrs)
+		for k, v := range identifiers {
+			rs.Resource().Attributes().PutStr(k, v)
+		}
 	}
 
 	return traces, nil
 }
-
-// func (ssp *stackstateprocessor) Capabilities() consumer.Capabilities {
-// 	return consumer.Capabilities{MutatesData: true}
-// }
-
-// func (ssp *stackstateprocessor) ConsumeTraces(ctx context.Context, traces ptrace.Traces) error {
-// 	for i := 0; i < traces.ResourceSpans().Len(); i++ {
-// 		rs := traces.ResourceSpans().At(i)
-// 		resourceAttrs := convert.ConvertCommonMap(rs.Resource().Attributes(), map[string]string{})
-// 		if _, ok := resourceAttrs[K8sNamespaceName]; !ok {
-// 			ssp.logger.Debug("Skip processing ResourceSpans without k8s.namespace.name")
-// 			continue
-// 		}
-// 		urn := fmt.Sprintf("urn:kubernetes:/%s:%s/pod/%s", ssp.clusterName, resourceAttrs[K8sNamespaceName], resourceAttrs[K8sPodName])
-// 		rs.Resource().Attributes().PutStr("sts.service.URN", urn)
-// 	}
-
-// 	return ssp.next.ConsumeTraces(ctx, traces)
-// }
-
-// func (ssp *stackstateprocessor) Start(context.Context, component.Host) error {
-// 	return nil
-// }
-
-// func (ssp *stackstateprocessor) Shutdown(context.Context) error {
-// 	return nil
-// }

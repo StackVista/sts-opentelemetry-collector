@@ -3,21 +3,23 @@ dist:
   description: StackState OpenTelemetry Collector
   output_path: /go/src/github.com/stackvista/sts-opentelemetry-collector/bin
 exporters:
-  - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.89.0
+  - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.90.1
   - gomod: github.com/stackvista/sts-opentelemetry-collector/exporter/stackstateexporter v0.0.0
     path: ./exporter/stackstateexporter
 
 receivers:
-  - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.89.0
+  - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.90.1
 
 extensions:
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.89.0
-  - gomod: go.opentelemetry.io/collector/extension/ballastextension v0.89.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.90.1
+  - gomod: go.opentelemetry.io/collector/extension/ballastextension v0.90.1
 
 processors:
-  - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.89.0
-  - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.89.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor v0.89.0
+  - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.90.1
+  - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.90.1
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor v0.90.1
   - gomod: github.com/stackvista/sts-opentelemetry-collector/processor/stackstateprocessor v0.0.0
     path: ./processor/stackstateprocessor
 
+replaces:
+  - github.com/stackvista/sts-opentelemetry-collector/common => ../common

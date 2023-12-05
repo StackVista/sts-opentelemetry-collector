@@ -4,29 +4,38 @@ package stackstateexporter
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/stackstateexporter/internal/convert"
-	"go.opentelemetry.io/collector/exporter"
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/stackstateexporter/internal/stackstate"
+	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.uber.org/zap"
 )
 
-var _ exporterhelper.TracesConverter = (*traceExporter)(nil)
-
 type traceExporter struct {
-	params exporter.CreateSettings
 	logger *zap.Logger
+	client stackstate.StackStateClient
 }
 
-func newTraceExporter(logger *zap.Logger) *traceExporter {
-	return &traceExporter{logger: logger}
+func newTraceExporter(ctx context.Context, logger *zap.Logger, cfg component.Config) (*traceExporter, error) {
+	if _, ok := cfg.(*Config); !ok {
+		return nil, fmt.Errorf("invalid config passed to stackstateexporter: %T", cfg)
+	}
+	c := cfg.(*Config)
+
+	logger.Info("Configuring StackState exporter", zap.String("endpoint", c.API.Endpoint))
+
+	client := stackstate.NewStackStateClient(c.API.Endpoint, c.API.APIKey)
+
+	return &traceExporter{logger: logger, client: client}, nil
 }
 
 func (t *traceExporter) RequestFromTraces(ctx context.Context, td ptrace.Traces) (exporterhelper.Request, error) {
 	logger := t.logger
 
-	req := EmptyRequest(logger)
+	req := EmptyRequest(logger, t.client)
 	for i := 0; i < td.ResourceSpans().Len(); i++ {
 		rs := td.ResourceSpans().At(i)
 		apiTrace, err := convert.ConvertTrace(ctx, rs, logger)
@@ -34,7 +43,7 @@ func (t *traceExporter) RequestFromTraces(ctx context.Context, td ptrace.Traces)
 			logger.Warn("Failed to convert ResourceSpans to APITrace", zap.Error(err))
 			return nil, err
 		}
-		req.APITraces = append(req.APITraces, apiTrace...)
+		req.AppendTrace(apiTrace)
 	}
 
 	return req, nil
