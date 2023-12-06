@@ -15,13 +15,17 @@ type StackStateRequest struct {
 	APITraces []*ststracepb.APITrace
 	logger    *zap.Logger
 	client    stackstate.StackStateClient
+	Hostname  string
+	Env       string
 }
 
-func EmptyRequest(logger *zap.Logger, client stackstate.StackStateClient) *StackStateRequest {
+func EmptyRequest(logger *zap.Logger, client stackstate.StackStateClient, cfg *Config) *StackStateRequest {
 	return &StackStateRequest{
 		APITraces: []*ststracepb.APITrace{},
 		logger:    logger,
 		client:    client,
+		Hostname:  cfg.Hostname,
+		Env:       cfg.Env,
 	}
 }
 
@@ -30,16 +34,14 @@ func (r *StackStateRequest) AppendTrace(trace []*ststracepb.APITrace) {
 }
 
 func (r *StackStateRequest) Export(ctx context.Context) error {
-	// for _, apiTrace := range r.APITraces {
-	// 	js, err := json.Marshal(apiTrace)
-	// 	if err != nil {
-	// 		r.logger.Error("Failed to marshal APITrace", zap.Error(err))
-	// 		return err
-	// 	}
+	payload := &ststracepb.TracePayload{
+		HostName: r.Hostname,
+		Env:      r.Env,
+		Traces:   r.APITraces,
+	}
 
-	// }
 	r.logger.Info("Sending trace to StackState", zap.Any("client", r.client), zap.Int("traces", len(r.APITraces)))
-	return r.client.SendTrace(ctx, r.APITraces)
+	return r.client.SendTrace(ctx, payload)
 }
 
 func (r *StackStateRequest) ItemsCount() int {

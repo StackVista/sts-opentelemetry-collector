@@ -5,14 +5,14 @@ import (
 	"fmt"
 
 	"github.com/go-resty/resty/v2"
-	"github.com/golang/protobuf/proto"
 	ststracepb "github.com/stackvista/sts-opentelemetry-collector/exporter/stackstateexporter/proto/sts/trace"
 	"go.opentelemetry.io/collector/config/configopaque"
+	"google.golang.org/protobuf/proto"
 )
 
 type StackStateClient interface {
 	// SendTrace sends a trace to StackState
-	SendTrace(ctx context.Context, traces []*ststracepb.APITrace) error
+	SendTrace(ctx context.Context, tracePayload *ststracepb.TracePayload) error
 }
 
 type stackStateClient struct {
@@ -32,8 +32,8 @@ func NewStackStateClient(endpoint string, apiKey configopaque.String) StackState
 	}
 }
 
-func (c *stackStateClient) SendTrace(ctx context.Context, traces []*ststracepb.APITrace) error {
-	bytes, err := proto.Marshal(&ststracepb.TracePayload{Traces: traces})
+func (c *stackStateClient) SendTrace(ctx context.Context, tracePayload *ststracepb.TracePayload) error {
+	bytes, err := proto.Marshal(tracePayload)
 	if err != nil {
 		return err
 	}

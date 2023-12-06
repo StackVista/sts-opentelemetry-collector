@@ -14,10 +14,20 @@ type Config struct {
 	exporterhelper.QueueSettings   `mapstructure:"sending_queue"`
 	exporterhelper.RetrySettings   `mapstructure:"retry_on_failure"`
 
-	API APIConfig `mapstructure:"api"`
+	API      APIConfig `mapstructure:"api"`
+	Hostname string    `mapstructure:"hostname"`
+	Env      string    `mapstructure:"env"`
 }
 
 func (c *Config) Validate() error {
+	if c.Hostname == "" {
+		return fmt.Errorf("hostname is required")
+	}
+
+	if c.Env == "" {
+		return fmt.Errorf("env is required")
+	}
+
 	if err := c.API.Validate(); err != nil {
 		return err
 	}

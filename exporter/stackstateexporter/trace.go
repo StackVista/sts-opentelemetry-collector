@@ -17,6 +17,7 @@ import (
 type traceExporter struct {
 	logger *zap.Logger
 	client stackstate.StackStateClient
+	cfg    *Config
 }
 
 func newTraceExporter(ctx context.Context, logger *zap.Logger, cfg component.Config) (*traceExporter, error) {
@@ -35,7 +36,7 @@ func newTraceExporter(ctx context.Context, logger *zap.Logger, cfg component.Con
 func (t *traceExporter) RequestFromTraces(ctx context.Context, td ptrace.Traces) (exporterhelper.Request, error) {
 	logger := t.logger
 
-	req := EmptyRequest(logger, t.client)
+	req := EmptyRequest(logger, t.client, t.cfg)
 	for i := 0; i < td.ResourceSpans().Len(); i++ {
 		rs := td.ResourceSpans().At(i)
 		apiTrace, err := convert.ConvertTrace(ctx, rs, logger)
