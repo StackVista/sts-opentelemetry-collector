@@ -22,7 +22,7 @@ type stackStateClient struct {
 
 func NewStackStateClient(endpoint string, apiKey configopaque.String) StackStateClient {
 	client := resty.New()
-	client = client.SetHeader("Content-Type", "application/json").SetQueryParam("api_key", string(apiKey)).SetBaseURL(endpoint)
+	client = client.SetHeader("Content-Type", "application/json").SetHeader("sts-api-key", string(apiKey)).SetBaseURL(endpoint)
 
 	return &stackStateClient{
 		Endpoint: endpoint,
