@@ -1,0 +1,10 @@
+type: stsauthentication
+
+status:
+  class: extension
+  stability:
+    beta: [extension]
+  distributions: [contrib]
+  codeowners:
+    active: [hierynomus]
+

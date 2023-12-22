@@ -3,5 +3,8 @@ go 1.21.4
 use (
 	./common
 	./exporter/stackstateexporter
+	./extension/stsapitokenextension
+	./extension/stsauthenticationextension
 	./processor/stackstateprocessor
+	./processor/ststenantprocessor
 )
