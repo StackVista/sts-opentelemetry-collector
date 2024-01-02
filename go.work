@@ -6,5 +6,4 @@ use (
 	./extension/stsapitokenextension
 	./extension/stsauthenticationextension
 	./processor/stackstateprocessor
-	./processor/ststenantprocessor
 )
