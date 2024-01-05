@@ -1,9 +1,9 @@
-type: stackstate
+type: stsauthentication
 
 status:
-  class: processor
+  class: extension
   stability:
-    alpha: [traces, logs, metrics]
+    beta: [extension]
   distributions: [contrib]
   codeowners:
     active: [hierynomus]

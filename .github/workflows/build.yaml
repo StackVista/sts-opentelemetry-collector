@@ -3,7 +3,7 @@ name: Build tagged Docker image
 on:
   push:
     branches:
-      - main
+      - '*'
     tags:
       - 'v*'
 
