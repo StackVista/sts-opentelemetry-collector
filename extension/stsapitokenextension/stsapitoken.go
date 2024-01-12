@@ -32,6 +32,7 @@ type StsAPITokenAuth struct {
 var _ auth.Client = (*StsAPITokenAuth)(nil)
 
 func newStsAPITokenAuth(cfg *Config, logger *zap.Logger) *StsAPITokenAuth {
+	logger.Info("StS API Token Auth initializing")
 	if cfg.Filename != "" && cfg.APIToken != "" {
 		logger.Warn("a filename is specified. Configured token is ignored!")
 	}
