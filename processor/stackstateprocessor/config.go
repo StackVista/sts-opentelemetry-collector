@@ -1,6 +1,8 @@
 package stackstateprocessor
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type Config struct {
 	// The ClusterName to tag the trace with

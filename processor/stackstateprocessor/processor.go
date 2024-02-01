@@ -4,14 +4,26 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/stackvista/sts-opentelemetry-collector/common/convert"
-	"github.com/stackvista/sts-opentelemetry-collector/processor/stackstateprocessor/internal/identifier"
+	"github.com/stackvista/sts-opentelemetry-collector/common/identifier"
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/plog"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	"go.opentelemetry.io/collector/processor/processorhelper"
 	"go.uber.org/zap"
 )
 
-// var _ consumer.Traces = (*stackstateprocessor)(nil)  // compile-time type check
+const (
+	ClusterName = "io.stackstate.clustername"
+)
+
+var _ processorhelper.ProcessTracesFunc = (*stackstateprocessor)(nil).ProcessTraces
+
+var _ processorhelper.ProcessLogsFunc = (*stackstateprocessor)(nil).ProcessLogs
+var _ processorhelper.ProcessMetricsFunc = (*stackstateprocessor)(nil).ProcessMetrics
+
+// var _ consumer.Traces = (*stackstateprocessor)(nil) // compile-time type check
 // var _ processor.Traces = (*stackstateprocessor)(nil) // compile-time type check
 
 type stackstateprocessor struct {
@@ -40,23 +52,34 @@ func newStackstateprocessor(ctx context.Context, logger *zap.Logger, cfg compone
 	}, nil
 }
 
+func (ssp *stackstateprocessor) ProcessMetrics(ctx context.Context, metrics pmetric.Metrics) (pmetric.Metrics, error) {
+	for i := 0; i < metrics.ResourceMetrics().Len(); i++ {
+		rm := metrics.ResourceMetrics().At(i)
+		ssp.addStackStateAttributes(ctx, rm.Resource())
+	}
+
+	return metrics, nil
+}
+
 func (ssp *stackstateprocessor) ProcessTraces(ctx context.Context, traces ptrace.Traces) (ptrace.Traces, error) {
 	for i := 0; i < traces.ResourceSpans().Len(); i++ {
 		rs := traces.ResourceSpans().At(i)
-		resourceAttrs := convert.ConvertCommonMap(rs.Resource().Attributes(), map[string]string{})
-
-		// Sanity check the resource attributes to see whether the k8sattributesprocessor has been run
-		if _, ok := resourceAttrs[identifier.K8sNamespaceName]; !ok {
-			ssp.logger.Debug("Skip processing ResourceSpans without k8s.namespace.name")
-			continue
-		}
-
-		// Find the identifiers for the resource
-		identifiers := ssp.identifier.Identify(ctx, resourceAttrs)
-		for k, v := range identifiers {
-			rs.Resource().Attributes().PutStr(k, v)
-		}
+		ssp.addStackStateAttributes(ctx, rs.Resource())
 	}
 
 	return traces, nil
+}
+
+func (ssp *stackstateprocessor) ProcessLogs(ctx context.Context, logs plog.Logs) (plog.Logs, error) {
+	for i := 0; i < logs.ResourceLogs().Len(); i++ {
+		rl := logs.ResourceLogs().At(i)
+		ssp.addStackStateAttributes(ctx, rl.Resource())
+	}
+
+	return logs, nil
+}
+
+func (ssp *stackstateprocessor) addStackStateAttributes(_ context.Context, res pcommon.Resource) {
+	attrMap := res.Attributes()
+	attrMap.PutStr(ClusterName, ssp.clusterName)
 }

@@ -3,21 +3,28 @@ dist:
   description: StackState OpenTelemetry Collector
   output_path: /go/src/github.com/stackvista/sts-opentelemetry-collector/bin
 exporters:
-  - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.90.1
+  - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.92.0
   - gomod: github.com/stackvista/sts-opentelemetry-collector/exporter/stackstateexporter v0.0.0
     path: ./exporter/stackstateexporter
+  - gomod: go.opentelemetry.io/collector/exporter/otlpexporter v0.92.0
+  - gomod: go.opentelemetry.io/collector/exporter/otlphttpexporter v0.92.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter v0.92.0
 
 receivers:
-  - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.90.1
+  - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.92.0
 
 extensions:
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.90.1
-  - gomod: go.opentelemetry.io/collector/extension/ballastextension v0.90.1
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.92.0
+  - gomod: go.opentelemetry.io/collector/extension/ballastextension v0.92.0
+  - gomod: github.com/stackvista/sts-opentelemetry-collector/extension/stsapitokenextension v0.0.0
+    path: ./extension/stsapitokenextension
+  - gomod: github.com/stackvista/sts-opentelemetry-collector/extension/stsauthenticationextension v0.0.0
+    path: ./extension/stsauthenticationextension
 
 processors:
-  - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.90.1
-  - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.90.1
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor v0.90.1
+  - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.92.0
+  - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.92.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor v0.92.0
   - gomod: github.com/stackvista/sts-opentelemetry-collector/processor/stackstateprocessor v0.0.0
     path: ./processor/stackstateprocessor
 

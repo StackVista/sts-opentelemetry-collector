@@ -7,6 +7,8 @@ import (
 )
 
 const (
-	Type            = "stackstate"
-	TracesStability = component.StabilityLevelAlpha
+	Type             = "stackstate"
+	TracesStability  = component.StabilityLevelAlpha
+	LogsStability    = component.StabilityLevelAlpha
+	MetricsStability = component.StabilityLevelAlpha
 )
