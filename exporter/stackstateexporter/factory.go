@@ -29,7 +29,6 @@ func createDefaultConfig() component.Config {
 		TimeoutSettings: exporterhelper.TimeoutSettings{
 			Timeout: 15 * time.Second,
 		},
-		RetrySettings: exporterhelper.NewDefaultRetrySettings(),
 		QueueSettings: exporterhelper.NewDefaultQueueSettings(),
 		Env:           "none",
 	}
