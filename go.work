@@ -2,6 +2,7 @@ go 1.21.6
 
 use (
 	./common
+	./exporter/clickhousestsexporter
 	./exporter/stackstateexporter
 	./extension/stsapitokenextension
 	./extension/stsauthenticationextension
