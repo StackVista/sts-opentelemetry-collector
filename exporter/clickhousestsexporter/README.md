@@ -322,7 +322,7 @@ processors:
     timeout: 5s
     send_batch_size: 100000
 exporters:
-  clickhouse:
+  clickhousests:
     endpoint: tcp://127.0.0.1:9000?dial_timeout=10s&compress=lz4
     database: otel
     ttl: 72h
@@ -340,5 +340,5 @@ service:
     logs:
       receivers: [ examplereceiver ]
       processors: [ batch ]
-      exporters: [ clickhouse ]
+      exporters: [ clickhousests ]
 ```

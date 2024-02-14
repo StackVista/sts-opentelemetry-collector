@@ -188,7 +188,7 @@ CREATE TABLE IF NOT EXISTS %s (
      Duration Int64 CODEC(ZSTD(1)),
      StatusCode LowCardinality(String) CODEC(ZSTD(1)),
      StatusMessage String CODEC(ZSTD(1)),
-	 SpanParentType String CODEC(ZSTD(1)),
+     SpanParentType String CODEC(ZSTD(1)),
      Events Nested (
          Timestamp DateTime64(9),
          Name LowCardinality(String),
@@ -222,9 +222,9 @@ SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
                         SpanName,
                         SpanKind,
                         ServiceName,
-					    ResourceAttributes,
-						ScopeName,
-						ScopeVersion,
+                        ResourceAttributes,
+                        ScopeName,
+                        ScopeVersion,
                         SpanAttributes,
                         Duration,
                         StatusCode,
@@ -260,7 +260,7 @@ SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
                                   ?,
                                   ?,
                                   ?,
-								  ?
+                                  ?
                                   )`
 )
 

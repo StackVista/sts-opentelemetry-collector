@@ -6,8 +6,8 @@ networks:
 services:
   otelcollector:
     build:
-      context: ../../../local
-      dockerfile: ../exporter/clickhousestsexporter/example/Dockerfile
+      context: ../../../
+      dockerfile: Dockerfile
     # Uncomment the next line to use a preexisting image
     # image: otelcontribcol:latest
     container_name: otel
@@ -70,8 +70,7 @@ services:
 
   # Traces generator
   telemetrygen:
-    build:
-      context: ../../../cmd/telemetrygen/
+    image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:v0.93.0
     command:
       - traces
       - --otlp-endpoint=otelcollector:4317
