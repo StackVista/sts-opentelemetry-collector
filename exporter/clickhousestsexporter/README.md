@@ -289,6 +289,7 @@ ClickHouse tables:
 - `logs_table_name` (default = otel_logs): The table name for logs.
 - `traces_table_name` (default = otel_traces): The table name for traces.
 - `metrics_table_name` (default = otel_metrics): The table name for metrics.
+- `create_traces_table` (default = true): Create the traces table on startup
 
 Processing:
 
@@ -329,6 +330,7 @@ exporters:
     logs_table_name: otel_logs
     traces_table_name: otel_traces
     metrics_table_name: otel_metrics
+    create_traces_table: true
     timeout: 5s
     retry_on_failure:
       enabled: true
