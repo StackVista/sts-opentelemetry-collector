@@ -43,6 +43,8 @@ type Config struct {
 	TTLDays uint `mapstructure:"ttl_days"`
 	// TTL is The data time-to-live example 30m, 48h. 0 means no ttl.
 	TTL time.Duration `mapstructure:"ttl"`
+	// Create the traces table on startup
+	CreateTracesTable bool `mapstructure:"create_traces_table"`
 }
 
 const defaultDatabase = "default"

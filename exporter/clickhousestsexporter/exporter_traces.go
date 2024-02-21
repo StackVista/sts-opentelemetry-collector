@@ -40,6 +40,10 @@ func newTracesExporter(logger *zap.Logger, cfg *Config) (*tracesExporter, error)
 }
 
 func (e *tracesExporter) start(ctx context.Context, _ component.Host) error {
+	if !e.cfg.CreateTracesTable {
+		return nil
+	}
+
 	if err := createDatabase(ctx, e.cfg); err != nil {
 		return err
 	}
@@ -200,12 +204,6 @@ CREATE TABLE IF NOT EXISTS %s (
          TraceState String,
          Attributes Map(LowCardinality(String), String)
      ) CODEC(ZSTD(1)),
-     INDEX idx_trace_id TraceId TYPE bloom_filter(0.001) GRANULARITY 1,
-     INDEX idx_res_attr_key mapKeys(ResourceAttributes) TYPE bloom_filter(0.01) GRANULARITY 1,
-     INDEX idx_res_attr_value mapValues(ResourceAttributes) TYPE bloom_filter(0.01) GRANULARITY 1,
-     INDEX idx_span_attr_key mapKeys(SpanAttributes) TYPE bloom_filter(0.01) GRANULARITY 1,
-     INDEX idx_span_attr_value mapValues(SpanAttributes) TYPE bloom_filter(0.01) GRANULARITY 1,
-     INDEX idx_duration Duration TYPE minmax GRANULARITY 1
 ) ENGINE MergeTree()
 %s
 PARTITION BY toDate(Timestamp)
@@ -264,41 +262,9 @@ SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
                                   )`
 )
 
-const (
-	createTraceIDTsTableSQL = `
-create table IF NOT EXISTS %s_trace_id_ts (
-     TraceId String CODEC(ZSTD(1)),
-     Start DateTime64(9) CODEC(Delta, ZSTD(1)),
-     End DateTime64(9) CODEC(Delta, ZSTD(1)),
-     INDEX idx_trace_id TraceId TYPE bloom_filter(0.01) GRANULARITY 1
-) ENGINE MergeTree()
-%s
-ORDER BY (TraceId, toUnixTimestamp(Start))
-SETTINGS index_granularity=8192;
-`
-	createTraceIDTsMaterializedViewSQL = `
-CREATE MATERIALIZED VIEW IF NOT EXISTS %s_trace_id_ts_mv
-TO %s.%s_trace_id_ts
-AS SELECT
-TraceId,
-min(Timestamp) as Start,
-max(Timestamp) as End
-FROM
-%s.%s
-WHERE TraceId!=''
-GROUP BY TraceId;
-`
-)
-
 func createTracesTable(ctx context.Context, cfg *Config, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, renderCreateTracesTableSQL(cfg)); err != nil {
 		return fmt.Errorf("exec create traces table sql: %w", err)
-	}
-	if _, err := db.ExecContext(ctx, renderCreateTraceIDTsTableSQL(cfg)); err != nil {
-		return fmt.Errorf("exec create traceIDTs table sql: %w", err)
-	}
-	if _, err := db.ExecContext(ctx, renderTraceIDTsMaterializedViewSQL(cfg)); err != nil {
-		return fmt.Errorf("exec create traceIDTs view sql: %w", err)
 	}
 	return nil
 }
@@ -310,14 +276,4 @@ func renderInsertTracesSQL(cfg *Config) string {
 func renderCreateTracesTableSQL(cfg *Config) string {
 	ttlExpr := generateTTLExpr(cfg.TTLDays, cfg.TTL, "Timestamp")
 	return fmt.Sprintf(createTracesTableSQL, cfg.TracesTableName, ttlExpr)
-}
-
-func renderCreateTraceIDTsTableSQL(cfg *Config) string {
-	ttlExpr := generateTTLExpr(cfg.TTLDays, cfg.TTL, "Start")
-	return fmt.Sprintf(createTraceIDTsTableSQL, cfg.TracesTableName, ttlExpr)
-}
-
-func renderTraceIDTsMaterializedViewSQL(cfg *Config) string {
-	return fmt.Sprintf(createTraceIDTsMaterializedViewSQL, cfg.TracesTableName,
-		cfg.Database, cfg.TracesTableName, cfg.Database, cfg.TracesTableName)
 }
