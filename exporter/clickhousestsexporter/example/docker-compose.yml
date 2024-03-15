@@ -70,7 +70,7 @@ services:
 
   # Traces generator
   telemetrygen:
-    image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:v0.93.0
+    image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:v0.96.0
     command:
       - traces
       - --otlp-endpoint=otelcollector:4317
