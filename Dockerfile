@@ -5,7 +5,7 @@ RUN apk add --no-cache git
 WORKDIR /go/src/github.com/stackvista/sts-opentelemetry-collector
 COPY . .
 
-RUN go install go.opentelemetry.io/collector/cmd/builder@v0.94.1
+RUN go install go.opentelemetry.io/collector/cmd/builder@v0.96.0
 RUN builder --config ./sts-otel-builder.yaml
 
 FROM gcr.io/distroless/static-debian11
