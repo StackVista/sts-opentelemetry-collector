@@ -123,6 +123,7 @@ func checkAuthorizationHeader(authorizationHeader string, exCtx *extensionContex
 	}
 
 	req, err := http.NewRequest(http.MethodPost, exCtx.config.Endpoint.Url, bytes.NewReader(jsonData))
+	req.Header.Add("Content-Type", "application/json")
 	if err != nil {
 		log.Print("Can't create authorization request ", err)
 		return errInternal
