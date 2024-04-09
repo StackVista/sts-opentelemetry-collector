@@ -1,0 +1,9 @@
+type: ingestion_api_key_auth
+
+status:
+  class: extension
+  stability:
+    beta: [extension]
+  distributions: [contrib]
+  codeowners:
+    active: StackState B.V.

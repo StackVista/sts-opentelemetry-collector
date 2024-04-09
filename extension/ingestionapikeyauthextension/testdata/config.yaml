@@ -1,0 +1,25 @@
+ingestion_api_key_auth:
+
+ingestion_api_key_auth/empty_endpoint:
+  endpoint:
+
+ingestion_api_key_auth/empty_url:
+  endpoint:
+    url:
+
+ingestion_api_key_auth/missing_cache:
+  endpoint:
+    url: http://localhost:8091/authorize
+
+ingestion_api_key_auth/empty_cache:
+  endpoint:
+    url: http://localhost:8091/authorize
+  cache:
+
+ingestion_api_key_auth/valid:
+  endpoint:
+    url: http://localhost:8091/authorize
+  cache:
+    valid_size: 10
+    valid_ttl: 20s
+    invalid_size: 30
