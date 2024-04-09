@@ -6,5 +6,6 @@ use (
 	./exporter/stackstateexporter
 	./extension/stsapitokenextension
 	./extension/stsauthenticationextension
+	./extension/ingestionapikeyauthextension
 	./processor/stackstateprocessor
 )
