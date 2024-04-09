@@ -1,4 +1,6 @@
-module ingestionapikeyauthextension
+module github.com/stackvista/sts-opentelemetry-collector/extension/ingestionapikeyauthextension
+
+go 1.21.6
 
 require (
 	github.com/stretchr/testify v1.9.0
@@ -48,5 +50,3 @@ require (
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-go 1.22.1

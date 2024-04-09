@@ -10,14 +10,25 @@ config:
   extensions:
     health_check: {}
     memory_ballast: {}
+    ingestion_api_key_auth:
+      endpoint:
+        url: http://localhost:8091/security/ingestion/authorize
+      cache:
+        valid_size: 2
+        valid_ttl: 20s
+        invalid_size: 4
   receivers:
     zipkin: null
     jaeger: null
     prometheus: null
     otlp:
       protocols:
-        grpc: {}
-        http: {}
+        grpc:
+          auth:
+            authenticator: ingestion_api_key_auth
+        http:
+          auth:
+            authenticator: ingestion_api_key_auth
   processors:
     batch: {}
     memory_limiter: null
