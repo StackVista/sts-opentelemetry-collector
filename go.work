@@ -4,8 +4,8 @@ use (
 	./common
 	./exporter/clickhousestsexporter
 	./exporter/stackstateexporter
+	./extension/ingestionapikeyauthextension
 	./extension/stsapitokenextension
 	./extension/stsauthenticationextension
-	./extension/ingestionapikeyauthextension
 	./processor/stackstateprocessor
 )
