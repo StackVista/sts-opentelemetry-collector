@@ -11,6 +11,8 @@ import (
 	"time"
 
 	_ "github.com/ClickHouse/clickhouse-go/v2" // For register database driver.
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil"
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter/internal"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	conventions "go.opentelemetry.io/collector/semconv/v1.18.0"
@@ -48,6 +50,10 @@ func (e *tracesExporter) start(ctx context.Context, _ component.Host) error {
 		return err
 	}
 
+	if err := internal.CreateResourcesTable(ctx, e.cfg.TTLDays, e.cfg.TTL, e.cfg.ResourcesTableName, e.client); err != nil {
+		return err
+	}
+
 	return createTracesTable(ctx, e.cfg, e.client)
 }
 
@@ -76,12 +82,16 @@ func getSpanParentType(r ptrace.Span) string {
 func (e *tracesExporter) pushTraceData(ctx context.Context, td ptrace.Traces) error {
 	start := time.Now()
 	err := doWithTx(ctx, e.client, func(tx *sql.Tx) error {
-		statement, err := tx.PrepareContext(ctx, e.insertSQL)
+		traceStatement, err := tx.PrepareContext(ctx, e.insertSQL)
 		if err != nil {
-			return fmt.Errorf("PrepareContext:%w", err)
+			return fmt.Errorf("PrepareContext Traces:%w", err)
+		}
+		resourceWriter, err := internal.NewResourceWriter(e.logger, ctx, tx, e.cfg.ResourcesTableName)
+		if err != nil {
+			return fmt.Errorf("init resource writer:%w", err)
 		}
 		defer func() {
-			_ = statement.Close()
+			_ = traceStatement.Close()
 		}()
 		for i := 0; i < td.ResourceSpans().Len(); i++ {
 			spans := td.ResourceSpans().At(i)
@@ -90,6 +100,10 @@ func (e *tracesExporter) pushTraceData(ctx context.Context, td ptrace.Traces) er
 			var serviceName string
 			if v, ok := res.Attributes().Get(conventions.AttributeServiceName); ok {
 				serviceName = v.Str()
+			}
+			resourceRef := pdatautil.MapHash(res.Attributes())
+			if err := resourceWriter.InsertResource(resourceRef, serviceName, resAttr); err != nil {
+				return fmt.Errorf("ExecContext Resources:%w", err)
 			}
 			for j := 0; j < spans.ScopeSpans().Len(); j++ {
 				rs := spans.ScopeSpans().At(j).Spans()
@@ -102,8 +116,9 @@ func (e *tracesExporter) pushTraceData(ctx context.Context, td ptrace.Traces) er
 					eventTimes, eventNames, eventAttrs := convertEvents(r.Events())
 					linksTraceIDs, linksSpanIDs, linksTraceStates, linksAttrs := convertLinks(r.Links())
 					spanParentType := getSpanParentType(r)
-					_, err = statement.ExecContext(ctx,
+					_, err = traceStatement.ExecContext(ctx,
 						r.StartTimestamp().AsTime(),
+						resourceRef,
 						TraceIDToHexOrEmptyString(r.TraceID()),
 						SpanIDToHexOrEmptyString(r.SpanID()),
 						SpanIDToHexOrEmptyString(r.ParentSpanID()),
@@ -111,7 +126,6 @@ func (e *tracesExporter) pushTraceData(ctx context.Context, td ptrace.Traces) er
 						r.Name(),
 						SpanKindStr(r.Kind()),
 						serviceName,
-						resAttr,
 						scopeName,
 						scopeVersion,
 						spanAttr,
@@ -128,7 +142,7 @@ func (e *tracesExporter) pushTraceData(ctx context.Context, td ptrace.Traces) er
 						linksAttrs,
 					)
 					if err != nil {
-						return fmt.Errorf("ExecContext:%w", err)
+						return fmt.Errorf("ExecContext Traces:%w", err)
 					}
 				}
 			}
@@ -178,6 +192,7 @@ const (
 	createTracesTableSQL = `
 CREATE TABLE IF NOT EXISTS %s (
      Timestamp DateTime64(9) CODEC(Delta, ZSTD(1)),
+		 ResourceRef UInt128,
      TraceId String CODEC(ZSTD(1)),
      SpanId String CODEC(ZSTD(1)),
      ParentSpanId String CODEC(ZSTD(1)),
@@ -185,7 +200,6 @@ CREATE TABLE IF NOT EXISTS %s (
      SpanName LowCardinality(String) CODEC(ZSTD(1)),
      SpanKind LowCardinality(String) CODEC(ZSTD(1)),
      ServiceName LowCardinality(String) CODEC(ZSTD(1)),
-     ResourceAttributes Map(LowCardinality(String), String) CODEC(ZSTD(1)),
      ScopeName String CODEC(ZSTD(1)),
      ScopeVersion String CODEC(ZSTD(1)),
      SpanAttributes Map(LowCardinality(String), String) CODEC(ZSTD(1)),
@@ -213,6 +227,7 @@ SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
 	// language=ClickHouse SQL
 	insertTracesSQLTemplate = `INSERT INTO %s (
                         Timestamp,
+												ResourceRef,
                         TraceId,
                         SpanId,
                         ParentSpanId,
@@ -220,7 +235,6 @@ SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
                         SpanName,
                         SpanKind,
                         ServiceName,
-                        ResourceAttributes,
                         ScopeName,
                         ScopeVersion,
                         SpanAttributes,
@@ -274,6 +288,6 @@ func renderInsertTracesSQL(cfg *Config) string {
 }
 
 func renderCreateTracesTableSQL(cfg *Config) string {
-	ttlExpr := generateTTLExpr(cfg.TTLDays, cfg.TTL, "Timestamp")
+	ttlExpr := internal.GenerateTTLExpr(cfg.TTLDays, cfg.TTL, "Timestamp")
 	return fmt.Sprintf(createTracesTableSQL, cfg.TracesTableName, ttlExpr)
 }

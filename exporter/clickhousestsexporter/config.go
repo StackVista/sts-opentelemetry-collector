@@ -38,7 +38,9 @@ type Config struct {
 	TracesTableName string `mapstructure:"traces_table_name"`
 	// MetricsTableName is the table name for metrics. default is `otel_metrics`.
 	MetricsTableName string `mapstructure:"metrics_table_name"`
-	// TTLDays is The data time-to-live in days, 0 means no ttl.
+	// ResourcesTableName is the table name for resources. default is `otel_resources`.
+	ResourcesTableName string `mapstructure:"resources_table_name"`
+
 	// Deprecated: Use 'ttl' instead
 	TTLDays uint `mapstructure:"ttl_days"`
 	// TTL is The data time-to-live example 30m, 48h. 0 means no ttl.

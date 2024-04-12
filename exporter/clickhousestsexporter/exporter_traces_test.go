@@ -19,11 +19,16 @@ import (
 
 func TestExporter_pushTracesData(t *testing.T) {
 	t.Run("push success", func(t *testing.T) {
-		var items int
+		traces := 0
+		resources := 0
 		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
-			t.Logf("%d, values:%+v", items, values)
+			t.Logf("Traces %d, Resources %d, values:%+v", traces, resources, values)
 			if strings.HasPrefix(query, "INSERT") {
-				items++
+				if strings.Contains(query, "otel_traces") {
+					traces++
+				} else if strings.Contains(query, "otel_resources") {
+					resources++
+				}
 			}
 			return nil
 		})
@@ -32,11 +37,26 @@ func TestExporter_pushTracesData(t *testing.T) {
 		mustPushTracesData(t, exporter, simpleTraces(1))
 		mustPushTracesData(t, exporter, simpleTraces(2))
 
-		require.Equal(t, 3, items)
+		require.Equal(t, 3, traces)
+		require.Equal(t, 2, resources)
 	})
+
+	t.Run("check insert resources with service name and attributes", func(t *testing.T) {
+		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
+			if strings.HasPrefix(query, "INSERT") && strings.Contains(query, "otel_resources") {
+				require.Equal(t, "test-service", values[1])
+				require.Equal(t, map[string]string{"service.name": "test-service"}, values[2])
+			}
+			return nil
+		})
+
+		exporter := newTestTracesExporter(t, defaultEndpoint)
+		mustPushTracesData(t, exporter, simpleTraces(1))
+	})
+
 	t.Run("check insert scopeName and ScopeVersion", func(t *testing.T) {
 		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
-			if strings.HasPrefix(query, "INSERT") {
+			if strings.HasPrefix(query, "INSERT") && strings.Contains(query, "otel_traces") {
 				require.Equal(t, "io.opentelemetry.contrib.clickhouse", values[9])
 				require.Equal(t, "1.0.0", values[10])
 			}
@@ -46,10 +66,11 @@ func TestExporter_pushTracesData(t *testing.T) {
 		exporter := newTestTracesExporter(t, defaultEndpoint)
 		mustPushTracesData(t, exporter, simpleTraces(1))
 	})
+
 	t.Run("check insert parentSpanType", func(t *testing.T) {
 		var parentTypes []string
 		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
-			if strings.HasPrefix(query, "INSERT") {
+			if strings.HasPrefix(query, "INSERT") && strings.Contains(query, "otel_traces") {
 				if str, ok := values[15].(string); ok {
 					parentTypes = append(parentTypes, str)
 				}
