@@ -43,6 +43,10 @@ func (rw *resourceWriter) InsertResource(resourceRef [16]byte, serviceName strin
 	return err
 }
 
+func (rw *resourceWriter) Close() error {
+	return rw.insertStatement.Close()
+}
+
 const (
 	// language=ClickHouse SQL
 	createResourcesTableSQL = `

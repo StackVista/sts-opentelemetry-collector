@@ -92,6 +92,7 @@ func (e *tracesExporter) pushTraceData(ctx context.Context, td ptrace.Traces) er
 		}
 		defer func() {
 			_ = traceStatement.Close()
+			_ = resourceWriter.Close()
 		}()
 		for i := 0; i < td.ResourceSpans().Len(); i++ {
 			spans := td.ResourceSpans().At(i)
