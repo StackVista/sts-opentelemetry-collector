@@ -35,6 +35,7 @@ func (rw *resourceWriter) InsertResource(resourceRef [16]byte, serviceName strin
 	ref := big.Int{}
 	ref.SetBytes(resourceRef[:])
 	_, err := rw.insertStatement.ExecContext(rw.context,
+		time.Now(),
 		ref,
 		serviceName,
 		resourceAttributes,
@@ -62,7 +63,7 @@ SETTINGS index_granularity=512, ttl_only_drop_parts = 1;
                         ServiceName,
                         ResourceAttributes,
                         ) VALUES (
-																	now(),
+																	?,
                                   ?,
                                   ?,
                                   ?
