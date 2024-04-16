@@ -222,7 +222,7 @@ CREATE TABLE IF NOT EXISTS %s (
 ) ENGINE MergeTree()
 %s
 PARTITION BY toDate(Timestamp)
-ORDER BY (ServiceName, SpanName, toUnixTimestamp(Timestamp), TraceId)
+ORDER BY (ServiceName, ResourceRef, SpanName, toUnixTimestamp(Timestamp), TraceId)
 SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
 `
 	// language=ClickHouse SQL
