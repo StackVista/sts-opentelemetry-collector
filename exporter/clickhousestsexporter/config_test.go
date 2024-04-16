@@ -46,14 +46,15 @@ func TestLoadConfig(t *testing.T) {
 		{
 			id: component.NewIDWithName(metadata.Type, "full"),
 			expected: &Config{
-				Endpoint:         defaultEndpoint,
-				Database:         "otel",
-				Username:         "foo",
-				Password:         "bar",
-				TTL:              72 * time.Hour,
-				LogsTableName:    "otel_logs",
-				TracesTableName:  "otel_traces",
-				MetricsTableName: "otel_metrics",
+				Endpoint:           defaultEndpoint,
+				Database:           "otel",
+				Username:           "foo",
+				Password:           "bar",
+				TTL:                72 * time.Hour,
+				LogsTableName:      "otel_logs",
+				TracesTableName:    "otel_traces",
+				MetricsTableName:   "otel_metrics",
+				ResourcesTableName: "otel_resources",
 				TimeoutSettings: exporterhelper.TimeoutSettings{
 					Timeout: 5 * time.Second,
 				},
