@@ -10,6 +10,7 @@ import (
 	"time"
 
 	_ "github.com/ClickHouse/clickhouse-go/v2" // For register database driver.
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter/internal"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -232,7 +233,7 @@ func createLogsTable(ctx context.Context, cfg *Config, db *sql.DB) error {
 }
 
 func renderCreateLogsTableSQL(cfg *Config) string {
-	ttlExpr := generateTTLExpr(cfg.TTLDays, cfg.TTL, "Timestamp")
+	ttlExpr := internal.GenerateTTLExpr(cfg.TTLDays, cfg.TTL, "Timestamp")
 	return fmt.Sprintf(createLogsTableSQL, cfg.LogsTableName, ttlExpr)
 }
 

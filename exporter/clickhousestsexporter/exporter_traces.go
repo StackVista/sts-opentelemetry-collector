@@ -11,6 +11,7 @@ import (
 	"time"
 
 	_ "github.com/ClickHouse/clickhouse-go/v2" // For register database driver.
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter/internal"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	conventions "go.opentelemetry.io/collector/semconv/v1.18.0"
@@ -18,8 +19,9 @@ import (
 )
 
 type tracesExporter struct {
-	client    *sql.DB
-	insertSQL string
+	client           *sql.DB
+	insertSQL        string
+	resourceExporter *resourcesExporter
 
 	logger *zap.Logger
 	cfg    *Config
@@ -30,16 +32,25 @@ func newTracesExporter(logger *zap.Logger, cfg *Config) (*tracesExporter, error)
 	if err != nil {
 		return nil, err
 	}
+	resourceExporter, err := newResourceExporter(logger, cfg)
+	if err != nil {
+		return nil, err
+	}
 
 	return &tracesExporter{
-		client:    client,
-		insertSQL: renderInsertTracesSQL(cfg),
-		logger:    logger,
-		cfg:       cfg,
+		client:           client,
+		insertSQL:        renderInsertTracesSQL(cfg),
+		resourceExporter: resourceExporter,
+		logger:           logger,
+		cfg:              cfg,
 	}, nil
 }
 
-func (e *tracesExporter) start(ctx context.Context, _ component.Host) error {
+func (e *tracesExporter) start(ctx context.Context, host component.Host) error {
+	if err := e.resourceExporter.start(ctx, host); err != nil {
+		return err
+	}
+
 	if !e.cfg.CreateTracesTable {
 		return nil
 	}
@@ -52,7 +63,9 @@ func (e *tracesExporter) start(ctx context.Context, _ component.Host) error {
 }
 
 // shutdown will shut down the exporter.
-func (e *tracesExporter) shutdown(_ context.Context) error {
+func (e *tracesExporter) shutdown(ctx context.Context) error {
+	e.resourceExporter.shutdown(ctx)
+
 	if e.client != nil {
 		return e.client.Close()
 	}
@@ -75,22 +88,28 @@ func getSpanParentType(r ptrace.Span) string {
 
 func (e *tracesExporter) pushTraceData(ctx context.Context, td ptrace.Traces) error {
 	start := time.Now()
+	resources := []*resourceModel{}
+
 	err := doWithTx(ctx, e.client, func(tx *sql.Tx) error {
-		statement, err := tx.PrepareContext(ctx, e.insertSQL)
+		traceStatement, err := tx.PrepareContext(ctx, e.insertSQL)
 		if err != nil {
-			return fmt.Errorf("PrepareContext:%w", err)
+			return fmt.Errorf("PrepareContext Traces:%w", err)
 		}
 		defer func() {
-			_ = statement.Close()
+			_ = traceStatement.Close()
 		}()
 		for i := 0; i < td.ResourceSpans().Len(); i++ {
 			spans := td.ResourceSpans().At(i)
-			res := spans.Resource()
-			resAttr := attributesToMap(res.Attributes())
+			res, err := newResourceModel(spans.Resource())
+			if err != nil {
+				return err
+			}
+			resources = append(resources, res)
 			var serviceName string
-			if v, ok := res.Attributes().Get(conventions.AttributeServiceName); ok {
+			if v, ok := spans.Resource().Attributes().Get(conventions.AttributeServiceName); ok {
 				serviceName = v.Str()
 			}
+
 			for j := 0; j < spans.ScopeSpans().Len(); j++ {
 				rs := spans.ScopeSpans().At(j).Spans()
 				scopeName := spans.ScopeSpans().At(j).Scope().Name()
@@ -102,8 +121,9 @@ func (e *tracesExporter) pushTraceData(ctx context.Context, td ptrace.Traces) er
 					eventTimes, eventNames, eventAttrs := convertEvents(r.Events())
 					linksTraceIDs, linksSpanIDs, linksTraceStates, linksAttrs := convertLinks(r.Links())
 					spanParentType := getSpanParentType(r)
-					_, err = statement.ExecContext(ctx,
+					_, err = traceStatement.ExecContext(ctx,
 						r.StartTimestamp().AsTime(),
+						res.resourceRef,
 						TraceIDToHexOrEmptyString(r.TraceID()),
 						SpanIDToHexOrEmptyString(r.SpanID()),
 						SpanIDToHexOrEmptyString(r.ParentSpanID()),
@@ -111,7 +131,6 @@ func (e *tracesExporter) pushTraceData(ctx context.Context, td ptrace.Traces) er
 						r.Name(),
 						SpanKindStr(r.Kind()),
 						serviceName,
-						resAttr,
 						scopeName,
 						scopeVersion,
 						spanAttr,
@@ -128,7 +147,7 @@ func (e *tracesExporter) pushTraceData(ctx context.Context, td ptrace.Traces) er
 						linksAttrs,
 					)
 					if err != nil {
-						return fmt.Errorf("ExecContext:%w", err)
+						return fmt.Errorf("ExecContext Traces:%w", err)
 					}
 				}
 			}
@@ -138,6 +157,7 @@ func (e *tracesExporter) pushTraceData(ctx context.Context, td ptrace.Traces) er
 	duration := time.Since(start)
 	e.logger.Debug("insert traces", zap.Int("records", td.SpanCount()),
 		zap.String("cost", duration.String()))
+	e.resourceExporter.InsertResources(ctx, resources)
 	return err
 }
 
@@ -178,6 +198,7 @@ const (
 	createTracesTableSQL = `
 CREATE TABLE IF NOT EXISTS %s (
      Timestamp DateTime64(9) CODEC(Delta, ZSTD(1)),
+     ResourceRef UUID,
      TraceId String CODEC(ZSTD(1)),
      SpanId String CODEC(ZSTD(1)),
      ParentSpanId String CODEC(ZSTD(1)),
@@ -185,7 +206,6 @@ CREATE TABLE IF NOT EXISTS %s (
      SpanName LowCardinality(String) CODEC(ZSTD(1)),
      SpanKind LowCardinality(String) CODEC(ZSTD(1)),
      ServiceName LowCardinality(String) CODEC(ZSTD(1)),
-     ResourceAttributes Map(LowCardinality(String), String) CODEC(ZSTD(1)),
      ScopeName String CODEC(ZSTD(1)),
      ScopeVersion String CODEC(ZSTD(1)),
      SpanAttributes Map(LowCardinality(String), String) CODEC(ZSTD(1)),
@@ -207,12 +227,13 @@ CREATE TABLE IF NOT EXISTS %s (
 ) ENGINE MergeTree()
 %s
 PARTITION BY toDate(Timestamp)
-ORDER BY (ServiceName, SpanName, toUnixTimestamp(Timestamp), TraceId)
+ORDER BY (ServiceName, ResourceRef, SpanName, toUnixTimestamp(Timestamp), TraceId)
 SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
 `
 	// language=ClickHouse SQL
 	insertTracesSQLTemplate = `INSERT INTO %s (
                         Timestamp,
+												ResourceRef,
                         TraceId,
                         SpanId,
                         ParentSpanId,
@@ -220,7 +241,6 @@ SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
                         SpanName,
                         SpanKind,
                         ServiceName,
-                        ResourceAttributes,
                         ScopeName,
                         ScopeVersion,
                         SpanAttributes,
@@ -274,6 +294,6 @@ func renderInsertTracesSQL(cfg *Config) string {
 }
 
 func renderCreateTracesTableSQL(cfg *Config) string {
-	ttlExpr := generateTTLExpr(cfg.TTLDays, cfg.TTL, "Timestamp")
+	ttlExpr := internal.GenerateTTLExpr(cfg.TTLDays, cfg.TTL, "Timestamp")
 	return fmt.Sprintf(createTracesTableSQL, cfg.TracesTableName, ttlExpr)
 }
