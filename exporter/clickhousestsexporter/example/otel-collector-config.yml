@@ -17,7 +17,9 @@ exporters:
     database: otel
     logs_table_name: otel_logs
     traces_table_name: otel_traces
+    resources_table_name: otel_resources
     create_traces_table: true
+    create_resources_table: true
     ttl: 12h
     timeout: 10s
     sending_queue:
