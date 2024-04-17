@@ -14,6 +14,7 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter/internal"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	conventions "go.opentelemetry.io/collector/semconv/v1.18.0"
 	"go.uber.org/zap"
 )
 
@@ -104,6 +105,10 @@ func (e *tracesExporter) pushTraceData(ctx context.Context, td ptrace.Traces) er
 				return err
 			}
 			resources = append(resources, res)
+			var serviceName string
+			if v, ok := spans.Resource().Attributes().Get(conventions.AttributeServiceName); ok {
+				serviceName = v.Str()
+			}
 
 			for j := 0; j < spans.ScopeSpans().Len(); j++ {
 				rs := spans.ScopeSpans().At(j).Spans()
@@ -125,7 +130,7 @@ func (e *tracesExporter) pushTraceData(ctx context.Context, td ptrace.Traces) er
 						r.TraceState().AsRaw(),
 						r.Name(),
 						SpanKindStr(r.Kind()),
-						res.serviceName,
+						serviceName,
 						scopeName,
 						scopeVersion,
 						spanAttr,

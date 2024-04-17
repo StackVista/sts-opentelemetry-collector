@@ -12,7 +12,6 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter/internal"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/pcommon"
-	conventions "go.opentelemetry.io/collector/semconv/v1.18.0"
 	"go.uber.org/zap"
 )
 
@@ -26,15 +25,10 @@ type resourcesExporter struct {
 
 type resourceModel struct {
 	resourceRef uuid.UUID
-	serviceName string
 	attributes  map[string]string
 }
 
 func newResourceModel(resource pcommon.Resource) (*resourceModel, error) {
-	var serviceName string
-	if v, ok := resource.Attributes().Get(conventions.AttributeServiceName); ok {
-		serviceName = v.Str()
-	}
 	resourceRef := pdatautil.MapHash(resource.Attributes())
 	refUUID, err := uuid.FromBytes(resourceRef[:])
 	if err != nil {
@@ -44,7 +38,6 @@ func newResourceModel(resource pcommon.Resource) (*resourceModel, error) {
 	resAttr := attributesToMap(resource.Attributes())
 	return &resourceModel{
 		resourceRef: refUUID,
-		serviceName: serviceName,
 		attributes:  resAttr,
 	}, nil
 }
@@ -101,7 +94,6 @@ func (e *resourcesExporter) InsertResources(ctx context.Context, resources []*re
 			_, err := resourceStatement.ExecContext(ctx,
 				time.Now(),
 				resource.resourceRef,
-				resource.serviceName,
 				resource.attributes,
 			)
 			if err != nil {
@@ -123,7 +115,6 @@ const (
 CREATE TABLE IF NOT EXISTS %s (
      Timestamp DateTime64(9) CODEC(Delta, ZSTD(1)),
 		 ResourceRef UUID,
-     ServiceName LowCardinality(String) CODEC(ZSTD(1)),
      ResourceAttributes Map(LowCardinality(String), String) CODEC(ZSTD(1)),
 ) ENGINE = ReplacingMergeTree
 %s
@@ -131,7 +122,7 @@ ORDER BY (ResourceRef, toUnixTimestamp(Timestamp))
 SETTINGS index_granularity=512, ttl_only_drop_parts = 1;
 `
 	// language=ClickHouse SQL
-	insertResourcesSQLTemplate = `INSERT INTO %s (Timestamp, ResourceRef, ServiceName, ResourceAttributes) VALUES (?, ?, ?, ?)`
+	insertResourcesSQLTemplate = `INSERT INTO %s (Timestamp, ResourceRef, ResourceAttributes) VALUES (?, ?, ?)`
 )
 
 func createResourcesTable(ctx context.Context, ttlDays uint, ttl time.Duration, tableName string, db *sql.DB) error {
