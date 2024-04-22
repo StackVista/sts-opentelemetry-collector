@@ -18,6 +18,7 @@ type CacheSettings struct {
 type Config struct {
 	Endpoint *EndpointSettings `mapstructure:"endpoint,omitempty"`
 	Cache    *CacheSettings    `mapstructure:"cache,omitempty"`
+	Schema   string            `mapstructure:"schema"`
 }
 
 func (cfg *Config) Validate() error {
@@ -39,6 +40,10 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.Cache.InvalidSize <= 0 {
 		return fmt.Errorf("paramater cache.invalid_size must be a postive value")
+	}
+
+	if len(cfg.Schema) == 0 {
+		return fmt.Errorf("required schema paramater")
 	}
 	return nil
 }

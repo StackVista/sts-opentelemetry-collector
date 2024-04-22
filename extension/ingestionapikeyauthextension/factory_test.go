@@ -17,6 +17,7 @@ func TestCreateDefaultConfig(t *testing.T) {
 			ValidTtl:    5 * time.Minute,
 			InvalidSize: 100,
 		},
+		Schema: "StackState",
 	}
 	actual := createDefaultConfig()
 	assert.Equal(t, expected, createDefaultConfig())
@@ -33,6 +34,7 @@ func TestCreateExtension_ValidConfig(t *testing.T) {
 			ValidTtl:    30,
 			InvalidSize: 3,
 		},
+		Schema: "StackState",
 	}
 
 	ext, err := createExtension(context.Background(), extensiontest.NewNopCreateSettings(), cfg)

@@ -39,6 +39,7 @@ func TestLoadConfig(t *testing.T) {
 					ValidTtl:    5 * time.Minute,
 					InvalidSize: 100,
 				},
+				Schema: "StackState",
 			},
 		},
 		{
@@ -52,6 +53,7 @@ func TestLoadConfig(t *testing.T) {
 					ValidTtl:    5 * time.Minute,
 					InvalidSize: 100,
 				},
+				Schema: "StackState",
 			},
 		},
 		{
@@ -65,6 +67,7 @@ func TestLoadConfig(t *testing.T) {
 					ValidTtl:    20 * time.Second,
 					InvalidSize: 30,
 				},
+				Schema: "StackStack2",
 			},
 		},
 	}

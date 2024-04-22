@@ -28,6 +28,7 @@ func createDefaultConfig() component.Config {
 			ValidTtl:    5 * time.Minute,
 			InvalidSize: 100,
 		},
+		Schema: "StackState",
 	}
 }
 
