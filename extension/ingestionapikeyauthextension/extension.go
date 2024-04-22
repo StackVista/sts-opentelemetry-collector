@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/collector/extension/auth"
 	"log"
 	"net/http"
+	"regexp"
 	"time"
 )
 
@@ -19,6 +20,8 @@ var (
 	errInternal              = errors.New("internal error")
 	errAuthServerUnavailable = errors.New("auth server unavailable")
 	errForbidden             = errors.New("forbidden")
+
+	tokenRegex = regexp.MustCompile(`(\w+) (.*)$`)
 )
 
 type extensionContext struct {
@@ -63,7 +66,16 @@ func (exCtx *extensionContext) authenticate(ctx context.Context, headers map[str
 		return ctx, errNoAuth
 	}
 
-	err := checkAuthorizationHeaderUseCache(authorizationHeader, exCtx)
+	// checks schema
+	matches := tokenRegex.FindStringSubmatch(authorizationHeader)
+	if len(matches) != 3 {
+		return ctx, errForbidden
+	}
+	if matches[1] != exCtx.config.Schema {
+		return ctx, errForbidden
+	}
+
+	err := checkAuthorizationHeaderUseCache(matches[2], exCtx)
 	if err != nil {
 		return ctx, err
 	}

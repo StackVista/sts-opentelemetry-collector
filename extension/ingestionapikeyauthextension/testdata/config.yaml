@@ -23,3 +23,5 @@ ingestion_api_key_auth/valid:
     valid_size: 10
     valid_ttl: 20s
     invalid_size: 30
+  schema:
+    StackStack2
