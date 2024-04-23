@@ -5,14 +5,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/hashicorp/golang-lru/v2/expirable"
-	"go.opentelemetry.io/collector/client"
-	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/extension/auth"
 	"log"
 	"net/http"
 	"regexp"
 	"time"
+
+	"github.com/hashicorp/golang-lru/v2/expirable"
+	stsauth "github.com/stackvista/sts-opentelemetry-collector/common/auth"
+	"go.opentelemetry.io/collector/client"
+	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/extension/auth"
 )
 
 var (
@@ -81,6 +83,9 @@ func (exCtx *extensionContext) authenticate(ctx context.Context, headers map[str
 	}
 
 	cl := client.FromContext(ctx)
+	cl.Auth = &stsauth.AuthData{
+		ApiKey: matches[2],
+	}
 	return client.NewContext(ctx, cl), nil
 }
 
@@ -124,7 +129,7 @@ type AuthorizeRequestBody struct {
 // Authorizes an Ingestion API Key (value of Authorization header) with the remote authorization server.
 // The function stores the result (valid keys but also non-transient errors) in the cache.
 func checkAuthorizationHeader(authorizationHeader string, exCtx *extensionContext) error {
-	log.Println("Sending authorization request...")
+	log.Printf("Sending authorization request for %s...\n", authorizationHeader)
 	request := AuthorizeRequestBody{
 		ApiKey: authorizationHeader,
 	}
@@ -147,6 +152,7 @@ func checkAuthorizationHeader(authorizationHeader string, exCtx *extensionContex
 		return errAuthServerUnavailable
 	}
 
+	log.Printf("Result for %s: %d\n", authorizationHeader, res.StatusCode)
 	if res.StatusCode == 403 {
 		exCtx.invalidKeysCache.Add(authorizationHeader, errForbidden)
 		return errForbidden
