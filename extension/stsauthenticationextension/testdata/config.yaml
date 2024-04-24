@@ -1,4 +1,0 @@
-stsauthentication:
-stsauthentication/sometoken:
-  tenants:
-    "sometoken": "tenant"
