@@ -13,6 +13,7 @@ import (
 
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/ststopologyexporter/internal"
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.uber.org/zap"
 )
@@ -48,6 +49,15 @@ func getOrDefault(componentsByApiKey map[string]*internal.ComponentsCollection, 
 	return collection
 }
 
+func (t *topologyExporter) logAttrs(msg string, attrs *pcommon.Map) {
+	fields := make([]zap.Field, 0)
+	attrs.Range(func(k string, v pcommon.Value) bool {
+		fields = append(fields, zap.String(k, v.AsString()))
+		return true
+	})
+	t.logger.Warn(msg, fields...)
+}
+
 func (t *topologyExporter) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
 	log := t.logger
 
@@ -63,7 +73,7 @@ func (t *topologyExporter) ConsumeMetrics(ctx context.Context, md pmetric.Metric
 			attrs.Remove("sts_api_key")
 			collection := getOrDefault(componentsByApiKey, sts_api_key)
 			if !collection.AddResource(&attrs) {
-				log.Warn("Skipping resource without necessary attributes")
+				t.logAttrs("Skipping resource without necessary attributes", &attrs)
 			}
 		} else {
 			// look for servicegraph metrics for relations
@@ -82,17 +92,33 @@ func (t *topologyExporter) ConsumeMetrics(ctx context.Context, md pmetric.Metric
 						continue
 					}
 					connAttrs := m.Sum().DataPoints().At(0).Attributes()
-					sts_api_key_value, key_exists := connAttrs.Get("client_sts_api_key")
-					if !key_exists {
-						log.Error("Configuration error - no sts_api_key available on servicegraph metric")
-						return errInternal
+					client_api_key_value, client_key_exists := connAttrs.Get("client_sts_api_key")
+					var client_api_key string
+					if client_key_exists {
+						client_api_key = client_api_key_value.AsString()
 					}
-					sts_api_key := sts_api_key_value.AsString()
+					server_api_key_value, server_key_exists := connAttrs.Get("server_sts_api_key")
+					var server_api_key string
+					if server_key_exists {
+						server_api_key = server_api_key_value.AsString()
+					}
+					if !client_key_exists && !server_key_exists {
+						t.logAttrs("No sts_api_key attributes, found: ", &connAttrs)
+						continue
+					}
 					connAttrs.Remove("client_sts_api_key")
 					connAttrs.Remove("server_sts_api_key")
-					collection := getOrDefault(componentsByApiKey, sts_api_key)
-					if !collection.AddConnection(&connAttrs) {
-						log.Warn("Unable to add connection from servicegraphconnector")
+					if client_key_exists {
+						collection := getOrDefault(componentsByApiKey, client_api_key)
+						if !collection.AddConnection(&connAttrs) {
+							t.logAttrs("Unable to add connection from servicegraphconnector to client", &connAttrs)
+						}
+					}
+					if server_key_exists {
+						collection := getOrDefault(componentsByApiKey, server_api_key)
+						if !collection.AddConnection(&connAttrs) {
+							t.logAttrs("Unable to add connection from servicegraphconnector to server", &connAttrs)
+						}
 					}
 				}
 				break
