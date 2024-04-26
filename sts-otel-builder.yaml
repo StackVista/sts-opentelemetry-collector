@@ -4,6 +4,7 @@ dist:
   output_path: /go/src/github.com/stackvista/sts-opentelemetry-collector/bin
 
 connectors:
+  - gomod: go.opentelemetry.io/collector/connector/forwardconnector v0.99.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector v0.99.0
 
 exporters:
