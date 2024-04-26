@@ -59,7 +59,7 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 			withEnvironment(attrs).
 			withName(attrs, "service.name").
 			withVersion(attrs, "service.version").
-			withTags(attrs, "telemetry.sdk"),
+			withTag(attrs, "service.namespace"),
 	})
 	c.serviceInstances = append(c.serviceInstances, &Component{
 		fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s", serviceNamespace.AsString(), serviceName.AsString(), serviceInstanceId.AsString()),
@@ -71,9 +71,8 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 			withEnvironment(attrs).
 			withName(attrs, "service.instance.id").
 			withVersion(attrs, "service.version").
-			withTags(attrs, "telemetry.sdk").
-			withTags(attrs, "telemetry.distro").
-			withProperties(attrs),
+			withTag(attrs, "service.namespace").
+			withTags(attrs),
 	})
 	return true
 }
@@ -103,9 +102,7 @@ func newData() *ComponentData {
 		Layer:       "",
 		Domain:      "",
 		Environment: "",
-		Labels:      []string{},
 		Tags:        map[string]string{},
-		Properties:  map[string]string{},
 	}
 }
 
@@ -122,6 +119,14 @@ func (c *ComponentData) withName(attrs *pcommon.Map, key string) *ComponentData 
 	return c
 }
 
+func (c *ComponentData) withTag(attrs *pcommon.Map, key string) *ComponentData {
+	value, ok := attrs.Get(key)
+	if ok {
+		c.Tags[key] = value.AsString()
+	}
+	return c
+}
+
 func (c *ComponentData) withVersion(attrs *pcommon.Map, key string) *ComponentData {
 	value, ok := attrs.Get(key)
 	if ok {
@@ -134,25 +139,17 @@ func (c *ComponentData) withEnvironment(attrs *pcommon.Map) *ComponentData {
 	value, ok := attrs.Get("deployment.environment")
 	if ok {
 		c.Environment = value.AsString()
+		c.Tags["deployment.environment"] = value.AsString()
 	}
 	return c
 }
-func (c *ComponentData) withTags(attrs *pcommon.Map, prefix string) *ComponentData {
+
+func (c *ComponentData) withTags(attrs *pcommon.Map) *ComponentData {
 	attrs.Range(func(k string, v pcommon.Value) bool {
-		if len(k) >= len(prefix) && k[:len(prefix)] == prefix {
+		if _, ok := c.Tags[k]; !ok {
 			c.Tags[k] = v.AsString()
 		}
 		return true
 	})
-	return c
-}
-
-func (c *ComponentData) withProperties(attrs *pcommon.Map) *ComponentData {
-	m := make(map[string]string, attrs.Len())
-	attrs.Range(func(k string, v pcommon.Value) bool {
-		m[k] = v.AsString()
-		return true
-	})
-	c.Properties = m
 	return c
 }

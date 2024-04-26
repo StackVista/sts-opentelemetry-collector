@@ -15,9 +15,7 @@ type ComponentData struct {
 	Layer       string            `json:"layer"`
 	Domain      string            `json:"domain"`
 	Environment string            `json:"environment"`
-	Labels      []string          `json:"labels"`
 	Tags        map[string]string `json:"tags"`
-	Properties  map[string]string `json:"properties"`
 }
 
 type Component struct {

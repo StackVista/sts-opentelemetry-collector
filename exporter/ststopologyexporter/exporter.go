@@ -33,7 +33,7 @@ func newTopologyExporter(logger *zap.Logger, cfg component.Config) (*topologyExp
 		return nil, fmt.Errorf("invalid config passed to stackstateexporter: %T", cfg)
 	}
 	httpClient := http.Client{
-		Timeout: 5 * time.Second, // TODO configure timeout
+		Timeout: 5 * time.Second,
 	}
 
 	return &topologyExporter{logger: logger, httpClient: httpClient, cfg: stsCfg}, nil
