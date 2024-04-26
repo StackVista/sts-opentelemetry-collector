@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/ststopologyexporter/internal"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.opentelemetry.io/collector/pdata/pmetric"
@@ -18,11 +19,11 @@ func TestExporter_pushResourcesData(t *testing.T) {
 	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		require.Equal(t, "APIKEY", req.Header[http.CanonicalHeaderKey("sts-api-key")][0])
 
-		var payload IntakeTopology
+		var payload internal.IntakeTopology
 		err := json.NewDecoder(req.Body).Decode(&payload)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(payload.Topologies))
-		require.Equal(t, 2, len(payload.Topologies[0].Components))
+		require.Equal(t, 3, len(payload.Topologies[0].Components))
 		res.WriteHeader(200)
 	}))
 	exporter := newTestExporter(t, testServer.URL)

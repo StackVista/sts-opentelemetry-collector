@@ -54,7 +54,7 @@ func newServerAuthExtension(cfg *Config) (auth.Server, error) {
 
 func (exCtx *extensionContext) serverStart(context.Context, component.Host) error {
 	httpClient := http.Client{
-		Timeout: 5 * time.Second, // TODO configure timeout
+		Timeout: 5 * time.Second,
 	}
 
 	exCtx.httpClient = httpClient
@@ -129,7 +129,7 @@ type AuthorizeRequestBody struct {
 // Authorizes an Ingestion API Key (value of Authorization header) with the remote authorization server.
 // The function stores the result (valid keys but also non-transient errors) in the cache.
 func checkAuthorizationHeader(authorizationHeader string, exCtx *extensionContext) error {
-	log.Printf("Sending authorization request for %s...\n", authorizationHeader)
+	log.Printf("Sending authorization request for ...%s\n", authorizationHeader[len(authorizationHeader)-4:])
 	request := AuthorizeRequestBody{
 		ApiKey: authorizationHeader,
 	}
@@ -152,7 +152,7 @@ func checkAuthorizationHeader(authorizationHeader string, exCtx *extensionContex
 		return errAuthServerUnavailable
 	}
 
-	log.Printf("Result for %s: %d\n", authorizationHeader, res.StatusCode)
+	log.Printf("Result for ...%s: %d\n", authorizationHeader[len(authorizationHeader)-4:], res.StatusCode)
 	if res.StatusCode == 403 {
 		exCtx.invalidKeysCache.Add(authorizationHeader, errForbidden)
 		return errForbidden
