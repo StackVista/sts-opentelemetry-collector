@@ -24,6 +24,7 @@ func TestExporter_pushResourcesData(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 1, len(payload.Topologies))
 		require.Equal(t, 3, len(payload.Topologies[0].Components))
+		require.Equal(t, 1, len(payload.Topologies[0].Relations))
 		res.WriteHeader(200)
 	}))
 	exporter := newTestExporter(t, testServer.URL)
@@ -45,6 +46,20 @@ func simpleMetrics() pmetric.Metrics {
 	rm.Resource().Attributes().PutStr("service.name", "demo 2")
 	rm.Resource().Attributes().PutStr("service.namespace", "demo")
 	rm.Resource().Attributes().PutStr("Resource Attributes 2", "value2")
+
+	rm = metrics.ResourceMetrics().AppendEmpty()
+	sc := rm.ScopeMetrics().AppendEmpty()
+	sc.Scope().SetName("traces_service_graph")
+	ms := sc.Metrics().AppendEmpty()
+	ms.SetName("traces_service_graph_request_total")
+	ms.SetEmptySum().SetIsMonotonic(true)
+	ma := ms.Sum().DataPoints().AppendEmpty().Attributes()
+	ma.PutStr("client_sts_api_key", "APIKEY")
+	ma.PutStr("client", "client")
+	ma.PutStr("client_service.namespace", "clientns")
+	ma.PutStr("server", "server")
+	ma.PutStr("server_service.namespace", "serverns")
+	ma.PutStr("connection_type", "unknown")
 	return metrics
 }
 

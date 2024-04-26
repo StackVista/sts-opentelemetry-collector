@@ -10,6 +10,7 @@ type ComponentsCollection struct {
 	namespaces       map[string]*Component
 	services         []*Component
 	serviceInstances []*Component
+	relations        map[string]*Relation
 }
 
 func NewCollection() *ComponentsCollection {
@@ -17,6 +18,7 @@ func NewCollection() *ComponentsCollection {
 		make(map[string]*Component, 0),
 		make([]*Component, 0),
 		make([]*Component, 0),
+		make(map[string]*Relation, 0),
 	}
 }
 
@@ -43,7 +45,7 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 			ComponentType{
 				"namespace",
 			},
-			newData().
+			newComponentData().
 				withLayer("urn:stackpack:common:layer:applications").
 				withEnvironment(attrs).
 				withName(attrs, "service.namespace"),
@@ -54,7 +56,7 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 		ComponentType{
 			"service",
 		},
-		newData().
+		newComponentData().
 			withLayer("urn:stackpack:common:layer:services").
 			withEnvironment(attrs).
 			withName(attrs, "service.name").
@@ -66,7 +68,7 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 		ComponentType{
 			"service_instance",
 		},
-		newData().
+		newComponentData().
 			withLayer("urn:stackpack:common:layer:containers").
 			withEnvironment(attrs).
 			withName(attrs, "service.instance.id").
@@ -74,6 +76,52 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 			withTag(attrs, "service.namespace").
 			withTags(attrs),
 	})
+	return true
+}
+
+func (c *ComponentsCollection) AddConnection(attrs *pcommon.Map) bool {
+	reqAttrs := make(map[string]string, 4)
+	for _, key := range []string{
+		"client",
+		"client_service.namespace",
+		"server",
+		"server_service.namespace",
+		"connection_type",
+	} {
+		value, ok := attrs.Get(key)
+		if !ok {
+			return false
+		}
+		reqAttrs[key] = value.AsString()
+	}
+
+	instanceId, ok := attrs.Get("client_service.instance.id")
+	var clientInstanceId string
+	if !ok {
+		clientInstanceId = reqAttrs["client"]
+	} else {
+		clientInstanceId = instanceId.AsString()
+	}
+	sourceId := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s", reqAttrs["client_service.namespace"], reqAttrs["client"], clientInstanceId)
+
+	instanceId, ok = attrs.Get("server_service.instance.id")
+	var serverInstanceId string
+	if !ok {
+		serverInstanceId = reqAttrs["server"]
+	} else {
+		serverInstanceId = instanceId.AsString()
+	}
+	targetId := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s", reqAttrs["server_service.namespace"], reqAttrs["server"], serverInstanceId)
+
+	relationId := fmt.Sprintf("%s-%s", sourceId, targetId)
+	c.relations[relationId] = &Relation{
+		ExternalId: fmt.Sprintf("%s-%s", sourceId, targetId),
+		SourceId:   sourceId,
+		TargetId:   targetId,
+		Type: RelationType{
+			Name: reqAttrs["connection_type"],
+		},
+	}
 	return true
 }
 
@@ -92,10 +140,14 @@ func (c *ComponentsCollection) GetComponents() []*Component {
 }
 
 func (c *ComponentsCollection) GetRelations() []*Relation {
-	return make([]*Relation, 0)
+	relations := make([]*Relation, 0, len(c.relations))
+	for _, relation := range c.relations {
+		relations = append(relations, relation)
+	}
+	return relations
 }
 
-func newData() *ComponentData {
+func newComponentData() *ComponentData {
 	return &ComponentData{
 		Name:        "",
 		Version:     "",
@@ -152,4 +204,15 @@ func (c *ComponentData) withTags(attrs *pcommon.Map) *ComponentData {
 		return true
 	})
 	return c
+}
+
+func newRelationData() *ComponentData {
+	return &ComponentData{
+		Name:        "",
+		Version:     "",
+		Layer:       "",
+		Domain:      "",
+		Environment: "",
+		Tags:        map[string]string{},
+	}
 }
