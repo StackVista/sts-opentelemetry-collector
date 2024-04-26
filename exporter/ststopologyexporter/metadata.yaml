@@ -1,0 +1,8 @@
+type: ststopology
+
+status:
+  class: exporter
+  stability:
+    development: [metrics]
+  codeowners:
+    active: StackState B.V.
