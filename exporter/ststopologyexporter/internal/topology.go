@@ -63,13 +63,14 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 			withEnvironment(attrs).
 			withName(attrs, "service.name").
 			withVersion(attrs, "service.version").
-			withTag(attrs, "service.namespace"),
+			withTag(attrs, "service.namespace").
+			withTagPrefix(attrs, "telemetry.sdk"),
 	})
 	serviceInstanceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s", serviceNamespace.AsString(), serviceName.AsString(), serviceInstanceId.AsString())
 	c.serviceInstances = append(c.serviceInstances, &Component{
 		serviceInstanceIdentifier,
 		ComponentType{
-			"service_instance",
+			"service-instance",
 		},
 		newComponentData().
 			withLayer("urn:stackpack:common:layer:containers").
@@ -184,6 +185,16 @@ func (c *ComponentData) withTag(attrs *pcommon.Map, key string) *ComponentData {
 	if ok {
 		c.Tags[key] = value.AsString()
 	}
+	return c
+}
+
+func (c *ComponentData) withTagPrefix(attrs *pcommon.Map, prefix string) *ComponentData {
+	attrs.Range(func(k string, v pcommon.Value) bool {
+		if len(k) >= len(prefix) && k[:len(prefix)] == prefix {
+			c.Tags[k] = v.AsString()
+		}
+		return true
+	})
 	return c
 }
 
