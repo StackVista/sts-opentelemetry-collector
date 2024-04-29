@@ -164,14 +164,25 @@ func (t *topologyExporter) ConsumeMetrics(ctx context.Context, md pmetric.Metric
 		if res.StatusCode == 403 {
 			log.Error("API Key was not valid", zap.Error(err))
 		}
-		log.Info(
-			fmt.Sprintf("Sent %d components, %d relations for key ...%s (status %d)",
-				len(components),
-				len(relations),
-				apiKey[len(apiKey)-4:],
-				res.StatusCode,
-			),
-		)
+		if res.StatusCode < 300 {
+			log.Debug(
+				fmt.Sprintf("Sent %d components, %d relations for key ...%s (status %d)",
+					len(components),
+					len(relations),
+					apiKey[len(apiKey)-4:],
+					res.StatusCode,
+				),
+			)
+		} else {
+			log.Error(
+				fmt.Sprintf("Failed to send %d components, %d relations for key ...%s (status %d)",
+					len(components),
+					len(relations),
+					apiKey[len(apiKey)-4:],
+					res.StatusCode,
+				),
+			)
+		}
 	}
 
 	return nil

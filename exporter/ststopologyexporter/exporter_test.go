@@ -24,7 +24,7 @@ func TestExporter_pushResourcesData(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 1, len(payload.Topologies))
 		require.Equal(t, 3, len(payload.Topologies[0].Components))
-		require.Equal(t, 1, len(payload.Topologies[0].Relations))
+		require.Equal(t, 2, len(payload.Topologies[0].Relations))
 		res.WriteHeader(200)
 	}))
 	exporter := newTestExporter(t, testServer.URL)

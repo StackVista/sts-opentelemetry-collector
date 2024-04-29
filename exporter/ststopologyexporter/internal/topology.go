@@ -51,8 +51,10 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 				withName(attrs, "service.namespace"),
 		}
 	}
+
+	serviceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s", serviceNamespace.AsString(), serviceName.AsString())
 	c.services = append(c.services, &Component{
-		fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s", serviceNamespace.AsString(), serviceName.AsString()),
+		serviceIdentifier,
 		ComponentType{
 			"service",
 		},
@@ -63,8 +65,9 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 			withVersion(attrs, "service.version").
 			withTag(attrs, "service.namespace"),
 	})
+	serviceInstanceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s", serviceNamespace.AsString(), serviceName.AsString(), serviceInstanceId.AsString())
 	c.serviceInstances = append(c.serviceInstances, &Component{
-		fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s", serviceNamespace.AsString(), serviceName.AsString(), serviceInstanceId.AsString()),
+		serviceInstanceIdentifier,
 		ComponentType{
 			"service_instance",
 		},
@@ -76,6 +79,7 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 			withTag(attrs, "service.namespace").
 			withTags(attrs),
 	})
+	c.addRelation(serviceIdentifier, serviceInstanceIdentifier, "provided by")
 	return true
 }
 
@@ -112,18 +116,21 @@ func (c *ComponentsCollection) AddConnection(attrs *pcommon.Map) bool {
 		serverInstanceId = instanceId.AsString()
 	}
 	targetId := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s", reqAttrs["server_service.namespace"], reqAttrs["server"], serverInstanceId)
+	c.addRelation(sourceId, targetId, reqAttrs["connection_type"])
+	return true
+}
 
+func (c *ComponentsCollection) addRelation(sourceId string, targetId string, typeName string) {
 	relationId := fmt.Sprintf("%s-%s", sourceId, targetId)
 	c.relations[relationId] = &Relation{
 		ExternalId: fmt.Sprintf("%s-%s", sourceId, targetId),
 		SourceId:   sourceId,
 		TargetId:   targetId,
 		Type: RelationType{
-			Name: reqAttrs["connection_type"],
+			Name: typeName,
 		},
 		Data: newRelationData(),
 	}
-	return true
 }
 
 func (c *ComponentsCollection) GetComponents() []*Component {
