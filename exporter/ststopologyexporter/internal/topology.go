@@ -121,6 +121,7 @@ func (c *ComponentsCollection) AddConnection(attrs *pcommon.Map) bool {
 		Type: RelationType{
 			Name: reqAttrs["connection_type"],
 		},
+		Data: newRelationData(),
 	}
 	return true
 }
@@ -206,13 +207,8 @@ func (c *ComponentData) withTags(attrs *pcommon.Map) *ComponentData {
 	return c
 }
 
-func newRelationData() *ComponentData {
-	return &ComponentData{
-		Name:        "",
-		Version:     "",
-		Layer:       "",
-		Domain:      "",
-		Environment: "",
-		Tags:        map[string]string{},
+func newRelationData() *RelationData {
+	return &RelationData{
+		Tags: map[string]string{},
 	}
 }
