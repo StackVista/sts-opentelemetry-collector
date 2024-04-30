@@ -24,7 +24,21 @@ type Component struct {
 	Data       *ComponentData `json:"data"`
 }
 
-type Relation struct{}
+type RelationType struct {
+	Name string `json:"name"`
+}
+
+type RelationData struct {
+	Tags map[string]string `json:"tags"`
+}
+
+type Relation struct {
+	ExternalId string        `json:"externalId"`
+	SourceId   string        `json:"sourceId"`
+	TargetId   string        `json:"targetId"`
+	Type       RelationType  `json:"type"`
+	Data       *RelationData `json:"data"`
+}
 
 type Topology struct {
 	Instance   Instance     `json:"instance"`
