@@ -92,6 +92,11 @@ func (t *topologyExporter) ConsumeMetrics(ctx context.Context, md pmetric.Metric
 						continue
 					}
 					connAttrs := m.Sum().DataPoints().At(0).Attributes()
+					connectionType, ok := connAttrs.Get("connection_type")
+					if !ok || connectionType.AsString() == "virtual_node" {
+						continue
+					}
+
 					client_api_key_value, client_key_exists := connAttrs.Get("client_sts_api_key")
 					var client_api_key string
 					if client_key_exists {

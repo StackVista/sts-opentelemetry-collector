@@ -23,12 +23,37 @@ func TestExporter_pushResourcesData(t *testing.T) {
 		err := json.NewDecoder(req.Body).Decode(&payload)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(payload.Topologies))
+
+		require.Equal(t, internal.Instance{
+			Type: "opentelemetry",
+			URL:  "collector",
+		}, payload.Topologies[0].Instance)
+
 		require.Equal(t, 3, len(payload.Topologies[0].Components))
+		for _, component := range payload.Topologies[0].Components {
+			tags := component.Data.Tags
+			_, ok := tags["sts_api_key"]
+			require.False(t, ok)
+		}
 		require.Equal(t, 2, len(payload.Topologies[0].Relations))
+		for _, relation := range payload.Topologies[0].Relations {
+			tags := relation.Data.Tags
+			_, ok := tags["sts_api_key"]
+			require.False(t, ok)
+		}
 		res.WriteHeader(200)
 	}))
 	exporter := newTestExporter(t, testServer.URL)
 	err := exporter.ConsumeMetrics(context.TODO(), simpleMetrics())
+	require.NoError(t, err)
+}
+
+func TestExporter_skipVirtualNodes(t *testing.T) {
+	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		require.Fail(t, "No request should be sent")
+	}))
+	exporter := newTestExporter(t, testServer.URL)
+	err := exporter.ConsumeMetrics(context.TODO(), virtualNodeMetrics())
 	require.NoError(t, err)
 }
 
@@ -59,7 +84,25 @@ func simpleMetrics() pmetric.Metrics {
 	ma.PutStr("client_service.namespace", "clientns")
 	ma.PutStr("server", "server")
 	ma.PutStr("server_service.namespace", "serverns")
-	ma.PutStr("connection_type", "unknown")
+	ma.PutStr("connection_type", "")
+	return metrics
+}
+
+func virtualNodeMetrics() pmetric.Metrics {
+	metrics := pmetric.NewMetrics()
+	rm := metrics.ResourceMetrics().AppendEmpty()
+	sc := rm.ScopeMetrics().AppendEmpty()
+	sc.Scope().SetName("traces_service_graph")
+	ms := sc.Metrics().AppendEmpty()
+	ms.SetName("traces_service_graph_request_total")
+	ms.SetEmptySum().SetIsMonotonic(true)
+	ma := ms.Sum().DataPoints().AppendEmpty().Attributes()
+	ma.PutStr("client_sts_api_key", "APIKEY")
+	ma.PutStr("client", "client")
+	ma.PutStr("client_service.namespace", "clientns")
+	ma.PutStr("server", "server")
+	ma.PutStr("server_service.namespace", "serverns")
+	ma.PutStr("connection_type", "virtual_node")
 	return metrics
 }
 

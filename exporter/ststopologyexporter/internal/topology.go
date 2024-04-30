@@ -8,16 +8,16 @@ import (
 
 type ComponentsCollection struct {
 	namespaces       map[string]*Component
-	services         []*Component
-	serviceInstances []*Component
+	services         map[string]*Component
+	serviceInstances map[string]*Component
 	relations        map[string]*Relation
 }
 
 func NewCollection() *ComponentsCollection {
 	return &ComponentsCollection{
 		make(map[string]*Component, 0),
-		make([]*Component, 0),
-		make([]*Component, 0),
+		make(map[string]*Component, 0),
+		make(map[string]*Component, 0),
 		make(map[string]*Relation, 0),
 	}
 }
@@ -53,7 +53,7 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 	}
 
 	serviceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s", serviceNamespace.AsString(), serviceName.AsString())
-	c.services = append(c.services, &Component{
+	c.services[serviceIdentifier] = &Component{
 		serviceIdentifier,
 		ComponentType{
 			"service",
@@ -65,9 +65,9 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 			withVersion(attrs, "service.version").
 			withTag(attrs, "service.namespace").
 			withTagPrefix(attrs, "telemetry.sdk"),
-	})
+	}
 	serviceInstanceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s", serviceNamespace.AsString(), serviceName.AsString(), serviceInstanceId.AsString())
-	c.serviceInstances = append(c.serviceInstances, &Component{
+	c.serviceInstances[serviceInstanceIdentifier] = &Component{
 		serviceInstanceIdentifier,
 		ComponentType{
 			"service-instance",
@@ -79,18 +79,17 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 			withVersion(attrs, "service.version").
 			withTag(attrs, "service.namespace").
 			withTags(attrs),
-	})
+	}
 	c.addRelation(serviceIdentifier, serviceInstanceIdentifier, "provided by")
 	return true
 }
 
 func (c *ComponentsCollection) AddConnection(attrs *pcommon.Map) bool {
-	reqAttrs := make(map[string]string, 4)
+	reqAttrs := make(map[string]string, 3)
 	for _, key := range []string{
 		"client",
 		"client_service.namespace",
 		"server",
-		"server_service.namespace",
 		"connection_type",
 	} {
 		value, ok := attrs.Get(key)
@@ -98,6 +97,17 @@ func (c *ComponentsCollection) AddConnection(attrs *pcommon.Map) bool {
 			return false
 		}
 		reqAttrs[key] = value.AsString()
+	}
+
+	var connectionType string
+	if reqAttrs["connection_type"] == "" {
+		connectionType = "synchronous"
+	} else if reqAttrs["connection_type"] == "messaging_system" {
+		connectionType = "asynchronous"
+	} else if reqAttrs["connection_type"] == "database" {
+		connectionType = "database"
+	} else {
+		return false
 	}
 
 	instanceId, ok := attrs.Get("client_service.instance.id")
@@ -109,15 +119,35 @@ func (c *ComponentsCollection) AddConnection(attrs *pcommon.Map) bool {
 	}
 	sourceId := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s", reqAttrs["client_service.namespace"], reqAttrs["client"], clientInstanceId)
 
-	instanceId, ok = attrs.Get("server_service.instance.id")
-	var serverInstanceId string
-	if !ok {
-		serverInstanceId = reqAttrs["server"]
+	var targetId string
+	if connectionType == "database" {
+		targetId = fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:database/%s", reqAttrs["client_service.namespace"], reqAttrs["client"], reqAttrs["server"])
+		c.serviceInstances[targetId] = &Component{
+			targetId,
+			ComponentType{
+				"database",
+			},
+			newComponentData().
+				withLayer("urn:stackpack:common:layer:databases").
+				withName(attrs, "server"),
+		}
 	} else {
-		serverInstanceId = instanceId.AsString()
+		serverNamespace, ok := attrs.Get("server_service.namespace")
+		if !ok {
+			return false
+		}
+		instanceId, ok := attrs.Get("server_service.instance.id")
+		var serverInstanceId string
+		if !ok {
+			serverInstanceId = reqAttrs["server"]
+		} else {
+			serverInstanceId = instanceId.AsString()
+		}
+		targetId = fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s", serverNamespace.AsString(), reqAttrs["server"], serverInstanceId)
 	}
-	targetId := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s", reqAttrs["server_service.namespace"], reqAttrs["server"], serverInstanceId)
-	c.addRelation(sourceId, targetId, reqAttrs["connection_type"])
+
+	c.addRelation(sourceId, targetId, connectionType)
+
 	return true
 }
 
@@ -139,10 +169,18 @@ func (c *ComponentsCollection) GetComponents() []*Component {
 	for _, namespace := range c.namespaces {
 		namespaces = append(namespaces, namespace)
 	}
+	services := make([]*Component, 0, len(c.services))
+	for _, service := range c.services {
+		services = append(services, service)
+	}
+	instances := make([]*Component, 0, len(c.serviceInstances))
+	for _, instance := range c.serviceInstances {
+		instances = append(instances, instance)
+	}
 	return append(
 		append(
-			c.services,
-			c.serviceInstances...,
+			services,
+			instances...,
 		),
 		namespaces...,
 	)
