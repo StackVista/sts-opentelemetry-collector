@@ -149,10 +149,10 @@ func (s *Store) tryEvictHead() bool {
 		delete(s.m, headEdge.Key)
 		s.l.Remove(head)
 	} else {
-		// TODO: update weight of edge to compensate for expiration
-		// this keeps the metrics (in expectation) correct
-		headEdge.expiration = headEdge.expiration.Add(s.ttl)
+		headEdge.expiration = time.Now().Add(s.ttl)
 		headEdge.generation++
+		// update weight of edge to compensate for expiration
+		// this keeps the metrics (in expectation) correct
 		headEdge.logp += math.Log(1.0 - float64(s.l.Len()-1)/float64(s.maxItems))
 		s.l.MoveToBack(head)
 	}
