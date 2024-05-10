@@ -6,6 +6,8 @@ package store // import "github.com/open-telemetry/opentelemetry-collector-contr
 import (
 	"container/list"
 	"errors"
+	"hash/fnv"
+	"strconv"
 	"sync"
 	"time"
 
@@ -131,9 +133,25 @@ func (s *Store) tryEvictHead() bool {
 		return false
 	}
 
-	s.onExpire(headEdge)
-	delete(s.m, headEdge.Key)
-	s.l.Remove(head)
+	// expire edges when there is memory pressure, but retain them when there is no pressure.
+	// In the extreme case (Len == maxItems), no expired edges are re-added.
+	// When the list is nearly empty, all edges are retained.  When the list is half-filled,
+	// about half of the expired edges are added again.
+	h := fnv.New32a()
+	h.Write(headEdge.TraceID[:])
+	h.Write([]byte(strconv.Itoa(headEdge.generation)))
+	hash := h.Sum32()
+	if hash%uint32(s.maxItems) < uint32(s.l.Len()) {
+		s.onExpire(headEdge)
+		delete(s.m, headEdge.Key)
+		s.l.Remove(head)
+	} else {
+		// TODO: update weight of edge to compensate for expiration
+		// this keeps the metrics (in expectation) correct
+		headEdge.expiration = headEdge.expiration.Add(s.ttl)
+		headEdge.generation++
+		s.l.MoveToBack(head)
+	}
 
 	return true
 }

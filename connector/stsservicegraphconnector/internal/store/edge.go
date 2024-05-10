@@ -35,6 +35,8 @@ type Edge struct {
 
 	// expiration is the time at which the Edge expires, expressed as Unix time
 	expiration time.Time
+	// generation is the number of times the edge has been re-inserted
+	generation int
 
 	PeerService string
 }
@@ -44,6 +46,7 @@ func newEdge(key Key, ttl time.Duration) *Edge {
 		Key:        key,
 		Dimensions: make(map[string]string),
 		expiration: time.Now().Add(ttl),
+		generation: 0,
 	}
 }
 
