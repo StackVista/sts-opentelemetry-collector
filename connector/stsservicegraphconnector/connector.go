@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
+	"math/rand"
 	"sort"
 	"strings"
 	"sync"
@@ -343,7 +345,7 @@ func (p *serviceGraphConnector) upsertPeerAttributes(m []string, peers map[strin
 	}
 }
 
-func (p *serviceGraphConnector) onComplete(e *store.Edge) {
+func (p *serviceGraphConnector) onComplete(e *store.Edge, logp float64) {
 	p.logger.Debug(
 		"edge completed",
 		zap.String("client_service", e.ClientService),
@@ -351,7 +353,7 @@ func (p *serviceGraphConnector) onComplete(e *store.Edge) {
 		zap.String("connection_type", string(e.ConnectionType)),
 		zap.Stringer("trace_id", e.TraceID),
 	)
-	p.aggregateMetricsForEdge(e)
+	p.aggregateMetricsForEdge(e, logp)
 }
 
 func (p *serviceGraphConnector) onExpire(e *store.Edge) {
@@ -366,18 +368,29 @@ func (p *serviceGraphConnector) onExpire(e *store.Edge) {
 	p.statExpiredEdges.Add(context.Background(), 1)
 }
 
-func (p *serviceGraphConnector) aggregateMetricsForEdge(e *store.Edge) {
+func (p *serviceGraphConnector) aggregateMetricsForEdge(e *store.Edge, logp float64) {
 	metricKey := p.buildMetricKey(e.ClientService, e.ServerService, string(e.ConnectionType), e.Dimensions)
 	dimensions := buildDimensions(e)
+
+	// logp is the (log) probability that the edge survived the wait for a matching span.
+	// Compensate the metrics for the culling of equivalent edges.
+	n := math.Exp(-logp)
+	fraction := n - math.Floor(n)
+	var count uint64
+	if rand.Float64() < fraction {
+		count = uint64(math.Floor(n)) + 1
+	} else {
+		count = uint64(math.Floor(n))
+	}
 
 	p.seriesMutex.Lock()
 	defer p.seriesMutex.Unlock()
 	p.updateSeries(metricKey, dimensions)
-	p.updateCountMetrics(metricKey)
+	p.updateCountMetrics(metricKey, count)
 	if e.Failed {
-		p.updateErrorMetrics(metricKey)
+		p.updateErrorMetrics(metricKey, count)
 	}
-	p.updateDurationMetrics(metricKey, e.ServerLatencySec, e.ClientLatencySec)
+	p.updateDurationMetrics(metricKey, e.ServerLatencySec, e.ClientLatencySec, count)
 }
 
 func (p *serviceGraphConnector) updateSeries(key string, dimensions pcommon.Map) {
@@ -400,33 +413,37 @@ func (p *serviceGraphConnector) dimensionsForSeries(key string) (pcommon.Map, bo
 	return pcommon.Map{}, false
 }
 
-func (p *serviceGraphConnector) updateCountMetrics(key string) { p.reqTotal[key]++ }
-
-func (p *serviceGraphConnector) updateErrorMetrics(key string) { p.reqFailedTotal[key]++ }
-
-func (p *serviceGraphConnector) updateDurationMetrics(key string, serverDuration, clientDuration float64) {
-	p.updateServerDurationMetrics(key, serverDuration)
-	p.updateClientDurationMetrics(key, clientDuration)
+func (p *serviceGraphConnector) updateCountMetrics(key string, count uint64) {
+	p.reqTotal[key] += int64(count)
 }
 
-func (p *serviceGraphConnector) updateServerDurationMetrics(key string, duration float64) {
+func (p *serviceGraphConnector) updateErrorMetrics(key string, count uint64) {
+	p.reqFailedTotal[key] += int64(count)
+}
+
+func (p *serviceGraphConnector) updateDurationMetrics(key string, serverDuration, clientDuration float64, count uint64) {
+	p.updateServerDurationMetrics(key, serverDuration, count)
+	p.updateClientDurationMetrics(key, clientDuration, count)
+}
+
+func (p *serviceGraphConnector) updateServerDurationMetrics(key string, duration float64, count uint64) {
 	index := sort.SearchFloat64s(p.reqDurationBounds, duration) // Search bucket index
 	if _, ok := p.reqServerDurationSecondsBucketCounts[key]; !ok {
 		p.reqServerDurationSecondsBucketCounts[key] = make([]uint64, len(p.reqDurationBounds)+1)
 	}
-	p.reqServerDurationSecondsSum[key] += duration
-	p.reqServerDurationSecondsCount[key]++
-	p.reqServerDurationSecondsBucketCounts[key][index]++
+	p.reqServerDurationSecondsSum[key] += duration * float64(count)
+	p.reqServerDurationSecondsCount[key] += count
+	p.reqServerDurationSecondsBucketCounts[key][index] += count
 }
 
-func (p *serviceGraphConnector) updateClientDurationMetrics(key string, duration float64) {
+func (p *serviceGraphConnector) updateClientDurationMetrics(key string, duration float64, count uint64) {
 	index := sort.SearchFloat64s(p.reqDurationBounds, duration) // Search bucket index
 	if _, ok := p.reqClientDurationSecondsBucketCounts[key]; !ok {
 		p.reqClientDurationSecondsBucketCounts[key] = make([]uint64, len(p.reqDurationBounds)+1)
 	}
-	p.reqClientDurationSecondsSum[key] += duration
-	p.reqClientDurationSecondsCount[key]++
-	p.reqClientDurationSecondsBucketCounts[key][index]++
+	p.reqClientDurationSecondsSum[key] += duration * float64(count)
+	p.reqClientDurationSecondsCount[key] += count
+	p.reqClientDurationSecondsBucketCounts[key][index] += count
 }
 
 func buildDimensions(e *store.Edge) pcommon.Map {
@@ -573,8 +590,17 @@ func (p *serviceGraphConnector) buildMetricKey(clientName, serverName, connectio
 	var metricKey strings.Builder
 	metricKey.WriteString(clientName + metricKeySeparator + serverName + metricKeySeparator + connectionType)
 
+	metricKey.WriteString(metricKeySeparator + "client")
 	for _, dimName := range p.config.Dimensions {
-		dim, ok := edgeDimensions[dimName]
+		dim, ok := edgeDimensions[clientKind+"_"+dimName]
+		if !ok {
+			continue
+		}
+		metricKey.WriteString(metricKeySeparator + dim)
+	}
+	metricKey.WriteString(metricKeySeparator + "server")
+	for _, dimName := range p.config.Dimensions {
+		dim, ok := edgeDimensions[serverName+"_"+dimName]
 		if !ok {
 			continue
 		}

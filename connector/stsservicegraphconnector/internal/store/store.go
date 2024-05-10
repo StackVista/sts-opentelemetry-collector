@@ -7,6 +7,7 @@ import (
 	"container/list"
 	"errors"
 	"hash/fnv"
+	"math"
 	"strconv"
 	"sync"
 	"time"
@@ -18,7 +19,9 @@ var (
 	ErrTooManyItems = errors.New("too many items")
 )
 
-type Callback func(e *Edge)
+type CompleteCallback func(e *Edge, logp float64)
+type UpdateCallback func(e *Edge)
+type ExpireCallback func(e *Edge)
 
 type Key struct {
 	tid pcommon.TraceID
@@ -38,8 +41,8 @@ type Store struct {
 	mtx sync.Mutex
 	m   map[Key]*list.Element
 
-	onComplete Callback
-	onExpire   Callback
+	onComplete CompleteCallback
+	onExpire   ExpireCallback
 
 	ttl      time.Duration
 	maxItems int
@@ -48,7 +51,7 @@ type Store struct {
 // NewStore creates a Store to build service graphs. The store caches edges, each representing a
 // request between two services. Once an edge is complete its metrics can be collected. Edges that
 // have not found their pair are deleted after ttl time.
-func NewStore(ttl time.Duration, maxItems int, onComplete, onExpire Callback) *Store {
+func NewStore(ttl time.Duration, maxItems int, onComplete CompleteCallback, onExpire ExpireCallback) *Store {
 	s := &Store{
 		l: list.New(),
 		m: make(map[Key]*list.Element),
@@ -71,7 +74,7 @@ func (s *Store) len() int {
 // UpsertEdge fetches an Edge from the store and updates it using the given callback. If the Edge
 // doesn't exist yet, it creates a new one with the default TTL.
 // If the Edge is complete after applying the callback, it's completed and removed.
-func (s *Store) UpsertEdge(key Key, update Callback) (isNew bool, err error) {
+func (s *Store) UpsertEdge(key Key, update UpdateCallback) (isNew bool, err error) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
@@ -80,7 +83,7 @@ func (s *Store) UpsertEdge(key Key, update Callback) (isNew bool, err error) {
 		update(edge)
 
 		if edge.isComplete() {
-			s.onComplete(edge)
+			s.onComplete(edge, edge.logp)
 			delete(s.m, key)
 			s.l.Remove(storedEdge)
 		}
@@ -92,7 +95,7 @@ func (s *Store) UpsertEdge(key Key, update Callback) (isNew bool, err error) {
 	update(edge)
 
 	if edge.isComplete() {
-		s.onComplete(edge)
+		s.onComplete(edge, 0.0)
 		return true, nil
 	}
 
@@ -150,6 +153,7 @@ func (s *Store) tryEvictHead() bool {
 		// this keeps the metrics (in expectation) correct
 		headEdge.expiration = headEdge.expiration.Add(s.ttl)
 		headEdge.generation++
+		headEdge.logp += math.Log(1.0 - float64(s.l.Len()-1)/float64(s.maxItems))
 		s.l.MoveToBack(head)
 	}
 

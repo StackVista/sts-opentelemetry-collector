@@ -37,6 +37,8 @@ type Edge struct {
 	expiration time.Time
 	// generation is the number of times the edge has been re-inserted
 	generation int
+	// logp is the probability this edge was retained after evictions
+	logp float64
 
 	PeerService string
 }
@@ -47,6 +49,7 @@ func newEdge(key Key, ttl time.Duration) *Edge {
 		Dimensions: make(map[string]string),
 		expiration: time.Now().Add(ttl),
 		generation: 0,
+		logp:       0.0,
 	}
 }
 

@@ -22,7 +22,7 @@ func TestStoreUpsertEdge(t *testing.T) {
 	var onCompletedCount int
 	var onExpireCount int
 
-	s := NewStore(time.Hour, 1, countingCallback(&onCompletedCount), countingCallback(&onExpireCount))
+	s := NewStore(time.Hour, 1, countingCompleteCallback(&onCompletedCount), countingCallback(&onExpireCount))
 	assert.Equal(t, 0, s.len())
 
 	// Insert first half of an edge
@@ -73,7 +73,7 @@ func TestStoreUpsertEdge_errTooManyItems(t *testing.T) {
 	key2 := NewKey(pcommon.TraceID([16]byte{4, 5, 6}), pcommon.SpanID([8]byte{1, 2, 3}))
 	var onCallbackCounter int
 
-	s := NewStore(time.Hour, 1, countingCallback(&onCallbackCounter), countingCallback(&onCallbackCounter))
+	s := NewStore(time.Hour, 1, countingCompleteCallback(&onCallbackCounter), countingCallback(&onCallbackCounter))
 	assert.Equal(t, 0, s.len())
 
 	isNew, err := s.UpsertEdge(key1, func(e *Edge) {
@@ -110,7 +110,7 @@ func TestStoreExpire(t *testing.T) {
 	var onCompletedCount int
 	var onExpireCount int
 
-	onComplete := func(e *Edge) {
+	onComplete := func(e *Edge, _ float64) {
 		onCompletedCount++
 		assert.Contains(t, keys, e.Key)
 	}
@@ -130,7 +130,7 @@ func TestStoreExpire(t *testing.T) {
 }
 
 func TestStoreConcurrency(t *testing.T) {
-	s := NewStore(10*time.Millisecond, 100000, noopCallback, noopCallback)
+	s := NewStore(10*time.Millisecond, 100000, noopCompleteCallback, noopCallback)
 
 	end := make(chan struct{})
 
@@ -162,10 +162,17 @@ func TestStoreConcurrency(t *testing.T) {
 	close(end)
 }
 
-func noopCallback(_ *Edge) {}
+func noopCallback(_ *Edge)                    {}
+func noopCompleteCallback(_ *Edge, _ float64) {}
 
 func countingCallback(counter *int) func(*Edge) {
 	return func(_ *Edge) {
+		*counter++
+	}
+}
+
+func countingCompleteCallback(counter *int) func(*Edge, float64) {
+	return func(_ *Edge, _ float64) {
 		*counter++
 	}
 }
