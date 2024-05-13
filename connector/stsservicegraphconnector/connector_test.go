@@ -6,6 +6,8 @@ package servicegraphconnector
 import (
 	"context"
 	"crypto/rand"
+	"fmt"
+	"math"
 	"sync"
 	"testing"
 	"time"
@@ -292,6 +294,83 @@ func TestUpdateDurationMetrics(t *testing.T) {
 			p.updateDurationMetrics(metricKey, tc.duration, tc.duration, 1)
 		})
 	}
+}
+
+func TestCorrectForExpiredEdges(t *testing.T) {
+	testSize := 1000
+
+	// Prepare
+	cfg := &Config{
+		MetricsExporter: "mock",
+		Dimensions:      []string{"some-attribute", "non-existing-attribute"},
+		Store: StoreConfig{
+			MaxItems: testSize,
+			TTL:      time.Millisecond,
+		},
+	}
+
+	mockMetricsExporter := newMockMetricsExporter()
+
+	set := componenttest.NewNopTelemetrySettings()
+	set.Logger = zaptest.NewLogger(t)
+	p := newConnector(set, cfg)
+
+	mHost := newMockHost(map[component.DataType]map[component.ID]component.Component{
+		component.DataTypeMetrics: {
+			component.MustNewID("mock"): mockMetricsExporter,
+		},
+	})
+
+	assert.NoError(t, p.Start(context.Background(), mHost))
+
+	td := ptrace.NewTraces()
+	for i := 0; i < testSize; i++ {
+		trace := buildSampleTrace(t, "first")
+		trace.ResourceSpans().MoveAndAppendTo(td.ResourceSpans())
+	}
+	td.MarkReadOnly()
+
+	clientTraces := ptrace.NewTraces()
+	td.CopyTo(clientTraces)
+	for rsi := 0; rsi < clientTraces.ResourceSpans().Len(); rsi++ {
+		rs := clientTraces.ResourceSpans().At(rsi)
+		for ssi := 0; ssi < rs.ScopeSpans().Len(); ssi++ {
+			ss := rs.ScopeSpans().At(ssi)
+			ss.Spans().RemoveIf(func(span ptrace.Span) bool {
+				return span.Kind() != ptrace.SpanKindClient
+			})
+		}
+	}
+	assert.NoError(t, p.ConsumeTraces(context.Background(), clientTraces))
+
+	p.store.Expire(time.Now().Add(2 * time.Millisecond))
+
+	serverTraces := ptrace.NewTraces()
+	td.CopyTo(serverTraces)
+	for rsi := 0; rsi < serverTraces.ResourceSpans().Len(); rsi++ {
+		rs := serverTraces.ResourceSpans().At(rsi)
+		for ssi := 0; ssi < rs.ScopeSpans().Len(); ssi++ {
+			ss := rs.ScopeSpans().At(ssi)
+			ss.Spans().RemoveIf(func(span ptrace.Span) bool {
+				return span.Kind() != ptrace.SpanKindServer
+			})
+		}
+	}
+	assert.NoError(t, p.ConsumeTraces(context.Background(), serverTraces))
+
+	total := mockMetricsExporter.md[0].ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0)
+	assert.Equal(t, "traces_service_graph_request_total", total.Name())
+	n := total.Sum().DataPoints().At(0).IntValue()
+
+	// variance is determined by size of store - after expiration only 37% of the edges remained
+	// the rescheduled edges try to compensate
+	stderr := int(math.Sqrt(float64(testSize) / 0.37))
+	println(fmt.Sprintf("Testing %d close to %d (within %d)", n, testSize, 4*stderr))
+	assert.Less(t, testSize-4*stderr, int(n))
+	assert.Greater(t, testSize+4*stderr, int(n))
+
+	// Shutdown the connector
+	assert.NoError(t, p.Shutdown(context.Background()))
 }
 
 func TestStaleSeriesCleanup(t *testing.T) {

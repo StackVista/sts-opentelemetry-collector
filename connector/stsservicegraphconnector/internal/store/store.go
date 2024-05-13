@@ -124,8 +124,8 @@ func (s *Store) Expire(time time.Time) {
 	}
 }
 
-// tryEvictHead checks if the oldest item (head of list) can be evicted and will delete it if so.
-// Returns true if the head was evicted.
+// tryEvictHead checks if the oldest item (head of list) can be evicted and will delete or
+// reschedule it if so.  Returns true if the head was expired.
 //
 // Must be called holding lock.
 func (s *Store) tryEvictHead(time time.Time) bool {
@@ -146,6 +146,7 @@ func (s *Store) tryEvictHead(time time.Time) bool {
 	var h maphash.Hash
 	h.Write([]byte(strconv.Itoa(headEdge.generation)))
 	h.Write(headEdge.TraceID[:])
+	h.Write(headEdge.Key.sid[:])
 	hash := h.Sum64()
 	if hash%uint64(s.maxItems) < uint64(s.l.Len()) {
 		s.onExpire(headEdge)
@@ -157,7 +158,7 @@ func (s *Store) tryEvictHead(time time.Time) bool {
 		s.onReschedule(headEdge)
 		// update weight of edge to compensate for expiration
 		// this keeps the metrics (in expectation) correct
-		headEdge.logp += math.Log(1.0 - float64(s.l.Len()-1)/float64(s.maxItems))
+		headEdge.logp += math.Log(1.0 - float64(s.l.Len())/float64(s.maxItems))
 		s.l.MoveToBack(head)
 	}
 
