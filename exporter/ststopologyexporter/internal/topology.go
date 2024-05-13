@@ -184,22 +184,23 @@ func (c *ComponentsCollection) AddConnection(attrs *pcommon.Map) bool {
 	peerService, hasPeer := attrs.Get("client_peer.service")
 	var targetId string
 	if connectionType == CONNECTION_TYPE_DATABASE {
-		// don't use peer.service attribute as it may exist, but not actually point to a valid resource
-		targetId = fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:database/%s", reqAttrs["client_service.namespace"], reqAttrs["client"], reqAttrs["server"])
-		c.serviceInstances[targetId] = &Component{
-			targetId,
-			ComponentType{
-				"database",
-			},
-			newComponentData().
-				withLayer("urn:stackpack:common:layer:databases").
-				withNameFromAttr(attrs, "server"),
+		if hasPeer {
+			// create separate relations producer -> peer and consumer -> peer
+			namespace := reqAttrs["client_service.namespace"]
+			targetId = fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s", namespace, peerService.AsString())
+		} else {
+			targetId = fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:database/%s", reqAttrs["client_service.namespace"], reqAttrs["client"], reqAttrs["server"])
+			c.serviceInstances[targetId] = &Component{
+				targetId,
+				ComponentType{
+					"database",
+				},
+				newComponentData().
+					withLayer("urn:stackpack:common:layer:databases").
+					withNameFromAttr(attrs, "server"),
+			}
 		}
-	} else if connectionType == CONNECTION_TYPE_ASYNCHRONOUS && hasPeer {
-		// create separate relations producer -> peer and consumer -> peer
-		namespace := reqAttrs["client_service.namespace"]
-		targetId = fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s", namespace, peerService.AsString())
-
+	} else if connectionType == CONNECTION_TYPE_ASYNCHRONOUS {
 		consumerNamespace, ok := attrs.Get("server_service.namespace")
 		if !ok {
 			return false
@@ -212,8 +213,15 @@ func (c *ComponentsCollection) AddConnection(attrs *pcommon.Map) bool {
 			consumerInstanceId = instanceId.AsString()
 		}
 		consumerId := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s", consumerNamespace.AsString(), reqAttrs["server"], consumerInstanceId)
-		c.addRelation(consumerId, targetId, connectionType)
-	} else {
+		if hasPeer {
+			// create separate relations producer -> peer and consumer -> peer
+			namespace := reqAttrs["client_service.namespace"]
+			targetId = fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s", namespace, peerService.AsString())
+			c.addRelation(consumerId, targetId, connectionType)
+		} else {
+			targetId = consumerId
+		}
+	} else { // connectionType == CONNECTION_TYPE_SYNCHRONOUS
 		serverNamespace, ok := attrs.Get("server_service.namespace")
 		if !ok {
 			return false

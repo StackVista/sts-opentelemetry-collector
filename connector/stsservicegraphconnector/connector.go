@@ -283,9 +283,8 @@ func (p *serviceGraphConnector) aggregateMetrics(ctx context.Context, td ptrace.
 						// span but just copy details from the client span
 						if db, ok := findDatabase(span.Attributes()); ok {
 							e.ConnectionType = store.Database
-							e.ServerService = db.service
+							e.ServerService = *db
 							e.ServerLatencySec = spanDuration(span)
-							e.Dimensions[serverKind+"_db.system"] = db.system
 						}
 					})
 				case ptrace.SpanKindConsumer:
@@ -623,17 +622,6 @@ func (p *serviceGraphConnector) storeExpirationLoop(d time.Duration) {
 	}
 }
 
-func (p *serviceGraphConnector) getPeerHost(m []string, peers map[string]string) string {
-	peerStr := "unknown"
-	for _, s := range m {
-		if peer, ok := peers[s]; ok {
-			peerStr = peer
-			break
-		}
-	}
-	return peerStr
-}
-
 // cacheLoop periodically cleans the cache
 func (p *serviceGraphConnector) cacheLoop(d time.Duration) {
 	t := time.NewTicker(d)
@@ -697,36 +685,26 @@ func mapDurationsToFloat(vs []time.Duration) []float64 {
 	return vsm
 }
 
-type database struct {
-	service string
-
-	name   string
-	system string
-}
-
-func findDatabase(attrs pcommon.Map) (*database, bool) {
+func findDatabase(attrs pcommon.Map) (*string, bool) {
 	dbSystem, dbSystemOk := findAttributeValue("db.system", attrs)
-	dbName, dbNameOk := findAttributeValue("db.name", attrs)
-	if !dbSystemOk && !dbNameOk {
+	if !dbSystemOk {
 		return nil, false
 	}
-	service := dbName
-	if peerService, ok := findAttributeValue("peer.service", attrs); ok {
-		service = peerService
-	}
-	db := &database{
-		service: service,
-		name:    dbName,
-		system:  dbSystem,
-	}
-	if !dbSystemOk {
-		db.system = "other_sql"
-	} else if dbSystem == "redis" {
-		if dbIndex, ok := findAttributeValue("db.redis.database_index", attrs); ok {
-			db.name = dbIndex
+	if peerService, peerOk := findAttributeValue("peer.service", attrs); peerOk {
+		return &peerService, true
+	} else {
+		if dbName, dbNameOk := findAttributeValue("db.name", attrs); dbNameOk {
+			return &dbName, true
 		} else {
-			db.name = "0"
+			dbName := "database"
+			if dbSystem == "redis" {
+				if dbIndex, ok := findAttributeValue("db.redis.database_index", attrs); ok {
+					dbName = dbIndex
+				} else {
+					dbName = "0"
+				}
+			}
+			return &dbName, true
 		}
 	}
-	return db, true
 }
