@@ -21,8 +21,9 @@ func TestStoreUpsertEdge(t *testing.T) {
 
 	var onCompletedCount int
 	var onExpireCount int
+	var onRescheduleCount int
 
-	s := NewStore(time.Hour, 1, countingCompleteCallback(&onCompletedCount), countingCallback(&onExpireCount))
+	s := NewStore(time.Hour, 1, countingCompleteCallback(&onCompletedCount), countingCallback(&onExpireCount), countingCallback(&onRescheduleCount))
 	assert.Equal(t, 0, s.len())
 
 	// Insert first half of an edge
@@ -34,7 +35,7 @@ func TestStoreUpsertEdge(t *testing.T) {
 	assert.Equal(t, 1, s.len())
 
 	// Nothing should be evicted as TTL is set to 1h
-	assert.False(t, s.tryEvictHead())
+	assert.False(t, s.tryEvictHead(time.Now()))
 	assert.Equal(t, 0, onCompletedCount)
 	assert.Equal(t, 0, onExpireCount)
 
@@ -62,7 +63,7 @@ func TestStoreUpsertEdge(t *testing.T) {
 	assert.Equal(t, 1, onCompletedCount)
 	assert.Equal(t, 0, onExpireCount)
 
-	assert.True(t, s.tryEvictHead())
+	assert.True(t, s.tryEvictHead(time.Now()))
 	assert.Equal(t, 0, s.len())
 	assert.Equal(t, 1, onCompletedCount)
 	assert.Equal(t, 1, onExpireCount)
@@ -73,7 +74,7 @@ func TestStoreUpsertEdge_errTooManyItems(t *testing.T) {
 	key2 := NewKey(pcommon.TraceID([16]byte{4, 5, 6}), pcommon.SpanID([8]byte{1, 2, 3}))
 	var onCallbackCounter int
 
-	s := NewStore(time.Hour, 1, countingCompleteCallback(&onCallbackCounter), countingCallback(&onCallbackCounter))
+	s := NewStore(time.Hour, 1, countingCompleteCallback(&onCallbackCounter), countingCallback(&onCallbackCounter), countingCallback(&onCallbackCounter))
 	assert.Equal(t, 0, s.len())
 
 	isNew, err := s.UpsertEdge(key1, func(e *Edge) {
@@ -100,22 +101,23 @@ func TestStoreUpsertEdge_errTooManyItems(t *testing.T) {
 }
 
 func TestStoreExpire(t *testing.T) {
-	const testSize = 100
+	const testSize = 1000
 
 	keys := map[Key]struct{}{}
 	for i := 0; i < testSize; i++ {
-		keys[NewKey(pcommon.TraceID([16]byte{byte(i)}), pcommon.SpanID([8]byte{1, 2, 3}))] = struct{}{}
+		keys[NewKey(pcommon.TraceID([16]byte{byte(i >> 24), byte(i >> 16), byte(i >> 8), byte(i)}), pcommon.SpanID([8]byte{1, 2, 3}))] = struct{}{}
 	}
 
 	var onCompletedCount int
 	var onExpireCount int
+	var onRescheduleCount int
 
-	onComplete := func(e *Edge, _ float64) {
+	onComplete := func(e *Edge, logp float64) {
 		onCompletedCount++
 		assert.Contains(t, keys, e.Key)
+		assert.Equal(t, 0.0, logp)
 	}
-	// New edges are immediately expired
-	s := NewStore(-time.Second, testSize, onComplete, countingCallback(&onExpireCount))
+	s := NewStore(time.Millisecond, testSize, onComplete, countingCallback(&onExpireCount), countingCallback(&onRescheduleCount))
 
 	for key := range keys {
 		isNew, err := s.UpsertEdge(key, noopCallback)
@@ -123,14 +125,18 @@ func TestStoreExpire(t *testing.T) {
 		require.Equal(t, true, isNew)
 	}
 
-	s.Expire()
-	assert.Equal(t, 0, s.len())
+	s.Expire(time.Now().Add(2 * time.Millisecond))
 	assert.Equal(t, 0, onCompletedCount)
-	assert.Equal(t, testSize, onExpireCount)
+	assert.Equal(t, testSize, onExpireCount+onRescheduleCount)
+	assert.Equal(t, onRescheduleCount, s.len())
+
+	// expected number of rescheduled items is 0.368 * testSize (for large testSize)
+	assert.Less(t, testSize/3, onRescheduleCount)
+	assert.Greater(t, 2*testSize/5, onRescheduleCount)
 }
 
 func TestStoreConcurrency(t *testing.T) {
-	s := NewStore(10*time.Millisecond, 100000, noopCompleteCallback, noopCallback)
+	s := NewStore(10*time.Millisecond, 100000, noopCompleteCallback, noopCallback, noopCallback)
 
 	end := make(chan struct{})
 
@@ -155,7 +161,7 @@ func TestStoreConcurrency(t *testing.T) {
 	})
 
 	go accessor(func() {
-		s.Expire()
+		s.Expire(time.Now())
 	})
 
 	time.Sleep(100 * time.Millisecond)

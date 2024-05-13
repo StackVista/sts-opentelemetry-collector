@@ -6,7 +6,7 @@ package store // import "github.com/open-telemetry/opentelemetry-collector-contr
 import (
 	"container/list"
 	"errors"
-	"hash/fnv"
+	"hash/maphash"
 	"math"
 	"strconv"
 	"sync"
@@ -22,6 +22,7 @@ var (
 type CompleteCallback func(e *Edge, logp float64)
 type UpdateCallback func(e *Edge)
 type ExpireCallback func(e *Edge)
+type RescheduleCallback func(e *Edge)
 
 type Key struct {
 	tid pcommon.TraceID
@@ -41,8 +42,9 @@ type Store struct {
 	mtx sync.Mutex
 	m   map[Key]*list.Element
 
-	onComplete CompleteCallback
-	onExpire   ExpireCallback
+	onComplete   CompleteCallback
+	onExpire     ExpireCallback
+	onReschedule RescheduleCallback
 
 	ttl      time.Duration
 	maxItems int
@@ -51,13 +53,14 @@ type Store struct {
 // NewStore creates a Store to build service graphs. The store caches edges, each representing a
 // request between two services. Once an edge is complete its metrics can be collected. Edges that
 // have not found their pair are deleted after ttl time.
-func NewStore(ttl time.Duration, maxItems int, onComplete CompleteCallback, onExpire ExpireCallback) *Store {
+func NewStore(ttl time.Duration, maxItems int, onComplete CompleteCallback, onExpire ExpireCallback, onReschedule RescheduleCallback) *Store {
 	s := &Store{
 		l: list.New(),
 		m: make(map[Key]*list.Element),
 
-		onComplete: onComplete,
-		onExpire:   onExpire,
+		onComplete:   onComplete,
+		onExpire:     onExpire,
+		onReschedule: onReschedule,
 
 		ttl:      ttl,
 		maxItems: maxItems,
@@ -112,12 +115,12 @@ func (s *Store) UpsertEdge(key Key, update UpdateCallback) (isNew bool, err erro
 }
 
 // Expire evicts all expired items in the store.
-func (s *Store) Expire() {
+func (s *Store) Expire(time time.Time) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
 	// Iterates until no more items can be evicted
-	for s.tryEvictHead() { // nolint
+	for s.tryEvictHead(time) { // nolint
 	}
 }
 
@@ -125,14 +128,14 @@ func (s *Store) Expire() {
 // Returns true if the head was evicted.
 //
 // Must be called holding lock.
-func (s *Store) tryEvictHead() bool {
+func (s *Store) tryEvictHead(time time.Time) bool {
 	head := s.l.Front()
 	if head == nil {
 		return false // list is empty
 	}
 
 	headEdge := head.Value.(*Edge)
-	if !headEdge.isExpired() {
+	if !headEdge.isExpired(time) {
 		return false
 	}
 
@@ -140,17 +143,18 @@ func (s *Store) tryEvictHead() bool {
 	// In the extreme case (Len == maxItems), no expired edges are re-added.
 	// When the list is nearly empty, all edges are retained.  When the list is half-filled,
 	// about half of the expired edges are added again.
-	h := fnv.New32a()
-	h.Write(headEdge.TraceID[:])
+	var h maphash.Hash
 	h.Write([]byte(strconv.Itoa(headEdge.generation)))
-	hash := h.Sum32()
-	if hash%uint32(s.maxItems) < uint32(s.l.Len()) {
+	h.Write(headEdge.TraceID[:])
+	hash := h.Sum64()
+	if hash%uint64(s.maxItems) < uint64(s.l.Len()) {
 		s.onExpire(headEdge)
 		delete(s.m, headEdge.Key)
 		s.l.Remove(head)
 	} else {
-		headEdge.expiration = time.Now().Add(s.ttl)
+		headEdge.expiration = time.Add(s.ttl)
 		headEdge.generation++
+		s.onReschedule(headEdge)
 		// update weight of edge to compensate for expiration
 		// this keeps the metrics (in expectation) correct
 		headEdge.logp += math.Log(1.0 - float64(s.l.Len()-1)/float64(s.maxItems))

@@ -59,6 +59,6 @@ func (e *Edge) isComplete() bool {
 	return len(e.ClientService) != 0 && len(e.ServerService) != 0
 }
 
-func (e *Edge) isExpired() bool {
-	return time.Now().After(e.expiration)
+func (e *Edge) isExpired(time time.Time) bool {
+	return time.After(e.expiration)
 }

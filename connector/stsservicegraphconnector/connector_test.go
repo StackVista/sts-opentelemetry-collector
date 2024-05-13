@@ -84,7 +84,7 @@ func TestConnectorConsume(t *testing.T) {
 	assert.NoError(t, conn.ConsumeTraces(context.Background(), td))
 
 	// Force collection
-	conn.store.Expire()
+	conn.store.Expire(time.Now())
 	md, err := conn.buildMetrics()
 	assert.NoError(t, err)
 	verifyHappyCaseMetrics(t, md)
@@ -464,7 +464,7 @@ func TestValidateOwnTelemetry(t *testing.T) {
 	require.Len(t, sm.Metrics, 1)
 	got := sm.Metrics[0]
 	want := metricdata.Metrics{
-		Name:        "connector/servicegraph/total_edges",
+		Name:        "connector/stsservicegraph/total_edges",
 		Description: "Total number of unique edges",
 		Unit:        "1",
 		Data: metricdata.Sum[int64]{
@@ -476,4 +476,31 @@ func TestValidateOwnTelemetry(t *testing.T) {
 		},
 	}
 	metricdatatest.AssertEqual(t, want, got, metricdatatest.IgnoreTimestamp())
+}
+
+func TestFindDatabaseUsesPeer(t *testing.T) {
+	attrs := pcommon.NewMap()
+	attrs.PutStr("db.system", "postgres")
+	attrs.PutStr("db.name", "the-db")
+	attrs.PutStr("peer.service", "the-peer")
+	db, found := findDatabase(attrs)
+	assert.True(t, found)
+	assert.Equal(t, "the-peer", *db)
+}
+
+func TestFindDatabaseUsesDbnameWithoutPeer(t *testing.T) {
+	attrs := pcommon.NewMap()
+	attrs.PutStr("db.system", "postgres")
+	attrs.PutStr("db.name", "the-db")
+	db, found := findDatabase(attrs)
+	assert.True(t, found)
+	assert.Equal(t, "the-db", *db)
+}
+
+func TestFindDatabaseUsesIndexForRedis(t *testing.T) {
+	attrs := pcommon.NewMap()
+	attrs.PutStr("db.system", "redis")
+	db, found := findDatabase(attrs)
+	assert.True(t, found)
+	assert.Equal(t, "0", *db)
 }

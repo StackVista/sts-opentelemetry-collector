@@ -71,9 +71,10 @@ type serviceGraphConnector struct {
 	metricMutex sync.RWMutex
 	keyToMetric map[string]metricSeries
 
-	statDroppedSpans metric.Int64Counter
-	statTotalEdges   metric.Int64Counter
-	statExpiredEdges metric.Int64Counter
+	statDroppedSpans     metric.Int64Counter
+	statTotalEdges       metric.Int64Counter
+	statExpiredEdges     metric.Int64Counter
+	statRescheduledEdges metric.Int64Counter
 
 	shutdownCh chan any
 }
@@ -115,6 +116,11 @@ func newConnector(set component.TelemetrySettings, config component.Config) *ser
 		metric.WithDescription("Number of edges that expired before finding its matching span"),
 		metric.WithUnit("1"),
 	)
+	rescheduledEdges, _ := meter.Int64Counter(
+		customMetricName("rescheduled_edges"),
+		metric.WithDescription("Number of edges that were rescheduled before finding its matching span"),
+		metric.WithUnit("1"),
+	)
 
 	return &serviceGraphConnector{
 		config:                               pConfig,
@@ -134,6 +140,7 @@ func newConnector(set component.TelemetrySettings, config component.Config) *ser
 		statDroppedSpans:                     droppedSpan,
 		statTotalEdges:                       totalEdges,
 		statExpiredEdges:                     expiredEdges,
+		statRescheduledEdges:                 rescheduledEdges,
 	}
 }
 
@@ -142,7 +149,7 @@ type getExporters interface {
 }
 
 func (p *serviceGraphConnector) Start(_ context.Context, host component.Host) error {
-	p.store = store.NewStore(p.config.Store.TTL, p.config.Store.MaxItems, p.onComplete, p.onExpire)
+	p.store = store.NewStore(p.config.Store.TTL, p.config.Store.MaxItems, p.onComplete, p.onExpire, p.onReschedule)
 
 	if p.metricsConsumer == nil {
 		ge, ok := host.(getExporters)
@@ -239,8 +246,7 @@ func (p *serviceGraphConnector) ConsumeTraces(ctx context.Context, td ptrace.Tra
 
 func (p *serviceGraphConnector) aggregateMetrics(ctx context.Context, td ptrace.Traces) (err error) {
 	var (
-		isNew             bool
-		totalDroppedSpans int
+		isNew bool
 	)
 
 	rss := td.ResourceSpans()
@@ -308,7 +314,6 @@ func (p *serviceGraphConnector) aggregateMetrics(ctx context.Context, td ptrace.
 				}
 
 				if errors.Is(err, store.ErrTooManyItems) {
-					totalDroppedSpans++
 					p.statDroppedSpans.Add(ctx, 1)
 					continue
 				}
@@ -335,15 +340,6 @@ func (p *serviceGraphConnector) upsertDimensions(kind string, m map[string]strin
 	}
 }
 
-func (p *serviceGraphConnector) upsertPeerAttributes(m []string, peers map[string]string, spanAttr pcommon.Map) {
-	for _, s := range m {
-		if v, ok := findAttributeValue(s, spanAttr); ok {
-			peers[s] = v
-			break
-		}
-	}
-}
-
 func (p *serviceGraphConnector) onComplete(e *store.Edge, logp float64) {
 	p.logger.Debug(
 		"edge completed",
@@ -365,6 +361,17 @@ func (p *serviceGraphConnector) onExpire(e *store.Edge) {
 	)
 
 	p.statExpiredEdges.Add(context.Background(), 1)
+}
+
+func (p *serviceGraphConnector) onReschedule(e *store.Edge) {
+	p.logger.Debug(
+		"edge rescheduled",
+		zap.String("client_service", e.ClientService),
+		zap.String("server_service", e.ServerService),
+		zap.String("connection_type", string(e.ConnectionType)),
+		zap.Stringer("trace_id", e.TraceID),
+	)
+	p.statRescheduledEdges.Add(context.Background(), 1)
 }
 
 func (p *serviceGraphConnector) aggregateMetricsForEdge(e *store.Edge, logp float64) {
@@ -615,7 +622,7 @@ func (p *serviceGraphConnector) storeExpirationLoop(d time.Duration) {
 	for {
 		select {
 		case <-t.C:
-			p.store.Expire()
+			p.store.Expire(time.Now())
 		case <-p.shutdownCh:
 			return
 		}

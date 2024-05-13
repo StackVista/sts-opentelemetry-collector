@@ -16,11 +16,6 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/connector/stsservicegraphconnector/internal/metadata"
 )
 
-const (
-	// The stability level of the processor.
-	connectorStability = component.StabilityLevelDevelopment
-)
-
 func init() {
 }
 

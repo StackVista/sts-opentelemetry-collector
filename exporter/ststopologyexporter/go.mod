@@ -11,7 +11,9 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/prometheus/client_golang v1.19.1 // indirect
 	github.com/prometheus/procfs v0.14.0 // indirect
+	github.com/rogpeppe/go-internal v1.11.0 // indirect
 	go.opentelemetry.io/collector v0.100.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
