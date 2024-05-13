@@ -23,6 +23,8 @@
 
 ## Overview
 
+NOTE: The StackState service graph connector is a fork of the opentelemetry-collector-contrib component.
+
 The service graphs connector builds a map representing the interrelationships between various services in a system.
 The connector will analyse trace data and generate metrics describing the relationship between the services.
 These metrics can be used by data visualization apps (e.g. Grafana) to draw a service graph.

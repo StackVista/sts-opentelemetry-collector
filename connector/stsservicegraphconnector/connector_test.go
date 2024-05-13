@@ -502,5 +502,5 @@ func TestFindDatabaseUsesIndexForRedis(t *testing.T) {
 	attrs.PutStr("db.system", "redis")
 	db, found := findDatabase(attrs)
 	assert.True(t, found)
-	assert.Equal(t, "0", *db)
+	assert.Equal(t, "redis", *db)
 }

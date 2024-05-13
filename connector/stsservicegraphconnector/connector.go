@@ -703,12 +703,10 @@ func findDatabase(attrs pcommon.Map) (*string, bool) {
 		if dbName, dbNameOk := findAttributeValue("db.name", attrs); dbNameOk {
 			return &dbName, true
 		} else {
-			dbName := "database"
+			dbName := dbSystem
 			if dbSystem == "redis" {
 				if dbIndex, ok := findAttributeValue("db.redis.database_index", attrs); ok {
-					dbName = dbIndex
-				} else {
-					dbName = "0"
+					dbName = fmt.Sprintf("redis %s", dbIndex)
 				}
 			}
 			return &dbName, true
