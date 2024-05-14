@@ -197,6 +197,8 @@ func (c *ComponentsCollection) AddConnection(attrs *pcommon.Map) bool {
 				},
 				newComponentData().
 					withLayer("urn:stackpack:common:layer:databases").
+					withTagValue("service.namespace", reqAttrs["client_service.namespace"]).
+					withTagValue("service.name", reqAttrs["client"]).
 					withNameFromAttr(attrs, "server"),
 			}
 		}
@@ -318,6 +320,11 @@ func (c *ComponentData) withTag(attrs *pcommon.Map, key string) *ComponentData {
 	if ok {
 		c.Tags[key] = value.AsString()
 	}
+	return c
+}
+
+func (c *ComponentData) withTagValue(key string, value string) *ComponentData {
+	c.Tags[key] = value
 	return c
 }
 
