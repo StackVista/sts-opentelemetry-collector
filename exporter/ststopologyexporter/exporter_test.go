@@ -57,6 +57,22 @@ func TestExporter_skipVirtualNodes(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestExporter_createBroker(t *testing.T) {
+	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		var payload internal.IntakeTopology
+		err := json.NewDecoder(req.Body).Decode(&payload)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(payload.Topologies))
+		require.Equal(t, 3, len(payload.Topologies[0].Components))
+		require.Equal(t, "broker", payload.Topologies[0].Components[1].Type.Name)
+		require.Equal(t, "broker-instance", payload.Topologies[0].Components[2].Type.Name)
+		res.WriteHeader(200)
+	}))
+	exporter := newTestExporter(t, testServer.URL)
+	err := exporter.ConsumeMetrics(context.TODO(), brokerMetrics())
+	require.NoError(t, err)
+}
+
 // simpleMetrics there will be added two ResourceMetrics and each of them have count data point
 func simpleMetrics() pmetric.Metrics {
 	metrics := pmetric.NewMetrics()
@@ -85,6 +101,24 @@ func simpleMetrics() pmetric.Metrics {
 	ma.PutStr("server", "server")
 	ma.PutStr("server_service.namespace", "serverns")
 	ma.PutStr("connection_type", "")
+	return metrics
+}
+
+// simpleMetrics there will be added two ResourceMetrics and each of them have count data point
+func brokerMetrics() pmetric.Metrics {
+	metrics := pmetric.NewMetrics()
+	rm := metrics.ResourceMetrics().AppendEmpty()
+	rm.Resource().Attributes().PutStr("service.name", "broker 1")
+	rm.Resource().Attributes().PutStr("service.namespace", "demo")
+	rm.Resource().Attributes().PutStr("sts_api_key", "APIKEY")
+	rm.Resource().Attributes().PutStr("Resource Attributes 1", "value1")
+	rm.SetSchemaUrl("Resource SchemaUrl 1")
+
+	sc := rm.ScopeMetrics().AppendEmpty()
+	sc.Scope().SetName("something")
+	ms := sc.Metrics().AppendEmpty()
+	ms.SetName("kafka_server_metric")
+	ms.SetEmptySum().SetIsMonotonic(true)
 	return metrics
 }
 

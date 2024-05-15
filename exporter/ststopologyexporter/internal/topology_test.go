@@ -14,7 +14,7 @@ func TestTopology_addResource(t *testing.T) {
 	attrs.PutStr("service.namespace", "demo")
 	attrs.PutStr("telemetry.sdk.language", "go")
 	attrs.PutStr("Resource Attributes 1", "value1")
-	collection.AddResource(&attrs)
+	collection.AddResource(&attrs, false)
 
 	components := collection.GetComponents()
 	require.Equal(t, []*Component{

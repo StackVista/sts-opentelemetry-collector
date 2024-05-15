@@ -34,7 +34,7 @@ func NewCollection() *ComponentsCollection {
 	}
 }
 
-func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
+func (c *ComponentsCollection) AddResource(attrs *pcommon.Map, isQueue bool) bool {
 	serviceName, ok := attrs.Get("service.name")
 	if !ok {
 		return false
@@ -67,11 +67,16 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 		}
 	}
 
+	componentType := "service"
+	if isQueue {
+		componentType = "broker"
+	}
+
 	serviceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s", serviceNamespace.AsString(), serviceName.AsString())
 	c.services[serviceIdentifier] = &Component{
 		serviceIdentifier,
 		ComponentType{
-			"service",
+			componentType,
 		},
 		newComponentData().
 			withLayer("urn:stackpack:common:layer:services").
@@ -83,11 +88,16 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 			withTag(attrs, "service.version").
 			withTagPrefix(attrs, "telemetry.sdk"),
 	}
+
+	instanceComponentType := "service-instance"
+	if isQueue {
+		instanceComponentType = "broker-instance"
+	}
 	serviceInstanceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s", serviceNamespace.AsString(), serviceName.AsString(), serviceInstanceId.AsString())
 	c.serviceInstances[serviceInstanceIdentifier] = &Component{
 		serviceInstanceIdentifier,
 		ComponentType{
-			"service-instance",
+			instanceComponentType,
 		},
 		newComponentData().
 			withLayer("urn:stackpack:common:layer:containers").
@@ -273,10 +283,10 @@ func (c *ComponentsCollection) GetComponents() []*Component {
 	}
 	return append(
 		append(
-			services,
-			instances...,
+			namespaces,
+			services...,
 		),
-		namespaces...,
+		instances...,
 	)
 }
 
