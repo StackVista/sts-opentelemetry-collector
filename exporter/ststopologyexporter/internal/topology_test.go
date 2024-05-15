@@ -7,7 +7,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/pcommon"
 )
 
-func TestTopology_addResource(t *testing.T) {
+func TestTopology_addService(t *testing.T) {
 	collection := NewCollection()
 	attrs := pcommon.NewMap()
 	attrs.PutStr("service.name", "demo 1")
@@ -18,6 +18,20 @@ func TestTopology_addResource(t *testing.T) {
 
 	components := collection.GetComponents()
 	require.Equal(t, []*Component{
+		{
+			ExternalId: "urn:opentelemetry:namespace/demo",
+			Type: ComponentType{
+				Name: "namespace",
+			},
+			Data: &ComponentData{
+				Name:        "demo",
+				Version:     "",
+				Layer:       "urn:stackpack:common:layer:applications",
+				Domain:      "",
+				Environment: "",
+				Tags:        map[string]string{},
+			},
+		},
 		{
 			ExternalId: "urn:opentelemetry:namespace/demo:service/demo 1",
 			Type: ComponentType{
@@ -30,6 +44,7 @@ func TestTopology_addResource(t *testing.T) {
 				Domain:      "",
 				Environment: "",
 				Tags: map[string]string{
+					"service.name":           "demo 1",
 					"service.namespace":      "demo",
 					"telemetry.sdk.language": "go",
 				},
@@ -54,6 +69,35 @@ func TestTopology_addResource(t *testing.T) {
 				},
 			},
 		},
+	}, components)
+
+	relations := collection.GetRelations()
+	require.Equal(t, []*Relation{
+		{
+			ExternalId: "urn:opentelemetry:namespace/demo:service/demo 1-urn:opentelemetry:namespace/demo:service/demo 1:serviceInstance/demo 1",
+			SourceId:   "urn:opentelemetry:namespace/demo:service/demo 1",
+			TargetId:   "urn:opentelemetry:namespace/demo:service/demo 1:serviceInstance/demo 1",
+			Type: RelationType{
+				Name: "provided by",
+			},
+			Data: &RelationData{
+				Tags: map[string]string{},
+			},
+		},
+	}, relations)
+}
+
+func TestTopology_addBroker(t *testing.T) {
+	collection := NewCollection()
+	attrs := pcommon.NewMap()
+	attrs.PutStr("service.name", "demo 1")
+	attrs.PutStr("service.namespace", "demo")
+	attrs.PutStr("telemetry.sdk.language", "go")
+	attrs.PutStr("Resource Attributes 1", "value1")
+	collection.AddResource(&attrs, true)
+
+	components := collection.GetComponents()
+	require.Equal(t, []*Component{
 		{
 			ExternalId: "urn:opentelemetry:namespace/demo",
 			Type: ComponentType{
@@ -68,14 +112,51 @@ func TestTopology_addResource(t *testing.T) {
 				Tags:        map[string]string{},
 			},
 		},
+		{
+			ExternalId: "urn:opentelemetry:namespace/demo:broker/demo 1",
+			Type: ComponentType{
+				Name: "broker",
+			},
+			Data: &ComponentData{
+				Name:        "demo 1",
+				Version:     "",
+				Layer:       "urn:stackpack:common:layer:messaging",
+				Domain:      "",
+				Environment: "",
+				Tags: map[string]string{
+					"service.name":           "demo 1",
+					"service.namespace":      "demo",
+					"telemetry.sdk.language": "go",
+				},
+			},
+		},
+		{
+			ExternalId: "urn:opentelemetry:namespace/demo:broker/demo 1:brokerInstance/demo 1",
+			Type: ComponentType{
+				Name: "broker-instance",
+			},
+			Data: &ComponentData{
+				Name:        "demo 1 - instance",
+				Version:     "",
+				Layer:       "urn:stackpack:common:layer:containers",
+				Domain:      "",
+				Environment: "",
+				Tags: map[string]string{
+					"Resource Attributes 1":  "value1",
+					"service.name":           "demo 1",
+					"service.namespace":      "demo",
+					"telemetry.sdk.language": "go",
+				},
+			},
+		},
 	}, components)
 
 	relations := collection.GetRelations()
 	require.Equal(t, []*Relation{
 		{
-			ExternalId: "urn:opentelemetry:namespace/demo:service/demo 1-urn:opentelemetry:namespace/demo:service/demo 1:serviceInstance/demo 1",
-			SourceId:   "urn:opentelemetry:namespace/demo:service/demo 1",
-			TargetId:   "urn:opentelemetry:namespace/demo:service/demo 1:serviceInstance/demo 1",
+			ExternalId: "urn:opentelemetry:namespace/demo:broker/demo 1-urn:opentelemetry:namespace/demo:broker/demo 1:brokerInstance/demo 1",
+			SourceId:   "urn:opentelemetry:namespace/demo:broker/demo 1",
+			TargetId:   "urn:opentelemetry:namespace/demo:broker/demo 1:brokerInstance/demo 1",
 			Type: RelationType{
 				Name: "provided by",
 			},
@@ -199,7 +280,10 @@ func TestTopology_addDatabase(t *testing.T) {
 				Layer:       "urn:stackpack:common:layer:databases",
 				Domain:      "",
 				Environment: "",
-				Tags:        map[string]string{},
+				Tags: map[string]string{
+					"service.name":      "frontend",
+					"service.namespace": "ns",
+				},
 			},
 		},
 	}, components)

@@ -74,7 +74,7 @@ func (t *topologyExporter) ConsumeMetrics(ctx context.Context, md pmetric.Metric
 			collection := getOrDefault(componentsByApiKey, sts_api_key)
 
 			// determine if it's a queue
-			isQueue := false
+			isBroker := false
 			ilms := rs.ScopeMetrics()
 			for j := 0; j < ilms.Len(); j++ {
 				ilm := ilms.At(j)
@@ -82,15 +82,15 @@ func (t *topologyExporter) ConsumeMetrics(ctx context.Context, md pmetric.Metric
 				for k := 0; k < metrics.Len(); k++ {
 					m := metrics.At(k)
 					if len(m.Name()) > 12 && m.Name()[:12] == "kafka_server" {
-						isQueue = true
+						isBroker = true
 						break
 					}
 				}
-				if isQueue {
+				if isBroker {
 					break
 				}
 			}
-			if !collection.AddResource(&attrs, isQueue) {
+			if !collection.AddResource(&attrs, isBroker) {
 				t.logAttrs("Skipping resource without necessary attributes", &attrs)
 			}
 		} else {

@@ -34,7 +34,7 @@ func NewCollection() *ComponentsCollection {
 	}
 }
 
-func (c *ComponentsCollection) AddResource(attrs *pcommon.Map, isQueue bool) bool {
+func (c *ComponentsCollection) AddResource(attrs *pcommon.Map, isBroker bool) bool {
 	serviceName, ok := attrs.Get("service.name")
 	if !ok {
 		return false
@@ -68,18 +68,20 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map, isQueue bool) boo
 	}
 
 	componentType := "service"
-	if isQueue {
+	layer := "services"
+	if isBroker {
 		componentType = "broker"
+		layer = "messaging"
 	}
 
-	serviceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s", serviceNamespace.AsString(), serviceName.AsString())
+	serviceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s:%s/%s", serviceNamespace.AsString(), componentType, serviceName.AsString())
 	c.services[serviceIdentifier] = &Component{
 		serviceIdentifier,
 		ComponentType{
 			componentType,
 		},
 		newComponentData().
-			withLayer("urn:stackpack:common:layer:services").
+			withLayer(fmt.Sprintf("urn:stackpack:common:layer:%s", layer)).
 			withEnvironment(attrs).
 			withNameFromAttr(attrs, "service.name").
 			withVersion(attrs, "service.version").
@@ -90,10 +92,10 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map, isQueue bool) boo
 	}
 
 	instanceComponentType := "service-instance"
-	if isQueue {
+	if isBroker {
 		instanceComponentType = "broker-instance"
 	}
-	serviceInstanceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s", serviceNamespace.AsString(), serviceName.AsString(), serviceInstanceId.AsString())
+	serviceInstanceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s:%s/%s:%sInstance/%s", serviceNamespace.AsString(), componentType, serviceName.AsString(), componentType, serviceInstanceId.AsString())
 	c.serviceInstances[serviceInstanceIdentifier] = &Component{
 		serviceInstanceIdentifier,
 		ComponentType{
@@ -230,7 +232,7 @@ func (c *ComponentsCollection) AddConnection(attrs *pcommon.Map) bool {
 		if hasPeer {
 			// create separate relations producer -> peer and consumer -> peer
 			namespace := reqAttrs["client_service.namespace"]
-			targetId = fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s", namespace, peerService.AsString())
+			targetId = fmt.Sprintf("urn:opentelemetry:namespace/%s:broker/%s", namespace, peerService.AsString())
 			c.addRelation(consumerId, targetId, connectionType)
 		} else {
 			targetId = consumerId
