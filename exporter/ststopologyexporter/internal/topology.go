@@ -78,7 +78,9 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 			withEnvironment(attrs).
 			withNameFromAttr(attrs, "service.name").
 			withVersion(attrs, "service.version").
+			withTag(attrs, "service.name").
 			withTag(attrs, "service.namespace").
+			withTag(attrs, "service.version").
 			withTagPrefix(attrs, "telemetry.sdk"),
 	}
 	serviceInstanceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s", serviceNamespace.AsString(), serviceName.AsString(), serviceInstanceId.AsString())
