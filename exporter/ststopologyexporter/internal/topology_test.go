@@ -41,7 +41,7 @@ func TestTopology_addResource(t *testing.T) {
 				Name: "service-instance",
 			},
 			Data: &ComponentData{
-				Name:        "",
+				Name:        "demo 1 - instance",
 				Version:     "",
 				Layer:       "urn:stackpack:common:layer:containers",
 				Domain:      "",
