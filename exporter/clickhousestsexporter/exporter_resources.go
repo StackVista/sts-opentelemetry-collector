@@ -114,7 +114,7 @@ const (
 	createResourcesTableSQL = `
 CREATE TABLE IF NOT EXISTS %s (
      Timestamp DateTime64(9) CODEC(Delta, ZSTD(1)),
-		 ResourceRef UUID,
+	 ResourceRef UUID,
      ResourceAttributes Map(LowCardinality(String), String) CODEC(ZSTD(1)),
 ) ENGINE = ReplacingMergeTree
 %s
