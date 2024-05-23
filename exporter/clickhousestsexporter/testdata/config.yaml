@@ -22,3 +22,19 @@ clickhousests/full:
     storage: file_storage/clickhouse
 clickhousests/invalid-endpoint:
   endpoint: 127.0.0.1:9000
+
+clickhousests/table-engine-empty:
+  endpoint: clickhouse://127.0.0.1:9000
+clickhousests/table-engine-name-only:
+  endpoint: clickhouse://127.0.0.1:9000
+  table_engine:
+    name: ReplicatedReplacingMergeTree
+clickhousests/table-engine-full:
+  endpoint: clickhouse://127.0.0.1:9000
+  table_engine:
+    name: ReplicatedReplacingMergeTree
+    params: "'/clickhouse/tables/{shard}/table_name', '{replica}', ver"
+clickhousests/table-engine-params-only:
+  endpoint: clickhouse://127.0.0.1:9000
+  table_engine:
+    params: "whatever"
