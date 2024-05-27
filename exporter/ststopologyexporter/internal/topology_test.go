@@ -19,6 +19,20 @@ func TestTopology_addResource(t *testing.T) {
 	components := collection.GetComponents()
 	require.Equal(t, []*Component{
 		{
+			ExternalId: "urn:opentelemetry:namespace/demo",
+			Type: ComponentType{
+				Name: "namespace",
+			},
+			Data: &ComponentData{
+				Name:        "demo",
+				Version:     "",
+				Layer:       "urn:stackpack:common:layer:applications",
+				Domain:      "",
+				Environment: "",
+				Tags:        map[string]string{},
+			},
+		},
+		{
 			ExternalId: "urn:opentelemetry:namespace/demo:service/demo 1",
 			Type: ComponentType{
 				Name: "service",
@@ -30,6 +44,7 @@ func TestTopology_addResource(t *testing.T) {
 				Domain:      "",
 				Environment: "",
 				Tags: map[string]string{
+					"service.name":           "demo 1",
 					"service.namespace":      "demo",
 					"telemetry.sdk.language": "go",
 				},
@@ -52,20 +67,6 @@ func TestTopology_addResource(t *testing.T) {
 					"service.namespace":      "demo",
 					"telemetry.sdk.language": "go",
 				},
-			},
-		},
-		{
-			ExternalId: "urn:opentelemetry:namespace/demo",
-			Type: ComponentType{
-				Name: "namespace",
-			},
-			Data: &ComponentData{
-				Name:        "demo",
-				Version:     "",
-				Layer:       "urn:stackpack:common:layer:applications",
-				Domain:      "",
-				Environment: "",
-				Tags:        map[string]string{},
 			},
 		},
 	}, components)
@@ -199,8 +200,221 @@ func TestTopology_addDatabase(t *testing.T) {
 				Layer:       "urn:stackpack:common:layer:databases",
 				Domain:      "",
 				Environment: "",
-				Tags:        map[string]string{},
+				Tags: map[string]string{
+					"service.name":      "frontend",
+					"service.namespace": "ns",
+				},
 			},
 		},
 	}, components)
+}
+
+func TestTopology_addHost(t *testing.T) {
+	collection := NewCollection()
+	attrs := pcommon.NewMap()
+	attrs.PutStr("service.name", "ye-service")
+	attrs.PutStr("service.namespace", "ns")
+	attrs.PutStr("host.id", "ye-host")
+	ok := collection.AddResource(&attrs)
+	require.True(t, ok)
+
+	components := collection.GetComponents()
+	require.Equal(t, []*Component{
+		{
+			ExternalId: "urn:opentelemetry:host/ye-host",
+			Type: ComponentType{
+				Name: "host",
+			},
+			Data: &ComponentData{
+				Name:        "ye-host",
+				Version:     "",
+				Layer:       "urn:stackpack:common:layer:machines",
+				Domain:      "",
+				Environment: "",
+				Tags: map[string]string{
+					"host.id": "ye-host",
+				},
+			},
+		},
+		{
+			ExternalId: "urn:opentelemetry:namespace/ns",
+			Type: ComponentType{
+				Name: "namespace",
+			},
+			Data: &ComponentData{
+				Name:        "ns",
+				Version:     "",
+				Layer:       "urn:stackpack:common:layer:applications",
+				Domain:      "",
+				Environment: "",
+				Tags:        map[string]string{},
+			},
+		},
+		{
+			ExternalId: "urn:opentelemetry:namespace/ns:service/ye-service",
+			Type: ComponentType{
+				Name: "service",
+			},
+			Data: &ComponentData{
+				Name:        "ye-service",
+				Version:     "",
+				Layer:       "urn:stackpack:common:layer:services",
+				Domain:      "",
+				Environment: "",
+				Tags: map[string]string{
+					"service.name":      "ye-service",
+					"service.namespace": "ns",
+				},
+			},
+		},
+		{
+			ExternalId: "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			Type: ComponentType{
+				Name: "service-instance",
+			},
+			Data: &ComponentData{
+				Name:        "ye-service - instance",
+				Version:     "",
+				Layer:       "urn:stackpack:common:layer:containers",
+				Domain:      "",
+				Environment: "",
+				Tags: map[string]string{
+					"host.id":           "ye-host",
+					"service.name":      "ye-service",
+					"service.namespace": "ns",
+				},
+			},
+		},
+	}, components)
+
+	relations := collection.GetRelations()
+	require.Equal(t, []*Relation{
+		{
+			ExternalId: "urn:opentelemetry:host/ye-host-urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			SourceId:   "urn:opentelemetry:host/ye-host",
+			TargetId:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			Type: RelationType{
+				Name: "executes",
+			},
+			Data: &RelationData{
+				Tags: map[string]string{},
+			},
+		},
+		{
+			ExternalId: "urn:opentelemetry:namespace/ns:service/ye-service-urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			SourceId:   "urn:opentelemetry:namespace/ns:service/ye-service",
+			TargetId:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			Type: RelationType{
+				Name: "provided by",
+			},
+			Data: &RelationData{
+				Tags: map[string]string{},
+			},
+		},
+	}, relations)
+}
+
+func TestTopology_addFaas(t *testing.T) {
+	collection := NewCollection()
+	attrs := pcommon.NewMap()
+	attrs.PutStr("service.name", "ye-service")
+	attrs.PutStr("service.namespace", "ns")
+	attrs.PutStr("faas.id", "ye-faas")
+	ok := collection.AddResource(&attrs)
+	require.True(t, ok)
+
+	components := collection.GetComponents()
+	require.Equal(t, []*Component{
+		{
+			ExternalId: "urn:opentelemetry:function/ye-faas",
+			Type: ComponentType{
+				Name: "function",
+			},
+			Data: &ComponentData{
+				Name:        "ye-faas",
+				Version:     "",
+				Layer:       "urn:stackpack:common:layer:serverless",
+				Domain:      "",
+				Environment: "",
+				Tags: map[string]string{
+					"faas.id": "ye-faas",
+				},
+			},
+		},
+		{
+			ExternalId: "urn:opentelemetry:namespace/ns",
+			Type: ComponentType{
+				Name: "namespace",
+			},
+			Data: &ComponentData{
+				Name:        "ns",
+				Version:     "",
+				Layer:       "urn:stackpack:common:layer:applications",
+				Domain:      "",
+				Environment: "",
+				Tags:        map[string]string{},
+			},
+		},
+		{
+			ExternalId: "urn:opentelemetry:namespace/ns:service/ye-service",
+			Type: ComponentType{
+				Name: "service",
+			},
+			Data: &ComponentData{
+				Name:        "ye-service",
+				Version:     "",
+				Layer:       "urn:stackpack:common:layer:services",
+				Domain:      "",
+				Environment: "",
+				Tags: map[string]string{
+					"service.name":      "ye-service",
+					"service.namespace": "ns",
+				},
+			},
+		},
+		{
+			ExternalId: "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			Type: ComponentType{
+				Name: "service-instance",
+			},
+			Data: &ComponentData{
+				Name:        "ye-service - instance",
+				Version:     "",
+				Layer:       "urn:stackpack:common:layer:containers",
+				Domain:      "",
+				Environment: "",
+				Tags: map[string]string{
+					"faas.id":           "ye-faas",
+					"service.name":      "ye-service",
+					"service.namespace": "ns",
+				},
+			},
+		},
+	}, components)
+
+	relations := collection.GetRelations()
+	require.Equal(t, []*Relation{
+		{
+			ExternalId: "urn:opentelemetry:function/ye-faas-urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			SourceId:   "urn:opentelemetry:function/ye-faas",
+			TargetId:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			Type: RelationType{
+				Name: "executes",
+			},
+			Data: &RelationData{
+				Tags: map[string]string{},
+			},
+		},
+		{
+			ExternalId: "urn:opentelemetry:namespace/ns:service/ye-service-urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			SourceId:   "urn:opentelemetry:namespace/ns:service/ye-service",
+			TargetId:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			Type: RelationType{
+				Name: "provided by",
+			},
+			Data: &RelationData{
+				Tags: map[string]string{},
+			},
+		},
+	}, relations)
 }

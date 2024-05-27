@@ -1,7 +1,9 @@
 package internal
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 
 	"go.opentelemetry.io/collector/pdata/pcommon"
 )
@@ -13,22 +15,12 @@ const (
 )
 
 type ComponentsCollection struct {
-	hosts            map[string]*Component
-	functions        map[string]*Component
-	tasks            map[string]*Component
-	namespaces       map[string]*Component
-	services         map[string]*Component
-	serviceInstances map[string]*Component
-	relations        map[string]*Relation
+	components map[string]*Component
+	relations  map[string]*Relation
 }
 
 func NewCollection() *ComponentsCollection {
 	return &ComponentsCollection{
-		make(map[string]*Component, 0),
-		make(map[string]*Component, 0),
-		make(map[string]*Component, 0),
-		make(map[string]*Component, 0),
-		make(map[string]*Component, 0),
 		make(map[string]*Component, 0),
 		make(map[string]*Relation, 0),
 	}
@@ -54,9 +46,10 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 		serviceInstanceName = fmt.Sprintf("%s - %s", serviceName.AsString(), instanceId.AsString())
 	}
 
-	if _, ok := c.namespaces[serviceNamespace.AsString()]; !ok {
-		c.namespaces[serviceNamespace.AsString()] = &Component{
-			fmt.Sprintf("urn:opentelemetry:namespace/%s", serviceNamespace.AsString()),
+	namespaceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s", serviceNamespace.AsString())
+	if _, ok := c.components[namespaceIdentifier]; !ok {
+		c.components[namespaceIdentifier] = &Component{
+			namespaceIdentifier,
 			ComponentType{
 				"namespace",
 			},
@@ -68,7 +61,7 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 	}
 
 	serviceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s", serviceNamespace.AsString(), serviceName.AsString())
-	c.services[serviceIdentifier] = &Component{
+	c.components[serviceIdentifier] = &Component{
 		serviceIdentifier,
 		ComponentType{
 			"service",
@@ -84,7 +77,7 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 			withTagPrefix(attrs, "telemetry.sdk"),
 	}
 	serviceInstanceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s", serviceNamespace.AsString(), serviceName.AsString(), serviceInstanceId.AsString())
-	c.serviceInstances[serviceInstanceIdentifier] = &Component{
+	c.components[serviceInstanceIdentifier] = &Component{
 		serviceInstanceIdentifier,
 		ComponentType{
 			"service-instance",
@@ -105,12 +98,13 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 func (c *ComponentsCollection) addHostResource(attrs *pcommon.Map, instance string) {
 	if hostId, ok := attrs.Get("host.id"); ok {
 		hostIdentifier := fmt.Sprintf("urn:opentelemetry:host/%s", hostId.AsString())
-		c.hosts[hostId.AsString()] = &Component{
+		c.components[hostId.AsString()] = &Component{
 			hostIdentifier,
 			ComponentType{
 				"host",
 			},
 			newComponentData().
+				withName(hostId.AsString()).
 				withEnvironment(attrs).
 				withLayer("urn:stackpack:common:layer:machines").
 				withTagPrefix(attrs, "os").
@@ -121,30 +115,36 @@ func (c *ComponentsCollection) addHostResource(attrs *pcommon.Map, instance stri
 		}
 		c.addRelation(hostIdentifier, instance, "executes")
 	} else if faasId, ok := attrs.Get("faas.id"); ok {
-		c.functions[faasId.AsString()] = &Component{
-			fmt.Sprintf("urn:opentelemetry:function/%s", faasId.AsString()),
+		faasIdentifier := fmt.Sprintf("urn:opentelemetry:function/%s", faasId.AsString())
+		c.components[faasIdentifier] = &Component{
+			faasIdentifier,
 			ComponentType{
 				"function",
 			},
 			newComponentData().
+				withName(faasId.AsString()).
 				withEnvironment(attrs).
 				withLayer("urn:stackpack:common:layer:serverless").
 				withVersion(attrs, "faas.version").
 				withTagPrefix(attrs, "faas").
 				withTagPrefix(attrs, "cloud"),
 		}
+		c.addRelation(faasIdentifier, instance, "executes")
 	} else if taskId, ok := attrs.Get("aws.ecs.task.id"); ok {
-		c.tasks[taskId.AsString()] = &Component{
-			fmt.Sprintf("urn:opentelemetry:task/%s", taskId.AsString()),
+		taskIdentifier := fmt.Sprintf("urn:opentelemetry:task/%s", taskId.AsString())
+		c.components[taskIdentifier] = &Component{
+			taskIdentifier,
 			ComponentType{
 				"task",
 			},
 			newComponentData().
+				withName(taskId.AsString()).
 				withEnvironment(attrs).
 				withLayer("urn:stackpack:common:layer:serverless").
 				withTagPrefix(attrs, "aws.ecs").
 				withTagPrefix(attrs, "cloud"),
 		}
+		c.addRelation(taskIdentifier, instance, "executes")
 	}
 }
 
@@ -192,7 +192,7 @@ func (c *ComponentsCollection) AddConnection(attrs *pcommon.Map) bool {
 			targetId = fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s", namespace, peerService.AsString())
 		} else {
 			targetId = fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:database/%s", reqAttrs["client_service.namespace"], reqAttrs["client"], reqAttrs["server"])
-			c.serviceInstances[targetId] = &Component{
+			c.components[targetId] = &Component{
 				targetId,
 				ComponentType{
 					"database",
@@ -259,25 +259,14 @@ func (c *ComponentsCollection) addRelation(sourceId string, targetId string, typ
 }
 
 func (c *ComponentsCollection) GetComponents() []*Component {
-	namespaces := make([]*Component, 0, len(c.namespaces))
-	for _, namespace := range c.namespaces {
-		namespaces = append(namespaces, namespace)
+	components := make([]*Component, 0, len(c.components))
+	for _, component := range c.components {
+		components = append(components, component)
 	}
-	services := make([]*Component, 0, len(c.services))
-	for _, service := range c.services {
-		services = append(services, service)
-	}
-	instances := make([]*Component, 0, len(c.serviceInstances))
-	for _, instance := range c.serviceInstances {
-		instances = append(instances, instance)
-	}
-	return append(
-		append(
-			services,
-			instances...,
-		),
-		namespaces...,
-	)
+	slices.SortFunc(components, func(a, b *Component) int {
+		return cmp.Compare(a.ExternalId, b.ExternalId)
+	})
+	return components
 }
 
 func (c *ComponentsCollection) GetRelations() []*Relation {
@@ -285,6 +274,9 @@ func (c *ComponentsCollection) GetRelations() []*Relation {
 	for _, relation := range c.relations {
 		relations = append(relations, relation)
 	}
+	slices.SortFunc(relations, func(a, b *Relation) int {
+		return cmp.Compare(a.ExternalId, b.ExternalId)
+	})
 	return relations
 }
 
