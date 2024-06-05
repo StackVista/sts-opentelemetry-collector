@@ -418,3 +418,96 @@ func TestTopology_addFaas(t *testing.T) {
 		},
 	}, relations)
 }
+
+func TestTopology_addKubernetes(t *testing.T) {
+	collection := NewCollection()
+	attrs := pcommon.NewMap()
+	attrs.PutStr("service.name", "ye-service")
+	attrs.PutStr("service.namespace", "ns")
+	attrs.PutStr("k8s.cluster.name", "ye-cluster")
+	attrs.PutStr("k8s.namespace.name", "ye-k8s-namespace")
+	attrs.PutStr("k8s.pod.name", "ye-pod-name")
+	ok := collection.AddResource(&attrs)
+	require.True(t, ok)
+
+	components := collection.GetComponents()
+	require.Equal(t, []*Component{
+		{
+			ExternalId: "urn:opentelemetry:namespace/ns",
+			Type: ComponentType{
+				Name: "namespace",
+			},
+			Data: &ComponentData{
+				Name:        "ns",
+				Version:     "",
+				Layer:       "urn:stackpack:common:layer:applications",
+				Domain:      "",
+				Environment: "",
+				Tags:        map[string]string{},
+			},
+		},
+		{
+			ExternalId: "urn:opentelemetry:namespace/ns:service/ye-service",
+			Type: ComponentType{
+				Name: "service",
+			},
+			Data: &ComponentData{
+				Name:        "ye-service",
+				Version:     "",
+				Layer:       "urn:stackpack:common:layer:services",
+				Domain:      "",
+				Environment: "",
+				Tags: map[string]string{
+					"service.name":      "ye-service",
+					"service.namespace": "ns",
+				},
+			},
+		},
+		{
+			ExternalId: "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			Type: ComponentType{
+				Name: "service-instance",
+			},
+			Data: &ComponentData{
+				Name:        "ye-service - instance",
+				Version:     "",
+				Layer:       "urn:stackpack:common:layer:containers",
+				Domain:      "",
+				Environment: "",
+				Tags: map[string]string{
+					"k8s.cluster.name":   "ye-cluster",
+					"k8s.namespace.name": "ye-k8s-namespace",
+					"k8s.pod.name":       "ye-pod-name",
+					"service.name":       "ye-service",
+					"service.namespace":  "ns",
+				},
+			},
+		},
+	}, components)
+
+	relations := collection.GetRelations()
+	require.Equal(t, []*Relation{
+		{
+			ExternalId: "urn:kubernetes:/ye-cluster:ye-k8s-namespace:pod/ye-pod-name-urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			SourceId:   "urn:kubernetes:/ye-cluster:ye-k8s-namespace:pod/ye-pod-name",
+			TargetId:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			Type: RelationType{
+				Name: "contains",
+			},
+			Data: &RelationData{
+				Tags: map[string]string{},
+			},
+		},
+		{
+			ExternalId: "urn:opentelemetry:namespace/ns:service/ye-service-urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			SourceId:   "urn:opentelemetry:namespace/ns:service/ye-service",
+			TargetId:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			Type: RelationType{
+				Name: "provided by",
+			},
+			Data: &RelationData{
+				Tags: map[string]string{},
+			},
+		},
+	}, relations)
+}

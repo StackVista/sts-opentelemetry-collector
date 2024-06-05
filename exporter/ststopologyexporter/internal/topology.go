@@ -92,6 +92,7 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 	}
 	c.addRelation(serviceIdentifier, serviceInstanceIdentifier, "provided by")
 	c.addHostResource(attrs, serviceInstanceIdentifier)
+	c.addKubernetesRelation(attrs, serviceInstanceIdentifier)
 	return true
 }
 
@@ -148,8 +149,25 @@ func (c *ComponentsCollection) addHostResource(attrs *pcommon.Map, instance stri
 	}
 }
 
-func (c *ComponentsCollection) AddConnection(attrs *pcommon.Map) bool {
+func (c *ComponentsCollection) addKubernetesRelation(attrs *pcommon.Map, instance string) {
 	reqAttrs := make(map[string]string, 3)
+	for _, key := range []string{
+		"k8s.cluster.name",
+		"k8s.namespace.name",
+		"k8s.pod.name",
+	} {
+		value, ok := attrs.Get(key)
+		if !ok {
+			return
+		}
+		reqAttrs[key] = value.AsString()
+	}
+	podIdentifier := fmt.Sprintf("urn:kubernetes:/%s:%s:pod/%s", reqAttrs["k8s.cluster.name"], reqAttrs["k8s.namespace.name"], reqAttrs["k8s.pod.name"])
+	c.addRelation(podIdentifier, instance, "kubernetes to otel")
+}
+
+func (c *ComponentsCollection) AddConnection(attrs *pcommon.Map) bool {
+	reqAttrs := make(map[string]string, 4)
 	for _, key := range []string{
 		"client",
 		"client_service.namespace",
