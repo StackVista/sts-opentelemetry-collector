@@ -29,6 +29,7 @@ func TestTopology_addResource(t *testing.T) {
 				Layer:       "urn:stackpack:common:layer:applications",
 				Domain:      "",
 				Environment: "",
+				Identifiers: []string{},
 				Tags:        map[string]string{},
 			},
 		},
@@ -43,6 +44,7 @@ func TestTopology_addResource(t *testing.T) {
 				Layer:       "urn:stackpack:common:layer:services",
 				Domain:      "",
 				Environment: "",
+				Identifiers: []string{},
 				Tags: map[string]string{
 					"service.name":           "demo 1",
 					"service.namespace":      "demo",
@@ -61,6 +63,7 @@ func TestTopology_addResource(t *testing.T) {
 				Layer:       "urn:stackpack:common:layer:containers",
 				Domain:      "",
 				Environment: "",
+				Identifiers: []string{},
 				Tags: map[string]string{
 					"Resource Attributes 1":  "value1",
 					"service.name":           "demo 1",
@@ -200,6 +203,7 @@ func TestTopology_addDatabase(t *testing.T) {
 				Layer:       "urn:stackpack:common:layer:databases",
 				Domain:      "",
 				Environment: "",
+				Identifiers: []string{},
 				Tags: map[string]string{
 					"service.name":      "frontend",
 					"service.namespace": "ns",
@@ -231,6 +235,7 @@ func TestTopology_addHost(t *testing.T) {
 				Layer:       "urn:stackpack:common:layer:machines",
 				Domain:      "",
 				Environment: "",
+				Identifiers: []string{},
 				Tags: map[string]string{
 					"host.id": "ye-host",
 				},
@@ -247,6 +252,7 @@ func TestTopology_addHost(t *testing.T) {
 				Layer:       "urn:stackpack:common:layer:applications",
 				Domain:      "",
 				Environment: "",
+				Identifiers: []string{},
 				Tags:        map[string]string{},
 			},
 		},
@@ -261,6 +267,7 @@ func TestTopology_addHost(t *testing.T) {
 				Layer:       "urn:stackpack:common:layer:services",
 				Domain:      "",
 				Environment: "",
+				Identifiers: []string{},
 				Tags: map[string]string{
 					"service.name":      "ye-service",
 					"service.namespace": "ns",
@@ -278,6 +285,7 @@ func TestTopology_addHost(t *testing.T) {
 				Layer:       "urn:stackpack:common:layer:containers",
 				Domain:      "",
 				Environment: "",
+				Identifiers: []string{},
 				Tags: map[string]string{
 					"host.id":           "ye-host",
 					"service.name":      "ye-service",
@@ -336,6 +344,7 @@ func TestTopology_addFaas(t *testing.T) {
 				Layer:       "urn:stackpack:common:layer:serverless",
 				Domain:      "",
 				Environment: "",
+				Identifiers: []string{},
 				Tags: map[string]string{
 					"faas.id": "ye-faas",
 				},
@@ -352,6 +361,7 @@ func TestTopology_addFaas(t *testing.T) {
 				Layer:       "urn:stackpack:common:layer:applications",
 				Domain:      "",
 				Environment: "",
+				Identifiers: []string{},
 				Tags:        map[string]string{},
 			},
 		},
@@ -366,6 +376,7 @@ func TestTopology_addFaas(t *testing.T) {
 				Layer:       "urn:stackpack:common:layer:services",
 				Domain:      "",
 				Environment: "",
+				Identifiers: []string{},
 				Tags: map[string]string{
 					"service.name":      "ye-service",
 					"service.namespace": "ns",
@@ -383,6 +394,7 @@ func TestTopology_addFaas(t *testing.T) {
 				Layer:       "urn:stackpack:common:layer:containers",
 				Domain:      "",
 				Environment: "",
+				Identifiers: []string{},
 				Tags: map[string]string{
 					"faas.id":           "ye-faas",
 					"service.name":      "ye-service",
@@ -433,6 +445,26 @@ func TestTopology_addKubernetes(t *testing.T) {
 	components := collection.GetComponents()
 	require.Equal(t, []*Component{
 		{
+			ExternalId: "urn:opentelemetry:kubernetes:/ye-cluster:ye-k8s-namespace:pod/ye-pod-name",
+			Type: ComponentType{
+				Name: "pod",
+			},
+			Data: &ComponentData{
+				Name:        "ye-pod-name",
+				Version:     "",
+				Layer:       "",
+				Domain:      "",
+				Environment: "",
+				Identifiers: []string{
+					"urn:kubernetes:/ye-cluster:ye-k8s-namespace:pod/ye-pod-name",
+				},
+				Tags: map[string]string{
+					"cluster-name": "ye-cluster",
+					"namespace":    "ye-k8s-namespace",
+				},
+			},
+		},
+		{
 			ExternalId: "urn:opentelemetry:namespace/ns",
 			Type: ComponentType{
 				Name: "namespace",
@@ -443,6 +475,7 @@ func TestTopology_addKubernetes(t *testing.T) {
 				Layer:       "urn:stackpack:common:layer:applications",
 				Domain:      "",
 				Environment: "",
+				Identifiers: []string{},
 				Tags:        map[string]string{},
 			},
 		},
@@ -457,6 +490,7 @@ func TestTopology_addKubernetes(t *testing.T) {
 				Layer:       "urn:stackpack:common:layer:services",
 				Domain:      "",
 				Environment: "",
+				Identifiers: []string{},
 				Tags: map[string]string{
 					"service.name":      "ye-service",
 					"service.namespace": "ns",
@@ -474,6 +508,7 @@ func TestTopology_addKubernetes(t *testing.T) {
 				Layer:       "urn:stackpack:common:layer:containers",
 				Domain:      "",
 				Environment: "",
+				Identifiers: []string{},
 				Tags: map[string]string{
 					"k8s.cluster.name":   "ye-cluster",
 					"k8s.namespace.name": "ye-k8s-namespace",
@@ -488,11 +523,11 @@ func TestTopology_addKubernetes(t *testing.T) {
 	relations := collection.GetRelations()
 	require.Equal(t, []*Relation{
 		{
-			ExternalId: "urn:kubernetes:/ye-cluster:ye-k8s-namespace:pod/ye-pod-name-urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
-			SourceId:   "urn:kubernetes:/ye-cluster:ye-k8s-namespace:pod/ye-pod-name",
+			ExternalId: "urn:opentelemetry:kubernetes:/ye-cluster:ye-k8s-namespace:pod/ye-pod-name-urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			SourceId:   "urn:opentelemetry:kubernetes:/ye-cluster:ye-k8s-namespace:pod/ye-pod-name",
 			TargetId:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
 			Type: RelationType{
-				Name: "contains",
+				Name: "kubernetes to otel",
 			},
 			Data: &RelationData{
 				Tags: map[string]string{},

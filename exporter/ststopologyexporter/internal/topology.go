@@ -162,7 +162,18 @@ func (c *ComponentsCollection) addKubernetesRelation(attrs *pcommon.Map, instanc
 		}
 		reqAttrs[key] = value.AsString()
 	}
-	podIdentifier := fmt.Sprintf("urn:kubernetes:/%s:%s:pod/%s", reqAttrs["k8s.cluster.name"], reqAttrs["k8s.namespace.name"], reqAttrs["k8s.pod.name"])
+	podIdentifier := fmt.Sprintf("urn:opentelemetry:kubernetes:/%s:%s:pod/%s", reqAttrs["k8s.cluster.name"], reqAttrs["k8s.namespace.name"], reqAttrs["k8s.pod.name"])
+	c.components[podIdentifier] = &Component{
+		podIdentifier,
+		ComponentType{
+			"pod",
+		},
+		newComponentData().
+			withNameFromAttr(attrs, "k8s.pod.name").
+			withTagValue("cluster-name", reqAttrs["k8s.cluster.name"]).
+			withTagValue("namespace", reqAttrs["k8s.namespace.name"]).
+			withIdentifier(fmt.Sprintf("urn:kubernetes:/%s:%s:pod/%s", reqAttrs["k8s.cluster.name"], reqAttrs["k8s.namespace.name"], reqAttrs["k8s.pod.name"])),
+	}
 	c.addRelation(podIdentifier, instance, "kubernetes to otel")
 }
 
@@ -305,6 +316,7 @@ func newComponentData() *ComponentData {
 		Layer:       "",
 		Domain:      "",
 		Environment: "",
+		Identifiers: []string{},
 		Tags:        map[string]string{},
 	}
 }
@@ -374,6 +386,11 @@ func (c *ComponentData) withTags(attrs *pcommon.Map) *ComponentData {
 		}
 		return true
 	})
+	return c
+}
+
+func (c *ComponentData) withIdentifier(identifier string) *ComponentData {
+	c.Identifiers = append(c.Identifiers, identifier)
 	return c
 }
 
