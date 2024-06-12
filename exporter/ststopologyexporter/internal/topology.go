@@ -90,7 +90,7 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 			withTag(attrs, "service.namespace").
 			withTags(attrs),
 	}
-	c.addRelation(serviceIdentifier, serviceInstanceIdentifier, "provided by")
+	c.addRelation(serviceIdentifier, serviceInstanceIdentifier, "provided-by")
 	c.addHostResource(attrs, serviceInstanceIdentifier)
 	c.addKubernetesRelation(attrs, serviceInstanceIdentifier)
 	return true
@@ -174,7 +174,7 @@ func (c *ComponentsCollection) addKubernetesRelation(attrs *pcommon.Map, instanc
 			withTagValue("namespace", reqAttrs["k8s.namespace.name"]).
 			withIdentifier(fmt.Sprintf("urn:kubernetes:/%s:%s:pod/%s", reqAttrs["k8s.cluster.name"], reqAttrs["k8s.namespace.name"], reqAttrs["k8s.pod.name"])),
 	}
-	c.addRelation(podIdentifier, instance, "kubernetes to otel")
+	c.addRelation(podIdentifier, instance, "kubernetes-to-otel")
 }
 
 func (c *ComponentsCollection) AddConnection(attrs *pcommon.Map) bool {
