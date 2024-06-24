@@ -160,6 +160,7 @@ func (t *topologyExporter) ConsumeMetrics(ctx context.Context, md pmetric.Metric
 		}
 		req.Header.Add("Content-Type", "application/json")
 		req.Header.Add("sts-api-key", apiKey)
+		req.Header.Add("sts-time-format", "ms")
 
 		res, err := t.httpClient.Do(req)
 		if err != nil {

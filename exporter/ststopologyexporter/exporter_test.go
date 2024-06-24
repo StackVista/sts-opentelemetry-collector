@@ -18,6 +18,7 @@ import (
 func TestExporter_pushResourcesData(t *testing.T) {
 	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		require.Equal(t, "APIKEY", req.Header[http.CanonicalHeaderKey("sts-api-key")][0])
+		require.Equal(t, "ms", req.Header[http.CanonicalHeaderKey("sts-time-format")][0])
 
 		var payload internal.IntakeTopology
 		err := json.NewDecoder(req.Body).Decode(&payload)
