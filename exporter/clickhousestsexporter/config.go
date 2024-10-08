@@ -47,8 +47,6 @@ type Config struct {
 	TTL time.Duration `mapstructure:"ttl"`
 	// TableEngine is the table engine to use. default is `MergeTree()`.
 	TableEngine TableEngine `mapstructure:"table_engine"`
-	// DeduplicatingTableEngine is the table engine to use that it removes duplicates entries with the same sorting key . default is `ReplacingMergeTree()`.
-	DeduplicatingTableEngine TableEngine `mapstructure:"deduplicating_table_engine"`
 	// ClusterName if set will append `ON CLUSTER` with the provided name when creating tables.
 	ClusterName string `mapstructure:"cluster_name"`
 	// Create the traces table on startup
@@ -65,7 +63,6 @@ type TableEngine struct {
 
 const defaultDatabase = "default"
 const defaultTableEngineName = "MergeTree"
-const defaultDeduplicatingTableEngineName = "ReplacingMergeTree"
 
 var (
 	errConfigNoEndpoint      = errors.New("endpoint must be specified")
@@ -163,19 +160,6 @@ func (cfg *Config) TableEngineString() string {
 
 	if cfg.TableEngine.Name == "" {
 		engine = defaultTableEngineName
-		params = ""
-	}
-
-	return fmt.Sprintf("%s(%s)", engine, params)
-}
-
-// DeduplicatingTableEngineString generates the ENGINE string that it removes duplicates entries with the same sorting key
-func (cfg *Config) DeduplicatingTableEngineString() string {
-	engine := cfg.DeduplicatingTableEngine.Name
-	params := cfg.DeduplicatingTableEngine.Params
-
-	if cfg.DeduplicatingTableEngine.Name == "" {
-		engine = defaultDeduplicatingTableEngineName
 		params = ""
 	}
 

@@ -74,7 +74,7 @@ func (e *resourcesExporter) start(ctx context.Context, _ component.Host) error {
 		return err
 	}
 
-	return createResourcesTable(ctx, e.cfg, e.client)
+	return createResourcesTable(ctx, e.cfg.TTLDays, e.cfg.TTL, e.cfg.ResourcesTableName, e.client)
 }
 
 func (e *resourcesExporter) InsertResources(ctx context.Context, resources []*resourceModel) error {
@@ -112,11 +112,11 @@ func (e *resourcesExporter) InsertResources(ctx context.Context, resources []*re
 const (
 	// language=ClickHouse SQL
 	createResourcesTableSQL = `
-CREATE TABLE IF NOT EXISTS %s %s (
+CREATE TABLE IF NOT EXISTS %s (
      Timestamp DateTime64(9) CODEC(Delta, ZSTD(1)),
 	 ResourceRef UUID,
      ResourceAttributes Map(LowCardinality(String), String) CODEC(ZSTD(1)),
-) ENGINE = %s
+) ENGINE = ReplacingMergeTree
 %s
 ORDER BY (ResourceRef, toUnixTimestamp(Timestamp))
 SETTINGS index_granularity=512, ttl_only_drop_parts = 1;
@@ -125,8 +125,9 @@ SETTINGS index_granularity=512, ttl_only_drop_parts = 1;
 	insertResourcesSQLTemplate = `INSERT INTO %s (Timestamp, ResourceRef, ResourceAttributes) VALUES (?, ?, ?)`
 )
 
-func createResourcesTable(ctx context.Context, cfg *Config, db *sql.DB) error {
-	if _, err := db.ExecContext(ctx, renderCreateResourcesTableSQL(cfg)); err != nil {
+func createResourcesTable(ctx context.Context, ttlDays uint, ttl time.Duration, tableName string, db *sql.DB) error {
+	ttlExpr := internal.GenerateTTLExpr(ttlDays, ttl, "Timestamp")
+	if _, err := db.ExecContext(ctx, renderCreateResourcesTableSQL(ttlExpr, tableName)); err != nil {
 		return fmt.Errorf("exec create resources table sql: %w", err)
 	}
 	return nil
@@ -136,7 +137,6 @@ func renderInsertResourcesSQL(tableName string) string {
 	return fmt.Sprintf(strings.ReplaceAll(insertResourcesSQLTemplate, "'", "`"), tableName)
 }
 
-func renderCreateResourcesTableSQL(cfg *Config) string {
-	ttlExpr := internal.GenerateTTLExpr(cfg.TTLDays, cfg.TTL, "Timestamp")
-	return fmt.Sprintf(createResourcesTableSQL, cfg.ResourcesTableName, cfg.ClusterString(), cfg.DeduplicatingTableEngineString(), ttlExpr)
+func renderCreateResourcesTableSQL(ttlExpr string, tableName string) string {
+	return fmt.Sprintf(createResourcesTableSQL, tableName, ttlExpr)
 }
