@@ -72,20 +72,6 @@ func (e *tracesExporter) shutdown(ctx context.Context) error {
 	return nil
 }
 
-func getSpanParentType(r ptrace.Span) string {
-	if r.ParentSpanID().IsEmpty() {
-		return "SPAN_PARENT_TYPE_ROOT"
-	}
-	switch r.Kind() {
-	case ptrace.SpanKindServer:
-		return "SPAN_PARENT_TYPE_EXTERNAL"
-	case ptrace.SpanKindConsumer:
-		return "SPAN_PARENT_TYPE_EXTERNAL"
-	default:
-		return "SPAN_PARENT_TYPE_INTERNAL"
-	}
-}
-
 func (e *tracesExporter) pushTraceData(ctx context.Context, td ptrace.Traces) error {
 	start := time.Now()
 	resources := []*resourceModel{}
@@ -120,7 +106,6 @@ func (e *tracesExporter) pushTraceData(ctx context.Context, td ptrace.Traces) er
 					status := r.Status()
 					eventTimes, eventNames, eventAttrs := convertEvents(r.Events())
 					linksTraceIDs, linksSpanIDs, linksTraceStates, linksAttrs := convertLinks(r.Links())
-					spanParentType := getSpanParentType(r)
 					_, err = traceStatement.ExecContext(ctx,
 						r.StartTimestamp().AsTime(),
 						res.resourceRef,
@@ -137,7 +122,6 @@ func (e *tracesExporter) pushTraceData(ctx context.Context, td ptrace.Traces) er
 						r.EndTimestamp().AsTime().Sub(r.StartTimestamp().AsTime()).Nanoseconds(),
 						StatusCodeStr(status.Code()),
 						status.Message(),
-						spanParentType,
 						eventTimes,
 						eventNames,
 						eventAttrs,
@@ -196,7 +180,7 @@ func convertLinks(links ptrace.SpanLinkSlice) ([]string, []string, []string, []m
 const (
 	// language=ClickHouse SQL
 	createTracesTableSQL = `
-CREATE TABLE IF NOT EXISTS %s (
+CREATE TABLE IF NOT EXISTS %s %s (
      Timestamp DateTime64(9) CODEC(Delta, ZSTD(1)),
      ResourceRef UUID,
      TraceId String CODEC(ZSTD(1)),
@@ -212,7 +196,6 @@ CREATE TABLE IF NOT EXISTS %s (
      Duration Int64 CODEC(ZSTD(1)),
      StatusCode LowCardinality(String) CODEC(ZSTD(1)),
      StatusMessage String CODEC(ZSTD(1)),
-     SpanParentType String CODEC(ZSTD(1)),
      Events Nested (
          Timestamp DateTime64(9),
          Name LowCardinality(String),
@@ -224,7 +207,7 @@ CREATE TABLE IF NOT EXISTS %s (
          TraceState String,
          Attributes Map(LowCardinality(String), String)
      ) CODEC(ZSTD(1)),
-) ENGINE MergeTree()
+) ENGINE = %s
 %s
 PARTITION BY toDate(Timestamp)
 ORDER BY (ServiceName, ResourceRef, SpanName, toUnixTimestamp(Timestamp), TraceId)
@@ -233,7 +216,7 @@ SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
 	// language=ClickHouse SQL
 	insertTracesSQLTemplate = `INSERT INTO %s (
                         Timestamp,
-												ResourceRef,
+						ResourceRef,
                         TraceId,
                         SpanId,
                         ParentSpanId,
@@ -247,7 +230,6 @@ SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
                         Duration,
                         StatusCode,
                         StatusMessage,
-                        SpanParentType,
                         Events.Timestamp,
                         Events.Name,
                         Events.Attributes,
@@ -256,7 +238,6 @@ SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
                         Links.TraceState,
                         Links.Attributes
                         ) VALUES (
-                                  ?,
                                   ?,
                                   ?,
                                   ?,
@@ -295,5 +276,5 @@ func renderInsertTracesSQL(cfg *Config) string {
 
 func renderCreateTracesTableSQL(cfg *Config) string {
 	ttlExpr := internal.GenerateTTLExpr(cfg.TTLDays, cfg.TTL, "Timestamp")
-	return fmt.Sprintf(createTracesTableSQL, cfg.TracesTableName, ttlExpr)
+	return fmt.Sprintf(createTracesTableSQL, cfg.TracesTableName, cfg.ClusterString(), cfg.TableEngineString(), ttlExpr)
 }
