@@ -291,19 +291,6 @@ ClickHouse tables:
 - `metrics_table_name` (default = otel_metrics): The table name for metrics.
 - `create_traces_table` (default = true): Create the traces table on startup
 
-Cluster definition:
-
-- `cluster_name` (default = ): Optional. If present, will include `ON CLUSTER cluster_name` when creating tables.
-
-Table engine:
-
-- `table_engine`
-    - `name` (default = MergeTree)
-    - `params` (default = )
-
-Modifies `ENGINE` definition when table is created. If not set then `ENGINE` defaults to `MergeTree()`.
-Can be combined with `cluster_name` to enable [replication for fault tolerance](https://clickhouse.com/docs/en/architecture/replication).
-
 Processing:
 
 - `timeout` (default = 5s): The timeout for every attempt to send data to the backend.
@@ -350,10 +337,6 @@ exporters:
       initial_interval: 5s
       max_interval: 30s
       max_elapsed_time: 300s
-    # cluster_name: my_cluster
-    # table_engine:
-    #   name: ReplicatedMergeTree
-    #   params:
 service:
   pipelines:
     logs:

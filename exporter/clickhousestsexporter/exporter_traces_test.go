@@ -44,7 +44,8 @@ func TestExporter_pushTracesData(t *testing.T) {
 	t.Run("check insert resources with service name and attributes", func(t *testing.T) {
 		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
 			if strings.HasPrefix(query, "INSERT") && strings.Contains(query, "otel_resources") {
-				require.Equal(t, map[string]string{"service.name": "test-service"}, values[2])
+				require.Equal(t, "test-service", values[2])
+				require.Equal(t, map[string]string{"service.name": "test-service"}, values[3])
 			}
 			return nil
 		})
@@ -64,6 +65,22 @@ func TestExporter_pushTracesData(t *testing.T) {
 
 		exporter := newTestTracesExporter(t, defaultEndpoint)
 		mustPushTracesData(t, exporter, simpleTraces(1))
+	})
+
+	t.Run("check insert parentSpanType", func(t *testing.T) {
+		var parentTypes []string
+		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
+			if strings.HasPrefix(query, "INSERT") && strings.Contains(query, "otel_traces") {
+				if str, ok := values[15].(string); ok {
+					parentTypes = append(parentTypes, str)
+				}
+			}
+			return nil
+		})
+
+		exporter := newTestTracesExporter(t, defaultEndpoint)
+		mustPushTracesData(t, exporter, simpleTraces(2))
+		require.Equal(t, parentTypes, []string{"SPAN_PARENT_TYPE_ROOT", "SPAN_PARENT_TYPE_INTERNAL"})
 	})
 }
 
@@ -88,28 +105,22 @@ func simpleTraces(count int) ptrace.Traces {
 	ss.SetSchemaUrl("https://opentelemetry.io/schemas/1.7.0")
 	ss.Scope().SetDroppedAttributesCount(20)
 	ss.Scope().Attributes().PutStr("lib", "clickhouse")
-	timestamp := time.Unix(1703498029, 0)
+	var firstSpan ptrace.Span
 	for i := 0; i < count; i++ {
 		s := ss.Spans().AppendEmpty()
-		s.SetTraceID([16]byte{1, 2, 3, byte(i)})
-		s.SetSpanID([8]byte{1, 2, 3, byte(i)})
-		s.TraceState().FromRaw("trace state")
-		s.SetParentSpanID([8]byte{1, 2, 4, byte(i)})
-		s.SetName("call db")
-		s.SetKind(ptrace.SpanKindInternal)
-		s.SetStartTimestamp(pcommon.NewTimestampFromTime(timestamp))
-		s.SetEndTimestamp(pcommon.NewTimestampFromTime(timestamp.Add(time.Minute)))
+		s.SetSpanID([8]byte{byte(i + 1)})
+		s.SetStartTimestamp(pcommon.NewTimestampFromTime(time.Now()))
+		s.SetEndTimestamp(pcommon.NewTimestampFromTime(time.Now()))
 		s.Attributes().PutStr(conventions.AttributeServiceName, "v")
-		s.Status().SetMessage("error")
-		s.Status().SetCode(ptrace.StatusCodeError)
+		if i == 0 {
+			firstSpan = s
+		} else {
+			s.SetParentSpanID(firstSpan.SpanID())
+		}
 		event := s.Events().AppendEmpty()
 		event.SetName("event1")
-		event.SetTimestamp(pcommon.NewTimestampFromTime(timestamp))
-		event.Attributes().PutStr("level", "info")
+		event.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
 		link := s.Links().AppendEmpty()
-		link.SetTraceID([16]byte{1, 2, 5, byte(i)})
-		link.SetSpanID([8]byte{1, 2, 5, byte(i)})
-		link.TraceState().FromRaw("error")
 		link.Attributes().PutStr("k", "v")
 	}
 	return traces
