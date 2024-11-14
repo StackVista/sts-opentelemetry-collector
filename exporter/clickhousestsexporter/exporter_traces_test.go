@@ -6,6 +6,7 @@ package clickhousestsexporter
 import (
 	"context"
 	"database/sql/driver"
+	"go.opentelemetry.io/collector/component/componenttest"
 	"strings"
 	"testing"
 	"time"
@@ -85,7 +86,7 @@ func TestExporter_pushTracesData(t *testing.T) {
 }
 
 func newTestTracesExporter(t *testing.T, dsn string, fns ...func(*Config)) *tracesExporter {
-	exporter, err := newTracesExporter(zaptest.NewLogger(t), withTestExporterConfig(fns...)(dsn))
+	exporter, err := newTracesExporter(zaptest.NewLogger(t), componenttest.NewNopTelemetrySettings(), withTestExporterConfig(fns...)(dsn))
 	require.NoError(t, err)
 	require.NoError(t, exporter.start(context.TODO(), nil))
 
