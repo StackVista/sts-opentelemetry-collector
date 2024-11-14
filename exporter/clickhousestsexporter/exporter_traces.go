@@ -7,6 +7,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter/internal/metadata"
+	"go.opentelemetry.io/otel/metric"
 	"strings"
 	"time"
 
@@ -23,11 +25,13 @@ type tracesExporter struct {
 	insertSQL        string
 	resourceExporter *resourcesExporter
 
-	logger *zap.Logger
-	cfg    *Config
+	logger      *zap.Logger
+	cfg         *Config
+	sizer       ptrace.Sizer
+	tracesBytes metric.Int64Counter
 }
 
-func newTracesExporter(logger *zap.Logger, cfg *Config) (*tracesExporter, error) {
+func newTracesExporter(logger *zap.Logger, set component.TelemetrySettings, cfg *Config) (*tracesExporter, error) {
 	client, err := newClickhouseClient(cfg)
 	if err != nil {
 		return nil, err
@@ -37,12 +41,21 @@ func newTracesExporter(logger *zap.Logger, cfg *Config) (*tracesExporter, error)
 		return nil, err
 	}
 
+	meter := metadata.Meter(set)
+	tracesBytesCounter, _ := meter.Int64Counter(
+		"suse_observability_usage_bytes_accepted_traces",
+		metric.WithDescription("Number of spans dropped when trying to add edges"),
+		metric.WithUnit("By"),
+	)
+
 	return &tracesExporter{
 		client:           client,
 		insertSQL:        renderInsertTracesSQL(cfg),
 		resourceExporter: resourceExporter,
 		logger:           logger,
 		cfg:              cfg,
+		sizer:            &ptrace.ProtoMarshaler{},
+		tracesBytes:      tracesBytesCounter,
 	}, nil
 }
 
@@ -157,6 +170,11 @@ func (e *tracesExporter) pushTraceData(ctx context.Context, td ptrace.Traces) er
 	duration := time.Since(start)
 	e.logger.Debug("insert traces", zap.Int("records", td.SpanCount()),
 		zap.String("cost", duration.String()))
+
+	// Report usage
+	bytes := int64(e.sizer.TracesSize(td))
+	e.tracesBytes.Add(ctx, bytes)
+
 	e.resourceExporter.InsertResources(ctx, resources)
 	return err
 }
