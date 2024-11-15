@@ -35,6 +35,8 @@ processors:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.100.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor v0.100.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.100.0
+  - gomod: github.com/stackvista/sts-opentelemetry-collector/processor/stsusageprocessor v0.0.0
+    path: ./processor/stsusageprocessor
 
 replaces:
   - github.com/stackvista/sts-opentelemetry-collector/common => ../common
