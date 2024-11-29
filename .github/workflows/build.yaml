@@ -46,3 +46,22 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+  test:
+    runs-on: ubuntu-latest
+    services:
+      clickhouse:
+        image: clickhouse/clickhouse-server:latest
+        ports:
+          - "9000:9000"
+          - "8123:8123"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+      - name: Run tests
+        run: |
+          go test ./exporter/clickhousestsexporter/...
+          go test ./exporter/ststopologyexporter/...
+          go test ./extension/ingestionapikeyauthextension/...
+          go test ./connector/stsservicegraphconnector/...

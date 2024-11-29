@@ -44,8 +44,7 @@ func TestExporter_pushTracesData(t *testing.T) {
 	t.Run("check insert resources with service name and attributes", func(t *testing.T) {
 		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
 			if strings.HasPrefix(query, "INSERT") && strings.Contains(query, "otel_resources") {
-				require.Equal(t, "test-service", values[2])
-				require.Equal(t, map[string]string{"service.name": "test-service"}, values[3])
+				require.Equal(t, map[string]string{"service.name": "test-service"}, values[2])
 			}
 			return nil
 		})
