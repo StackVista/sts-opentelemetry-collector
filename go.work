@@ -1,4 +1,4 @@
-go 1.23.3
+go 1.22.0
 
 use (
 	./common
@@ -6,4 +6,5 @@ use (
 	./exporter/clickhousestsexporter
 	./exporter/ststopologyexporter
 	./extension/ingestionapikeyauthextension
+	./processor/stsusageprocessor
 )

@@ -1,0 +1,12 @@
+type: stsusage
+
+status:
+  class: processor
+  stability:
+    beta: [traces, metrics, logs]
+  distributions: [sts]
+  codeowners:
+    active: []
+
+tests:
+  config:
