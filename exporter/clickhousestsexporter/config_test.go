@@ -73,6 +73,8 @@ func TestLoadConfig(t *testing.T) {
 					QueueSize:    100,
 					StorageID:    &storageID,
 				},
+				CreateResourcesTable: true,
+				CreateTracesTable: true,
 			},
 		},
 	}

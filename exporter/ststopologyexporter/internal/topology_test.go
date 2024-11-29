@@ -81,7 +81,7 @@ func TestTopology_addResource(t *testing.T) {
 			SourceId:   "urn:opentelemetry:namespace/demo:service/demo 1",
 			TargetId:   "urn:opentelemetry:namespace/demo:service/demo 1:serviceInstance/demo 1",
 			Type: RelationType{
-				Name: "provided by",
+				Name: "provided-by",
 			},
 			Data: &RelationData{
 				Tags: map[string]string{},
@@ -313,7 +313,7 @@ func TestTopology_addHost(t *testing.T) {
 			SourceId:   "urn:opentelemetry:namespace/ns:service/ye-service",
 			TargetId:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
 			Type: RelationType{
-				Name: "provided by",
+				Name: "provided-by",
 			},
 			Data: &RelationData{
 				Tags: map[string]string{},
@@ -422,7 +422,7 @@ func TestTopology_addFaas(t *testing.T) {
 			SourceId:   "urn:opentelemetry:namespace/ns:service/ye-service",
 			TargetId:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
 			Type: RelationType{
-				Name: "provided by",
+				Name: "provided-by",
 			},
 			Data: &RelationData{
 				Tags: map[string]string{},
@@ -527,7 +527,7 @@ func TestTopology_addKubernetes(t *testing.T) {
 			SourceId:   "urn:opentelemetry:kubernetes:/ye-cluster:ye-k8s-namespace:pod/ye-pod-name",
 			TargetId:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
 			Type: RelationType{
-				Name: "kubernetes to otel",
+				Name: "kubernetes-to-otel",
 			},
 			Data: &RelationData{
 				Tags: map[string]string{},
@@ -538,7 +538,89 @@ func TestTopology_addKubernetes(t *testing.T) {
 			SourceId:   "urn:opentelemetry:namespace/ns:service/ye-service",
 			TargetId:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
 			Type: RelationType{
-				Name: "provided by",
+				Name: "provided-by",
+			},
+			Data: &RelationData{
+				Tags: map[string]string{},
+			},
+		},
+	}, relations)
+}
+
+func TestTopology_addResourceWithoutNamespace(t *testing.T) {
+	collection := NewCollection()
+	attrs := pcommon.NewMap()
+	attrs.PutStr("service.name", "demo 1")
+	attrs.PutStr("telemetry.sdk.language", "go")
+	attrs.PutStr("Resource Attributes 1", "value1")
+	collection.AddResource(&attrs)
+
+	components := collection.GetComponents()
+	require.Equal(t, []*Component{
+		{
+			ExternalId: "urn:opentelemetry:namespace/default",
+			Type: ComponentType{
+				Name: "namespace",
+			},
+			Data: &ComponentData{
+				Name:        "default",
+				Version:     "",
+				Layer:       "urn:stackpack:common:layer:applications",
+				Domain:      "",
+				Environment: "",
+				Identifiers: []string{},
+				Tags:        map[string]string{},
+			},
+		},
+		{
+			ExternalId: "urn:opentelemetry:namespace/default:service/demo 1",
+			Type: ComponentType{
+				Name: "service",
+			},
+			Data: &ComponentData{
+				Name:        "demo 1",
+				Version:     "",
+				Layer:       "urn:stackpack:common:layer:services",
+				Domain:      "",
+				Environment: "",
+				Identifiers: []string{},
+				Tags: map[string]string{
+					"service.name":           "demo 1",
+					"service.namespace":      "default",
+					"telemetry.sdk.language": "go",
+				},
+			},
+		},
+		{
+			ExternalId: "urn:opentelemetry:namespace/default:service/demo 1:serviceInstance/demo 1",
+			Type: ComponentType{
+				Name: "service-instance",
+			},
+			Data: &ComponentData{
+				Name:        "demo 1 - instance",
+				Version:     "",
+				Layer:       "urn:stackpack:common:layer:containers",
+				Domain:      "",
+				Environment: "",
+				Identifiers: []string{},
+				Tags: map[string]string{
+					"Resource Attributes 1":  "value1",
+					"service.name":           "demo 1",
+					"service.namespace":      "default",
+					"telemetry.sdk.language": "go",
+				},
+			},
+		},
+	}, components)
+
+	relations := collection.GetRelations()
+	require.Equal(t, []*Relation{
+		{
+			ExternalId: "urn:opentelemetry:namespace/default:service/demo 1-urn:opentelemetry:namespace/default:service/demo 1:serviceInstance/demo 1",
+			SourceId:   "urn:opentelemetry:namespace/default:service/demo 1",
+			TargetId:   "urn:opentelemetry:namespace/default:service/demo 1:serviceInstance/demo 1",
+			Type: RelationType{
+				Name: "provided-by",
 			},
 			Data: &RelationData{
 				Tags: map[string]string{},

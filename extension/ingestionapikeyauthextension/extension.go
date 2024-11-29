@@ -129,7 +129,8 @@ type AuthorizeRequestBody struct {
 // Authorizes an Ingestion API Key (value of Authorization header) with the remote authorization server.
 // The function stores the result (valid keys but also non-transient errors) in the cache.
 func checkAuthorizationHeader(authorizationHeader string, exCtx *extensionContext) error {
-	log.Printf("Sending authorization request for ...%s\n", authorizationHeader[len(authorizationHeader)-4:])
+	headerSample := authorizationHeader[max(0, len(authorizationHeader) - 4):]
+	log.Printf("Sending authorization request for ...%s\n", headerSample)
 	request := AuthorizeRequestBody{
 		ApiKey: authorizationHeader,
 	}
@@ -152,7 +153,7 @@ func checkAuthorizationHeader(authorizationHeader string, exCtx *extensionContex
 		return errAuthServerUnavailable
 	}
 
-	log.Printf("Result for ...%s: %d\n", authorizationHeader[len(authorizationHeader)-4:], res.StatusCode)
+	log.Printf("Result for ...%s: %d\n", headerSample, res.StatusCode)
 	if res.StatusCode == 403 {
 		exCtx.invalidKeysCache.Add(authorizationHeader, errForbidden)
 		return errForbidden

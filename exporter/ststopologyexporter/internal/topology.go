@@ -31,9 +31,12 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 	if !ok {
 		return false
 	}
-	serviceNamespace, ok := attrs.Get("service.namespace")
+	serviceNamespaceValue, ok := attrs.Get("service.namespace")
+	var serviceNamespace string
 	if !ok {
-		return false
+		serviceNamespace = "default"
+	} else {
+		serviceNamespace = serviceNamespaceValue.AsString()
 	}
 	instanceId, ok := attrs.Get("service.instance.id")
 	var serviceInstanceId pcommon.Value
@@ -46,7 +49,7 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 		serviceInstanceName = fmt.Sprintf("%s - %s", serviceName.AsString(), instanceId.AsString())
 	}
 
-	namespaceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s", serviceNamespace.AsString())
+	namespaceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s", serviceNamespace)
 	if _, ok := c.components[namespaceIdentifier]; !ok {
 		c.components[namespaceIdentifier] = &Component{
 			namespaceIdentifier,
@@ -56,11 +59,11 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 			newComponentData().
 				withLayer("urn:stackpack:common:layer:applications").
 				withEnvironment(attrs).
-				withNameFromAttr(attrs, "service.namespace"),
+				withName(serviceNamespace),
 		}
 	}
 
-	serviceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s", serviceNamespace.AsString(), serviceName.AsString())
+	serviceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s", serviceNamespace, serviceName.AsString())
 	c.components[serviceIdentifier] = &Component{
 		serviceIdentifier,
 		ComponentType{
@@ -72,11 +75,11 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 			withNameFromAttr(attrs, "service.name").
 			withVersion(attrs, "service.version").
 			withTag(attrs, "service.name").
-			withTag(attrs, "service.namespace").
+			withTagValue("service.namespace", serviceNamespace).
 			withTag(attrs, "service.version").
 			withTagPrefix(attrs, "telemetry.sdk"),
 	}
-	serviceInstanceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s", serviceNamespace.AsString(), serviceName.AsString(), serviceInstanceId.AsString())
+	serviceInstanceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s", serviceNamespace, serviceName.AsString(), serviceInstanceId.AsString())
 	c.components[serviceInstanceIdentifier] = &Component{
 		serviceInstanceIdentifier,
 		ComponentType{
@@ -87,7 +90,7 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 			withEnvironment(attrs).
 			withName(serviceInstanceName).
 			withVersion(attrs, "service.version").
-			withTag(attrs, "service.namespace").
+			withTagValue("service.namespace", serviceNamespace).
 			withTags(attrs),
 	}
 	c.addRelation(serviceIdentifier, serviceInstanceIdentifier, "provided-by")
