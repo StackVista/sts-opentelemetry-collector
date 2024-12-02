@@ -4,6 +4,7 @@ package ststopologyexporter
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/ststopologyexporter/internal/metadata"
@@ -17,6 +18,7 @@ func NewFactory() exporter.Factory {
 		metadata.Type,
 		createDefaultConfig,
 		exporter.WithMetrics(createMetricsExporter, metadata.MetricsStability),
+		exporter.WithTraces(createTracesExporter, metadata.TracesStability),
 	)
 }
 
@@ -43,6 +45,29 @@ func createMetricsExporter(ctx context.Context, settings exporter.CreateSettings
 		settings,
 		cfg,
 		exp.ConsumeMetrics,
+		exporterhelper.WithTimeout(c.TimeoutSettings),
+		exporterhelper.WithQueue(c.QueueSettings),
+	)
+}
+
+// createTracesExporter creates a new exporter for traces.
+// Traces are directly insert into clickhouse.
+func createTracesExporter(
+	ctx context.Context,
+	set exporter.CreateSettings,
+	cfg component.Config,
+) (exporter.Traces, error) {
+	c := cfg.(*Config)
+	exporter, err := newTopologyExporter(set.Logger, c)
+	if err != nil {
+		return nil, fmt.Errorf("cannot configure clickhouse traces exporter: %w", err)
+	}
+
+	return exporterhelper.NewTracesExporter(
+		ctx,
+		set,
+		cfg,
+		exporter.ConsumeTraces,
 		exporterhelper.WithTimeout(c.TimeoutSettings),
 		exporterhelper.WithQueue(c.QueueSettings),
 	)

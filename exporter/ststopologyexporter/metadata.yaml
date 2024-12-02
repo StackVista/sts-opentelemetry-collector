@@ -3,6 +3,6 @@ type: ststopology
 status:
   class: exporter
   stability:
-    development: [metrics]
+    development: [traces, metrics]
   codeowners:
     active: StackState B.V.
