@@ -9,9 +9,12 @@ import (
 
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/ststopologyexporter/internal/metadata"
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 )
+
+var processorCapabilities = consumer.Capabilities{MutatesData: true}
 
 func NewFactory() exporter.Factory {
 	return exporter.NewFactory(
@@ -47,6 +50,7 @@ func createMetricsExporter(ctx context.Context, settings exporter.CreateSettings
 		exp.ConsumeMetrics,
 		exporterhelper.WithTimeout(c.TimeoutSettings),
 		exporterhelper.WithQueue(c.QueueSettings),
+		exporterhelper.WithCapabilities(processorCapabilities),
 	)
 }
 
@@ -70,5 +74,6 @@ func createTracesExporter(
 		exporter.ConsumeTraces,
 		exporterhelper.WithTimeout(c.TimeoutSettings),
 		exporterhelper.WithQueue(c.QueueSettings),
+		exporterhelper.WithCapabilities(processorCapabilities),
 	)
 }
