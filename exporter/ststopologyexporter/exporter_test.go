@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.uber.org/zap/zaptest"
 )
 
@@ -56,6 +57,42 @@ func TestExporter_skipVirtualNodes(t *testing.T) {
 	exporter := newTestExporter(t, testServer.URL)
 	err := exporter.ConsumeMetrics(context.TODO(), virtualNodeMetrics())
 	require.NoError(t, err)
+}
+
+func TestExporter_simpleTrace(t *testing.T) {
+	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		require.Equal(t, "APIKEY", req.Header[http.CanonicalHeaderKey("sts-api-key")][0])
+		require.Equal(t, "ms", req.Header[http.CanonicalHeaderKey("sts-time-format")][0])
+
+		var payload internal.IntakeTopology
+		err := json.NewDecoder(req.Body).Decode(&payload)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(payload.Topologies))
+
+		require.Equal(t, internal.Instance{
+			Type: "opentelemetry",
+			URL:  "collector",
+		}, payload.Topologies[0].Instance)
+
+		require.Equal(t, 3, len(payload.Topologies[0].Components))
+		for _, component := range payload.Topologies[0].Components {
+			tags := component.Data.Tags
+			_, ok := tags["sts_api_key"]
+			require.False(t, ok)
+		}
+		// just service <-> instance
+		require.Equal(t, 1, len(payload.Topologies[0].Relations))
+		for _, relation := range payload.Topologies[0].Relations {
+			tags := relation.Data.Tags
+			_, ok := tags["sts_api_key"]
+			require.False(t, ok)
+		}
+		res.WriteHeader(200)
+	}))
+	exporter := newTestExporter(t, testServer.URL)
+	err := exporter.ConsumeTraces(context.TODO(), simpleTrace())
+	require.NoError(t, err)
+
 }
 
 // simpleMetrics there will be added two ResourceMetrics and each of them have count data point
@@ -105,6 +142,14 @@ func virtualNodeMetrics() pmetric.Metrics {
 	ma.PutStr("server_service.namespace", "serverns")
 	ma.PutStr("connection_type", "virtual_node")
 	return metrics
+}
+
+func simpleTrace() ptrace.Traces {
+	traces := ptrace.NewTraces()
+	rt := traces.ResourceSpans().AppendEmpty()
+	rt.Resource().Attributes().PutStr("service.name", "demo 1")
+	rt.Resource().Attributes().PutStr("sts_api_key", "APIKEY")
+	return traces
 }
 
 func newTestExporter(t *testing.T, url string) *topologyExporter {

@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.uber.org/zap"
 )
 
@@ -59,7 +60,6 @@ func (t *topologyExporter) logAttrs(msg string, attrs *pcommon.Map) {
 }
 
 func (t *topologyExporter) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
-	log := t.logger
 
 	componentsByApiKey := make(map[string]*internal.ComponentsCollection, 0)
 	rms := md.ResourceMetrics()
@@ -132,6 +132,37 @@ func (t *topologyExporter) ConsumeMetrics(ctx context.Context, md pmetric.Metric
 		}
 	}
 
+	t.sendCollection(componentsByApiKey)
+
+	return nil
+}
+
+func (t *topologyExporter) ConsumeTraces(ctx context.Context, td ptrace.Traces) error {
+	componentsByApiKey := make(map[string]*internal.ComponentsCollection, 0)
+	rms := td.ResourceSpans()
+	for i := 0; i < rms.Len(); i++ {
+		rs := rms.At(i)
+		resource := rs.Resource()
+		attrs := resource.Attributes()
+		sts_api_key_value, key_exists := attrs.Get("sts_api_key")
+		if key_exists {
+			sts_api_key := sts_api_key_value.AsString()
+			attrs.Remove("sts_api_key")
+			collection := getOrDefault(componentsByApiKey, sts_api_key)
+			if !collection.AddResource(&attrs) {
+				t.logAttrs("Skipping resource without necessary attributes", &attrs)
+			}
+		}
+	}
+
+	t.sendCollection(componentsByApiKey)
+
+	return nil
+}
+
+func (t *topologyExporter) sendCollection(componentsByApiKey map[string]*internal.ComponentsCollection) error {
+	log := t.logger
+
 	for apiKey, collection := range componentsByApiKey {
 		components := collection.GetComponents()
 		relations := collection.GetRelations()
@@ -190,6 +221,5 @@ func (t *topologyExporter) ConsumeMetrics(ctx context.Context, md pmetric.Metric
 			)
 		}
 	}
-
 	return nil
 }
