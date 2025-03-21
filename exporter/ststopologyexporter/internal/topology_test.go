@@ -459,6 +459,7 @@ func TestTopology_addKubernetes(t *testing.T) {
 					"urn:kubernetes:/ye-cluster:ye-k8s-namespace:pod/ye-pod-name",
 				},
 				Tags: map[string]string{
+					"k8s-scope":    "ye-cluster/ye-k8s-namespace",
 					"cluster-name": "ye-cluster",
 					"namespace":    "ye-k8s-namespace",
 				},
@@ -476,7 +477,9 @@ func TestTopology_addKubernetes(t *testing.T) {
 				Domain:      "",
 				Environment: "",
 				Identifiers: []string{},
-				Tags:        map[string]string{},
+				Tags:        map[string]string{
+					"k8s-scope":    "ye-cluster/ye-k8s-namespace",
+				},
 			},
 		},
 		{
@@ -492,6 +495,7 @@ func TestTopology_addKubernetes(t *testing.T) {
 				Environment: "",
 				Identifiers: []string{},
 				Tags: map[string]string{
+					"k8s-scope":         "ye-cluster/ye-k8s-namespace",
 					"service.name":      "ye-service",
 					"service.namespace": "ns",
 				},
@@ -513,6 +517,7 @@ func TestTopology_addKubernetes(t *testing.T) {
 					"k8s.cluster.name":   "ye-cluster",
 					"k8s.namespace.name": "ye-k8s-namespace",
 					"k8s.pod.name":       "ye-pod-name",
+					"k8s-scope":          "ye-cluster/ye-k8s-namespace",
 					"service.name":       "ye-service",
 					"service.namespace":  "ns",
 				},
