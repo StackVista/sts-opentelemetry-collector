@@ -26,6 +26,7 @@ type resourcesExporter struct {
 type resourceModel struct {
 	resourceRef uuid.UUID
 	attributes  map[string]string
+	authScope   []string
 }
 
 func newResourceModel(resource pcommon.Resource) (*resourceModel, error) {
@@ -36,10 +37,29 @@ func newResourceModel(resource pcommon.Resource) (*resourceModel, error) {
 	}
 
 	resAttr := attributesToMap(resource.Attributes())
+	authScope := attributesToAuthScope(resource.Attributes())
 	return &resourceModel{
 		resourceRef: refUUID,
 		attributes:  resAttr,
+		authScope:   authScope,
 	}, nil
+}
+
+func attributesToAuthScope(attrs pcommon.Map) []string {
+	clusterName, ok := attrs.Get("k8s.cluster.name")
+	if ok {
+		namespaceName, nsok := attrs.Get("k8s.namespace.name")
+		if nsok {
+			return []string{
+				fmt.Sprintf("k8s.cluster.name:%s", clusterName.AsString()),
+				fmt.Sprintf("k8s.scope:%s/%s", clusterName.AsString(), namespaceName.AsString()),
+			}
+		}
+		return []string{
+			fmt.Sprintf("k8s.cluster.name:%s", clusterName.AsString()),
+		}
+	}
+	return []string{}
 }
 
 func newResourceExporter(logger *zap.Logger, cfg *Config) (*resourcesExporter, error) {
@@ -95,6 +115,7 @@ func (e *resourcesExporter) InsertResources(ctx context.Context, resources []*re
 				time.Now(),
 				resource.resourceRef,
 				resource.attributes,
+				resource.authScope,
 			)
 			if err != nil {
 				return err
@@ -116,13 +137,14 @@ CREATE TABLE IF NOT EXISTS %s (
      Timestamp DateTime64(9) CODEC(Delta, ZSTD(1)),
 		 ResourceRef UUID,
      ResourceAttributes Map(LowCardinality(String), String) CODEC(ZSTD(1)),
+	 AuthScope Array(LowCardinality(String)),
 ) ENGINE = ReplacingMergeTree
 %s
 ORDER BY (ResourceRef, toUnixTimestamp(Timestamp))
 SETTINGS index_granularity=512, ttl_only_drop_parts = 1;
 `
 	// language=ClickHouse SQL
-	insertResourcesSQLTemplate = `INSERT INTO %s (Timestamp, ResourceRef, ResourceAttributes) VALUES (?, ?, ?)`
+	insertResourcesSQLTemplate = `INSERT INTO %s (Timestamp, ResourceRef, ResourceAttributes, AuthScope) VALUES (?, ?, ?, ?)`
 )
 
 func createResourcesTable(ctx context.Context, ttlDays uint, ttl time.Duration, tableName string, db *sql.DB) error {
