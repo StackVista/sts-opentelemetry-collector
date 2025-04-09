@@ -250,14 +250,14 @@ SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
                         StatusCode,
                         StatusMessage,
                         SpanParentType,
-						AuthScope
+                        AuthScope,
                         Events.Timestamp,
                         Events.Name,
                         Events.Attributes,
                         Links.TraceId,
                         Links.SpanId,
                         Links.TraceState,
-                        Links.Attributes,
+                        Links.Attributes
                         ) VALUES (
                                   ?,
                                   ?,
