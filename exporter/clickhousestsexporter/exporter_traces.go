@@ -138,6 +138,7 @@ func (e *tracesExporter) pushTraceData(ctx context.Context, td ptrace.Traces) er
 						StatusCodeStr(status.Code()),
 						status.Message(),
 						spanParentType,
+						res.authScope,
 						eventTimes,
 						eventNames,
 						eventAttrs,
@@ -213,6 +214,7 @@ CREATE TABLE IF NOT EXISTS %s (
      StatusCode LowCardinality(String) CODEC(ZSTD(1)),
      StatusMessage String CODEC(ZSTD(1)),
      SpanParentType String CODEC(ZSTD(1)),
+     AuthScope Array(LowCardinality(String)),
      Events Nested (
          Timestamp DateTime64(9),
          Name LowCardinality(String),
@@ -248,6 +250,7 @@ SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
                         StatusCode,
                         StatusMessage,
                         SpanParentType,
+                        AuthScope,
                         Events.Timestamp,
                         Events.Name,
                         Events.Attributes,
@@ -256,6 +259,7 @@ SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
                         Links.TraceState,
                         Links.Attributes
                         ) VALUES (
+                                  ?,
                                   ?,
                                   ?,
                                   ?,
