@@ -151,7 +151,7 @@ func checkAuthorizationHeader(token string, exCtx *extensionContext) error {
 		return errForbidden
 	}
 
-	if res.StatusCode == 204 {
+	if res.StatusCode >= 200 && res.StatusCode < 300 {
 		exCtx.validKeysCache.Add(token, "") //In future we can store tenant ID in the cache
 		return nil
 	}
