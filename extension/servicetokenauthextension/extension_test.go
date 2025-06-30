@@ -1,8 +1,7 @@
-package ingestionapikeyauthextension
+package servicetokenauthextension
 
 import (
 	"context"
-	"encoding/json"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component/componenttest"
@@ -50,11 +49,13 @@ func TestExtension_AuthServerUnavailable(t *testing.T) {
 
 func TestExtension_InvalidKey(t *testing.T) {
 	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-		var payload AuthorizeRequestBody
-		err := json.NewDecoder(req.Body).Decode(&payload)
-		if err == nil && payload.ApiKey == "key" {
+		token := req.Header.Get("sts-api-key")
+		if token == "key" {
 			res.WriteHeader(403)
+			return
 		}
+		// Default to 204 to avoid test failures for unexpected requests
+		res.WriteHeader(204)
 	}))
 
 	ext, err := newServerAuthExtension(&Config{
@@ -76,11 +77,12 @@ func TestExtension_InvalidKey(t *testing.T) {
 
 func TestExtension_Authorized(t *testing.T) {
 	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-		var payload AuthorizeRequestBody
-		err := json.NewDecoder(req.Body).Decode(&payload)
-		if err == nil && payload.ApiKey == "key" {
+		token := req.Header.Get("sts-api-key")
+		if token == "key" {
 			res.WriteHeader(204)
+			return
 		}
+		res.WriteHeader(403)
 	}))
 
 	ext, err := newServerAuthExtension(&Config{
@@ -102,11 +104,12 @@ func TestExtension_Authorized(t *testing.T) {
 
 func TestExtension_WrongSchema(t *testing.T) {
 	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-		var payload AuthorizeRequestBody
-		err := json.NewDecoder(req.Body).Decode(&payload)
-		if err == nil && payload.ApiKey == "key" {
+		token := req.Header.Get("sts-api-key")
+		if token == "key" {
 			res.WriteHeader(204)
+			return
 		}
+		res.WriteHeader(403)
 	}))
 
 	ext, err := newServerAuthExtension(&Config{
@@ -134,11 +137,12 @@ func TestExtension_WrongSchema(t *testing.T) {
 
 func TestExtension_AuthorizedWithCamelcaseHeader(t *testing.T) {
 	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-		var payload AuthorizeRequestBody
-		err := json.NewDecoder(req.Body).Decode(&payload)
-		if err == nil && payload.ApiKey == "key" {
+		token := req.Header.Get("sts-api-key")
+		if token == "key" {
 			res.WriteHeader(204)
+			return
 		}
+		res.WriteHeader(403)
 	}))
 
 	ext, err := newServerAuthExtension(&Config{

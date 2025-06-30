@@ -1,4 +1,4 @@
-type: ingestion_api_key_auth
+type: service_token_auth
 
 status:
   class: extension

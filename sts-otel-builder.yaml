@@ -25,8 +25,8 @@ extensions:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.100.0
   - gomod: go.opentelemetry.io/collector/extension/ballastextension v0.100.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/bearertokenauthextension v0.100.0
-  - gomod: github.com/stackvista/sts-opentelemetry-collector/extension/ingestionapikeyauthextension v0.0.0
-    path: ./extension/ingestionapikeyauthextension
+  - gomod: github.com/stackvista/sts-opentelemetry-collector/extension/servicetokenauthextension v0.0.0
+    path: ./extension/servicetokenauthextension
 
 processors:
   - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.100.0

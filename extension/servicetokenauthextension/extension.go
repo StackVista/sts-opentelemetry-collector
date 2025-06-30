@@ -1,9 +1,7 @@
-package ingestionapikeyauthextension
+package servicetokenauthextension
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -104,7 +102,7 @@ func getAuthHeader(headers map[string][]string) string {
 	return ""
 }
 
-// Check if an Ingestion API Key is inside caches otherwise use a remote server to authorize it
+// Check if a ServiceToken is inside caches otherwise use a remote server to authorize it
 func checkAuthorizationHeaderUseCache(authorizationHeader string, exCtx *extensionContext) error {
 	// check if the key is stored in "validKeysCache" cache, so we know the Key is valid.
 	_, ok := exCtx.validKeysCache.Get(authorizationHeader)
@@ -126,26 +124,20 @@ type AuthorizeRequestBody struct {
 	ApiKey string `json:"apiKey"`
 }
 
-// Authorizes an Ingestion API Key (value of Authorization header) with the remote authorization server.
+// Authorizes an API Key or Service Token (value of Authorization header) with the remote authorization server.
 // The function stores the result (valid keys but also non-transient errors) in the cache.
-func checkAuthorizationHeader(authorizationHeader string, exCtx *extensionContext) error {
-	headerSample := authorizationHeader[max(0, len(authorizationHeader) - 4):]
+func checkAuthorizationHeader(token string, exCtx *extensionContext) error {
+	headerSample := token[max(0, len(token)-4):]
 	log.Printf("Sending authorization request for ...%s\n", headerSample)
-	request := AuthorizeRequestBody{
-		ApiKey: authorizationHeader,
-	}
-	jsonData, err := json.Marshal(request)
-	if err != nil {
-		log.Print("Can't encode api request to JSON ", err)
-		return errInternal //it shouldn't happen, something is wrong with the implementation
-	}
 
-	req, err := http.NewRequest(http.MethodPost, exCtx.config.Endpoint.Url, bytes.NewReader(jsonData))
-	req.Header.Add("Content-Type", "application/json")
+	req, err := http.NewRequest(http.MethodGet, exCtx.config.Endpoint.Url, nil)
 	if err != nil {
 		log.Print("Can't create authorization request ", err)
 		return errInternal
 	}
+
+	// Add the token to the header
+	req.Header.Add("sts-api-key", token)
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -155,12 +147,12 @@ func checkAuthorizationHeader(authorizationHeader string, exCtx *extensionContex
 
 	log.Printf("Result for ...%s: %d\n", headerSample, res.StatusCode)
 	if res.StatusCode == 403 {
-		exCtx.invalidKeysCache.Add(authorizationHeader, errForbidden)
+		exCtx.invalidKeysCache.Add(token, errForbidden)
 		return errForbidden
 	}
 
 	if res.StatusCode == 204 {
-		exCtx.validKeysCache.Add(authorizationHeader, "") //In future we can store tenant ID in the cache
+		exCtx.validKeysCache.Add(token, "") //In future we can store tenant ID in the cache
 		return nil
 	}
 
