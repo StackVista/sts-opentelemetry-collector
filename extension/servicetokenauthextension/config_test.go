@@ -1,4 +1,4 @@
-package ingestionapikeyauthextension
+package servicetokenauthextension
 
 import (
 	"github.com/stretchr/testify/assert"

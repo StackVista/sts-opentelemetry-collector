@@ -5,6 +5,6 @@ use (
 	./connector/stsservicegraphconnector
 	./exporter/clickhousestsexporter
 	./exporter/ststopologyexporter
-	./extension/ingestionapikeyauthextension
+	./extension/servicetokenauthextension
 	./processor/stsusageprocessor
 )

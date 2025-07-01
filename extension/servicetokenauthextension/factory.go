@@ -1,4 +1,4 @@
-package ingestionapikeyauthextension
+package servicetokenauthextension
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	Type = component.MustNewType("ingestion_api_key_auth")
+	Type = component.MustNewType("service_token_auth")
 )
 
 func NewFactory() extension.Factory {

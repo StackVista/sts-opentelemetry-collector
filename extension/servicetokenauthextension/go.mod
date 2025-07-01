@@ -1,4 +1,4 @@
-module github.com/stackvista/sts-opentelemetry-collector/extension/ingestionapikeyauthextension
+module github.com/stackvista/sts-opentelemetry-collector/extension/servicetokenauthextension
 
 go 1.21.6
 

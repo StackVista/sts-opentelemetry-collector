@@ -1,22 +1,22 @@
-ingestion_api_key_auth:
+service_token_auth:
 
-ingestion_api_key_auth/empty_endpoint:
+service_token_auth/empty_endpoint:
   endpoint:
 
-ingestion_api_key_auth/empty_url:
+service_token_auth/empty_url:
   endpoint:
     url:
 
-ingestion_api_key_auth/missing_cache:
+service_token_auth/missing_cache:
   endpoint:
     url: http://localhost:8091/authorize
 
-ingestion_api_key_auth/empty_cache:
+service_token_auth/empty_cache:
   endpoint:
     url: http://localhost:8091/authorize
   cache:
 
-ingestion_api_key_auth/valid:
+service_token_auth/valid:
   endpoint:
     url: http://localhost:8091/authorize
   cache:
