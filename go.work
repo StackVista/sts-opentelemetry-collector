@@ -3,6 +3,7 @@ go 1.22.0
 use (
 	./common
 	./connector/stsservicegraphconnector
+	./connector/tracetotopoconnector
 	./exporter/clickhousestsexporter
 	./exporter/ststopologyexporter
 	./extension/servicetokenauthextension
