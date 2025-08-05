@@ -6,6 +6,7 @@ package settings
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/oapi-codegen/runtime"
 )
@@ -288,7 +289,8 @@ const (
 
 // Argument defines model for Argument.
 type Argument struct {
-	union json.RawMessage
+	ArgumentType string `json:"argumentType"`
+	union        json.RawMessage
 }
 
 // ArgumentBoolean defines model for ArgumentBoolean.
@@ -458,7 +460,8 @@ type FailingHealthState string
 
 // FunctionBody defines model for FunctionBody.
 type FunctionBody struct {
-	union json.RawMessage
+	FunctionType string `json:"functionType"`
+	union        json.RawMessage
 }
 
 // FunctionCall defines model for FunctionCall.
@@ -863,6 +866,7 @@ type QueryViewType string
 
 // Setting defines model for Setting.
 type Setting struct {
+	Type  string `json:"type"`
 	union json.RawMessage
 }
 
@@ -956,7 +960,8 @@ type SyncType string
 
 // SyncAction defines model for SyncAction.
 type SyncAction struct {
-	union json.RawMessage
+	ActionType string `json:"actionType"`
+	union      json.RawMessage
 }
 
 // SyncActionComponent defines model for SyncActionComponent.
@@ -1077,7 +1082,8 @@ func (t Argument) AsMonitorArgument() (MonitorArgument, error) {
 
 // FromMonitorArgument overwrites any union data inside the Argument as the provided MonitorArgument
 func (t *Argument) FromMonitorArgument(v MonitorArgument) error {
-	v.ArgumentType = "MonitorArgument"
+	t.ArgumentType = "MonitorArgument"
+
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
@@ -1085,7 +1091,8 @@ func (t *Argument) FromMonitorArgument(v MonitorArgument) error {
 
 // MergeMonitorArgument performs a merge with any union data inside the Argument, using the provided MonitorArgument
 func (t *Argument) MergeMonitorArgument(v MonitorArgument) error {
-	v.ArgumentType = "MonitorArgument"
+	t.ArgumentType = "MonitorArgument"
+
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -1119,11 +1126,44 @@ func (t Argument) ValueByDiscriminator() (interface{}, error) {
 
 func (t Argument) MarshalJSON() ([]byte, error) {
 	b, err := t.union.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	object := make(map[string]json.RawMessage)
+	if t.union != nil {
+		err = json.Unmarshal(b, &object)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	object["argumentType"], err = json.Marshal(t.ArgumentType)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'argumentType': %w", err)
+	}
+
+	b, err = json.Marshal(object)
 	return b, err
 }
 
 func (t *Argument) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
+	if err != nil {
+		return err
+	}
+	object := make(map[string]json.RawMessage)
+	err = json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["argumentType"]; found {
+		err = json.Unmarshal(raw, &t.ArgumentType)
+		if err != nil {
+			return fmt.Errorf("error reading 'argumentType': %w", err)
+		}
+	}
+
 	return err
 }
 
@@ -1136,7 +1176,8 @@ func (t FunctionBody) AsMonitorFunctionBody() (MonitorFunctionBody, error) {
 
 // FromMonitorFunctionBody overwrites any union data inside the FunctionBody as the provided MonitorFunctionBody
 func (t *FunctionBody) FromMonitorFunctionBody(v MonitorFunctionBody) error {
-	v.FunctionType = "MonitorFunctionBody"
+	t.FunctionType = "MonitorFunctionBody"
+
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
@@ -1144,7 +1185,8 @@ func (t *FunctionBody) FromMonitorFunctionBody(v MonitorFunctionBody) error {
 
 // MergeMonitorFunctionBody performs a merge with any union data inside the FunctionBody, using the provided MonitorFunctionBody
 func (t *FunctionBody) MergeMonitorFunctionBody(v MonitorFunctionBody) error {
-	v.FunctionType = "MonitorFunctionBody"
+	t.FunctionType = "MonitorFunctionBody"
+
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -1164,7 +1206,8 @@ func (t FunctionBody) AsIdExtractorFunctionBody() (IdExtractorFunctionBody, erro
 
 // FromIdExtractorFunctionBody overwrites any union data inside the FunctionBody as the provided IdExtractorFunctionBody
 func (t *FunctionBody) FromIdExtractorFunctionBody(v IdExtractorFunctionBody) error {
-	v.FunctionType = "IdExtractorFunctionBody"
+	t.FunctionType = "IdExtractorFunctionBody"
+
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
@@ -1172,7 +1215,8 @@ func (t *FunctionBody) FromIdExtractorFunctionBody(v IdExtractorFunctionBody) er
 
 // MergeIdExtractorFunctionBody performs a merge with any union data inside the FunctionBody, using the provided IdExtractorFunctionBody
 func (t *FunctionBody) MergeIdExtractorFunctionBody(v IdExtractorFunctionBody) error {
-	v.FunctionType = "IdExtractorFunctionBody"
+	t.FunctionType = "IdExtractorFunctionBody"
+
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -1192,7 +1236,8 @@ func (t FunctionBody) AsHandlebarsFunctionBody() (HandlebarsFunctionBody, error)
 
 // FromHandlebarsFunctionBody overwrites any union data inside the FunctionBody as the provided HandlebarsFunctionBody
 func (t *FunctionBody) FromHandlebarsFunctionBody(v HandlebarsFunctionBody) error {
-	v.FunctionType = "HandlebarsFunctionBody"
+	t.FunctionType = "HandlebarsFunctionBody"
+
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
@@ -1200,7 +1245,8 @@ func (t *FunctionBody) FromHandlebarsFunctionBody(v HandlebarsFunctionBody) erro
 
 // MergeHandlebarsFunctionBody performs a merge with any union data inside the FunctionBody, using the provided HandlebarsFunctionBody
 func (t *FunctionBody) MergeHandlebarsFunctionBody(v HandlebarsFunctionBody) error {
-	v.FunctionType = "HandlebarsFunctionBody"
+	t.FunctionType = "HandlebarsFunctionBody"
+
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -1220,7 +1266,8 @@ func (t FunctionBody) AsGroovyFunctionBody() (GroovyFunctionBody, error) {
 
 // FromGroovyFunctionBody overwrites any union data inside the FunctionBody as the provided GroovyFunctionBody
 func (t *FunctionBody) FromGroovyFunctionBody(v GroovyFunctionBody) error {
-	v.FunctionType = "GroovyFunctionBody"
+	t.FunctionType = "GroovyFunctionBody"
+
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
@@ -1228,7 +1275,8 @@ func (t *FunctionBody) FromGroovyFunctionBody(v GroovyFunctionBody) error {
 
 // MergeGroovyFunctionBody performs a merge with any union data inside the FunctionBody, using the provided GroovyFunctionBody
 func (t *FunctionBody) MergeGroovyFunctionBody(v GroovyFunctionBody) error {
-	v.FunctionType = "GroovyFunctionBody"
+	t.FunctionType = "GroovyFunctionBody"
+
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -1248,7 +1296,8 @@ func (t FunctionBody) AsNativeFunctionBody() (NativeFunctionBody, error) {
 
 // FromNativeFunctionBody overwrites any union data inside the FunctionBody as the provided NativeFunctionBody
 func (t *FunctionBody) FromNativeFunctionBody(v NativeFunctionBody) error {
-	v.FunctionType = "NativeFunctionBody"
+	t.FunctionType = "NativeFunctionBody"
+
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
@@ -1256,7 +1305,8 @@ func (t *FunctionBody) FromNativeFunctionBody(v NativeFunctionBody) error {
 
 // MergeNativeFunctionBody performs a merge with any union data inside the FunctionBody, using the provided NativeFunctionBody
 func (t *FunctionBody) MergeNativeFunctionBody(v NativeFunctionBody) error {
-	v.FunctionType = "NativeFunctionBody"
+	t.FunctionType = "NativeFunctionBody"
+
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -1298,11 +1348,44 @@ func (t FunctionBody) ValueByDiscriminator() (interface{}, error) {
 
 func (t FunctionBody) MarshalJSON() ([]byte, error) {
 	b, err := t.union.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	object := make(map[string]json.RawMessage)
+	if t.union != nil {
+		err = json.Unmarshal(b, &object)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	object["functionType"], err = json.Marshal(t.FunctionType)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'functionType': %w", err)
+	}
+
+	b, err = json.Marshal(object)
 	return b, err
 }
 
 func (t *FunctionBody) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
+	if err != nil {
+		return err
+	}
+	object := make(map[string]json.RawMessage)
+	err = json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["functionType"]; found {
+		err = json.Unmarshal(raw, &t.FunctionType)
+		if err != nil {
+			return fmt.Errorf("error reading 'functionType': %w", err)
+		}
+	}
+
 	return err
 }
 
@@ -2506,7 +2589,8 @@ func (t Setting) AsNotificationConfiguration() (NotificationConfiguration, error
 
 // FromNotificationConfiguration overwrites any union data inside the Setting as the provided NotificationConfiguration
 func (t *Setting) FromNotificationConfiguration(v NotificationConfiguration) error {
-	v.Type = "NotificationConfiguration"
+	t.Type = "NotificationConfiguration"
+
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
@@ -2514,7 +2598,8 @@ func (t *Setting) FromNotificationConfiguration(v NotificationConfiguration) err
 
 // MergeNotificationConfiguration performs a merge with any union data inside the Setting, using the provided NotificationConfiguration
 func (t *Setting) MergeNotificationConfiguration(v NotificationConfiguration) error {
-	v.Type = "NotificationConfiguration"
+	t.Type = "NotificationConfiguration"
+
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -2534,7 +2619,8 @@ func (t Setting) AsNotificationChannel() (NotificationChannel, error) {
 
 // FromNotificationChannel overwrites any union data inside the Setting as the provided NotificationChannel
 func (t *Setting) FromNotificationChannel(v NotificationChannel) error {
-	v.Type = "NotificationChannel"
+	t.Type = "NotificationChannel"
+
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
@@ -2542,7 +2628,8 @@ func (t *Setting) FromNotificationChannel(v NotificationChannel) error {
 
 // MergeNotificationChannel performs a merge with any union data inside the Setting, using the provided NotificationChannel
 func (t *Setting) MergeNotificationChannel(v NotificationChannel) error {
-	v.Type = "NotificationChannel"
+	t.Type = "NotificationChannel"
+
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -2562,7 +2649,8 @@ func (t Setting) AsSync() (Sync, error) {
 
 // FromSync overwrites any union data inside the Setting as the provided Sync
 func (t *Setting) FromSync(v Sync) error {
-	v.Type = "Sync"
+	t.Type = "Sync"
+
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
@@ -2570,7 +2658,8 @@ func (t *Setting) FromSync(v Sync) error {
 
 // MergeSync performs a merge with any union data inside the Setting, using the provided Sync
 func (t *Setting) MergeSync(v Sync) error {
-	v.Type = "Sync"
+	t.Type = "Sync"
+
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -2590,7 +2679,8 @@ func (t Setting) AsMonitor() (Monitor, error) {
 
 // FromMonitor overwrites any union data inside the Setting as the provided Monitor
 func (t *Setting) FromMonitor(v Monitor) error {
-	v.Type = "Monitor"
+	t.Type = "Monitor"
+
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
@@ -2598,7 +2688,8 @@ func (t *Setting) FromMonitor(v Monitor) error {
 
 // MergeMonitor performs a merge with any union data inside the Setting, using the provided Monitor
 func (t *Setting) MergeMonitor(v Monitor) error {
-	v.Type = "Monitor"
+	t.Type = "Monitor"
+
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -2618,7 +2709,8 @@ func (t Setting) AsExternalMonitor() (ExternalMonitor, error) {
 
 // FromExternalMonitor overwrites any union data inside the Setting as the provided ExternalMonitor
 func (t *Setting) FromExternalMonitor(v ExternalMonitor) error {
-	v.Type = "ExternalMonitor"
+	t.Type = "ExternalMonitor"
+
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
@@ -2626,7 +2718,8 @@ func (t *Setting) FromExternalMonitor(v ExternalMonitor) error {
 
 // MergeExternalMonitor performs a merge with any union data inside the Setting, using the provided ExternalMonitor
 func (t *Setting) MergeExternalMonitor(v ExternalMonitor) error {
-	v.Type = "ExternalMonitor"
+	t.Type = "ExternalMonitor"
+
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -2646,7 +2739,8 @@ func (t Setting) AsQueryView() (QueryView, error) {
 
 // FromQueryView overwrites any union data inside the Setting as the provided QueryView
 func (t *Setting) FromQueryView(v QueryView) error {
-	v.Type = "QueryView"
+	t.Type = "QueryView"
+
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
@@ -2654,7 +2748,8 @@ func (t *Setting) FromQueryView(v QueryView) error {
 
 // MergeQueryView performs a merge with any union data inside the Setting, using the provided QueryView
 func (t *Setting) MergeQueryView(v QueryView) error {
-	v.Type = "QueryView"
+	t.Type = "QueryView"
+
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -2674,7 +2769,8 @@ func (t Setting) AsOtelComponentMapping() (OtelComponentMapping, error) {
 
 // FromOtelComponentMapping overwrites any union data inside the Setting as the provided OtelComponentMapping
 func (t *Setting) FromOtelComponentMapping(v OtelComponentMapping) error {
-	v.Type = "OtelComponentMapping"
+	t.Type = "OtelComponentMapping"
+
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
@@ -2682,7 +2778,8 @@ func (t *Setting) FromOtelComponentMapping(v OtelComponentMapping) error {
 
 // MergeOtelComponentMapping performs a merge with any union data inside the Setting, using the provided OtelComponentMapping
 func (t *Setting) MergeOtelComponentMapping(v OtelComponentMapping) error {
-	v.Type = "OtelComponentMapping"
+	t.Type = "OtelComponentMapping"
+
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -2702,7 +2799,8 @@ func (t Setting) AsOtelRelationMapping() (OtelRelationMapping, error) {
 
 // FromOtelRelationMapping overwrites any union data inside the Setting as the provided OtelRelationMapping
 func (t *Setting) FromOtelRelationMapping(v OtelRelationMapping) error {
-	v.Type = "OtelRelationMapping"
+	t.Type = "OtelRelationMapping"
+
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
@@ -2710,7 +2808,8 @@ func (t *Setting) FromOtelRelationMapping(v OtelRelationMapping) error {
 
 // MergeOtelRelationMapping performs a merge with any union data inside the Setting, using the provided OtelRelationMapping
 func (t *Setting) MergeOtelRelationMapping(v OtelRelationMapping) error {
-	v.Type = "OtelRelationMapping"
+	t.Type = "OtelRelationMapping"
+
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -2758,11 +2857,44 @@ func (t Setting) ValueByDiscriminator() (interface{}, error) {
 
 func (t Setting) MarshalJSON() ([]byte, error) {
 	b, err := t.union.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	object := make(map[string]json.RawMessage)
+	if t.union != nil {
+		err = json.Unmarshal(b, &object)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	object["type"], err = json.Marshal(t.Type)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'type': %w", err)
+	}
+
+	b, err = json.Marshal(object)
 	return b, err
 }
 
 func (t *Setting) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
+	if err != nil {
+		return err
+	}
+	object := make(map[string]json.RawMessage)
+	err = json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["type"]; found {
+		err = json.Unmarshal(raw, &t.Type)
+		if err != nil {
+			return fmt.Errorf("error reading 'type': %w", err)
+		}
+	}
+
 	return err
 }
 
@@ -2775,7 +2907,8 @@ func (t SyncAction) AsSyncActionComponent() (SyncActionComponent, error) {
 
 // FromSyncActionComponent overwrites any union data inside the SyncAction as the provided SyncActionComponent
 func (t *SyncAction) FromSyncActionComponent(v SyncActionComponent) error {
-	v.ActionType = "SyncActionComponent"
+	t.ActionType = "SyncActionComponent"
+
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
@@ -2783,7 +2916,8 @@ func (t *SyncAction) FromSyncActionComponent(v SyncActionComponent) error {
 
 // MergeSyncActionComponent performs a merge with any union data inside the SyncAction, using the provided SyncActionComponent
 func (t *SyncAction) MergeSyncActionComponent(v SyncActionComponent) error {
-	v.ActionType = "SyncActionComponent"
+	t.ActionType = "SyncActionComponent"
+
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -2803,7 +2937,8 @@ func (t SyncAction) AsSyncActionRelation() (SyncActionRelation, error) {
 
 // FromSyncActionRelation overwrites any union data inside the SyncAction as the provided SyncActionRelation
 func (t *SyncAction) FromSyncActionRelation(v SyncActionRelation) error {
-	v.ActionType = "SyncActionRelation"
+	t.ActionType = "SyncActionRelation"
+
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
@@ -2811,7 +2946,8 @@ func (t *SyncAction) FromSyncActionRelation(v SyncActionRelation) error {
 
 // MergeSyncActionRelation performs a merge with any union data inside the SyncAction, using the provided SyncActionRelation
 func (t *SyncAction) MergeSyncActionRelation(v SyncActionRelation) error {
-	v.ActionType = "SyncActionRelation"
+	t.ActionType = "SyncActionRelation"
+
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -2831,7 +2967,8 @@ func (t SyncAction) AsSyncActionCreate() (SyncActionCreate, error) {
 
 // FromSyncActionCreate overwrites any union data inside the SyncAction as the provided SyncActionCreate
 func (t *SyncAction) FromSyncActionCreate(v SyncActionCreate) error {
-	v.ActionType = "SyncActionCreate"
+	t.ActionType = "SyncActionCreate"
+
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
@@ -2839,7 +2976,8 @@ func (t *SyncAction) FromSyncActionCreate(v SyncActionCreate) error {
 
 // MergeSyncActionCreate performs a merge with any union data inside the SyncAction, using the provided SyncActionCreate
 func (t *SyncAction) MergeSyncActionCreate(v SyncActionCreate) error {
-	v.ActionType = "SyncActionCreate"
+	t.ActionType = "SyncActionCreate"
+
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -2859,7 +2997,8 @@ func (t SyncAction) AsSyncActionCreateOnMerge() (SyncActionCreateOnMerge, error)
 
 // FromSyncActionCreateOnMerge overwrites any union data inside the SyncAction as the provided SyncActionCreateOnMerge
 func (t *SyncAction) FromSyncActionCreateOnMerge(v SyncActionCreateOnMerge) error {
-	v.ActionType = "SyncActionCreateOnMerge"
+	t.ActionType = "SyncActionCreateOnMerge"
+
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
@@ -2867,7 +3006,8 @@ func (t *SyncAction) FromSyncActionCreateOnMerge(v SyncActionCreateOnMerge) erro
 
 // MergeSyncActionCreateOnMerge performs a merge with any union data inside the SyncAction, using the provided SyncActionCreateOnMerge
 func (t *SyncAction) MergeSyncActionCreateOnMerge(v SyncActionCreateOnMerge) error {
-	v.ActionType = "SyncActionCreateOnMerge"
+	t.ActionType = "SyncActionCreateOnMerge"
+
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -2907,11 +3047,44 @@ func (t SyncAction) ValueByDiscriminator() (interface{}, error) {
 
 func (t SyncAction) MarshalJSON() ([]byte, error) {
 	b, err := t.union.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	object := make(map[string]json.RawMessage)
+	if t.union != nil {
+		err = json.Unmarshal(b, &object)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	object["actionType"], err = json.Marshal(t.ActionType)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'actionType': %w", err)
+	}
+
+	b, err = json.Marshal(object)
 	return b, err
 }
 
 func (t *SyncAction) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
+	if err != nil {
+		return err
+	}
+	object := make(map[string]json.RawMessage)
+	err = json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["actionType"]; found {
+		err = json.Unmarshal(raw, &t.ActionType)
+		if err != nil {
+			return fmt.Errorf("error reading 'actionType': %w", err)
+		}
+	}
+
 	return err
 }
 

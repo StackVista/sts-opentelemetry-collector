@@ -52,6 +52,9 @@ components:
 
     Setting:
       type: object
+      properties:
+        type:
+          type: string
       oneOf:
         - $ref: "#/components/schemas/NotificationConfiguration"
         - $ref: "#/components/schemas/NotificationChannel"
@@ -461,6 +464,9 @@ components:
             - autoExpireElements
             - expireElementsAfterMs
     SyncAction:
+      properties:
+        actionType:
+          type: string
       oneOf:
         - $ref: "#/components/schemas/SyncActionComponent"
         - $ref: "#/components/schemas/SyncActionRelation"
@@ -468,6 +474,8 @@ components:
         - $ref: "#/components/schemas/SyncActionCreateOnMerge"
       discriminator:
         propertyName: actionType
+      required:
+        - actionType
 
     SyncActionCreate:
       oneOf:
@@ -669,15 +677,19 @@ components:
         - type
 
     FunctionBody:
+      properties:
+        functionType:
+          type: string
       oneOf:
         - $ref: "#/components/schemas/MonitorFunctionBody"
         - $ref: "#/components/schemas/IdExtractorFunctionBody"
         - $ref: "#/components/schemas/HandlebarsFunctionBody"
         - $ref: "#/components/schemas/GroovyFunctionBody"
         - $ref: "#/components/schemas/NativeFunctionBody"
-
       discriminator:
         propertyName: functionType
+      required:
+        - functionType
 
     MonitorFunctionBody:
       oneOf:
@@ -693,10 +705,15 @@ components:
         propertyName: functionType
 
     Argument:
+      properties:
+        argumentType:
+          type: string
       oneOf:
         - $ref: "#/components/schemas/MonitorArgument"
       discriminator:
         propertyName: argumentType
+      required:
+        - argumentType
 
     MonitorArgument:
       oneOf:
