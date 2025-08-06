@@ -1,0 +1,153 @@
+syntax = "proto3";
+import "google/protobuf/struct.proto";
+
+package topo_stream.v1;
+option go_package = "topo_stream";
+option java_package = "com.stackstate.topoStream.protocol";
+
+
+message TopologyStreamComponent {
+  string external_id = 1;
+
+
+  // Identifiers for Sync service merging with other sync sources. Example aws node merges with k8s node
+  repeated string identifiers = 2;
+
+
+  string name = 3;
+
+
+  // Component type. Is what help us match it with config and come with the rendering for overview, highlight pages
+  string  type_name = 4;
+  optional string type_identifier = 5;
+
+  string layer_name = 6;
+  optional string layer_identifier = 7;
+
+  string domain_name = 8;
+  optional string domain_identifier = 9;
+
+
+  // currently the properties on the component dto. Helpful to access data when we are building overview, highlight pages
+  // We agree to start without displayProperties.
+  //map<string, string> displayProperties = 10;
+
+
+  // Resource Definition. Configuration or Specification that yielded the component instance.
+  // We have a `Show Configuration` button on the "Highlight pages" that gives you access to this info.
+  google.protobuf.Struct resource_definition = 10;
+
+
+  // StatusData.
+  // Contains the current status of a running component. Summary of a component lifecycle.
+  // We have a `Show Status` button on the "Highlight pages" that gives you access to this info.
+  google.protobuf.Struct status_data = 11;
+
+
+  repeated string tags = 12;
+
+
+  // Do we want the `version` field?
+}
+
+
+// No direction for the relation requires. We set it as ONE_WAY as source -> target
+message TopologyStreamRelation {
+  string external_id = 1;
+
+
+  // Works with datasource unique Identifiers, it allow us to not have to send dummy components, the components need to exist on some datasource:shardId OtelComponentMapping stream
+  // which might not necessarily be the same nor the same partition where this message lands. Thus components and relations are not in the same datasource:shard state.
+  // Will need some changes on how to propagate this relations to the sync service. Potentially a new definition of ExtopoComponentId that helps the grouper make the late binding of
+  // source/target. And the detection and error/warning raising of incomplete relations will be delayed to the grouper.
+  // Global unique identifier of a source component.
+  string source_identifier = 2; // E.g. datasource:externalId ...
+  // Global unique identifier of a target component.
+  string target_identifier = 3; // E.g. datasource:externalId ...
+
+  string name = 4;
+
+  // Relation type name
+  string type_name = 5;
+  optional string type_identifier = 6;
+
+  repeated string tags = 7;
+
+}
+
+
+/**
+Delete message for any datasource:shardId
+*/
+message TopologyStreamRemove {
+  // Do we need to track the cause of removal? Is it always the OtelMapping settings being deleted?
+  string removal_cause = 1;
+}
+
+/**
+Messages for REPEAT_SNAPSHOTS consistency model
+*/
+message TopologyStreamSnapshotData {
+  // Defines how often we expect a new snapshot. Helps raise warnings related to data being not up to date
+  int32 repeat_interval_ms = 1;
+
+
+  // Defines the grace period to keep the data in the case that we datasource:shardId is decommissioned, we don't want
+  // data hanging permanently
+  optional int32 expiry_interval_ms = 2;
+  optional bool snapshot_start = 3;
+  optional bool snapshot_stop = 4;
+
+  repeated TopologyStreamComponent components = 5;
+  repeated TopologyStreamRelation relations = 6;
+
+
+  // In case the Mapping fails and the Otel collector would like to push some messages that we can display when the user requests the TopologyStream status via the cli
+  // TODO Do we need a data structure that can carry something like a level (INFO, WARN, ERROR), perhaps a category/type besides the message itself
+  repeated string errors = 7;
+}
+
+
+/**
+Messages for REPEAT_ELEMENTS consistency model
+*/
+message TopologyStreamRepeatElementsData {
+  // Defines the grace period to keep the data in the case that we datasource:shardId is decommissioned, we don't want
+  // data hanging permanently
+  int32 expiry_interval_ms = 1;
+
+  repeated TopologyStreamComponent components = 2;
+  repeated TopologyStreamRelation relations = 3;
+
+
+  // In case the Mapping fails and the Otel collector would like to push some messages that we can display when the user requests the TopologyStream status via the cli
+  // TODO Do we need a data structure that can carry something like a level (INFO, WARN, ERROR), perhaps a category/type besides the message itself
+  repeated string errors = 4;
+}
+
+
+/**
+== Possible Messages
+
+
+Based on the design where we have several Otel collectors deployed and ack that OtelComponentMapping and the OtelRelationMapping
+will be colocated in different collectors drives the protocol into having message keys carrying encoded the
+datasource:shardId (stream:subStreamId)
+so we get the property that all messages for a datasource:shardId land in the same partition and we get them in order.. Order among the whole dataSource is not
+needed as the SyncService is tolerant to for example keeping in hold relations in the meantime that the components are observed.
+*/
+message TopologyStreamMessage {
+  // Timestamp when the agent collected the data, Helpful to calculate pipeline latencies
+  int64 collection_timestamp = 1;
+
+
+  // Timestamp when the record was submitted for processing on the platform. Helpful to calculate pipeline latencies
+  int64 submitted_timestamp = 2;
+
+
+  oneof payload {
+    TopologyStreamSnapshotData topology_stream_snapshot_data = 3;
+    TopologyStreamRepeatElementsData topology_stream_repeat_elements_data = 4;
+    TopologyStreamRemove topology_stream_remove = 5;
+  }
+}
