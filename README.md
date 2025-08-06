@@ -1,5 +1,22 @@
 # Local development
 
+## Install dependencies
+### Protobuf generator
+```shell
+go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+```
+
+## Generate 
+To generate a `settings` model from OpenAPI definition, execute following command:
+```shell
+go generate ./generated/settings/model.go
+```
+
+To generate a `topo_stream` model from Protobuf schema execute following command:
+```shell
+go generate ./generated/topostream/model.go
+```
+
 ## Build collector locally
 ```shell
 docker build . -t sts-opentelemetry-collector:latest
