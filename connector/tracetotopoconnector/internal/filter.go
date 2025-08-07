@@ -25,11 +25,8 @@ func FilterRelation(span *ptrace.Span, mapping *settings.OtelComponentMapping) *
 }
 
 func filterByConditions(span *ptrace.Span, conditions *[]settings.OtelConditionMapping) bool {
-	conditionsLength := len(*conditions)
-
-	for index, condition := range *conditions {
-		lastCondition := index == conditionsLength-1
-		switch filterByCondition(span, &condition, lastCondition) {
+	for _, condition := range *conditions {
+		switch evalCondition(span, &condition) {
 		case settings.CREATE:
 			return true
 		case settings.REJECT:
@@ -42,18 +39,14 @@ func filterByConditions(span *ptrace.Span, conditions *[]settings.OtelConditionM
 	return true
 }
 
-func filterByCondition(span *ptrace.Span, condition *settings.OtelConditionMapping, lastCondition bool) settings.OtelConditionMappingAction {
+func evalCondition(span *ptrace.Span, condition *settings.OtelConditionMapping) settings.OtelConditionMappingAction {
 	expression := condition.Expression.Expression
 	expressionResult := evalBooleanExpression(span, &expression)
+
 	if expressionResult {
 		return condition.Action
-	} else {
-		if lastCondition {
-			return settings.REJECT
-		} else {
-			return settings.CONTINUE
-		}
 	}
+	return settings.CONTINUE
 }
 
 func evalBooleanExpression(span *ptrace.Span, expression *string) bool {
