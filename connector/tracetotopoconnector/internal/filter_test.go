@@ -23,7 +23,7 @@ func TestFilter_evalCondition(t *testing.T) {
 			name: "Matched condition with CREATE action",
 			span: testSpan,
 			condition: settings.OtelConditionMapping{
-				Expression: settings.OtelBooleanExpression{Expression: "test-attr"},
+				Expression: settings.OtelBooleanExpression{Expression: "attributes.test-attr"},
 				Action:     settings.CREATE,
 			},
 			expectedAction: settings.CREATE,
@@ -32,7 +32,7 @@ func TestFilter_evalCondition(t *testing.T) {
 			name: "Non-matched condition with CREATE action",
 			span: testSpan,
 			condition: settings.OtelConditionMapping{
-				Expression: settings.OtelBooleanExpression{Expression: "non-existing-attr"},
+				Expression: settings.OtelBooleanExpression{Expression: "attributes.non-existing-attr"},
 				Action:     settings.CREATE,
 			},
 			expectedAction: settings.CONTINUE,
@@ -41,7 +41,7 @@ func TestFilter_evalCondition(t *testing.T) {
 			name: "Matched condition with REJECT action",
 			span: testSpan,
 			condition: settings.OtelConditionMapping{
-				Expression: settings.OtelBooleanExpression{Expression: "test-attr"},
+				Expression: settings.OtelBooleanExpression{Expression: "attributes.test-attr"},
 				Action:     settings.REJECT,
 			},
 			expectedAction: settings.REJECT,
@@ -50,7 +50,7 @@ func TestFilter_evalCondition(t *testing.T) {
 			name: "Non-matched condition with REJECT action",
 			span: testSpan,
 			condition: settings.OtelConditionMapping{
-				Expression: settings.OtelBooleanExpression{Expression: "non-existing-attr"},
+				Expression: settings.OtelBooleanExpression{Expression: "attributes.non-existing-attr"},
 				Action:     settings.REJECT,
 			},
 			expectedAction: settings.CONTINUE,
@@ -59,7 +59,7 @@ func TestFilter_evalCondition(t *testing.T) {
 			name: "Matched condition with CONTINUE action",
 			span: testSpan,
 			condition: settings.OtelConditionMapping{
-				Expression: settings.OtelBooleanExpression{Expression: "test-attr"},
+				Expression: settings.OtelBooleanExpression{Expression: "attributes.test-attr"},
 				Action:     settings.CONTINUE,
 			},
 			expectedAction: settings.CONTINUE,
@@ -68,7 +68,7 @@ func TestFilter_evalCondition(t *testing.T) {
 			name: "Non-matched condition with CONTINUE action",
 			span: testSpan,
 			condition: settings.OtelConditionMapping{
-				Expression: settings.OtelBooleanExpression{Expression: "non-existing-attr"},
+				Expression: settings.OtelBooleanExpression{Expression: "attributes.non-existing-attr"},
 				Action:     settings.CONTINUE,
 			},
 			expectedAction: settings.CONTINUE,
@@ -108,7 +108,7 @@ func TestFilter_filterByConditions(t *testing.T) {
 			span: testSpan,
 			conditions: []settings.OtelConditionMapping{
 				{
-					Expression: settings.OtelBooleanExpression{Expression: "test-attr"},
+					Expression: settings.OtelBooleanExpression{Expression: "attributes.test-attr"},
 					Action:     settings.CREATE,
 				},
 			},
@@ -119,7 +119,7 @@ func TestFilter_filterByConditions(t *testing.T) {
 			span: testSpan,
 			conditions: []settings.OtelConditionMapping{
 				{
-					Expression: settings.OtelBooleanExpression{Expression: "non-existing-attr"},
+					Expression: settings.OtelBooleanExpression{Expression: "attributes.non-existing-attr"},
 					Action:     settings.CREATE,
 				},
 			},
@@ -130,7 +130,7 @@ func TestFilter_filterByConditions(t *testing.T) {
 			span: testSpan,
 			conditions: []settings.OtelConditionMapping{
 				{
-					Expression: settings.OtelBooleanExpression{Expression: "test-attr"},
+					Expression: settings.OtelBooleanExpression{Expression: "attributes.test-attr"},
 					Action:     settings.REJECT,
 				},
 			},
@@ -141,7 +141,7 @@ func TestFilter_filterByConditions(t *testing.T) {
 			span: testSpan,
 			conditions: []settings.OtelConditionMapping{
 				{
-					Expression: settings.OtelBooleanExpression{Expression: "non-existing-attr"},
+					Expression: settings.OtelBooleanExpression{Expression: "attributes.non-existing-attr"},
 					Action:     settings.REJECT,
 				},
 			},
@@ -152,7 +152,7 @@ func TestFilter_filterByConditions(t *testing.T) {
 			span: testSpan,
 			conditions: []settings.OtelConditionMapping{
 				{
-					Expression: settings.OtelBooleanExpression{Expression: "test-attr"},
+					Expression: settings.OtelBooleanExpression{Expression: "attributes.test-attr"},
 					Action:     settings.CONTINUE,
 				},
 			},
@@ -163,7 +163,7 @@ func TestFilter_filterByConditions(t *testing.T) {
 			span: testSpan,
 			conditions: []settings.OtelConditionMapping{
 				{
-					Expression: settings.OtelBooleanExpression{Expression: "non-existing-attr"},
+					Expression: settings.OtelBooleanExpression{Expression: "attributes.non-existing-attr"},
 					Action:     settings.CONTINUE,
 				},
 			},
@@ -174,11 +174,11 @@ func TestFilter_filterByConditions(t *testing.T) {
 			span: testSpan,
 			conditions: []settings.OtelConditionMapping{
 				{
-					Expression: settings.OtelBooleanExpression{Expression: "test-attr"},
+					Expression: settings.OtelBooleanExpression{Expression: "attributes.test-attr"},
 					Action:     settings.CREATE,
 				},
 				{
-					Expression: settings.OtelBooleanExpression{Expression: "test-attr"},
+					Expression: settings.OtelBooleanExpression{Expression: "attributes.test-attr"},
 					Action:     settings.REJECT,
 				},
 			},
@@ -189,11 +189,11 @@ func TestFilter_filterByConditions(t *testing.T) {
 			span: testSpan,
 			conditions: []settings.OtelConditionMapping{
 				{
-					Expression: settings.OtelBooleanExpression{Expression: "non-existing-attr"},
+					Expression: settings.OtelBooleanExpression{Expression: "attributes.non-existing-attr"},
 					Action:     settings.CREATE,
 				},
 				{
-					Expression: settings.OtelBooleanExpression{Expression: "test-attr"},
+					Expression: settings.OtelBooleanExpression{Expression: "attributes.test-attr"},
 					Action:     settings.REJECT,
 				},
 			},
@@ -204,11 +204,11 @@ func TestFilter_filterByConditions(t *testing.T) {
 			span: testSpan,
 			conditions: []settings.OtelConditionMapping{
 				{
-					Expression: settings.OtelBooleanExpression{Expression: "test-attr"},
+					Expression: settings.OtelBooleanExpression{Expression: "attributes.test-attr"},
 					Action:     settings.REJECT,
 				},
 				{
-					Expression: settings.OtelBooleanExpression{Expression: "test-attr"},
+					Expression: settings.OtelBooleanExpression{Expression: "attributes.test-attr"},
 					Action:     settings.CREATE,
 				},
 			},
@@ -219,11 +219,11 @@ func TestFilter_filterByConditions(t *testing.T) {
 			span: testSpan,
 			conditions: []settings.OtelConditionMapping{
 				{
-					Expression: settings.OtelBooleanExpression{Expression: "non-existing-attr"},
+					Expression: settings.OtelBooleanExpression{Expression: "attributes.non-existing-attr"},
 					Action:     settings.REJECT,
 				},
 				{
-					Expression: settings.OtelBooleanExpression{Expression: "test-attr"},
+					Expression: settings.OtelBooleanExpression{Expression: "attributes.test-attr"},
 					Action:     settings.CREATE,
 				},
 			},
