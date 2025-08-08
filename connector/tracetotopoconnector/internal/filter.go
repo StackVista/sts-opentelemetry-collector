@@ -40,16 +40,10 @@ func filterByConditions(span *ptrace.Span, conditions *[]settings.OtelConditionM
 }
 
 func evalCondition(span *ptrace.Span, condition *settings.OtelConditionMapping) settings.OtelConditionMappingAction {
-	expression := condition.Expression.Expression
-	expressionResult := evalBooleanExpression(span, &expression)
+	expressionResult := EvalBooleanExpression(span, &condition.Expression)
 
 	if expressionResult {
 		return condition.Action
 	}
 	return settings.CONTINUE
-}
-
-func evalBooleanExpression(span *ptrace.Span, expression *string) bool {
-	_, exists := span.Attributes().Get(*expression) //TODO implement it
-	return exists
 }
