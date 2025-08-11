@@ -9,7 +9,7 @@ go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 ## Generate 
 To generate a `settings` model from OpenAPI definition, execute following command:
 ```shell
-go generate ./generated/settings/model.go
+go generate ./connector/tracetotopoconnector/generated/settings/model.go
 ```
 
 To generate a `topo_stream` model from Protobuf schema execute following command:
@@ -25,6 +25,19 @@ docker build . -t sts-opentelemetry-collector:latest
 ## Run it locally 
 Create a file (`dev-config.yaml`) with configuration for OpenTelemetry Collector.
 ```yaml
+extensions:
+  settings_provider:
+    file:
+      path: "/otel_mappings.yaml"
+      update_interval: 30s
+    # Or for Kafka:
+    # kafka:
+    #   brokers: ["localhost:9092"]
+    #   topic: "sts_internal_settings"
+
+connectors:
+  tracetotopo:
+
 receivers:
   otlp:
     protocols:
@@ -32,6 +45,7 @@ receivers:
         endpoint: 0.0.0.0:4317
       http:
         endpoint: 0.0.0.0:4318
+
 processors:
   batch:
 
@@ -40,23 +54,31 @@ exporters:
     verbosity: detailed
 
 service:
+  telemetry:
+    logs:
+      level: debug
+  extensions: [ settings_provider ]
   pipelines:
     traces:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [debug]
+      receivers: [ otlp ]
+      processors: [ batch ]
+      exporters: [ debug, tracetotopo ]
     metrics:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [debug]
+      receivers: [ otlp ]
+      processors: [ batch ]
+      exporters: [ debug ]
     logs:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [debug]
+      receivers: [ otlp, tracetotopo ]
+      processors: [ batch ]
+      exporters: [ debug ]]
 ```
-
+### Run with above config (and no extension config)
 ```shell
 docker run --rm -p 4317:4317 -p 4318:4318  -v ./dev-config.yaml:/config.yaml --network="host" sts-opentelemetry-collector:latest  --config /config.yaml
+```
+### Run with file-based setting provider for OTEL mappings
+```shell
+docker run --rm -p 4317:4317 -p 4318:4318  -v ./dev-config.yaml:/config.yaml -v ./extension/settingsproviderextension/testdata/otel_mappings.yaml:/otel_mappings.yaml --network="host" sts-opentelemetry-collector:latest  --config /config.yaml
 ```
 
 ## Generate traces
