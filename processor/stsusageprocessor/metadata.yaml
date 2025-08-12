@@ -10,22 +10,3 @@ status:
 
 tests:
   config:
-
-  - createdTimeStamp: 1723485601
-    id: "1122334456"
-    name: "Host Component 2"
-    shard: 1
-    type: "OtelComponentMapping"
-    output:
-      domainIdentifier:
-        expression: "host"
-      domainName:
-        expression: "my-custom-domain"
-      identifier:
-        expression: "${input.attributes['host.name']}"
-      layerName:
-        expression: "Infrastructure"
-      name:
-        expression: "${input.attributes['service.name']}"
-      typeName:
-        expression: "host-component-type"

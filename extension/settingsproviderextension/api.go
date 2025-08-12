@@ -1,6 +1,7 @@
 package settingsproviderextension
 
 import (
+	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 	"go.opentelemetry.io/collector/extension"
 )
 
@@ -10,4 +11,5 @@ type SettingsProvider interface {
 
 	// RegisterForUpdates returns a channel that receives a signal when settings change.
 	RegisterForUpdates() <-chan struct{}
+	GetCurrentSettings() map[stsSettingsModel.SettingId]stsSettingsModel.OtelComponentMapping
 }
