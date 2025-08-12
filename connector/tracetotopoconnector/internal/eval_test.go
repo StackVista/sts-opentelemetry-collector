@@ -1,9 +1,11 @@
 package internal
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
+	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
@@ -15,25 +17,25 @@ func TestEvalVariables(t *testing.T) {
 	testSpan.Attributes().PutStr("str-attr", "Hello")
 
 	tests := []struct {
-		name    string
-		vars    *[]settings.OtelVariableMapping
-		span    *ptrace.Span
-		want    map[string]string
-		wantErr bool
+		name      string
+		vars      *[]settings.OtelVariableMapping
+		span      *ptrace.Span
+		want      map[string]string
+		expectErr map[string]error
 	}{
 		{
-			name:    "NilVariables",
-			vars:    nil,
-			span:    &testSpan,
-			want:    map[string]string{},
-			wantErr: false,
+			name:      "NilVariables",
+			vars:      nil,
+			span:      &testSpan,
+			want:      map[string]string{},
+			expectErr: nil,
 		},
 		{
-			name:    "EmptyVariables",
-			vars:    &[]settings.OtelVariableMapping{},
-			span:    &testSpan,
-			want:    map[string]string{},
-			wantErr: false,
+			name:      "EmptyVariables",
+			vars:      &[]settings.OtelVariableMapping{},
+			span:      &testSpan,
+			want:      map[string]string{},
+			expectErr: nil,
 		},
 		{
 			name: "single literally variable",
@@ -47,7 +49,7 @@ func TestEvalVariables(t *testing.T) {
 			want: map[string]string{
 				"variable1": "it is static value",
 			},
-			wantErr: false,
+			expectErr: nil,
 		},
 		{
 			name: "refer to span attribute",
@@ -66,7 +68,7 @@ func TestEvalVariables(t *testing.T) {
 				"variable1": "Hello",
 				"variable2": "true",
 			},
-			wantErr: false,
+			expectErr: nil,
 		},
 		{
 			name: "refers to another variable",
@@ -85,7 +87,7 @@ func TestEvalVariables(t *testing.T) {
 				"variable1": "Hello",
 				"variable2": "Hello",
 			},
-			wantErr: false,
+			expectErr: nil,
 		},
 		{
 			name: "error, not found attribute",
@@ -95,9 +97,11 @@ func TestEvalVariables(t *testing.T) {
 					Value: settings.OtelStringExpression{Expression: "attributes.not-existing-attr"},
 				},
 			},
-			span:    &testSpan,
-			want:    map[string]string{},
-			wantErr: true,
+			span: &testSpan,
+			want: map[string]string{},
+			expectErr: map[string]error{
+				"variable1": errors.New("Not found attribute with name: not-existing-attr"),
+			},
 		},
 		{
 			name: "error, not found related variable",
@@ -115,20 +119,42 @@ func TestEvalVariables(t *testing.T) {
 			want: map[string]string{
 				"variable1": "Hello",
 			},
-			wantErr: true,
+			expectErr: map[string]error{
+				"variable2": errors.New("Not found variable with name: not-existing-variable"),
+			},
+		},
+		{
+			name: "error, mid variable can't be evaluated",
+			vars: &[]settings.OtelVariableMapping{
+				{
+					Name:  "variable1",
+					Value: settings.OtelStringExpression{Expression: "attributes.str-attr"},
+				},
+				{
+					Name:  "variable2",
+					Value: settings.OtelStringExpression{Expression: "vars.not-existing-variable"},
+				},
+				{
+					Name:  "variable3",
+					Value: settings.OtelStringExpression{Expression: "vars.variable1"},
+				},
+			},
+			span: &testSpan,
+			want: map[string]string{
+				"variable1": "Hello",
+				"variable3": "Hello",
+			},
+			expectErr: map[string]error{
+				"variable2": errors.New("Not found variable with name: not-existing-variable"),
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := EvalVariables(tt.vars, tt.span)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("EvalVariables() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !equalMaps(got, tt.want) {
-				t.Errorf("EvalVariables() = %v, want %v", got, tt.want)
-			}
+			assert.True(t, equalMaps(got, tt.want))
+			assert.Equal(t, tt.expectErr, err)
 		})
 	}
 }
