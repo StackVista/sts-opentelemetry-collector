@@ -1,16 +1,15 @@
 package internal
 
 import (
-	"errors"
-
 	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
 // EvalVariables evaluates a list of OtelVariableMapping objects and resolves variable values based on span data or expressions.
-// It returns a map of variable names and their resolved values or an error if evaluation fails.
-func EvalVariables(vars *[]settings.OtelVariableMapping, span *ptrace.Span) (map[string]string, error) {
+// It returns a map of variable names and their resolved values and a map of variable names and any encountered errors.
+func EvalVariables(vars *[]settings.OtelVariableMapping, span *ptrace.Span) (map[string]string, map[string]error) {
 	result := make(map[string]string)
+	errs := make(map[string]error)
 	if vars == nil {
 		return result, nil
 	}
@@ -19,9 +18,13 @@ func EvalVariables(vars *[]settings.OtelVariableMapping, span *ptrace.Span) (map
 		if value, err := EvalStringExpression(variable.Value, span, &result); err == nil {
 			result[variable.Name] = value
 		} else {
-			return result, errors.New("Error '" + err.Error() + "' evaluating variable: " + variable.Name)
+			errs[variable.Name] = err
 		}
 	}
 
-	return result, nil
+	if len(errs) > 0 {
+		return result, errs
+	} else {
+		return result, nil
+	}
 }
