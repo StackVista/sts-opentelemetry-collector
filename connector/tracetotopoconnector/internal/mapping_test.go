@@ -2,6 +2,7 @@ package internal
 
 import (
 	"errors"
+	"sort"
 	"testing"
 
 	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
@@ -148,6 +149,8 @@ func TestMapping_MapComponent(t *testing.T) {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectErr.Error())
 			}
+			sort.Strings(got.Tags)
+			sort.Strings(tt.want.Tags)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -226,6 +229,8 @@ func TestMapping_MapRelation(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
+			sort.Strings(got.Tags)
+			sort.Strings(tt.want.Tags)
 			assert.Equal(t, tt.want, got)
 		})
 	}
