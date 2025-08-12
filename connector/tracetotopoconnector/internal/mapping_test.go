@@ -152,3 +152,81 @@ func TestMapping_MapComponent(t *testing.T) {
 		})
 	}
 }
+
+func TestMapping_MapRelation(t *testing.T) {
+
+	testSpan := ptrace.NewSpan()
+	testSpan.Attributes().PutStr("env.name", "prod")
+	testSpan.Attributes().PutStr("service.name", "billing")
+	testSpan.Attributes().PutInt("amount", 1000)
+	testSpan.Attributes().PutStr("kind", "licence")
+	testSpan.Attributes().PutStr("priority", "urgent")
+
+	tests := []struct {
+		name      string
+		mapping   *settings.OtelRelationMapping
+		span      *ptrace.Span
+		vars      *map[string]string
+		want      *topo_stream_v1.TopologyStreamRelation
+		expectErr error
+	}{
+		{
+			name: "valid relation mapping",
+			mapping: &settings.OtelRelationMapping{
+				Output: settings.OtelRelationMappingOutput{
+					SourceId:       settings.OtelStringExpression{"attributes.service.name"},
+					TargetId:       settings.OtelStringExpression{"database"},
+					TypeName:       settings.OtelStringExpression{"query"},
+					TypeIdentifier: &settings.OtelStringExpression{"attributes.kind"},
+				},
+			},
+			span: &testSpan,
+			vars: &map[string]string{},
+			want: &topo_stream_v1.TopologyStreamRelation{
+				ExternalId:       "todo",
+				SourceIdentifier: "billing",
+				TargetIdentifier: "database",
+				Name:             "todo",
+				TypeName:         "query",
+				TypeIdentifier:   Ptr("licence"),
+				Tags:             []string{},
+			},
+			expectErr: nil,
+		},
+		{
+			name: "missing mandatory attributes",
+			mapping: &settings.OtelRelationMapping{
+				Output: settings.OtelRelationMappingOutput{
+					SourceId: settings.OtelStringExpression{"attributes.non-existing"},
+					TargetId: settings.OtelStringExpression{"database"},
+					TypeName: settings.OtelStringExpression{"query"},
+				},
+			},
+			span: &testSpan,
+			vars: &map[string]string{},
+			want: &topo_stream_v1.TopologyStreamRelation{
+				ExternalId:       "todo",
+				SourceIdentifier: "",
+				TargetIdentifier: "database",
+				Name:             "todo",
+				TypeName:         "query",
+				TypeIdentifier:   nil,
+				Tags:             []string{},
+			},
+			expectErr: errors.New("Not found attribute with name: non-existing"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := MapRelation(tt.mapping, tt.span, tt.vars)
+			if tt.expectErr != nil {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectErr.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

@@ -76,3 +76,34 @@ func MapComponent(mapping *settings.OtelComponentMapping, span *ptrace.Span, var
 	}
 	return &result, errs
 }
+
+// MapRelation creates and returns a TopologyStreamRelation based on the provided OtelRelationMapping, span, and variables.
+func MapRelation(mapping *settings.OtelRelationMapping, span *ptrace.Span, vars *map[string]string) (*topo_stream_v1.TopologyStreamRelation, error) {
+	var errs error
+	joinErr := func(err error) {
+		if err != nil {
+			errs = errors.Join(errs, err)
+		}
+	}
+	evalStr := func(expr settings.OtelStringExpression) string {
+		val, err := EvalStringExpression(expr, span, vars)
+		joinErr(err)
+		return val
+	}
+	evalOptStr := func(expr *settings.OtelStringExpression) *string {
+		val, err := EvalOptionalStringExpression(expr, span, vars)
+		joinErr(err)
+		return val
+	}
+
+	result := topo_stream_v1.TopologyStreamRelation{
+		ExternalId:       "todo",
+		SourceIdentifier: evalStr(mapping.Output.SourceId),
+		TargetIdentifier: evalStr(mapping.Output.TargetId),
+		Name:             "todo",
+		TypeName:         evalStr(mapping.Output.TypeName),
+		TypeIdentifier:   evalOptStr(mapping.Output.TypeIdentifier),
+		Tags:             []string{},
+	}
+	return &result, errs
+}
