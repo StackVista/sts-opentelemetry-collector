@@ -1,0 +1,90 @@
+package internal
+
+import (
+	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
+	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
+	"go.opentelemetry.io/collector/pdata/ptrace"
+)
+
+func ConvertSpanToTopologyStreamMessage(trace ptrace.Traces, componentMappings []settings.OtelComponentMapping, relationMappings []settings.OtelRelationMapping, now int64) topo_stream_v1.TopologyStreamMessage {
+	components := make([]*topo_stream_v1.TopologyStreamComponent, 0)
+	relations := make([]*topo_stream_v1.TopologyStreamRelation, 0)
+	errors := make([]error, 0)
+
+	resourceSpans := trace.ResourceSpans()
+	for i := 0; i < resourceSpans.Len(); i++ {
+		rs := resourceSpans.At(i)
+		scopeSpans := rs.ScopeSpans()
+		for j := 0; j < scopeSpans.Len(); j++ {
+			ss := scopeSpans.At(j)
+			spans := ss.Spans()
+			for k := 0; k < spans.Len(); k++ {
+				span := spans.At(k)
+
+				for _, componentMapping := range componentMappings {
+					component, errs := convertToComponent(&rs, &ss, &span, &componentMapping)
+					if component != nil {
+						components = append(components, component)
+					}
+					if errs != nil {
+						errors = append(errors, errs...)
+					}
+				}
+
+				for _, relationMapping := range relationMappings {
+					relation, errs := convertToRelation(&rs, &ss, &span, &relationMapping)
+					if relation != nil {
+						relations = append(relations, relation)
+					}
+					if errs != nil {
+						errors = append(errors, errs...)
+					}
+				}
+			}
+		}
+	}
+
+	errorStrings := make([]string, len(errors))
+	for i, err := range errors {
+		if err != nil {
+			errorStrings[i] = err.Error()
+		}
+	}
+
+	return topo_stream_v1.TopologyStreamMessage{
+		CollectionTimestamp: now,
+		SubmittedTimestamp:  now,
+		Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
+			TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
+				ExpiryIntervalMs: 0, //TODO handle TTL
+				Components:       components,
+				Relations:        relations,
+				Errors:           errorStrings,
+			},
+		},
+	}
+}
+
+func convertToComponent(resourceSpan *ptrace.ResourceSpans, scopeSpan *ptrace.ScopeSpans, span *ptrace.Span, mapping *settings.OtelComponentMapping) (*topo_stream_v1.TopologyStreamComponent, []error) {
+	evaluatedVars, _ := EvalVariables(span, scopeSpan, resourceSpan, mapping.Vars)
+	if filterByConditions(span, scopeSpan, resourceSpan, &evaluatedVars, &mapping.Conditions) {
+		component, err := MapComponent(mapping, span, scopeSpan, resourceSpan, &evaluatedVars)
+		if len(err) > 0 {
+			return nil, err
+		}
+		return component, err
+	}
+	return nil, nil
+}
+
+func convertToRelation(resourceSpan *ptrace.ResourceSpans, scopeSpan *ptrace.ScopeSpans, span *ptrace.Span, mapping *settings.OtelRelationMapping) (*topo_stream_v1.TopologyStreamRelation, []error) {
+	evaluatedVars, _ := EvalVariables(span, scopeSpan, resourceSpan, mapping.Vars)
+	if filterByConditions(span, scopeSpan, resourceSpan, &evaluatedVars, &mapping.Conditions) {
+		relation, err := MapRelation(mapping, span, scopeSpan, resourceSpan, &evaluatedVars)
+		if len(err) > 0 {
+			return nil, err
+		}
+		return relation, err
+	}
+	return nil, nil
+}

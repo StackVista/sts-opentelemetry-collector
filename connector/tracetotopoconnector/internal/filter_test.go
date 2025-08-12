@@ -25,6 +25,7 @@ func TestFilter_evalCondition(t *testing.T) {
 		span           *ptrace.Span
 		scope          *ptrace.ScopeSpans
 		resource       *ptrace.ResourceSpans
+		vars           *map[string]string
 		condition      settings.OtelConditionMapping
 		expectedAction *settings.OtelConditionMappingAction
 	}{
@@ -33,6 +34,7 @@ func TestFilter_evalCondition(t *testing.T) {
 			span:     &testSpan,
 			scope:    &testScope,
 			resource: &testResource,
+			vars:     &map[string]string{},
 			condition: settings.OtelConditionMapping{
 				Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.test-attr"},
 				Action:     settings.CREATE,
@@ -44,6 +46,7 @@ func TestFilter_evalCondition(t *testing.T) {
 			span:     &testSpan,
 			scope:    &testScope,
 			resource: &testResource,
+			vars:     &map[string]string{},
 			condition: settings.OtelConditionMapping{
 				Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.non-existing-attr"},
 				Action:     settings.CREATE,
@@ -55,6 +58,7 @@ func TestFilter_evalCondition(t *testing.T) {
 			span:     &testSpan,
 			scope:    &testScope,
 			resource: &testResource,
+			vars:     &map[string]string{},
 			condition: settings.OtelConditionMapping{
 				Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.test-attr"},
 				Action:     settings.REJECT,
@@ -66,6 +70,7 @@ func TestFilter_evalCondition(t *testing.T) {
 			span:     &testSpan,
 			scope:    &testScope,
 			resource: &testResource,
+			vars:     &map[string]string{},
 			condition: settings.OtelConditionMapping{
 				Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.non-existing-attr"},
 				Action:     settings.REJECT,
@@ -77,6 +82,7 @@ func TestFilter_evalCondition(t *testing.T) {
 			span:     &testSpan,
 			scope:    &testScope,
 			resource: &testResource,
+			vars:     &map[string]string{},
 			condition: settings.OtelConditionMapping{
 				Expression: settings.OtelBooleanExpression{Expression: "scopeAttributes.test-attr-scope"},
 				Action:     settings.CREATE,
@@ -88,8 +94,23 @@ func TestFilter_evalCondition(t *testing.T) {
 			span:     &testSpan,
 			scope:    &testScope,
 			resource: &testResource,
+			vars:     &map[string]string{},
 			condition: settings.OtelConditionMapping{
 				Expression: settings.OtelBooleanExpression{Expression: "resourceAttributes.test-attr-resource"},
+				Action:     settings.CREATE,
+			},
+			expectedAction: Ptr(settings.CREATE),
+		},
+		{
+			name:     "Support variables",
+			span:     &testSpan,
+			scope:    &testScope,
+			resource: &testResource,
+			vars: &map[string]string{
+				"namespace": "payments_ns",
+			},
+			condition: settings.OtelConditionMapping{
+				Expression: settings.OtelBooleanExpression{Expression: "vars.namespace"},
 				Action:     settings.CREATE,
 			},
 			expectedAction: Ptr(settings.CREATE),
@@ -98,7 +119,7 @@ func TestFilter_evalCondition(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			resultAction := evalCondition(tc.span, tc.scope, tc.resource, &tc.condition)
+			resultAction := evalCondition(tc.span, tc.scope, tc.resource, tc.vars, &tc.condition)
 			assert.Equal(t, tc.expectedAction, resultAction)
 		})
 	}
@@ -121,6 +142,7 @@ func TestFilter_filterByConditions(t *testing.T) {
 		span       *ptrace.Span
 		scope      *ptrace.ScopeSpans
 		resource   *ptrace.ResourceSpans
+		vars       *map[string]string
 		conditions []settings.OtelConditionMapping
 		expected   bool
 	}{
@@ -129,6 +151,7 @@ func TestFilter_filterByConditions(t *testing.T) {
 			span:       &testSpan,
 			scope:      &testScope,
 			resource:   &testResource,
+			vars:       &map[string]string{},
 			conditions: []settings.OtelConditionMapping{},
 			expected:   false,
 		},
@@ -137,6 +160,7 @@ func TestFilter_filterByConditions(t *testing.T) {
 			span:     &testSpan,
 			scope:    &testScope,
 			resource: &testResource,
+			vars:     &map[string]string{},
 			conditions: []settings.OtelConditionMapping{
 				{
 					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.test-attr"},
@@ -150,6 +174,7 @@ func TestFilter_filterByConditions(t *testing.T) {
 			span:     &testSpan,
 			scope:    &testScope,
 			resource: &testResource,
+			vars:     &map[string]string{},
 			conditions: []settings.OtelConditionMapping{
 				{
 					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.non-existing-attr"},
@@ -163,6 +188,7 @@ func TestFilter_filterByConditions(t *testing.T) {
 			span:     &testSpan,
 			scope:    &testScope,
 			resource: &testResource,
+			vars:     &map[string]string{},
 			conditions: []settings.OtelConditionMapping{
 				{
 					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.test-attr"},
@@ -176,6 +202,7 @@ func TestFilter_filterByConditions(t *testing.T) {
 			span:     &testSpan,
 			scope:    &testScope,
 			resource: &testResource,
+			vars:     &map[string]string{},
 			conditions: []settings.OtelConditionMapping{
 				{
 					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.non-existing-attr"},
@@ -189,6 +216,7 @@ func TestFilter_filterByConditions(t *testing.T) {
 			span:     &testSpan,
 			scope:    &testScope,
 			resource: &testResource,
+			vars:     &map[string]string{},
 			conditions: []settings.OtelConditionMapping{
 				{
 					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.test-attr"},
@@ -206,6 +234,7 @@ func TestFilter_filterByConditions(t *testing.T) {
 			span:     &testSpan,
 			scope:    &testScope,
 			resource: &testResource,
+			vars:     &map[string]string{},
 			conditions: []settings.OtelConditionMapping{
 				{
 					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.non-existing-attr"},
@@ -223,6 +252,7 @@ func TestFilter_filterByConditions(t *testing.T) {
 			span:     &testSpan,
 			scope:    &testScope,
 			resource: &testResource,
+			vars:     &map[string]string{},
 			conditions: []settings.OtelConditionMapping{
 				{
 					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.test-attr"},
@@ -240,6 +270,7 @@ func TestFilter_filterByConditions(t *testing.T) {
 			span:     &testSpan,
 			scope:    &testScope,
 			resource: &testResource,
+			vars:     &map[string]string{},
 			conditions: []settings.OtelConditionMapping{
 				{
 					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.non-existing-attr"},
@@ -252,11 +283,12 @@ func TestFilter_filterByConditions(t *testing.T) {
 			},
 			expected: true,
 		},
-				{
+		{
 			name:     "REJECT not matched then CREATE not-matched",
 			span:     &testSpan,
 			scope:    &testScope,
 			resource: &testResource,
+			vars:     &map[string]string{},
 			conditions: []settings.OtelConditionMapping{
 				{
 					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.non-existing-attr"},
@@ -273,7 +305,7 @@ func TestFilter_filterByConditions(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := filterByConditions(tc.span, tc.scope, tc.resource, &tc.conditions)
+			result := filterByConditions(tc.span, tc.scope, tc.resource, tc.vars, &tc.conditions)
 			assert.Equal(t, tc.expected, result)
 		})
 	}
