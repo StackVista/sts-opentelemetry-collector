@@ -4,6 +4,7 @@ import (
 	"context"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal"
 	"os"
+	"reflect"
 	"sync"
 	"time"
 
@@ -137,18 +138,12 @@ func (f *FileSettingsProvider) readAndParseMappings() (map[stsSettingsModel.Sett
 	return mappingMap, nil
 }
 
-// mapsAreEqual performs a deep comparison of two maps.
-// This is a simplified example. For production, you would need a more robust deep equality check.
 func mapsAreEqual(a, b map[stsSettingsModel.SettingId]stsSettingsModel.OtelComponentMapping) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	for k, v := range a {
-		if b[k] != v { // TODO: this is a shallow comparison
-			return false
-		}
-	}
-	return true
+
+	return reflect.DeepEqual(a, b)
 }
 
 // GetCurrentSettings provides a thread-safe way to access the latest settings.

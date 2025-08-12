@@ -26,7 +26,7 @@ func NewFactory() extension.Factory {
 func createDefaultConfig() component.Config {
 	return &stsSettingsConfig.Config{
 		File: &stsSettingsConfig.FileSourceConfig{
-			Path: "location", // TODO
+			Path: "./testdata/otel_mappings.yaml",
 		},
 	}
 }

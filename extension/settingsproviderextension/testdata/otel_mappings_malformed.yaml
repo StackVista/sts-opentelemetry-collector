@@ -1,6 +1,6 @@
 ---
 - createdTimeStamp: 1723485600
-  id: "1122334455"
+    id: "1122334455"
   name: "Host Component"
   shard: 0
   type: "OtelComponentMapping"
