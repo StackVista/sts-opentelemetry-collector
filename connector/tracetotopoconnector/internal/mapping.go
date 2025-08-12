@@ -96,11 +96,13 @@ func MapRelation(mapping *settings.OtelRelationMapping, span *ptrace.Span, vars 
 		return val
 	}
 
+	sourceId := evalStr(mapping.Output.SourceId)
+	targetId := evalStr(mapping.Output.TargetId)
 	result := topo_stream_v1.TopologyStreamRelation{
-		ExternalId:       "todo",
-		SourceIdentifier: evalStr(mapping.Output.SourceId),
-		TargetIdentifier: evalStr(mapping.Output.TargetId),
-		Name:             "todo",
+		ExternalId:       sourceId + "-" + targetId,
+		SourceIdentifier: sourceId,
+		TargetIdentifier: targetId,
+		Name:             "", //TODO
 		TypeName:         evalStr(mapping.Output.TypeName),
 		TypeIdentifier:   evalOptStr(mapping.Output.TypeIdentifier),
 		Tags:             []string{},
