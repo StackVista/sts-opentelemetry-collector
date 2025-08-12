@@ -9,11 +9,16 @@ import (
 )
 
 func EvalBooleanExpression(span *ptrace.Span, expression *settings.OtelBooleanExpression) bool {
-	_, exists := span.Attributes().Get(expression.Expression) //TODO implement it
-	return exists
+	if strings.HasPrefix(expression.Expression, "attributes.") {
+		attributeName := strings.TrimPrefix(expression.Expression, "attributes.")
+		_, exists := span.Attributes().Get(attributeName) //TODO implement it
+		return exists
+	} else {
+		return false
+	}
 }
 
-func EvalStringExpression(expression *settings.OtelStringExpression, span *ptrace.Span, vars *map[string]string) (string, error) {
+func EvalStringExpression(expression settings.OtelStringExpression, span *ptrace.Span, vars *map[string]string) (string, error) {
 	if strings.HasPrefix(expression.Expression, "attributes.") {
 		attributeName := strings.TrimPrefix(expression.Expression, "attributes.")
 		if val, exists := span.Attributes().Get(attributeName); exists {
@@ -29,4 +34,13 @@ func EvalStringExpression(expression *settings.OtelStringExpression, span *ptrac
 		return "", errors.New("Not found variable with name: " + varName)
 	}
 	return expression.Expression, nil
+}
+
+func EvalOptionalStringExpression(expression *settings.OtelStringExpression, span *ptrace.Span, vars *map[string]string) (*string, error) {
+	if expression == nil {
+		return nil, nil
+	} else {
+		result, err := EvalStringExpression(*expression, span, vars)
+		return &result, err
+	}
 }

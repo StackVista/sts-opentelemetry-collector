@@ -16,7 +16,7 @@ func EvalVariables(vars *[]settings.OtelVariableMapping, span *ptrace.Span) (map
 	}
 
 	for _, variable := range *vars {
-		if value, err := EvalStringExpression(&variable.Value, span, &result); err == nil {
+		if value, err := EvalStringExpression(variable.Value, span, &result); err == nil {
 			result[variable.Name] = value
 		} else {
 			return result, errors.New("Error '" + err.Error() + "' evaluating variable: " + variable.Name)
