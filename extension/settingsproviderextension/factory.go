@@ -25,7 +25,7 @@ func NewFactory() extension.Factory {
 
 func createDefaultConfig() component.Config {
 	return &stsSettingsConfig.Config{
-		File: &stsSettingsConfig.FileSourceConfig{
+		File: &stsSettingsConfig.FileSettingsProviderConfig{
 			Path: "./testdata/otel_mappings.yaml",
 		},
 	}
@@ -36,7 +36,7 @@ func createExtension(_ context.Context, set extension.CreateSettings, cfg compon
 	logger := set.Logger
 
 	if topoCfg.File != nil {
-		fileProvider, err := stsSettingsSource.NewFileProvider(topoCfg.File, logger)
+		fileProvider, err := stsSettingsSource.NewFileSettingsProvider(topoCfg.File, logger)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create file provider: %w", err)
 		}
@@ -44,8 +44,11 @@ func createExtension(_ context.Context, set extension.CreateSettings, cfg compon
 	}
 
 	if topoCfg.Kafka != nil {
-		// TODO
-		return nil, nil
+		kafkaProvider, err := stsSettingsSource.NewKafkaSettingsProvider(topoCfg.Kafka, logger)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create kafka provider: %w", err)
+		}
+		return kafkaProvider, nil
 	}
 
 	return nil, fmt.Errorf("configuration must specify either 'file' or 'kafka'")

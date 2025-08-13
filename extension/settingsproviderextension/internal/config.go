@@ -7,20 +7,20 @@ import (
 
 type Config struct {
 	// File specifies the configuration for reading settings from a local file.
-	File *FileSourceConfig `mapstructure:"file,omitempty"`
+	File *FileSettingsProviderConfig `mapstructure:"file,omitempty"`
 
 	// Kafka specifies the configuration for reading settings from a Kafka topic.
-	Kafka *KafkaSourceConfig `mapstructure:"kafka,omitempty"`
+	Kafka *KafkaSettingsProviderConfig `mapstructure:"kafka,omitempty"`
 }
 
-type FileSourceConfig struct {
+type FileSettingsProviderConfig struct {
 	Path string `mapstructure:"path"`
 
 	// UpdateInterval defines how often to check for changes. Defaults to 30 seconds.
 	UpdateInterval time.Duration `mapstructure:"update_interval"`
 }
 
-type KafkaSourceConfig struct {
+type KafkaSettingsProviderConfig struct {
 	Brokers []string `mapstructure:"brokers"`
 	Topic   string   `mapstructure:"topic"`
 

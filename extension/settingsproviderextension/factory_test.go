@@ -32,23 +32,23 @@ func TestCreateExtension(t *testing.T) {
 		{
 			name: "Valid File Config",
 			cfg: &stsSettingsConfig.Config{
-				File: &stsSettingsConfig.FileSourceConfig{
+				File: &stsSettingsConfig.FileSettingsProviderConfig{
 					Path:           "./testdata/otel_mappings.yaml",
 					UpdateInterval: 30 * time.Second,
 				},
 			},
 			expectError: false,
 		},
-		//{
-		//	name: "Valid Kafka Config",
-		//	cfg: &stsSettingsConfig.Config{
-		//		Kafka: &stsSettingsConfig.KafkaSourceConfig{
-		//			Brokers: []string{"localhost:9092"},
-		//			Topic:   "sts_internal_settings",
-		//		},
-		//	},
-		//	expectError: false,
-		//},
+		{
+			name: "Valid Kafka Config",
+			cfg: &stsSettingsConfig.Config{
+				Kafka: &stsSettingsConfig.KafkaSettingsProviderConfig{
+					Brokers: []string{"localhost:9092"},
+					Topic:   "sts_internal_settings",
+				},
+			},
+			expectError: false,
+		},
 		{
 			name:        "Invalid Config (no source)",
 			cfg:         &stsSettingsConfig.Config{},
@@ -57,10 +57,10 @@ func TestCreateExtension(t *testing.T) {
 		{
 			name: "Invalid Config (both sources)",
 			cfg: &stsSettingsConfig.Config{
-				File: &stsSettingsConfig.FileSourceConfig{
+				File: &stsSettingsConfig.FileSettingsProviderConfig{
 					Path: "/path/to/testdata/mappings.yaml",
 				},
-				Kafka: &stsSettingsConfig.KafkaSourceConfig{
+				Kafka: &stsSettingsConfig.KafkaSettingsProviderConfig{
 					Brokers: []string{"localhost:9092"},
 				},
 			},
@@ -72,6 +72,7 @@ func TestCreateExtension(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			set := extension.CreateSettings{}
 			ctx := context.Background()
+			tt.cfg.Validate()
 			ext, err := createExtension(ctx, set, tt.cfg)
 
 			if tt.expectError {
