@@ -22,10 +22,10 @@ import (
 func TestNewFileProvider(t *testing.T) {
 	// Test case 1: Successful initialization.
 	t.Run("success", func(t *testing.T) {
-		cfg := &stsSettingsConfig.FileSourceConfig{
+		cfg := &stsSettingsConfig.FileSettingsProviderConfig{
 			Path: filepath.Join("../testdata", "otel_mappings.yaml"),
 		}
-		provider, err := NewFileProvider(cfg, zap.NewNop())
+		provider, err := NewFileSettingsProvider(cfg, zap.NewNop())
 		require.NoError(t, err)
 		assert.NotNil(t, provider)
 		assert.Equal(t, 1, len(provider.GetCurrentSettings()))
@@ -33,10 +33,10 @@ func TestNewFileProvider(t *testing.T) {
 
 	// Test case 2: File not found error.
 	t.Run("file_not_found", func(t *testing.T) {
-		cfg := &stsSettingsConfig.FileSourceConfig{
+		cfg := &stsSettingsConfig.FileSettingsProviderConfig{
 			Path: "/non-existent/file",
 		}
-		provider, err := NewFileProvider(cfg, zap.NewNop())
+		provider, err := NewFileSettingsProvider(cfg, zap.NewNop())
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "no such file or directory")
 		assert.Nil(t, provider)
@@ -44,10 +44,10 @@ func TestNewFileProvider(t *testing.T) {
 
 	// Test case 3: Malformed YAML.
 	t.Run("malformed_yaml", func(t *testing.T) {
-		cfg := &stsSettingsConfig.FileSourceConfig{
+		cfg := &stsSettingsConfig.FileSettingsProviderConfig{
 			Path: filepath.Join("../testdata", "otel_mappings_malformed.yaml"),
 		}
-		provider, err := NewFileProvider(cfg, zap.NewNop())
+		provider, err := NewFileSettingsProvider(cfg, zap.NewNop())
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "yaml: line 3")
 		assert.Nil(t, provider)
@@ -65,11 +65,11 @@ func TestFileProvider_StartAndShutdown(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(tempFilePath, content, 0644))
 
-	cfg := &stsSettingsConfig.FileSourceConfig{
+	cfg := &stsSettingsConfig.FileSettingsProviderConfig{
 		Path:           tempFilePath,
 		UpdateInterval: 100 * time.Millisecond,
 	}
-	provider, err := NewFileProvider(cfg, zap.NewNop())
+	provider, err := NewFileSettingsProvider(cfg, zap.NewNop())
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
