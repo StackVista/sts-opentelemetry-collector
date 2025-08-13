@@ -22,10 +22,18 @@ func TestMapping_MapComponent(t *testing.T) {
 	testSpan.Attributes().PutStr("kind", "licence")
 	testSpan.Attributes().PutStr("priority", "urgent")
 
+	testScope := ptrace.NewScopeSpans()
+	testScope.Scope().Attributes().PutStr("name", "kamon")
+
+	testResource := ptrace.NewResourceSpans()
+	testResource.Resource().Attributes().PutStr("name", "microservice")
+
 	tests := []struct {
 		name      string
 		mapping   *settings.OtelComponentMapping
 		span      *ptrace.Span
+		scope     *ptrace.ScopeSpans
+		resource  *ptrace.ResourceSpans
 		vars      *map[string]string
 		want      *topo_stream_v1.TopologyStreamComponent
 		expectErr error
@@ -34,8 +42,8 @@ func TestMapping_MapComponent(t *testing.T) {
 			name: "valid mapping with all required fields",
 			mapping: &settings.OtelComponentMapping{
 				Output: settings.OtelComponentMappingOutput{
-					Identifier:       settings.OtelStringExpression{"attributes.service.name"},
-					Name:             settings.OtelStringExpression{"attributes.service.name"},
+					Identifier:       settings.OtelStringExpression{"spanAttributes.service.name"},
+					Name:             settings.OtelStringExpression{"spanAttributes.service.name"},
 					TypeName:         settings.OtelStringExpression{"service"},
 					TypeIdentifier:   &settings.OtelStringExpression{"service_id"},
 					DomainName:       settings.OtelStringExpression{"vars.namespace"},
@@ -44,18 +52,22 @@ func TestMapping_MapComponent(t *testing.T) {
 					LayerIdentifier:  &settings.OtelStringExpression{"backend_id"},
 					Optional: &settings.OtelComponentMappingFieldMapping{
 						Tags: &map[string]settings.OtelStringExpression{
-							"priority": {"attributes.priority"},
+							"priority":     {"spanAttributes.priority"},
+							"scopeName":    {"scopeAttributes.name"},
+							"resourceName": {"resourceAttributes.name"},
 						},
 					},
 					Required: &settings.OtelComponentMappingFieldMapping{
 						Tags: &map[string]settings.OtelStringExpression{
-							"kind":   {"attributes.kind"},
-							"amount": {"attributes.amount"},
+							"kind":   {"spanAttributes.kind"},
+							"amount": {"spanAttributes.amount"},
 						},
 					},
 				},
 			},
-			span: &testSpan,
+			span:     &testSpan,
+			scope:    &testScope,
+			resource: &testResource,
 			vars: &map[string]string{
 				"namespace": "payments_ns",
 			},
@@ -69,7 +81,7 @@ func TestMapping_MapComponent(t *testing.T) {
 				DomainIdentifier: Ptr("payments_ns"),
 				LayerName:        "backend",
 				LayerIdentifier:  Ptr("backend_id"),
-				Tags:             []string{"priority:urgent", "kind:licence", "amount:1000"},
+				Tags:             []string{"priority:urgent", "kind:licence", "amount:1000", "scopeName:kamon", "resourceName:microservice"},
 			},
 			expectErr: nil,
 		},
@@ -77,15 +89,17 @@ func TestMapping_MapComponent(t *testing.T) {
 			name: "valid mapping with minimal set of properties",
 			mapping: &settings.OtelComponentMapping{
 				Output: settings.OtelComponentMappingOutput{
-					Identifier: settings.OtelStringExpression{"attributes.service.name"},
-					Name:       settings.OtelStringExpression{"attributes.service.name"},
+					Identifier: settings.OtelStringExpression{"spanAttributes.service.name"},
+					Name:       settings.OtelStringExpression{"spanAttributes.service.name"},
 					TypeName:   settings.OtelStringExpression{"service"},
 					DomainName: settings.OtelStringExpression{"payment"},
 					LayerName:  settings.OtelStringExpression{"backend"},
 				},
 			},
-			span: &testSpan,
-			vars: &map[string]string{},
+			span:     &testSpan,
+			scope:    &testScope,
+			resource: &testResource,
+			vars:     &map[string]string{},
 			want: &topo_stream_v1.TopologyStreamComponent{
 				ExternalId:  "billing",
 				Identifiers: []string{},
@@ -101,8 +115,8 @@ func TestMapping_MapComponent(t *testing.T) {
 			name: "missing required fields",
 			mapping: &settings.OtelComponentMapping{
 				Output: settings.OtelComponentMappingOutput{
-					Identifier:       settings.OtelStringExpression{"attributes.service.name"},
-					Name:             settings.OtelStringExpression{"attributes.non-existing-attr"},
+					Identifier:       settings.OtelStringExpression{"spanAttributes.service.name"},
+					Name:             settings.OtelStringExpression{"spanAttributes.non-existing-attr"},
 					TypeName:         settings.OtelStringExpression{"service"},
 					TypeIdentifier:   &settings.OtelStringExpression{"service_id"},
 					DomainName:       settings.OtelStringExpression{"vars.non-existing-var"},
@@ -111,18 +125,20 @@ func TestMapping_MapComponent(t *testing.T) {
 					LayerIdentifier:  &settings.OtelStringExpression{"backend_id"},
 					Optional: &settings.OtelComponentMappingFieldMapping{
 						Tags: &map[string]settings.OtelStringExpression{
-							"priority": {"attributes.priority"},
+							"priority": {"spanAttributes.priority"},
 						},
 					},
 					Required: &settings.OtelComponentMappingFieldMapping{
 						Tags: &map[string]settings.OtelStringExpression{
-							"kind":   {"attributes.kind"},
-							"amount": {"attributes.amount"},
+							"kind":   {"spanAttributes.kind"},
+							"amount": {"spanAttributes.amount"},
 						},
 					},
 				},
 			},
-			span: &testSpan,
+			span:     &testSpan,
+			scope:    &testScope,
+			resource: &testResource,
 			vars: &map[string]string{
 				"namespace": "payments_ns",
 			},
@@ -138,13 +154,13 @@ func TestMapping_MapComponent(t *testing.T) {
 				LayerIdentifier:  Ptr("backend_id"),
 				Tags:             []string{"priority:urgent", "kind:licence", "amount:1000"},
 			},
-			expectErr: errors.New("Not found attribute with name: non-existing-attr\nNot found variable with name: non-existing-var"),
+			expectErr: errors.New("Not found span attribute with name: non-existing-attr\nNot found variable with name: non-existing-var"),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := MapComponent(tt.mapping, tt.span, tt.vars)
+			got, err := MapComponent(tt.mapping, tt.span, tt.scope, tt.resource, tt.vars)
 			if tt.expectErr != nil {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectErr.Error())
@@ -165,10 +181,18 @@ func TestMapping_MapRelation(t *testing.T) {
 	testSpan.Attributes().PutStr("kind", "licence")
 	testSpan.Attributes().PutStr("priority", "urgent")
 
+	testScope := ptrace.NewScopeSpans()
+	testScope.Scope().Attributes().PutStr("name", "kamon")
+
+	testResource := ptrace.NewResourceSpans()
+	testResource.Resource().Attributes().PutStr("name", "microservice")
+
 	tests := []struct {
 		name      string
 		mapping   *settings.OtelRelationMapping
 		span      *ptrace.Span
+		scope     *ptrace.ScopeSpans
+		resource  *ptrace.ResourceSpans
 		vars      *map[string]string
 		want      *topo_stream_v1.TopologyStreamRelation
 		expectErr error
@@ -177,14 +201,16 @@ func TestMapping_MapRelation(t *testing.T) {
 			name: "valid relation mapping",
 			mapping: &settings.OtelRelationMapping{
 				Output: settings.OtelRelationMappingOutput{
-					SourceId:       settings.OtelStringExpression{"attributes.service.name"},
+					SourceId:       settings.OtelStringExpression{"spanAttributes.service.name"},
 					TargetId:       settings.OtelStringExpression{"database"},
 					TypeName:       settings.OtelStringExpression{"query"},
-					TypeIdentifier: &settings.OtelStringExpression{"attributes.kind"},
+					TypeIdentifier: &settings.OtelStringExpression{"spanAttributes.kind"},
 				},
 			},
-			span: &testSpan,
-			vars: &map[string]string{},
+			span:     &testSpan,
+			scope:    &testScope,
+			resource: &testResource,
+			vars:     &map[string]string{},
 			want: &topo_stream_v1.TopologyStreamRelation{
 				ExternalId:       "billing-database",
 				SourceIdentifier: "billing",
@@ -200,13 +226,15 @@ func TestMapping_MapRelation(t *testing.T) {
 			name: "missing mandatory attributes",
 			mapping: &settings.OtelRelationMapping{
 				Output: settings.OtelRelationMappingOutput{
-					SourceId: settings.OtelStringExpression{"attributes.non-existing"},
+					SourceId: settings.OtelStringExpression{"spanAttributes.non-existing"},
 					TargetId: settings.OtelStringExpression{"database"},
 					TypeName: settings.OtelStringExpression{"query"},
 				},
 			},
-			span: &testSpan,
-			vars: &map[string]string{},
+			span:     &testSpan,
+			scope:    &testScope,
+			resource: &testResource,
+			vars:     &map[string]string{},
 			want: &topo_stream_v1.TopologyStreamRelation{
 				ExternalId:       "-database",
 				SourceIdentifier: "",
@@ -216,13 +244,13 @@ func TestMapping_MapRelation(t *testing.T) {
 				TypeIdentifier:   nil,
 				Tags:             []string{},
 			},
-			expectErr: errors.New("Not found attribute with name: non-existing"),
+			expectErr: errors.New("Not found span attribute with name: non-existing"),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := MapRelation(tt.mapping, tt.span, tt.vars)
+			got, err := MapRelation(tt.mapping, tt.span, tt.scope, tt.resource, tt.vars)
 			if tt.expectErr != nil {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectErr.Error())
