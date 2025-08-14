@@ -17,3 +17,4 @@
       expression: "${input.attributes['service.name']}"
     typeName:
       expression: "host-component-type"
+      

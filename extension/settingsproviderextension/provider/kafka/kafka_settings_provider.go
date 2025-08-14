@@ -1,9 +1,10 @@
-package source
+package kafka
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	stsProviderCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/provider/common"
 	"go.opentelemetry.io/collector/component"
 	"go.uber.org/zap"
 	"sync"
@@ -120,7 +121,6 @@ func (k *kafkaSettingProvider) readMessages(ctx context.Context) {
 				continue
 			}
 
-			// --- Snapshot State Machine Logic ---
 			actualMessage, err := message.ValueByDiscriminator()
 			if err != nil {
 				k.logger.Error("Error getting settings protocol message by discriminator.", zap.Error(err))
@@ -146,38 +146,38 @@ func (k *kafkaSettingProvider) readMessages(ctx context.Context) {
 
 			case stsSettingsModel.SettingsSnapshotStop:
 				if snapshot, found := k.inProgressSnapshots[v.Id]; found {
-					k.logger.Info("Received snapshot stop. Processing complete snapshot.", zap.String("snapshotId", v.Id), zap.Int("settingCount", len(snapshot.settings)))
+					k.logger.Info(
+						"Received snapshot stop. Processing complete snapshot.",
+						zap.String("snapshotId", v.Id),
+						zap.String("settingType", string(k.inProgressSnapshots[v.Id].settingType)),
+						zap.Int("settingCount", len(snapshot.settings)))
 
 					newSettings := make(map[stsSettingsModel.SettingId]stsSettingsModel.Setting)
 					for _, setting := range snapshot.settings {
-						actualSetting, err := setting.ValueByDiscriminator()
+						settingId, err := stsProviderCommon.GetSettingId(setting)
 						if err != nil {
-							k.logger.Error("Error getting setting by discriminator.", zap.Error(err))
+							k.logger.Error("Failed to get setting id.", zap.Error(err))
 							continue
 						}
-
-						if mappingId, ok := getSettingID(actualSetting); ok {
-							newSettings[mappingId] = setting
-						}
-
+						newSettings[settingId] = setting
 					}
 
 					k.settingsLock.Lock()
 					mergedSettings := make(map[stsSettingsModel.SettingId]stsSettingsModel.Setting)
 
-					// Copy all settings from the old map that are NOT of the type contained in the new snapshot.
+					// Copy all settings from the old map that are NOT of the setting type contained in the new snapshot.
 					for id, setting := range k.currentSettings {
 						if setting.Type != string(snapshot.settingType) {
 							mergedSettings[id] = setting
 						}
 					}
 
-					// 2. Add all the new settings from the processed snapshot. This effectively replaces all settings of the given type.
+					// Add all the new settings from the processed snapshot. This effectively replaces all settings of the given type.
 					for id, setting := range newSettings {
 						mergedSettings[id] = setting
 					}
 
-					// 3. Atomically swap the old map with the newly merged one.
+					// Atomically swap the old map with the newly merged one.
 					k.currentSettings = mergedSettings
 
 					k.settingsLock.Unlock()
@@ -190,26 +190,11 @@ func (k *kafkaSettingProvider) readMessages(ctx context.Context) {
 						// Channel is full, meaning clients are still processing the last update.
 						// This decouples the consumption rate from the update rate.
 					}
-
 				} else {
 					k.logger.Warn("Received an orphan snapshot stop for an unknown snapshot.", zap.String("snapshotId", v.Id))
 				}
 			}
 		}
-	}
-}
-
-// getSettingID safely extracts the ID from a setting of unknown concrete type.
-// It centralizes the type switch logic so it only needs to be maintained here.
-func getSettingID(setting interface{}) (stsSettingsModel.SettingId, bool) {
-	switch v := setting.(type) {
-	case stsSettingsModel.OtelComponentMapping:
-		return v.Id, true
-	case stsSettingsModel.OtelRelationMapping:
-		return v.Id, true
-	default:
-		// This type doesn't have an ID we care about.
-		return "", false
 	}
 }
 

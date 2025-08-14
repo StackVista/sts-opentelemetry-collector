@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal"
-	stsSettingsSource "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/source"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/provider/file"
+	stsSettingsSource "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/provider/kafka"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/extension"
 )
@@ -36,7 +37,7 @@ func createExtension(_ context.Context, set extension.CreateSettings, cfg compon
 	logger := set.Logger
 
 	if topoCfg.File != nil {
-		fileProvider, err := stsSettingsSource.NewFileSettingsProvider(topoCfg.File, logger)
+		fileProvider, err := file.NewFileSettingsProvider(topoCfg.File, logger)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create file provider: %w", err)
 		}

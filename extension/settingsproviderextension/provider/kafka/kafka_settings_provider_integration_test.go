@@ -1,6 +1,6 @@
 //go:build integration
 
-package source
+package kafka
 
 import (
 	"context"
@@ -25,87 +25,111 @@ import (
 
 const (
 	kafkaImageName = "confluentinc/confluent-local:7.5.0"
+	updateTimeout  = 10 * time.Second
+	settleTime     = 2 * time.Second
 )
 
-func TestKafkaSettingsProvider_MultipleSettingTypes(t *testing.T) {
-	ctx, provider, writer, cleanup := setupTestInfra(t)
-	defer cleanup()
-
-	// --- ROUND 1: Publish initial state with two different setting types ---
-	componentMappingId1 := "11111"
-	otelComponentMappingSnapshot1 := newOtelComponentMappingSnapshot(t, uuid.New().String(), componentMappingId1, "Host component V1")
-	relationMappingId1 := "22222"
-	otelRelationMappingSnapshot := newOtelRelationMappingSnapshot(t, uuid.New().String(), relationMappingId1, "Runs on host")
-
-	// Combine and write the first batch of messages
-	initialMessages := append(otelComponentMappingSnapshot1, otelRelationMappingSnapshot...)
-	err := writer.WriteMessages(ctx, initialMessages...)
-	require.NoError(t, err, "Failed to write initial messages")
-
-	// Wait for the provider to process the first batch
-	select {
-	case <-provider.RegisterForUpdates():
-		t.Log("Update signal received after initial publish.")
-	case <-time.After(30 * time.Second):
-		t.Fatal("timed out waiting for update signal after initial publish")
-	}
-	time.Sleep(2 * time.Second) // Settle time
-
-	// Assert the initial state is correct
-	currentSettings1 := provider.GetCurrentSettings()
-	assert.Len(t, currentSettings1, 2, "Should be 2 settings after initial publish")
-	_, ok := currentSettings1[componentMappingId1]
-	require.True(t, ok, "Initial OtelComponentMapping should exist")
-	_, ok = currentSettings1[relationMappingId1]
-	require.True(t, ok, "OtelRelationMapping should exist")
-
-	// --- ROUND 2: Publish an update for one setting type to test compaction ---
-	componentMappingId2 := "33333"
-	otelComponentMappingSnapshot2 := newOtelComponentMappingSnapshot(t, uuid.New().String(), componentMappingId2, "Host component V2")
-
-	// Write the new snapshot, which should replace all previous OtelComponentMapping settings
-	err = writer.WriteMessages(ctx, otelComponentMappingSnapshot2...)
-	require.NoError(t, err, "Failed to write updated messages")
-
-	// Wait for the provider to process the update
-	select {
-	case <-provider.RegisterForUpdates():
-		t.Log("Update signal received after compaction publish.")
-	case <-time.After(30 * time.Second):
-		t.Fatal("timed out waiting for update signal after compaction publish")
-	}
-	time.Sleep(2 * time.Second) // Settle time
-
-	// --- FINAL ASSERT: Verify the state reflects the compaction ---
-	finalSettings := provider.GetCurrentSettings()
-	assert.Len(t, finalSettings, 2, "Should still be 2 settings after compaction, not 3")
-
-	// 1. The OLD OtelComponentMapping should be GONE.
-	_, ok = finalSettings[componentMappingId1]
-	assert.False(t, ok, "Old OtelComponentMapping (V1) should have been removed")
-
-	// 2. The NEW OtelComponentMapping should be PRESENT.
-	newMapping, ok := finalSettings[componentMappingId2]
-	require.True(t, ok, "New OtelComponentMapping (V2) should exist")
-	newOtelCompMapping, err := newMapping.AsOtelComponentMapping()
-	require.NoError(t, err)
-	assert.Equal(t, "Host component V2", newOtelCompMapping.Name)
-
-	// 3. The OTHER setting type (OtelRelationMapping) should be UNCHANGED.
-	relationMapping, ok := finalSettings[relationMappingId1]
-	require.True(t, ok, "OtelRelationMapping should be unaffected by the compaction of another type")
-	otelRelationMapping, err := relationMapping.AsOtelRelationMapping()
-	require.NoError(t, err)
-	assert.Equal(t, "Runs on host", otelRelationMapping.Name)
+type testContext struct {
+	ctx      context.Context
+	provider *kafkaSettingProvider
+	writer   *kafka.Writer
+	cleanup  func()
 }
 
-// setupTestInfra initializes the test environment (Kafka container, topic, kafka settings provider, kafka writer).
-// It returns the context, the kafka settings provider, the Kafka writer, and a cleanup function to be deferred.
-func setupTestInfra(t *testing.T) (context.Context, *kafkaSettingProvider, *kafka.Writer, func()) {
+func TestKafkaSettingsProvider_InitialState(t *testing.T) {
+	tc := setupTest(t)
+	defer tc.cleanup()
+
+	// Setup initial state
+	componentMapping := publishComponentMapping(t, tc, "11111", "Host component V1")
+	relationMapping := publishRelationMapping(t, tc, "22222", "Runs on host")
+
+	// Verify initial state
+	settings := waitForSettingsUpdate(t, tc)
+	assertSettingsCount(t, settings, 2)
+	assertComponentMapping(t, settings, componentMapping.id, componentMapping.name)
+	assertRelationMapping(t, settings, relationMapping.id, relationMapping.name)
+}
+
+func TestKafkaSettingsProvider_Compaction(t *testing.T) {
+	tc := setupTest(t)
+	defer tc.cleanup()
+
+	// Setup initial state
+	publishComponentMapping(t, tc, "11111", "Host component V1")
+	relationMapping := publishRelationMapping(t, tc, "22222", "Runs on host")
+	waitForSettingsUpdate(t, tc) // Wait for initial state to be processed
+
+	// Update component mapping
+	updatedMapping := publishComponentMapping(t, tc, "11111", "Host component V2")
+
+	// Verify state after update
+	settings := waitForSettingsUpdate(t, tc)
+	assertSettingsCount(t, settings, 2)
+	assertComponentMapping(t, settings, updatedMapping.id, updatedMapping.name)
+	assertRelationMapping(t, settings, relationMapping.id, relationMapping.name)
+}
+
+type mappingInfo struct {
+	id   string
+	name string
+}
+
+func publishComponentMapping(t *testing.T, tc *testContext, id, name string) mappingInfo {
+	snapshotID := uuid.New().String()
+	messages := newOtelComponentMappingSnapshot(t, snapshotID, id, name)
+	require.NoError(t, tc.writer.WriteMessages(tc.ctx, messages...))
+	return mappingInfo{id: id, name: name}
+}
+
+func publishRelationMapping(t *testing.T, tc *testContext, id, name string) mappingInfo {
+	snapshotID := uuid.New().String()
+	messages := newOtelRelationMappingSnapshot(t, snapshotID, id, name)
+	require.NoError(t, tc.writer.WriteMessages(tc.ctx, messages...))
+	return mappingInfo{id: id, name: name}
+}
+
+func waitForSettingsUpdate(t *testing.T, tc *testContext) map[stsSettingsModel.SettingId]stsSettingsModel.Setting {
+	t.Helper()
+	select {
+	case <-tc.provider.RegisterForUpdates():
+		time.Sleep(settleTime)
+		return tc.provider.GetCurrentSettings()
+	case <-time.After(updateTimeout):
+		t.Fatal("timed out waiting for settings update")
+		return nil
+	}
+}
+
+func assertSettingsCount(t *testing.T, settings map[stsSettingsModel.SettingId]stsSettingsModel.Setting, expected int) {
+	t.Helper()
+	assert.Len(t, settings, expected, "Unexpected number of settings")
+}
+
+func assertComponentMapping(t *testing.T, settings map[stsSettingsModel.SettingId]stsSettingsModel.Setting, id, expectedName string) {
+	t.Helper()
+	mapping, exists := settings[id]
+	require.True(t, exists, "Component mapping should exist")
+
+	compMapping, err := mapping.AsOtelComponentMapping()
+	require.NoError(t, err)
+	assert.Equal(t, expectedName, compMapping.Name)
+}
+
+func assertRelationMapping(t *testing.T, settings map[stsSettingsModel.SettingId]stsSettingsModel.Setting, id, expectedName string) {
+	t.Helper()
+	mapping, exists := settings[id]
+	require.True(t, exists, "Relation mapping should exist")
+
+	relMapping, err := mapping.AsOtelRelationMapping()
+	require.NoError(t, err)
+	assert.Equal(t, expectedName, relMapping.Name)
+}
+
+func setupTest(t *testing.T) *testContext {
 	t.Helper()
 
 	ctx, cancel := context.WithCancel(context.Background())
-
 	kafkaContainer, err := testContainersKafka.Run(ctx, kafkaImageName)
 	require.NoError(t, err, "failed to start container")
 
@@ -115,21 +139,9 @@ func setupTestInfra(t *testing.T) (context.Context, *kafkaSettingProvider, *kafk
 	topicName := fmt.Sprintf("sts-internal-settings-%s", uuid.New().String())
 	createCompactedTopic(t, brokers[0], topicName)
 
-	providerCfg := &stsSettingsConfig.KafkaSettingsProviderConfig{Brokers: brokers, Topic: topicName, BufferSize: 1000}
-	logger, _ := zap.NewDevelopment()
-	provider, err := NewKafkaSettingsProvider(providerCfg, logger)
-	require.NoError(t, err)
+	provider := createProvider(t, brokers, topicName)
+	writer := createWriter(brokers, topicName)
 
-	go provider.Start(ctx, componenttest.NewNopHost())
-	time.Sleep(3 * time.Second)
-
-	writer := &kafka.Writer{
-		Addr:     kafka.TCP(brokers...),
-		Topic:    topicName,
-		Balancer: &kafka.Hash{},
-	}
-
-	// The cleanup function handles tearing down all resources.
 	cleanup := func() {
 		writer.Close()
 		if err := testcontainers.TerminateContainer(kafkaContainer); err != nil {
@@ -138,7 +150,36 @@ func setupTestInfra(t *testing.T) (context.Context, *kafkaSettingProvider, *kafk
 		cancel()
 	}
 
-	return ctx, provider, writer, cleanup
+	return &testContext{
+		ctx:      ctx,
+		provider: provider,
+		writer:   writer,
+		cleanup:  cleanup,
+	}
+}
+
+func createProvider(t *testing.T, brokers []string, topicName string) *kafkaSettingProvider {
+	providerCfg := &stsSettingsConfig.KafkaSettingsProviderConfig{
+		Brokers:    brokers,
+		Topic:      topicName,
+		BufferSize: 1000,
+	}
+	logger, _ := zap.NewDevelopment()
+	provider, err := NewKafkaSettingsProvider(providerCfg, logger)
+	require.NoError(t, err)
+
+	go provider.Start(context.Background(), componenttest.NewNopHost())
+	time.Sleep(3 * time.Second)
+
+	return provider
+}
+
+func createWriter(brokers []string, topicName string) *kafka.Writer {
+	return &kafka.Writer{
+		Addr:     kafka.TCP(brokers...),
+		Topic:    topicName,
+		Balancer: &kafka.Hash{},
+	}
 }
 
 func newOtelComponentMappingSnapshot(t *testing.T, snapshotId, mappingId, mappingName string) []kafka.Message {

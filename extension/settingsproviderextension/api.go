@@ -11,6 +11,7 @@ type SettingsProvider interface {
 
 	// RegisterForUpdates returns a channel that receives a signal when settings change.
 	RegisterForUpdates() <-chan struct{}
-	// GetCurrentSettings returns a map (keyed by SettingId) of OtelMapping
-	GetCurrentSettings() map[stsSettingsModel.SettingId]stsSettingsModel.OtelMapping
+	// GetCurrentSettings returns a map where the key is the SettingType and the value
+	// is a slice of all currently active settings of that type.
+	GetCurrentSettings() map[stsSettingsModel.SettingType][]stsSettingsModel.Setting
 }
