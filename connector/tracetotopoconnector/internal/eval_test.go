@@ -16,10 +16,18 @@ func TestEvalVariables(t *testing.T) {
 	testSpan.Attributes().PutBool("bool-attr", true)
 	testSpan.Attributes().PutStr("str-attr", "Hello")
 
+	testScope := ptrace.NewScopeSpans()
+	testScope.Scope().Attributes().PutStr("str-attr", "it is scope attribute")
+
+	testResource := ptrace.NewResourceSpans()
+	testResource.Resource().Attributes().PutStr("str-attr", "it is resource attribute")
+
 	tests := []struct {
 		name      string
 		vars      *[]settings.OtelVariableMapping
 		span      *ptrace.Span
+		scope     *ptrace.ScopeSpans
+		resource  *ptrace.ResourceSpans
 		want      map[string]string
 		expectErr map[string]error
 	}{
@@ -27,6 +35,8 @@ func TestEvalVariables(t *testing.T) {
 			name:      "NilVariables",
 			vars:      nil,
 			span:      &testSpan,
+			scope:     &testScope,
+			resource:  &testResource,
 			want:      map[string]string{},
 			expectErr: nil,
 		},
@@ -34,6 +44,8 @@ func TestEvalVariables(t *testing.T) {
 			name:      "EmptyVariables",
 			vars:      &[]settings.OtelVariableMapping{},
 			span:      &testSpan,
+			scope:     &testScope,
+			resource:  &testResource,
 			want:      map[string]string{},
 			expectErr: nil,
 		},
@@ -45,7 +57,9 @@ func TestEvalVariables(t *testing.T) {
 					Value: settings.OtelStringExpression{Expression: "it is static value"},
 				},
 			},
-			span: &testSpan,
+			span:     &testSpan,
+			scope:    &testScope,
+			resource: &testResource,
 			want: map[string]string{
 				"variable1": "it is static value",
 			},
@@ -56,14 +70,16 @@ func TestEvalVariables(t *testing.T) {
 			vars: &[]settings.OtelVariableMapping{
 				{
 					Name:  "variable1",
-					Value: settings.OtelStringExpression{Expression: "attributes.str-attr"},
+					Value: settings.OtelStringExpression{Expression: "spanAttributes.str-attr"},
 				},
 				{
 					Name:  "variable2",
-					Value: settings.OtelStringExpression{Expression: "attributes.bool-attr"},
+					Value: settings.OtelStringExpression{Expression: "spanAttributes.bool-attr"},
 				},
 			},
-			span: &testSpan,
+			span:     &testSpan,
+			scope:    &testScope,
+			resource: &testResource,
 			want: map[string]string{
 				"variable1": "Hello",
 				"variable2": "true",
@@ -75,17 +91,45 @@ func TestEvalVariables(t *testing.T) {
 			vars: &[]settings.OtelVariableMapping{
 				{
 					Name:  "variable1",
-					Value: settings.OtelStringExpression{Expression: "attributes.str-attr"},
+					Value: settings.OtelStringExpression{Expression: "spanAttributes.str-attr"},
 				},
 				{
 					Name:  "variable2",
 					Value: settings.OtelStringExpression{Expression: "vars.variable1"},
 				},
 			},
-			span: &testSpan,
+			span:     &testSpan,
+			scope:    &testScope,
+			resource: &testResource,
 			want: map[string]string{
 				"variable1": "Hello",
 				"variable2": "Hello",
+			},
+			expectErr: nil,
+		},
+		{
+			name: "evaluate variables from span, scope and resource",
+			vars: &[]settings.OtelVariableMapping{
+				{
+					Name:  "spanVariable",
+					Value: settings.OtelStringExpression{Expression: "spanAttributes.str-attr"},
+				},
+				{
+					Name:  "scopeVariable",
+					Value: settings.OtelStringExpression{Expression: "scopeAttributes.str-attr"},
+				},
+				{
+					Name:  "resourceVariable",
+					Value: settings.OtelStringExpression{Expression: "resourceAttributes.str-attr"},
+				},
+			},
+			span:     &testSpan,
+			scope:    &testScope,
+			resource: &testResource,
+			want: map[string]string{
+				"spanVariable":     "Hello",
+				"scopeVariable":    "it is scope attribute",
+				"resourceVariable": "it is resource attribute",
 			},
 			expectErr: nil,
 		},
@@ -94,13 +138,15 @@ func TestEvalVariables(t *testing.T) {
 			vars: &[]settings.OtelVariableMapping{
 				{
 					Name:  "variable1",
-					Value: settings.OtelStringExpression{Expression: "attributes.not-existing-attr"},
+					Value: settings.OtelStringExpression{Expression: "spanAttributes.not-existing-attr"},
 				},
 			},
-			span: &testSpan,
-			want: map[string]string{},
+			span:     &testSpan,
+			scope:    &testScope,
+			resource: &testResource,
+			want:     map[string]string{},
 			expectErr: map[string]error{
-				"variable1": errors.New("Not found attribute with name: not-existing-attr"),
+				"variable1": errors.New("Not found span attribute with name: not-existing-attr"),
 			},
 		},
 		{
@@ -108,14 +154,16 @@ func TestEvalVariables(t *testing.T) {
 			vars: &[]settings.OtelVariableMapping{
 				{
 					Name:  "variable1",
-					Value: settings.OtelStringExpression{Expression: "attributes.str-attr"},
+					Value: settings.OtelStringExpression{Expression: "spanAttributes.str-attr"},
 				},
 				{
 					Name:  "variable2",
 					Value: settings.OtelStringExpression{Expression: "vars.not-existing-variable"},
 				},
 			},
-			span: &testSpan,
+			span:     &testSpan,
+			scope:    &testScope,
+			resource: &testResource,
 			want: map[string]string{
 				"variable1": "Hello",
 			},
@@ -128,7 +176,7 @@ func TestEvalVariables(t *testing.T) {
 			vars: &[]settings.OtelVariableMapping{
 				{
 					Name:  "variable1",
-					Value: settings.OtelStringExpression{Expression: "attributes.str-attr"},
+					Value: settings.OtelStringExpression{Expression: "spanAttributes.str-attr"},
 				},
 				{
 					Name:  "variable2",
@@ -139,7 +187,9 @@ func TestEvalVariables(t *testing.T) {
 					Value: settings.OtelStringExpression{Expression: "vars.variable1"},
 				},
 			},
-			span: &testSpan,
+			span:     &testSpan,
+			scope:    &testScope,
+			resource: &testResource,
 			want: map[string]string{
 				"variable1": "Hello",
 				"variable3": "Hello",
@@ -152,7 +202,7 @@ func TestEvalVariables(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := EvalVariables(tt.vars, tt.span)
+			got, err := EvalVariables(tt.span, tt.scope, tt.resource, tt.vars)
 			assert.True(t, equalMaps(got, tt.want))
 			assert.Equal(t, tt.expectErr, err)
 		})
