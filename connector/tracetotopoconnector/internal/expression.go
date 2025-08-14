@@ -8,7 +8,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
-func EvalBooleanExpression(expression *settings.OtelBooleanExpression, span *ptrace.Span, scope *ptrace.ScopeSpans, resource *ptrace.ResourceSpans) bool {
+func EvalBooleanExpression(expression *settings.OtelBooleanExpression, span *ptrace.Span, scope *ptrace.ScopeSpans, resource *ptrace.ResourceSpans, vars *map[string]string) bool {
 	if strings.HasPrefix(expression.Expression, "spanAttributes.") {
 		attributeName := strings.TrimPrefix(expression.Expression, "spanAttributes.")
 		_, exists := span.Attributes().Get(attributeName) //TODO implement it
@@ -20,6 +20,10 @@ func EvalBooleanExpression(expression *settings.OtelBooleanExpression, span *ptr
 	} else if strings.HasPrefix(expression.Expression, "resourceAttributes.") {
 		attributeName := strings.TrimPrefix(expression.Expression, "resourceAttributes.")
 		_, exists := resource.Resource().Attributes().Get(attributeName) //TODO implement it
+		return exists
+	} else if strings.HasPrefix(expression.Expression, "vars.") {
+		varName := strings.TrimPrefix(expression.Expression, "vars.")
+		_, exists := (*vars)[varName]
 		return exists
 	} else {
 		return false
@@ -46,7 +50,7 @@ func EvalStringExpression(expression settings.OtelStringExpression, span *ptrace
 		if val, exists := resource.Resource().Attributes().Get(attributeName); exists {
 			return val.AsString(), nil
 		}
-		return "", errors.New("Not found span attribute with name: " + attributeName)
+		return "", errors.New("Not found resource attribute with name: " + attributeName)
 	}
 	if strings.HasPrefix(expression.Expression, "vars.") {
 		varName := strings.TrimPrefix(expression.Expression, "vars.")

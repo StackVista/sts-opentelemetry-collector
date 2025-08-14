@@ -1,8 +1,6 @@
 package internal
 
 import (
-	"errors"
-
 	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
 	"go.opentelemetry.io/collector/pdata/ptrace"
@@ -10,11 +8,11 @@ import (
 
 // MapComponent maps an OpenTelemetry span and variables to a TopologyStreamComponent based on the given mapping configuration.
 // It evaluates expressions, constructs a component, and returns it along with any encountered errors.
-func MapComponent(mapping *settings.OtelComponentMapping, span *ptrace.Span, scope *ptrace.ScopeSpans, resource *ptrace.ResourceSpans, vars *map[string]string) (*topo_stream_v1.TopologyStreamComponent, error) {
-	var errs error
+func MapComponent(mapping *settings.OtelComponentMapping, span *ptrace.Span, scope *ptrace.ScopeSpans, resource *ptrace.ResourceSpans, vars *map[string]string) (*topo_stream_v1.TopologyStreamComponent, []error) {
+	errors := make([]error, 0)
 	joinErr := func(err error) {
 		if err != nil {
-			errs = errors.Join(errs, err)
+			errors = append(errors, err)
 		}
 	}
 	evalStr := func(expr settings.OtelStringExpression) string {
@@ -74,15 +72,15 @@ func MapComponent(mapping *settings.OtelComponentMapping, span *ptrace.Span, sco
 		StatusData:         nil,
 		Tags:               tagsList,
 	}
-	return &result, errs
+	return &result, errors
 }
 
 // MapRelation creates and returns a TopologyStreamRelation based on the provided OtelRelationMapping, span, and variables.
-func MapRelation(mapping *settings.OtelRelationMapping, span *ptrace.Span, scope *ptrace.ScopeSpans, resource *ptrace.ResourceSpans, vars *map[string]string) (*topo_stream_v1.TopologyStreamRelation, error) {
-	var errs error
+func MapRelation(mapping *settings.OtelRelationMapping, span *ptrace.Span, scope *ptrace.ScopeSpans, resource *ptrace.ResourceSpans, vars *map[string]string) (*topo_stream_v1.TopologyStreamRelation, []error) {
+	errors := make([]error, 0)
 	joinErr := func(err error) {
 		if err != nil {
-			errs = errors.Join(errs, err)
+			errors = append(errors, err)
 		}
 	}
 	evalStr := func(expr settings.OtelStringExpression) string {
@@ -107,5 +105,5 @@ func MapRelation(mapping *settings.OtelRelationMapping, span *ptrace.Span, scope
 		TypeIdentifier:   evalOptStr(mapping.Output.TypeIdentifier),
 		Tags:             []string{},
 	}
-	return &result, errs
+	return &result, errors
 }
