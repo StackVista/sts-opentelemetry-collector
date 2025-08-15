@@ -7,8 +7,8 @@ require (
 	github.com/segmentio/kafka-go v0.4.48
 	github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector v0.0.0-20250812090457-db95bfcfa7a0
 	github.com/stretchr/testify v1.10.0
-	github.com/testcontainers/testcontainers-go v0.38.0
-	github.com/testcontainers/testcontainers-go/modules/kafka v0.38.0
+	github.com/testcontainers/testcontainers-go v0.33.0
+	github.com/testcontainers/testcontainers-go/modules/kafka v0.33.0
 	go.opentelemetry.io/collector/component v0.100.0
 	go.opentelemetry.io/collector/extension v0.100.0
 	go.uber.org/zap v1.27.0

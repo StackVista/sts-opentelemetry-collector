@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"github.com/testcontainers/testcontainers-go"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.uber.org/zap"
 	"log"
@@ -144,7 +143,7 @@ func setupTest(t *testing.T) *testContext {
 
 	cleanup := func() {
 		writer.Close()
-		if err := testcontainers.TerminateContainer(kafkaContainer); err != nil {
+		if err := kafkaContainer.Terminate(ctx); err != nil {
 			log.Printf("failed to terminate container: %s", err)
 		}
 		cancel()
