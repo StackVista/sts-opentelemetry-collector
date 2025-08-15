@@ -160,9 +160,10 @@ func setupTest(t *testing.T) *testContext {
 
 func createProvider(t *testing.T, brokers []string, topicName string) *kafkaSettingProvider {
 	providerCfg := &stsSettingsConfig.KafkaSettingsProviderConfig{
-		Brokers:    brokers,
-		Topic:      topicName,
-		BufferSize: 1000,
+		Brokers:     brokers,
+		Topic:       topicName,
+		BufferSize:  1000,
+		ReadTimeout: 60 * time.Second,
 	}
 	logger, _ := zap.NewDevelopment()
 	provider, err := NewKafkaSettingsProvider(providerCfg, logger)
@@ -334,5 +335,6 @@ func createCompactedTopic(t *testing.T, brokerAddress, topicName string) {
 	}
 
 	err = controllerConn.CreateTopics(topicConfigs...)
+	time.Sleep(2 * time.Second)
 	require.NoError(t, err)
 }

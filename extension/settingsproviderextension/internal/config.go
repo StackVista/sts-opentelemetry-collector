@@ -24,6 +24,7 @@ type KafkaSettingsProviderConfig struct {
 	Brokers []string `mapstructure:"brokers"`
 	Topic   string   `mapstructure:"topic"`
 
+	ReadTimeout time.Duration `mapstructure:"read_timeout"`
 	// BufferSize limits the memory usage of the consumer. Defaults to 1000.
 	BufferSize int `mapstructure:"buffer_size"`
 }
@@ -52,6 +53,9 @@ func (cfg *Config) Validate() error {
 		}
 		if cfg.Kafka.Topic == "" {
 			return errors.New("'topic' must be specified when using kafka source")
+		}
+		if cfg.Kafka.ReadTimeout <= 0 {
+			cfg.Kafka.ReadTimeout = 30 * time.Second // Default
 		}
 		if cfg.Kafka.BufferSize <= 0 {
 			cfg.Kafka.BufferSize = 1000 // Default
