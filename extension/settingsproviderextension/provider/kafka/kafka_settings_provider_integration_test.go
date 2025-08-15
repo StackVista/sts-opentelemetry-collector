@@ -69,6 +69,27 @@ func TestKafkaSettingsProvider_Compaction(t *testing.T) {
 	assertRelationMapping(t, settings, relationMapping.id, relationMapping.name)
 }
 
+func TestKafkaSettingsProvider_Shutdown(t *testing.T) {
+	tc := setupTest(t)
+	defer tc.cleanup()
+
+	err := tc.provider.Shutdown(tc.ctx)
+	assert.NoError(t, err)
+
+	done := make(chan struct{})
+	go func() {
+		tc.provider.readerCancelWg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// the kafka reader in the provider should be stopped
+	case <-time.After(5 * time.Second):
+		t.Fatalf("Provider did not exit after being shut down")
+	}
+}
+
 type mappingInfo struct {
 	id   string
 	name string
@@ -138,11 +159,12 @@ func setupTest(t *testing.T) *testContext {
 	topicName := fmt.Sprintf("sts-internal-settings-%s", uuid.New().String())
 	createCompactedTopic(t, brokers[0], topicName)
 
-	provider := createProvider(t, brokers, topicName)
+	provider := createProvider(t, ctx, brokers, topicName)
 	writer := createWriter(brokers, topicName)
 
 	cleanup := func() {
-		writer.Close()
+		err := writer.Close()
+		assert.NoError(t, err)
 		if err := kafkaContainer.Terminate(ctx); err != nil {
 			log.Printf("failed to terminate container: %s", err)
 		}
@@ -157,7 +179,7 @@ func setupTest(t *testing.T) *testContext {
 	}
 }
 
-func createProvider(t *testing.T, brokers []string, topicName string) *kafkaSettingProvider {
+func createProvider(t *testing.T, ctx context.Context, brokers []string, topicName string) *kafkaSettingProvider {
 	providerCfg := &stsSettingsConfig.KafkaSettingsProviderConfig{
 		Brokers:     brokers,
 		Topic:       topicName,
@@ -168,7 +190,7 @@ func createProvider(t *testing.T, brokers []string, topicName string) *kafkaSett
 	provider, err := NewKafkaSettingsProvider(providerCfg, logger)
 	require.NoError(t, err)
 
-	go provider.Start(context.Background(), componenttest.NewNopHost())
+	go provider.Start(ctx, componenttest.NewNopHost())
 	time.Sleep(3 * time.Second)
 
 	return provider
