@@ -43,8 +43,8 @@ type kafkaSettingProvider struct {
 	// The key is the snapshot UUID (from the SnapshotStart/SettingsEnvelope/SnapshotStop's 'Id' field).
 	inProgressSnapshots map[string]*inProgressSnapshot
 
-	cancelFunc context.CancelFunc
-	wg         sync.WaitGroup
+	readerCancelFunc context.CancelFunc
+	readerCancelWg   sync.WaitGroup
 }
 
 func NewKafkaSettingsProvider(cfg *stsSettingsConfig.KafkaSettingsProviderConfig, logger *zap.Logger) (*kafkaSettingProvider, error) {
@@ -98,14 +98,14 @@ func (k *kafkaSettingProvider) Start(ctx context.Context, host component.Host) e
 		return fmt.Errorf("failed to start kafka settings provider: %w", err)
 	}
 
-	readerCtx, cancel := context.WithCancel(ctx)
-	k.cancelFunc = cancel
+	readerCtx, readerCancelFunc := context.WithCancel(ctx)
+	k.readerCancelFunc = readerCancelFunc
 
 	errChan := make(chan error, 1)
-	k.wg.Add(1)
+	k.readerCancelWg.Add(1)
 
 	go func() {
-		defer k.wg.Done()
+		defer k.readerCancelWg.Done()
 		if err := k.readMessages(readerCtx); err != nil && !errors.Is(err, context.Canceled) {
 			select {
 			case errChan <- err:
@@ -117,7 +117,7 @@ func (k *kafkaSettingProvider) Start(ctx context.Context, host component.Host) e
 	// Wait a short time for startup errors
 	select {
 	case err := <-errChan:
-		cancel()
+		readerCancelFunc()
 		return fmt.Errorf("failed to start message consumption: %w", err)
 	case <-time.After(5 * time.Second):
 		return nil // started successfully
@@ -126,13 +126,13 @@ func (k *kafkaSettingProvider) Start(ctx context.Context, host component.Host) e
 
 func (k *kafkaSettingProvider) Shutdown(ctx context.Context) error {
 	k.logger.Info("Shutting down Kafka settings provider")
-	if k.cancelFunc != nil {
-		k.cancelFunc()
+	if k.readerCancelFunc != nil {
+		k.readerCancelFunc()
 	}
 
 	done := make(chan struct{})
 	go func() {
-		k.wg.Wait()
+		k.readerCancelWg.Wait()
 		close(done)
 	}()
 
