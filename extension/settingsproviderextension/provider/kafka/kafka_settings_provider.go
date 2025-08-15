@@ -43,37 +43,33 @@ type kafkaSettingProvider struct {
 	// The key is the snapshot UUID (from the SnapshotStart/SettingsEnvelope/SnapshotStop's 'Id' field).
 	inProgressSnapshots map[string]*inProgressSnapshot
 
-	cleanup func()
+	cancelFunc context.CancelFunc
+	wg         sync.WaitGroup
 }
 
 func NewKafkaSettingsProvider(cfg *stsSettingsConfig.KafkaSettingsProviderConfig, logger *zap.Logger) (*kafkaSettingProvider, error) {
-	provider := &kafkaSettingProvider{
-		cfg:                 cfg,
-		logger:              logger,
-		currentSettings:     make(map[stsSettingsModel.SettingId]stsSettingsModel.Setting),
-		updateChannel:       make(chan struct{}, 1),
-		inProgressSnapshots: make(map[string]*inProgressSnapshot),
-	}
-
-	// Generate a random consumer group ID to ensure full topic processing.
 	consumerGroupID := fmt.Sprintf("sts-otel-collector-internal-settings-%s", uuid.New().String())
 
-	provider.reader = kafka.NewReader(kafka.ReaderConfig{
+	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:        cfg.Brokers,
 		Topic:          cfg.Topic,
 		GroupID:        consumerGroupID,
 		MaxBytes:       cfg.BufferSize,
 		MinBytes:       1,
-		CommitInterval: 1 * time.Second,
+		CommitInterval: time.Second,
 		MaxWait:        100 * time.Millisecond,
 		StartOffset:    kafka.FirstOffset,
 	})
 
-	provider.client = &kafka.Client{
-		Addr: kafka.TCP(cfg.Brokers...),
-	}
-
-	return provider, nil
+	return &kafkaSettingProvider{
+		cfg:                 cfg,
+		logger:              logger,
+		reader:              reader,
+		client:              &kafka.Client{Addr: kafka.TCP(cfg.Brokers...)},
+		currentSettings:     make(map[stsSettingsModel.SettingId]stsSettingsModel.Setting),
+		updateChannel:       make(chan struct{}, 1),
+		inProgressSnapshots: make(map[string]*inProgressSnapshot),
+	}, nil
 }
 
 func (k *kafkaSettingProvider) RegisterForUpdates() <-chan struct{} {
@@ -93,125 +89,79 @@ func (k *kafkaSettingProvider) GetCurrentSettings() map[stsSettingsModel.Setting
 }
 
 func (k *kafkaSettingProvider) Start(ctx context.Context, host component.Host) error {
-	k.logger.Info("Starting Kafka settings provider.",
+	k.logger.Info("Starting Kafka settings provider",
 		zap.Strings("brokers", k.cfg.Brokers),
 		zap.String("topic", k.cfg.Topic))
 
-	// Check initial connection and topic existence
+	// Fail fast if topic doesn't exist
 	if err := k.checkTopicExists(ctx); err != nil {
-		return fmt.Errorf("failed to start kafka provider: %w", err)
+		return fmt.Errorf("failed to start kafka settings provider: %w", err)
 	}
 
+	readerCtx, cancel := context.WithCancel(ctx)
+	k.cancelFunc = cancel
+
 	errChan := make(chan error, 1)
-
-	// Create parent context with timeout for the reader
-	readerCtx, cancelReader := context.WithTimeout(ctx, k.cfg.ReadTimeout)
-
-	var wg sync.WaitGroup
-	wg.Add(1)
+	k.wg.Add(1)
 
 	go func() {
-		defer wg.Done()
-		defer cancelReader()
-
-		if err := k.readMessages(readerCtx); err != nil {
-			if !errors.Is(err, context.DeadlineExceeded) {
-				select {
-				case errChan <- err:
-				default:
-				}
+		defer k.wg.Done()
+		if err := k.readMessages(readerCtx); err != nil && !errors.Is(err, context.Canceled) {
+			select {
+			case errChan <- err:
+			default:
 			}
-			k.logger.Error("Kafka reader stopped",
-				zap.Error(err),
-				zap.Bool("timeout", errors.Is(err, context.DeadlineExceeded)))
 		}
 	}()
 
-	// Wait for potential initial errors
+	// Wait a short time for startup errors
 	select {
 	case err := <-errChan:
+		cancel()
 		return fmt.Errorf("failed to start message consumption: %w", err)
 	case <-time.After(5 * time.Second):
-		// Successfully started
+		return nil // started successfully
 	}
-
-	k.cleanup = func() {
-		cancelReader()
-
-		// Wait for goroutine to finish with timeout
-		done := make(chan struct{})
-		go func() {
-			wg.Wait()
-			close(done)
-		}()
-
-		select {
-		case <-done:
-			k.logger.Info("Kafka reader goroutine cleaned up successfully")
-		case <-time.After(30 * time.Second):
-			k.logger.Warn("Timeout waiting for Kafka reader goroutine to finish")
-		}
-
-		if err := k.reader.Close(); err != nil {
-			k.logger.Error("Failed to close kafka reader", zap.Error(err))
-		}
-	}
-
-	return nil
 }
 
 func (k *kafkaSettingProvider) Shutdown(ctx context.Context) error {
-	k.logger.Info("Shutting down Kafka settings provider.")
-
-	// Create a timeout context for shutdown
-	shutdownCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
-	// Call cleanup function that was set in Start()
-	if k.cleanup != nil {
-		k.cleanup()
+	k.logger.Info("Shutting down Kafka settings provider")
+	if k.cancelFunc != nil {
+		k.cancelFunc()
 	}
 
-	// Attempt to close the reader with timeout
-	errChan := make(chan error, 1)
+	done := make(chan struct{})
 	go func() {
-		errChan <- k.reader.Close()
+		k.wg.Wait()
+		close(done)
 	}()
 
 	select {
-	case err := <-errChan:
-		if err != nil {
-			return fmt.Errorf("failed to close kafka reader: %w", err)
-		}
-		return nil
-	case <-shutdownCtx.Done():
-		return fmt.Errorf("shutdown timed out: %w", shutdownCtx.Err())
+	case <-done:
+	case <-time.After(30 * time.Second):
+		k.logger.Warn("Timeout waiting for Kafka reader to exit")
 	}
+
+	if err := k.reader.Close(); err != nil {
+		return fmt.Errorf("failed to close kafka reader: %w", err)
+	}
+	return nil
 }
 
 func (k *kafkaSettingProvider) readMessages(ctx context.Context) error {
-	// Check topic existence with timeout
-	checkCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
-	if err := k.checkTopicExists(checkCtx); err != nil {
-		return fmt.Errorf("kafka topic unavailable: %w", err)
-	}
-
 	backoff := time.Second
 	maxBackoff := time.Minute
 
 	for {
 		select {
 		case <-ctx.Done():
-			k.logger.Info("Kafka reader context done, stopping message consumption.")
+			k.logger.Info("Reader context done, stopping consumption")
 			return ctx.Err()
-
 		default:
-			// Create timeout context for each message processing attempt
-			msgCtx, cancelMsg := context.WithTimeout(ctx, 30*time.Second)
+			// Per-message timeout
+			msgCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			err := k.processNextMessage(msgCtx)
-			cancelMsg()
+			cancel()
 
 			if err != nil {
 				if isShutdownError(err) || errors.Is(err, context.Canceled) {
@@ -219,15 +169,11 @@ func (k *kafkaSettingProvider) readMessages(ctx context.Context) error {
 				}
 
 				if errors.Is(err, context.DeadlineExceeded) {
-					k.logger.Warn("Message processing timed out, retrying",
-						zap.Duration("backoff", backoff))
+					k.logger.Warn("Message processing timed out", zap.Duration("backoff", backoff))
 				} else {
-					k.logger.Error("Failed to process message",
-						zap.Error(err),
-						zap.Duration("backoff", backoff))
+					k.logger.Error("Failed to process message", zap.Error(err), zap.Duration("backoff", backoff))
 				}
 
-				// Apply backoff with context awareness
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
@@ -236,8 +182,6 @@ func (k *kafkaSettingProvider) readMessages(ctx context.Context) error {
 					continue
 				}
 			}
-
-			// Reset backoff on successful processing
 			backoff = time.Second
 		}
 	}
