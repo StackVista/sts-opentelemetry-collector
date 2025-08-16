@@ -29,6 +29,8 @@ extensions:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/bearertokenauthextension v0.100.0
   - gomod: github.com/stackvista/sts-opentelemetry-collector/extension/servicetokenauthextension v0.0.0
     path: ./extension/servicetokenauthextension
+  - gomod: github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension v0.0.0
+    path: ./extension/settingsproviderextension
 
 processors:
   - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.100.0

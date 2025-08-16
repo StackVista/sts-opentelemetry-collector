@@ -19,18 +19,64 @@ externalDocs:
 paths: {}
 components:
   schemas:
-    SettingsSnapshot:
+    SettingsProtocol:
+      properties:
+        type:
+          type: string
+      oneOf:
+        - $ref: "#/components/schemas/SettingsSnapshotStart"
+        - $ref: "#/components/schemas/SettingsSnapshotStop"
+        - $ref: "#/components/schemas/SettingsEnvelope"
+      discriminator:
+        propertyName: type
+      required:
+        - type
+        - id
+
+    SettingsSnapshotStart:
       type: object
       properties:
+        type:
+          type: string
+          enum: [SettingsSnapshotStart]
+        id:
+          type: string
+          description: UUID to match snapshot start, stop and envelope
         settingType:
           $ref: "#/components/schemas/SettingType"
-        settings:
-          type: object
-          additionalProperties:
-            $ref: "#/components/schemas/Setting"
       required:
+        - type
+        - id
         - settingType
-        - settings
+
+    SettingsSnapshotStop:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [SettingsSnapshotStop]
+        id:
+          type: string
+          description: UUID to match snapshot start, stop and envelope
+      required:
+        - type
+        - id
+
+    SettingsEnvelope:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [SettingsEnvelope]
+        id:
+          type: string
+          description: UUID to match snapshot start, stop and envelope
+        setting:
+          $ref: "#/components/schemas/Setting"
+      required:
+        - type
+        - id
+        - setting
 
     # Base types
 
@@ -686,6 +732,7 @@ components:
         - $ref: "#/components/schemas/HandlebarsFunctionBody"
         - $ref: "#/components/schemas/GroovyFunctionBody"
         - $ref: "#/components/schemas/NativeFunctionBody"
+
       discriminator:
         propertyName: functionType
       required:

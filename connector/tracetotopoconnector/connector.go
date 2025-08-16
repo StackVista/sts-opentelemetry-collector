@@ -23,7 +23,7 @@ func newConnector(logger *zap.Logger, config component.Config, nextConsumer cons
 	}, nil
 }
 
-func (p *connectorImpl) Start(_ context.Context, host component.Host) error {
+func (p *connectorImpl) Start(ctx context.Context, host component.Host) error {
 	return nil
 }
 

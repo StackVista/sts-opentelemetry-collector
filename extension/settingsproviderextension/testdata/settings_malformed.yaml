@@ -1,0 +1,19 @@
+---
+- createdTimeStamp: 1723485600
+    id: "1122334455"
+  name: "Host Component"
+  shard: 0
+  type: "OtelComponentMapping"
+  output:
+    domainIdentifier:
+      expression: "host"
+    domainName:
+      expression: "my-custom-domain"
+    identifier:
+      expression: "${input.attributes['host.name']}"
+    layerName:
+      expression: "Infrastructure"
+    name:
+      expression: "${input.attributes['service.name']}"
+    typeName:
+      expression: "host-component-type"
