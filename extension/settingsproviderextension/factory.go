@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	Type = component.MustNewType("settings_provider")
+	Type = component.MustNewType("sts_settings_provider")
 )
 
 func NewFactory() extension.Factory {
@@ -24,12 +24,9 @@ func NewFactory() extension.Factory {
 	)
 }
 
+// createDefaultConfig builds the base config for the extension
 func createDefaultConfig() component.Config {
-	return &stsSettingsConfig.Config{
-		File: &stsSettingsConfig.FileSettingsProviderConfig{
-			Path: "./testdata/otel_mappings.yaml",
-		},
-	}
+	return &stsSettingsConfig.Config{}
 }
 
 func createExtension(_ context.Context, set extension.CreateSettings, cfg component.Config) (extension.Extension, error) {
