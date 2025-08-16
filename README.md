@@ -25,16 +25,6 @@ docker build . -t sts-opentelemetry-collector:latest
 ## Run it locally 
 Create a file (`dev-config.yaml`) with configuration for OpenTelemetry Collector.
 ```yaml
-extensions:
-  settings_provider:
-    file:
-      path: "/otel_mappings.yaml"
-      update_interval: 30s
-    # Or for Kafka:
-    # kafka:
-    #   brokers: ["localhost:9092"]
-    #   topic: "sts_internal_settings"
-
 connectors:
   tracetotopo:
 
@@ -54,10 +44,6 @@ exporters:
     verbosity: detailed
 
 service:
-  telemetry:
-    logs:
-      level: debug
-  extensions: [ settings_provider ]
   pipelines:
     traces:
       receivers: [ otlp ]
@@ -75,10 +61,6 @@ service:
 ### Run with above config (and no extension config)
 ```shell
 docker run --rm -p 4317:4317 -p 4318:4318  -v ./dev-config.yaml:/config.yaml --network="host" sts-opentelemetry-collector:latest  --config /config.yaml
-```
-### Run with file-based setting provider for OTEL mappings
-```shell
-docker run --rm -p 4317:4317 -p 4318:4318  -v ./dev-config.yaml:/config.yaml -v ./extension/settingsproviderextension/testdata/otel_mappings.yaml:/otel_mappings.yaml --network="host" sts-opentelemetry-collector:latest  --config /config.yaml
 ```
 
 ## Generate traces

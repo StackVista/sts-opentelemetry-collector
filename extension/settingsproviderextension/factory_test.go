@@ -44,7 +44,7 @@ func TestCreateExtension(t *testing.T) {
 			cfg: &stsSettingsConfig.Config{
 				Kafka: &stsSettingsConfig.KafkaSettingsProviderConfig{
 					Brokers:    []string{"localhost:9092"},
-					Topic:      "sts_internal_settings",
+					Topic:      "sts-internal-settings",
 					BufferSize: 1000,
 				},
 			},
