@@ -11,6 +11,7 @@ require (
 	go.opentelemetry.io/collector/component v0.100.0
 	go.opentelemetry.io/collector/extension v0.100.0
 	go.uber.org/zap v1.27.0
+	go.yaml.in/yaml/v3 v3.0.4
 	gopkg.in/yaml.v3 v3.0.1
 )
 

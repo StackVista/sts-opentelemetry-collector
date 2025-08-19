@@ -6,6 +6,7 @@ import (
 	"errors"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal"
 	stsProviderCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/provider/common"
+	yaml "go.yaml.in/yaml/v3"
 	"os"
 	"reflect"
 	"sync"
@@ -13,7 +14,6 @@ import (
 
 	"go.opentelemetry.io/collector/component"
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v3"
 
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 )
@@ -22,19 +22,19 @@ type fileSettingsProvider struct {
 	cfg    *stsSettingsConfig.FileSettingsProviderConfig
 	logger *zap.Logger
 
-	// The current state of the stsSettingsModel. Using a map for potential multiple mappings.
-	settingsLock    sync.RWMutex
-	currentSettings map[stsSettingsModel.SettingType][]stsSettingsModel.Setting
+	subscriberHub *stsProviderCommon.SubscriberHub
 
-	// Channel to notify clients of updates.
-	updateChannel chan struct{}
+	// Mutex for concurrent access to currentSettings
+	settingsLock sync.RWMutex
+	// The current state of the stsSettingsModel. Using a map for potential multiple mappings.
+	currentSettings map[stsSettingsModel.SettingType][]stsSettingsModel.Setting
 }
 
 func NewFileSettingsProvider(cfg *stsSettingsConfig.FileSettingsProviderConfig, logger *zap.Logger) (*fileSettingsProvider, error) {
 	provider := &fileSettingsProvider{
 		cfg:             cfg,
 		logger:          logger,
-		updateChannel:   make(chan struct{}, 1),
+		subscriberHub:   stsProviderCommon.NewSubscriberHub(),
 		currentSettings: make(map[stsSettingsModel.SettingType][]stsSettingsModel.Setting),
 	}
 
@@ -53,6 +53,9 @@ func (f *fileSettingsProvider) Start(ctx context.Context, host component.Host) e
 	go func() {
 		ticker := time.NewTicker(f.cfg.UpdateInterval)
 		defer ticker.Stop()
+
+		// The ticker doesn't tick immediately, so we do an initial run
+		f.checkAndUpdateSettings()
 
 		for {
 			select {
@@ -75,7 +78,7 @@ func (f *fileSettingsProvider) Shutdown(ctx context.Context) error {
 
 // RegisterForUpdates returns a channel for receiving change notifications.
 func (f *fileSettingsProvider) RegisterForUpdates() <-chan struct{} {
-	return f.updateChannel
+	return f.subscriberHub.Register()
 }
 
 // GetCurrentSettings provides a thread-safe way to access the latest settings.
@@ -90,7 +93,6 @@ func (f *fileSettingsProvider) GetCurrentSettings() map[stsSettingsModel.Setting
 		copiedSettings[key] = copiedSlice
 	}
 	return copiedSettings
-
 }
 
 func (f *fileSettingsProvider) loadSettings() error {
@@ -139,11 +141,7 @@ func (f *fileSettingsProvider) checkAndUpdateSettings() {
 		f.currentSettings = newSettingsMap
 		f.settingsLock.Unlock()
 
-		select {
-		case f.updateChannel <- struct{}{}:
-			f.logger.Info("New settings loaded and change signal sent.")
-		default:
-		}
+		f.subscriberHub.Notify()
 	}
 }
 

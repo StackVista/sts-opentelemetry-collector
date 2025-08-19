@@ -33,7 +33,7 @@ func TestCreateExtension(t *testing.T) {
 			name: "Valid File Config",
 			cfg: &stsSettingsConfig.Config{
 				File: &stsSettingsConfig.FileSettingsProviderConfig{
-					Path:           "./testdata/settings.yaml",
+					Path:           "./provider/file/testdata/settings.yaml",
 					UpdateInterval: 30 * time.Second,
 				},
 			},

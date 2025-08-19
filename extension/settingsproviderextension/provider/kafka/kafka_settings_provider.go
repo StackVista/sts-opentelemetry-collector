@@ -30,14 +30,13 @@ type kafkaSettingProvider struct {
 	reader      *kafka.Reader
 	readTimeout time.Duration
 
+	subscriberHub *stsProviderCommon.SubscriberHub
+
 	// Mutex for concurrent access to settings
 	settingsLock    sync.RWMutex
 	currentSettings map[stsSettingsModel.SettingId]stsSettingsModel.Setting
 
-	// Channel to signal updates
-	updateChannel chan struct{}
-
-	// Mutex for concurrent access to settings
+	// Mutex for concurrent access to inProgressSnapshots
 	snapshotsLock sync.RWMutex
 	// A map to store snapshots that are currently in the process of being received.
 	// The key is the snapshot UUID (from the SnapshotStart/SettingsEnvelope/SnapshotStop's 'Id' field).
@@ -66,14 +65,15 @@ func NewKafkaSettingsProvider(cfg *stsSettingsConfig.KafkaSettingsProviderConfig
 		logger:              logger,
 		reader:              reader,
 		client:              &kafka.Client{Addr: kafka.TCP(cfg.Brokers...)},
+		subscriberHub:       stsProviderCommon.NewSubscriberHub(),
 		currentSettings:     make(map[stsSettingsModel.SettingId]stsSettingsModel.Setting),
-		updateChannel:       make(chan struct{}, 1),
 		inProgressSnapshots: make(map[string]*inProgressSnapshot),
 	}, nil
 }
 
+// RegisterForUpdates returns a channel for receiving change notifications.
 func (k *kafkaSettingProvider) RegisterForUpdates() <-chan struct{} {
-	return k.updateChannel
+	return k.subscriberHub.Register()
 }
 
 func (k *kafkaSettingProvider) GetCurrentSettings() map[stsSettingsModel.SettingId]stsSettingsModel.Setting {
@@ -270,7 +270,7 @@ func (k *kafkaSettingProvider) handleSettingsEnvelope(msg stsSettingsModel.Setti
 
 	snapshot, found := k.inProgressSnapshots[msg.Id]
 	if !found {
-		k.logger.Warn("Received an orphan settings envelope for an unknown snapshot.",
+		k.logger.Warn("Received an orphan settings envelope for a not in progress snapshot.",
 			zap.String("snapshotId", msg.Id))
 		// TODO: add a metric for this case
 		return nil
@@ -290,21 +290,19 @@ func (k *kafkaSettingProvider) handleSnapshotStop(msg stsSettingsModel.SettingsS
 		return nil
 	}
 
-	// Make a local snapshotCopy so we can unlock before processing
-	snapshotCopy := *snapshot
 	delete(k.inProgressSnapshots, msg.Id)
 	k.snapshotsLock.Unlock()
 
 	k.logger.Info("Received snapshot stop. Processing complete snapshot.",
 		zap.String("snapshotId", msg.Id),
-		zap.String("settingType", string(snapshotCopy.settingType)),
-		zap.Int("settingCount", len(snapshotCopy.settings)))
+		zap.String("settingType", string(snapshot.settingType)),
+		zap.Int("settingCount", len(snapshot.settings)))
 
-	if err := k.updateSettings(&snapshotCopy); err != nil {
+	if err := k.updateSettings(snapshot); err != nil {
 		return fmt.Errorf("failed to update settings: %w", err)
 	}
 
-	k.notifyUpdate()
+	k.subscriberHub.Notify()
 	return nil
 }
 
@@ -350,14 +348,6 @@ func (k *kafkaSettingProvider) mergeSettings(settingType stsSettingsModel.Settin
 	}
 
 	return mergedSettings
-}
-
-func (k *kafkaSettingProvider) notifyUpdate() {
-	select {
-	case k.updateChannel <- struct{}{}:
-	default:
-		// Channel is full, clients are still processing the last update
-	}
 }
 
 func isShutdownError(err error) bool {

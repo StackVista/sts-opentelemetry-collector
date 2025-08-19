@@ -63,7 +63,7 @@ docker run --rm \
 docker run --rm \
   -p 4317:4317 -p 4318:4318 \
   -v ./dev-config.yaml:/config.yaml \
-  -v ./extension/settingsproviderextension/testdata/settings.yaml:/settings.yaml \
+  -v ./extension/settingsproviderextension/provider/file/testdata/settings.yaml:/settings.yaml \
   --network="host" \
   sts-opentelemetry-collector:latest --config /config.yaml
 ```

@@ -16,7 +16,7 @@ func TestNewFileSettingsProvider(t *testing.T) {
 	// Test case 1: Successful initialization.
 	t.Run("success", func(t *testing.T) {
 		cfg := &stsSettingsConfig.FileSettingsProviderConfig{
-			Path: filepath.Join("../../testdata", "settings.yaml"),
+			Path: filepath.Join("./testdata", "settings.yaml"),
 		}
 		provider, err := NewFileSettingsProvider(cfg, zap.NewNop())
 		require.NoError(t, err)
@@ -38,7 +38,7 @@ func TestNewFileSettingsProvider(t *testing.T) {
 	// Test case 3: Malformed YAML.
 	t.Run("malformed_yaml", func(t *testing.T) {
 		cfg := &stsSettingsConfig.FileSettingsProviderConfig{
-			Path: filepath.Join("../../testdata", "settings_malformed.yaml"),
+			Path: filepath.Join("./testdata", "settings_malformed.yaml"),
 		}
 		provider, err := NewFileSettingsProvider(cfg, zap.NewNop())
 		assert.Error(t, err)

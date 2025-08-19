@@ -22,7 +22,7 @@ import (
 
 // TestFileSettingsProvider_StartAndShutdown verifies the lifecycle and change detection.
 func TestFileSettingsProvider_StartAndShutdown(t *testing.T) {
-	originalFilePath := filepath.Join("../../testdata", "settings.yaml")
+	originalFilePath := filepath.Join("./testdata", "settings.yaml")
 	tempDir := t.TempDir()
 	tempFilePath := filepath.Join(tempDir, "temp_settings.yaml")
 
