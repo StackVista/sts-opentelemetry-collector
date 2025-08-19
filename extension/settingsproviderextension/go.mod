@@ -4,6 +4,7 @@ go 1.21.13
 
 require (
 	github.com/google/uuid v1.6.0
+	github.com/jinzhu/copier v0.4.0
 	github.com/segmentio/kafka-go v0.4.48
 	github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector v0.0.0-20250814093050-792e5fb7c1bf
 	github.com/stretchr/testify v1.9.0

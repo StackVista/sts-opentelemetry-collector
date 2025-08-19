@@ -5,7 +5,8 @@ package file
 import (
 	"context"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
-	stsProviderCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/provider/common"
+	stsProviderCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/common"
+	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"os"
 	"path/filepath"
@@ -16,8 +17,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
-
-	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal"
 )
 
 // TestFileSettingsProvider_StartAndShutdown verifies the lifecycle and change detection.

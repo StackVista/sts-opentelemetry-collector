@@ -2,8 +2,35 @@ package common
 
 import (
 	"fmt"
+	"github.com/mohae/deepcopy"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 )
+
+type ConverterFunc func(stsSettingsModel.Setting) (any, error)
+
+var converters = map[stsSettingsModel.SettingType]func(stsSettingsModel.Setting) (any, error){
+	stsSettingsModel.SettingTypeOtelComponentMapping: func(s stsSettingsModel.Setting) (any, error) {
+		return s.AsOtelComponentMapping()
+	},
+	stsSettingsModel.SettingTypeOtelRelationMapping: func(s stsSettingsModel.Setting) (any, error) {
+		return s.AsOtelRelationMapping()
+	},
+}
+
+func ConverterFor(t stsSettingsModel.SettingType) (ConverterFunc, bool) {
+	fn, ok := converters[t]
+	return fn, ok
+}
+
+func DeepCopyAs[T any](val any) (T, error) {
+	valCopy := deepcopy.Copy(val)
+	typedCopy, ok := valCopy.(T)
+	if !ok {
+		var zero T
+		return zero, fmt.Errorf("failed to cast deepcopy to expected type")
+	}
+	return typedCopy, nil
+}
 
 func processSetting[T any](setting stsSettingsModel.Setting, processor func(actualSetting interface{}) (T, error)) (T, error) {
 	actualSetting, err := setting.ValueByDiscriminator()

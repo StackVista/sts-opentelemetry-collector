@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal"
-	stsProviderCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/provider/common"
+	stsProviderCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/common"
+	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
+	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/subscribers"
 	yaml "go.yaml.in/yaml/v3"
 	"os"
 	"reflect"
@@ -22,11 +24,11 @@ type fileSettingsProvider struct {
 	cfg    *stsSettingsConfig.FileSettingsProviderConfig
 	logger *zap.Logger
 
-	subscriberHub *stsProviderCommon.SubscriberHub
+	subscriberHub *subscribers.SubscriberHub
 
 	// Mutex for concurrent access to currentSettings
 	settingsLock sync.RWMutex
-	// The current state of the stsSettingsModel. Using a map for potential multiple mappings.
+	// A map where the key is the SettingType and the value is a slice of all currently active settings of that type.
 	currentSettings map[stsSettingsModel.SettingType][]stsSettingsModel.Setting
 }
 
@@ -34,7 +36,7 @@ func NewFileSettingsProvider(cfg *stsSettingsConfig.FileSettingsProviderConfig, 
 	provider := &fileSettingsProvider{
 		cfg:             cfg,
 		logger:          logger,
-		subscriberHub:   stsProviderCommon.NewSubscriberHub(),
+		subscriberHub:   subscribers.NewSubscriberHub(),
 		currentSettings: make(map[stsSettingsModel.SettingType][]stsSettingsModel.Setting),
 	}
 
@@ -76,9 +78,12 @@ func (f *fileSettingsProvider) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// RegisterForUpdates returns a channel for receiving change notifications.
-func (f *fileSettingsProvider) RegisterForUpdates() <-chan struct{} {
-	return f.subscriberHub.Register()
+func (f *fileSettingsProvider) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
+	return f.subscriberHub.Register(types...)
+}
+
+func (f *fileSettingsProvider) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
+	return f.subscriberHub.Unregister(ch)
 }
 
 // GetCurrentSettings provides a thread-safe way to access the latest settings.
@@ -124,24 +129,32 @@ func (f *fileSettingsProvider) checkAndUpdateSettings() {
 
 	newSettingsMap, err := f.parseSettings(fileContent)
 	if err != nil {
-		f.logger.Error("Failed to read or parse settings file.", zap.Error(err))
+		f.logger.Error("Failed to parse settings file.", zap.Error(err))
 		return
 	}
 
 	f.settingsLock.RLock()
-	isDifferent := len(newSettingsMap) != len(f.currentSettings) || !mapsAreEqual(newSettingsMap, f.currentSettings)
-	f.logger.Debug("Current settings size", zap.Int("size", len(f.currentSettings)))
-	if isDifferent {
-		f.logger.Debug("New settings detected, updating in-memory cache")
-	}
+	oldSettings := f.currentSettings
 	f.settingsLock.RUnlock()
 
-	if isDifferent {
-		f.settingsLock.Lock()
-		f.currentSettings = newSettingsMap
-		f.settingsLock.Unlock()
+	changedTypes := diffSettingsMaps(oldSettings, newSettingsMap)
+	if len(changedTypes) == 0 {
+		f.logger.Debug("No settings changes detected")
+		return
+	}
 
-		f.subscriberHub.Notify()
+	f.logger.Debug("Settings changed", zap.Int("changedTypes", len(changedTypes)))
+
+	// Update cache
+	f.settingsLock.Lock()
+	f.currentSettings = newSettingsMap
+	f.settingsLock.Unlock()
+
+	// Notify only for changed types
+	for _, settingType := range changedTypes {
+		f.subscriberHub.Notify(stsSettingsEvents.UpdateSettingsEvent{
+			Type: settingType,
+		})
 	}
 }
 
@@ -197,6 +210,22 @@ func (f *fileSettingsProvider) readSettingsFile() ([]byte, error) {
 	return os.ReadFile(f.cfg.Path)
 }
 
-func mapsAreEqual(a, b map[stsSettingsModel.SettingType][]stsSettingsModel.Setting) bool {
-	return reflect.DeepEqual(a, b)
+func diffSettingsMaps(oldMap, newMap map[stsSettingsModel.SettingType][]stsSettingsModel.Setting) []stsSettingsModel.SettingType {
+	diff := []stsSettingsModel.SettingType{}
+
+	// Detect added/diff
+	for k, newVal := range newMap {
+		if oldVal, ok := oldMap[k]; !ok || !reflect.DeepEqual(oldVal, newVal) {
+			diff = append(diff, k)
+		}
+	}
+
+	// Detect removed
+	for k := range oldMap {
+		if _, ok := newMap[k]; !ok {
+			diff = append(diff, k)
+		}
+	}
+
+	return diff
 }

@@ -3,6 +3,7 @@ package common
 import (
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
@@ -15,13 +16,13 @@ func TestGetSettingId(t *testing.T) {
 	}{
 		{
 			name:          "component mapping",
-			setting:       newOtelComponentMapping("11111"),
+			setting:       newOtelComponentMappingAsSetting("11111"),
 			expectedId:    "11111",
 			expectedError: "",
 		},
 		{
 			name:          "relation mapping",
-			setting:       newOtelRelationMapping("22222"),
+			setting:       newOtelRelationMappingAsSetting("22222"),
 			expectedId:    "22222",
 			expectedError: "",
 		},
@@ -56,13 +57,13 @@ func TestGetSettingType(t *testing.T) {
 	}{
 		{
 			name:          "component mapping",
-			setting:       newOtelComponentMapping("11111"),
+			setting:       newOtelComponentMappingAsSetting("11111"),
 			expectedType:  stsSettingsModel.SettingTypeOtelComponentMapping,
 			expectedError: "",
 		},
 		{
 			name:          "relation mapping",
-			setting:       newOtelRelationMapping("22222"),
+			setting:       newOtelRelationMappingAsSetting("22222"),
 			expectedType:  stsSettingsModel.SettingTypeOtelRelationMapping,
 			expectedError: "",
 		},
@@ -88,8 +89,26 @@ func TestGetSettingType(t *testing.T) {
 	}
 }
 
-func newOtelComponentMapping(id string) stsSettingsModel.Setting {
-	otelComponentMapping := stsSettingsModel.OtelComponentMapping{
+func TestDeepCopyAs(t *testing.T) {
+	t.Run("struct with nested references", func(t *testing.T) {
+		mapping := newOtelComponentMapping("111")
+
+		mappingCopy, err := DeepCopyAs[stsSettingsModel.OtelComponentMapping](mapping)
+		require.NoError(t, err)
+
+		// Values match
+		require.Equal(t, mapping, mappingCopy)
+
+		// Slices are not the same reference
+		require.NotSame(t, mapping.Conditions, mappingCopy.Conditions)
+
+		// Nested pointer fields also independent
+		require.NotSame(t, &mapping.Output.DomainIdentifier, &mappingCopy.Output.DomainIdentifier)
+	})
+}
+
+func newOtelComponentMapping(id string) stsSettingsModel.OtelComponentMapping {
+	return stsSettingsModel.OtelComponentMapping{
 		Id:               id,
 		CreatedTimeStamp: 2,
 		Shard:            0,
@@ -102,14 +121,24 @@ func newOtelComponentMapping(id string) stsSettingsModel.Setting {
 			Name:             *newOtelStringExpression("${input.attributes['service.name']}"),
 			TypeName:         *newOtelStringExpression("host-component-type"),
 		},
+		Conditions: &[]stsSettingsModel.OtelConditionMapping{
+			{
+				Action: stsSettingsModel.CREATE,
+				Expression: stsSettingsModel.OtelBooleanExpression{
+					Expression: "${input.attributes['service.name'] == 'test'}",
+				},
+			},
+		},
 	}
+}
 
+func newOtelComponentMappingAsSetting(id string) stsSettingsModel.Setting {
 	setting := stsSettingsModel.Setting{}
-	setting.FromOtelComponentMapping(otelComponentMapping)
+	setting.FromOtelComponentMapping(newOtelComponentMapping(id))
 	return setting
 }
 
-func newOtelRelationMapping(id string) stsSettingsModel.Setting {
+func newOtelRelationMappingAsSetting(id string) stsSettingsModel.Setting {
 	otelRelationMapping := stsSettingsModel.OtelRelationMapping{
 		Id:               id,
 		CreatedTimeStamp: 2,

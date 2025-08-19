@@ -1,11 +1,11 @@
-package settingsproviderextension
+package factory
 
 import (
 	"context"
 	"fmt"
-	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/provider/file"
-	stsSettingsSource "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/provider/kafka"
+	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
+	stsFileSettingsSource "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/provider/file"
+	stsKafkaSettingsSource "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/provider/kafka"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/extension"
 )
@@ -34,7 +34,7 @@ func createExtension(_ context.Context, set extension.CreateSettings, cfg compon
 	logger := set.Logger
 
 	if topoCfg.File != nil {
-		fileProvider, err := file.NewFileSettingsProvider(topoCfg.File, logger)
+		fileProvider, err := stsFileSettingsSource.NewFileSettingsProvider(topoCfg.File, logger)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create file provider: %w", err)
 		}
@@ -42,7 +42,7 @@ func createExtension(_ context.Context, set extension.CreateSettings, cfg compon
 	}
 
 	if topoCfg.Kafka != nil {
-		kafkaProvider, err := stsSettingsSource.NewKafkaSettingsProvider(topoCfg.Kafka, logger)
+		kafkaProvider, err := stsKafkaSettingsSource.NewKafkaSettingsProvider(topoCfg.Kafka, logger)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create kafka provider: %w", err)
 		}

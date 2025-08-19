@@ -1,6 +1,6 @@
 //go:build integration
 
-package kafka
+package kafka_test
 
 import (
 	"context"
@@ -17,7 +17,9 @@ import (
 
 	"github.com/segmentio/kafka-go"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
-	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal"
+	stsSettings "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
+	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
+	stsKafkaSettings "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/provider/kafka"
 	"github.com/stretchr/testify/require"
 	testContainersKafka "github.com/testcontainers/testcontainers-go/modules/kafka"
 )
@@ -30,7 +32,7 @@ const (
 
 type testContext struct {
 	ctx      context.Context
-	provider *kafkaSettingProvider
+	provider *stsKafkaSettings.KafkaSettingsProvider
 	writer   *kafka.Writer
 	cleanup  func()
 }
@@ -44,10 +46,16 @@ func TestKafkaSettingsProvider_InitialState(t *testing.T) {
 	relationMapping := publishRelationMapping(t, tc, "22222", "Runs on host")
 
 	// Verify initial state
-	settings := waitForSettingsUpdate(t, tc)
-	assertSettingsCount(t, settings, 2)
-	assertComponentMapping(t, settings, componentMapping.id, componentMapping.name)
-	assertRelationMapping(t, settings, relationMapping.id, relationMapping.name)
+	waitForSettingsUpdate[stsSettingsModel.OtelComponentMapping](t, tc, stsSettingsModel.SettingTypeOtelComponentMapping)
+	waitForSettingsUpdate[stsSettingsModel.OtelRelationMapping](t, tc, stsSettingsModel.SettingTypeOtelRelationMapping)
+
+	otelComponentMappings, err := stsSettings.GetSettingsAs[stsSettingsModel.OtelComponentMapping](tc.provider, stsSettingsModel.SettingTypeOtelComponentMapping)
+	require.NoError(t, err)
+	otelRelationMappings, err := stsSettings.GetSettingsAs[stsSettingsModel.OtelRelationMapping](tc.provider, stsSettingsModel.SettingTypeOtelRelationMapping)
+	require.NoError(t, err)
+	assert.Equal(t, 2, len(otelComponentMappings)+len(otelRelationMappings), "Unexpected number of settings")
+	assertComponentMapping(t, otelComponentMappings, componentMapping.id, componentMapping.name)
+	assertRelationMapping(t, otelRelationMappings, relationMapping.id, relationMapping.name)
 }
 
 func TestKafkaSettingsProvider_Compaction(t *testing.T) {
@@ -57,16 +65,21 @@ func TestKafkaSettingsProvider_Compaction(t *testing.T) {
 	// Setup initial state
 	publishComponentMapping(t, tc, "11111", "Host component V1")
 	relationMapping := publishRelationMapping(t, tc, "22222", "Runs on host")
-	waitForSettingsUpdate(t, tc) // Wait for initial state to be processed
+	// Wait for initial state to be processed
+	waitForSettingsUpdate[stsSettingsModel.OtelComponentMapping](t, tc, stsSettingsModel.SettingTypeOtelComponentMapping)
+	waitForSettingsUpdate[stsSettingsModel.OtelRelationMapping](t, tc, stsSettingsModel.SettingTypeOtelRelationMapping)
 
 	// Update component mapping
 	updatedMapping := publishComponentMapping(t, tc, "11111", "Host component V2")
 
 	// Verify state after update
-	settings := waitForSettingsUpdate(t, tc)
-	assertSettingsCount(t, settings, 2)
-	assertComponentMapping(t, settings, updatedMapping.id, updatedMapping.name)
-	assertRelationMapping(t, settings, relationMapping.id, relationMapping.name)
+	otelComponentMappings := waitForSettingsUpdate[stsSettingsModel.OtelComponentMapping](t, tc, stsSettingsModel.SettingTypeOtelComponentMapping)
+	assert.Len(t, otelComponentMappings, 1, "Unexpected number of settings")
+	assertComponentMapping(t, otelComponentMappings, updatedMapping.id, updatedMapping.name)
+	// Get otel relation mappings again to check that they're the same
+	otelRelationMappings, err := stsSettings.GetSettingsAs[stsSettingsModel.OtelRelationMapping](tc.provider, stsSettingsModel.SettingTypeOtelRelationMapping)
+	require.NoError(t, err)
+	assertRelationMapping(t, otelRelationMappings, relationMapping.id, relationMapping.name)
 }
 
 func TestKafkaSettingsProvider_Shutdown(t *testing.T) {
@@ -78,7 +91,7 @@ func TestKafkaSettingsProvider_Shutdown(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		tc.provider.readerCancelWg.Wait()
+		tc.provider.ReaderCancelWg.Wait()
 		close(done)
 	}()
 
@@ -109,41 +122,48 @@ func publishRelationMapping(t *testing.T, tc *testContext, id, name string) mapp
 	return mappingInfo{id: id, name: name}
 }
 
-func waitForSettingsUpdate(t *testing.T, tc *testContext) map[stsSettingsModel.SettingId]stsSettingsModel.Setting {
+func waitForSettingsUpdate[T any](t *testing.T, tc *testContext, settingType stsSettingsModel.SettingType) []T {
 	t.Helper()
+
+	// Subscribe only for the setting type we care about
+	ch := tc.provider.RegisterForUpdates(settingType)
+	defer tc.provider.Unregister(ch)
+
 	select {
-	case <-tc.provider.RegisterForUpdates():
-		time.Sleep(settleTime)
-		return tc.provider.GetCurrentSettings()
+	case <-ch:
+		as, err := stsSettings.GetSettingsAs[T](tc.provider, settingType)
+		require.NoError(t, err)
+		return as
 	case <-time.After(updateTimeout):
-		t.Fatal("timed out waiting for settings update")
+		t.Fatalf("timed out waiting for settings update for type %v", settingType)
 		return nil
 	}
 }
 
-func assertSettingsCount(t *testing.T, settings map[stsSettingsModel.SettingId]stsSettingsModel.Setting, expected int) {
+func assertComponentMapping(t *testing.T, settings []stsSettingsModel.OtelComponentMapping, id, expectedName string) {
 	t.Helper()
-	assert.Len(t, settings, expected, "Unexpected number of settings")
+	var mapping *stsSettingsModel.OtelComponentMapping
+	for i := range settings {
+		if settings[i].Id == id {
+			mapping = &settings[i]
+			break
+		}
+	}
+	require.NotNil(t, mapping, "Component mapping should exist")
+	assert.Equal(t, expectedName, mapping.Name)
 }
 
-func assertComponentMapping(t *testing.T, settings map[stsSettingsModel.SettingId]stsSettingsModel.Setting, id, expectedName string) {
+func assertRelationMapping(t *testing.T, settings []stsSettingsModel.OtelRelationMapping, id, expectedName string) {
 	t.Helper()
-	mapping, exists := settings[id]
-	require.True(t, exists, "Component mapping should exist")
-
-	compMapping, err := mapping.AsOtelComponentMapping()
-	require.NoError(t, err)
-	assert.Equal(t, expectedName, compMapping.Name)
-}
-
-func assertRelationMapping(t *testing.T, settings map[stsSettingsModel.SettingId]stsSettingsModel.Setting, id, expectedName string) {
-	t.Helper()
-	mapping, exists := settings[id]
-	require.True(t, exists, "Relation mapping should exist")
-
-	relMapping, err := mapping.AsOtelRelationMapping()
-	require.NoError(t, err)
-	assert.Equal(t, expectedName, relMapping.Name)
+	var mapping *stsSettingsModel.OtelRelationMapping
+	for i := range settings {
+		if settings[i].Id == id {
+			mapping = &settings[i]
+			break
+		}
+	}
+	require.NotNil(t, mapping, "Relation mapping should exist")
+	assert.Equal(t, expectedName, mapping.Name)
 }
 
 func setupTest(t *testing.T) *testContext {
@@ -179,7 +199,7 @@ func setupTest(t *testing.T) *testContext {
 	}
 }
 
-func createProvider(t *testing.T, ctx context.Context, brokers []string, topicName string) *kafkaSettingProvider {
+func createProvider(t *testing.T, ctx context.Context, brokers []string, topicName string) *stsKafkaSettings.KafkaSettingsProvider {
 	providerCfg := &stsSettingsConfig.KafkaSettingsProviderConfig{
 		Brokers:     brokers,
 		Topic:       topicName,
@@ -187,7 +207,7 @@ func createProvider(t *testing.T, ctx context.Context, brokers []string, topicNa
 		ReadTimeout: 60 * time.Second,
 	}
 	logger, _ := zap.NewDevelopment()
-	provider, err := NewKafkaSettingsProvider(providerCfg, logger)
+	provider, err := stsKafkaSettings.NewKafkaSettingsProvider(providerCfg, logger)
 	require.NoError(t, err)
 
 	go provider.Start(ctx, componenttest.NewNopHost())
