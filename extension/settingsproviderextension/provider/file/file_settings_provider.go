@@ -92,10 +92,15 @@ func (f *SettingsProvider) Shutdown(ctx context.Context) error {
 	case <-done:
 		f.subscriberHub.Shutdown()
 		f.logger.Info("File provider shutdown complete.")
-		return nil
 	case <-ctx.Done():
 		return ctx.Err() // timed out waiting for goroutine
 	}
+
+	if f.subscriberHub != nil {
+		f.subscriberHub.Shutdown()
+	}
+
+	return nil
 }
 
 func (f *SettingsProvider) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {

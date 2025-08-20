@@ -132,14 +132,18 @@ func (k *SettingsProvider) Shutdown(ctx context.Context) error {
 
 	select {
 	case <-done:
-		k.subscriberHub.Shutdown()
 	case <-time.After(30 * time.Second):
 		k.logger.Warn("Timeout waiting for Kafka reader to exit")
+	}
+
+	if k.subscriberHub != nil {
+		k.subscriberHub.Shutdown()
 	}
 
 	if err := k.reader.Close(); err != nil {
 		return fmt.Errorf("failed to close kafka reader: %w", err)
 	}
+
 	return nil
 }
 
