@@ -1,12 +1,13 @@
 //go:build integration
 
-package file
+package file_test
 
 import (
 	"context"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
-	stsProviderCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/common"
+	stsSettings "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
+	stsSettingsFile "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/provider/file"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"os"
 	"path/filepath"
@@ -34,7 +35,7 @@ func TestFileSettingsProvider_StartAndShutdown(t *testing.T) {
 		UpdateInterval: 100 * time.Millisecond,
 	}
 	logger, _ := zap.NewDevelopment()
-	provider, err := NewFileSettingsProvider(cfg, logger)
+	provider, err := stsSettingsFile.NewFileSettingsProvider(cfg, logger)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -44,11 +45,9 @@ func TestFileSettingsProvider_StartAndShutdown(t *testing.T) {
 	t.Run("loads initial settings on start", func(t *testing.T) {
 		require.NoError(t, provider.Start(ctx, componenttest.NewNopHost()))
 
-		currentSettings := provider.GetCurrentSettings()
-		assert.Len(t, currentSettings, 1, "should have one setting type")
-
-		otelMappings := currentSettings[stsSettingsModel.SettingTypeOtelComponentMapping]
-		assert.Len(t, otelMappings, 1, "should have one mapping initially")
+		currentSettings, err := stsSettings.GetSettingsAs[stsSettingsModel.OtelComponentMapping](provider, stsSettingsModel.SettingTypeOtelComponentMapping)
+		require.NoError(t, err)
+		assert.Len(t, currentSettings, 1, "should have one OtelComponentMapping")
 	})
 
 	// --- File Update Verification ---
@@ -68,10 +67,10 @@ func TestFileSettingsProvider_StartAndShutdown(t *testing.T) {
 		}
 
 		// Verify the state after the update
-		currentSettings := provider.GetCurrentSettings()
-		otelMappings := currentSettings[stsSettingsModel.SettingTypeOtelComponentMapping]
-		assert.Len(t, otelMappings, 2, "should have two mappings after update")
-		assertSettingExists(t, otelMappings, "111")
+		currentSettings, err := stsSettings.GetSettingsAs[stsSettingsModel.OtelComponentMapping](provider, stsSettingsModel.SettingTypeOtelComponentMapping)
+		require.NoError(t, err)
+		assert.Len(t, currentSettings, 2, "should have two mappings after update")
+		assertSettingExists(t, currentSettings, "111")
 	})
 }
 
@@ -89,19 +88,17 @@ func addMappingToFile(t *testing.T, filePath string, originalContent []byte, new
 	require.NoError(t, os.WriteFile(filePath, updatedContent, 0644), "failed to write updated settings file")
 }
 
-func assertSettingExists(t *testing.T, settings []stsSettingsModel.Setting, expectedID string) {
+func assertSettingExists(t *testing.T, settings []stsSettingsModel.OtelComponentMapping, expectedId string) {
 	t.Helper()
 
 	found := false
 	for _, setting := range settings {
-		id, err := stsProviderCommon.GetSettingId(setting)
-		require.NoError(t, err)
-		if id == expectedID {
+		if expectedId == setting.Id {
 			found = true
 			break
 		}
 	}
-	assert.True(t, found, "setting with id '%s' should exist but was not found", expectedID)
+	assert.True(t, found, "setting with id '%s' should exist but was not found", expectedId)
 }
 
 func newOtelComponentMapping(id string) stsSettingsModel.OtelComponentMapping {

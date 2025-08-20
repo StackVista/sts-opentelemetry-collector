@@ -19,7 +19,7 @@ import (
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 	stsSettings "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
-	stsKafkaSettings "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/provider/kafka"
+	stsSettingsKafka "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/provider/kafka"
 	"github.com/stretchr/testify/require"
 	testContainersKafka "github.com/testcontainers/testcontainers-go/modules/kafka"
 )
@@ -32,7 +32,7 @@ const (
 
 type testContext struct {
 	ctx      context.Context
-	provider *stsKafkaSettings.KafkaSettingsProvider
+	provider *stsSettingsKafka.SettingsProvider
 	writer   *kafka.Writer
 	cleanup  func()
 }
@@ -199,7 +199,7 @@ func setupTest(t *testing.T) *testContext {
 	}
 }
 
-func createProvider(t *testing.T, ctx context.Context, brokers []string, topicName string) *stsKafkaSettings.KafkaSettingsProvider {
+func createProvider(t *testing.T, ctx context.Context, brokers []string, topicName string) *stsSettingsKafka.SettingsProvider {
 	providerCfg := &stsSettingsConfig.KafkaSettingsProviderConfig{
 		Brokers:     brokers,
 		Topic:       topicName,
@@ -207,7 +207,7 @@ func createProvider(t *testing.T, ctx context.Context, brokers []string, topicNa
 		ReadTimeout: 60 * time.Second,
 	}
 	logger, _ := zap.NewDevelopment()
-	provider, err := stsKafkaSettings.NewKafkaSettingsProvider(providerCfg, logger)
+	provider, err := stsSettingsKafka.NewKafkaSettingsProvider(providerCfg, logger)
 	require.NoError(t, err)
 
 	go provider.Start(ctx, componenttest.NewNopHost())

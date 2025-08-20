@@ -30,7 +30,7 @@ type inProgressSnapshot struct {
 	settings    []stsSettingsModel.Setting
 }
 
-type KafkaSettingsProvider struct {
+type SettingsProvider struct {
 	cfg         *stsSettingsConfig.KafkaSettingsProviderConfig
 	logger      *zap.Logger
 	client      *kafka.Client
@@ -54,7 +54,7 @@ type KafkaSettingsProvider struct {
 	ReaderCancelWg   sync.WaitGroup
 }
 
-func NewKafkaSettingsProvider(cfg *stsSettingsConfig.KafkaSettingsProviderConfig, logger *zap.Logger) (*KafkaSettingsProvider, error) {
+func NewKafkaSettingsProvider(cfg *stsSettingsConfig.KafkaSettingsProviderConfig, logger *zap.Logger) (*SettingsProvider, error) {
 	consumerGroupID := fmt.Sprintf("sts-otel-collector-internal-settings-%s", uuid.New().String())
 
 	reader := kafka.NewReader(kafka.ReaderConfig{
@@ -68,7 +68,7 @@ func NewKafkaSettingsProvider(cfg *stsSettingsConfig.KafkaSettingsProviderConfig
 		StartOffset:    kafka.FirstOffset,
 	})
 
-	return &KafkaSettingsProvider{
+	return &SettingsProvider{
 		cfg:                 cfg,
 		logger:              logger,
 		reader:              reader,
@@ -79,15 +79,15 @@ func NewKafkaSettingsProvider(cfg *stsSettingsConfig.KafkaSettingsProviderConfig
 	}, nil
 }
 
-func (k *KafkaSettingsProvider) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
+func (k *SettingsProvider) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
 	return k.subscriberHub.Register(types...)
 }
 
-func (k *KafkaSettingsProvider) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
+func (k *SettingsProvider) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
 	return k.subscriberHub.Unregister(ch)
 }
 
-func (k *KafkaSettingsProvider) GetCurrentSettingsByType(settingType stsSettingsModel.SettingType) (any, error) {
+func (k *SettingsProvider) GetCurrentSettingsByType(settingType stsSettingsModel.SettingType) (any, error) {
 	k.settingsLock.RLock()
 	defer k.settingsLock.RUnlock()
 
@@ -117,7 +117,7 @@ func (k *KafkaSettingsProvider) GetCurrentSettingsByType(settingType stsSettings
 	return out, nil
 }
 
-func (k *KafkaSettingsProvider) Start(ctx context.Context, host component.Host) error {
+func (k *SettingsProvider) Start(ctx context.Context, host component.Host) error {
 	k.logger.Info("Starting Kafka settings provider",
 		zap.Strings("brokers", k.cfg.Brokers),
 		zap.String("topic", k.cfg.Topic))
@@ -153,7 +153,7 @@ func (k *KafkaSettingsProvider) Start(ctx context.Context, host component.Host) 
 	}
 }
 
-func (k *KafkaSettingsProvider) Shutdown(ctx context.Context) error {
+func (k *SettingsProvider) Shutdown(ctx context.Context) error {
 	k.logger.Info("Shutting down Kafka settings provider")
 	if k.readerCancelFunc != nil {
 		k.readerCancelFunc()
@@ -167,6 +167,7 @@ func (k *KafkaSettingsProvider) Shutdown(ctx context.Context) error {
 
 	select {
 	case <-done:
+		k.subscriberHub.Shutdown()
 	case <-time.After(30 * time.Second):
 		k.logger.Warn("Timeout waiting for Kafka reader to exit")
 	}
@@ -177,7 +178,7 @@ func (k *KafkaSettingsProvider) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (k *KafkaSettingsProvider) readMessages(ctx context.Context) error {
+func (k *SettingsProvider) readMessages(ctx context.Context) error {
 	backoff := time.Second
 	maxBackoff := time.Minute
 
@@ -216,7 +217,7 @@ func (k *KafkaSettingsProvider) readMessages(ctx context.Context) error {
 	}
 }
 
-func (k *KafkaSettingsProvider) checkTopicExists(ctx context.Context) error {
+func (k *SettingsProvider) checkTopicExists(ctx context.Context) error {
 	metadata, err := k.client.Metadata(ctx, &kafka.MetadataRequest{
 		Topics: []string{k.cfg.Topic},
 	})
@@ -238,7 +239,7 @@ func (k *KafkaSettingsProvider) checkTopicExists(ctx context.Context) error {
 	return nil
 }
 
-func (k *KafkaSettingsProvider) processNextMessage(ctx context.Context) error {
+func (k *SettingsProvider) processNextMessage(ctx context.Context) error {
 	msg, err := k.reader.ReadMessage(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to read message: %w", err)
@@ -252,7 +253,7 @@ func (k *KafkaSettingsProvider) processNextMessage(ctx context.Context) error {
 	return k.handleMessage(message)
 }
 
-func (k *KafkaSettingsProvider) unmarshalMessage(value []byte) (*stsSettingsModel.SettingsProtocol, error) {
+func (k *SettingsProvider) unmarshalMessage(value []byte) (*stsSettingsModel.SettingsProtocol, error) {
 	var message stsSettingsModel.SettingsProtocol
 	if err := json.Unmarshal(value, &message); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal message: %w", err)
@@ -260,7 +261,7 @@ func (k *KafkaSettingsProvider) unmarshalMessage(value []byte) (*stsSettingsMode
 	return &message, nil
 }
 
-func (k *KafkaSettingsProvider) handleMessage(message *stsSettingsModel.SettingsProtocol) error {
+func (k *SettingsProvider) handleMessage(message *stsSettingsModel.SettingsProtocol) error {
 	actualMessage, err := message.ValueByDiscriminator()
 	if err != nil {
 		return fmt.Errorf("error getting message by discriminator: %w", err)
@@ -278,7 +279,7 @@ func (k *KafkaSettingsProvider) handleMessage(message *stsSettingsModel.Settings
 	}
 }
 
-func (k *KafkaSettingsProvider) handleSnapshotStart(msg stsSettingsModel.SettingsSnapshotStart) error {
+func (k *SettingsProvider) handleSnapshotStart(msg stsSettingsModel.SettingsSnapshotStart) error {
 	k.logger.Info("Received snapshot start.",
 		zap.String("snapshotId", msg.Id),
 		zap.String("settingType", string(msg.SettingType)))
@@ -293,7 +294,7 @@ func (k *KafkaSettingsProvider) handleSnapshotStart(msg stsSettingsModel.Setting
 	return nil
 }
 
-func (k *KafkaSettingsProvider) handleSettingsEnvelope(msg stsSettingsModel.SettingsEnvelope) error {
+func (k *SettingsProvider) handleSettingsEnvelope(msg stsSettingsModel.SettingsEnvelope) error {
 	k.snapshotsLock.Lock()
 	defer k.snapshotsLock.Unlock()
 
@@ -309,7 +310,7 @@ func (k *KafkaSettingsProvider) handleSettingsEnvelope(msg stsSettingsModel.Sett
 	return nil
 }
 
-func (k *KafkaSettingsProvider) handleSnapshotStop(msg stsSettingsModel.SettingsSnapshotStop) error {
+func (k *SettingsProvider) handleSnapshotStop(msg stsSettingsModel.SettingsSnapshotStop) error {
 	k.snapshotsLock.Lock()
 	snapshot, found := k.inProgressSnapshots[msg.Id]
 	if !found {

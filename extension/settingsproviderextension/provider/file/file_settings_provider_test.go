@@ -1,6 +1,7 @@
 package file
 
 import (
+	"context"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 	stsProviderCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/common"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
@@ -9,6 +10,7 @@ import (
 	"go.uber.org/zap"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // TestNewFileSettingsProvider verifies the constructor's behavior.
@@ -21,7 +23,9 @@ func TestNewFileSettingsProvider(t *testing.T) {
 		provider, err := NewFileSettingsProvider(cfg, zap.NewNop())
 		require.NoError(t, err)
 		assert.NotNil(t, provider)
-		assert.Equal(t, 1, len(provider.GetCurrentSettings()))
+		settings, err := provider.GetCurrentSettingsByType(stsSettingsModel.SettingTypeOtelComponentMapping)
+		require.NoError(t, err)
+		assert.Equal(t, 1, len(settings.([]interface{})))
 	})
 
 	// Test case 2: File not found error.
@@ -49,7 +53,7 @@ func TestNewFileSettingsProvider(t *testing.T) {
 
 // TestParseSettings focuses on the YAML parsing and transformation logic.
 func TestParseSettings(t *testing.T) {
-	provider := &fileSettingsProvider{
+	provider := &SettingsProvider{
 		cfg:    &stsSettingsConfig.FileSettingsProviderConfig{Path: "/dev/null"},
 		logger: zap.NewNop(),
 	}
@@ -159,11 +163,37 @@ func TestParseSettings(t *testing.T) {
 
 				if tc.expectedMappingCount > 0 {
 					require.Len(t, otelMappings, 1)
-					settingId, err := stsProviderCommon.GetSettingId(otelMappings[0])
+					settingId, err := stsProviderCommon.GetSettingId(otelMappings[0].raw)
 					require.NoError(t, err)
 					assert.Equal(t, tc.expectedID, settingId)
 				}
 			}
 		})
 	}
+}
+
+func TestFileSettingsProviderShutdown(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	provider := &SettingsProvider{
+		cfg: &stsSettingsConfig.FileSettingsProviderConfig{
+			Path:           "/dev/null",
+			UpdateInterval: 10 * time.Millisecond,
+		},
+		logger: logger,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Start provider (spins up goroutine with ticker)
+	err := provider.Start(ctx, nil)
+	require.NoError(t, err)
+	time.Sleep(5 * time.Millisecond) // settle time
+
+	// Shutdown with a timeout context
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), time.Second)
+	defer cancelShutdown()
+
+	err = provider.Shutdown(shutdownCtx)
+	require.NoError(t, err, "expected clean shutdown without timeout")
 }

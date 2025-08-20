@@ -79,3 +79,13 @@ func (h *SubscriberHub) SubscriberCount() int {
 	defer h.subscribersLock.RUnlock()
 	return len(h.subscribers)
 }
+
+func (h *SubscriberHub) Shutdown() {
+	h.subscribersLock.Lock()
+	defer h.subscribersLock.Unlock()
+
+	for _, sub := range h.subscribers {
+		close(sub.channel)
+	}
+	h.subscribers = nil
+}
