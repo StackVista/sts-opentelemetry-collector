@@ -4,14 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	stsProviderCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/common"
+	stsSettingsCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/common"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/subscribers"
-	yaml "go.yaml.in/yaml/v3"
+	stsSettingsSubscribers "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/subscribers"
+	"go.yaml.in/yaml/v3"
 	"os"
-	"reflect"
 	"sync"
 	"time"
 
@@ -21,21 +19,12 @@ import (
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 )
 
-type cachedSetting struct {
-	raw                 stsSettingsModel.Setting
-	concreteSettingType any // holds typed/concrete struct, lazy populated
-}
-
 type SettingsProvider struct {
 	cfg    *stsSettingsConfig.FileSettingsProviderConfig
 	logger *zap.Logger
 
-	subscriberHub *subscribers.SubscriberHub
-
-	// Mutex for concurrent access to currentSettings
-	settingsLock sync.RWMutex
-	// A map where the key is the SettingType and the value is a slice of all currently active settings of that type.
-	currentSettings map[stsSettingsModel.SettingType][]cachedSetting
+	settingsCache *stsSettingsCommon.SettingsCache
+	subscriberHub *stsSettingsSubscribers.SubscriberHub
 
 	providerCancelFunc context.CancelFunc
 	providerCancelWg   sync.WaitGroup
@@ -43,10 +32,10 @@ type SettingsProvider struct {
 
 func NewFileSettingsProvider(cfg *stsSettingsConfig.FileSettingsProviderConfig, logger *zap.Logger) (*SettingsProvider, error) {
 	provider := &SettingsProvider{
-		cfg:             cfg,
-		logger:          logger,
-		subscriberHub:   subscribers.NewSubscriberHub(),
-		currentSettings: make(map[stsSettingsModel.SettingType][]cachedSetting),
+		cfg:           cfg,
+		logger:        logger,
+		subscriberHub: stsSettingsSubscribers.NewSubscriberHub(),
+		settingsCache: stsSettingsCommon.NewSettingsCache(),
 	}
 
 	// Perform an initial load of the configuration file.
@@ -117,34 +106,8 @@ func (f *SettingsProvider) Unregister(ch <-chan stsSettingsEvents.UpdateSettings
 	return f.subscriberHub.Unregister(ch)
 }
 
-func (f *SettingsProvider) GetCurrentSettingsByType(settingType stsSettingsModel.SettingType) (any, error) {
-	f.settingsLock.RLock()
-	defer f.settingsLock.RUnlock()
-
-	cachedSetting, ok := f.currentSettings[settingType]
-	if !ok {
-		return nil, fmt.Errorf("no settings for type %s", settingType)
-	}
-
-	converterFor, ok := stsProviderCommon.ConverterFor(settingType)
-	if !ok {
-		return nil, fmt.Errorf("no converter registered for type %s", settingType)
-	}
-
-	// hydrate cache on demand
-	out := make([]any, 0, len(cachedSetting))
-	for i := range cachedSetting {
-		if cachedSetting[i].concreteSettingType == nil {
-			val, err := converterFor(cachedSetting[i].raw)
-			if err != nil {
-				return nil, err
-			}
-			cachedSetting[i].concreteSettingType = val
-		}
-		out = append(out, cachedSetting[i].concreteSettingType)
-	}
-
-	return out, nil
+func (f *SettingsProvider) GetCurrentSettingsByType(settingType stsSettingsModel.SettingType) ([]any, error) {
+	return f.settingsCache.GetSettingsByType(settingType)
 }
 
 func (f *SettingsProvider) loadSettings() error {
@@ -157,9 +120,7 @@ func (f *SettingsProvider) loadSettings() error {
 		return err
 	}
 
-	f.settingsLock.Lock()
-	f.currentSettings = settingsMap
-	f.settingsLock.Unlock()
+	f.settingsCache.Update(settingsMap)
 
 	return nil
 }
@@ -174,31 +135,18 @@ func (f *SettingsProvider) checkAndUpdateSettings() {
 		return
 	}
 
-	newSettingsMap, err := f.parseSettings(fileContent)
+	newSettingsByType, err := f.parseSettings(fileContent)
 	if err != nil {
 		f.logger.Error("Failed to parse settings file.", zap.Error(err))
 		return
 	}
 
-	f.settingsLock.RLock()
-	oldSettings := f.currentSettings
-	f.settingsLock.RUnlock()
-
-	changedTypes := diffSettingsMaps(oldSettings, newSettingsMap)
-	if len(changedTypes) == 0 {
-		f.logger.Debug("No settings changes detected")
-		return
-	}
-
-	f.logger.Debug("Settings changed", zap.Int("changedTypes", len(changedTypes)))
-
-	// Update cache
-	f.settingsLock.Lock()
-	f.currentSettings = newSettingsMap
-	f.settingsLock.Unlock()
+	// Note: since the file-based settings provider is not intended for production use, we're updating the entire cache.
+	f.settingsCache.Update(newSettingsByType)
 
 	// Notify only for changed types
-	for _, settingType := range changedTypes {
+	for settingType, _ := range newSettingsByType {
+		f.logger.Debug("Notifying subscribers for setting type.", zap.String("type", string(settingType)))
 		f.subscriberHub.Notify(stsSettingsEvents.UpdateSettingsEvent{
 			Type: settingType,
 		})
@@ -206,7 +154,7 @@ func (f *SettingsProvider) checkAndUpdateSettings() {
 }
 
 // parseSettings is a private helper method to parse the file content.
-func (f *SettingsProvider) parseSettings(fileContent []byte) (map[stsSettingsModel.SettingType][]cachedSetting, error) {
+func (f *SettingsProvider) parseSettings(fileContent []byte) (stsSettingsCommon.SettingsByType, error) {
 	if len(fileContent) == 0 {
 		return nil, errors.New("file content is empty")
 	}
@@ -217,7 +165,7 @@ func (f *SettingsProvider) parseSettings(fileContent []byte) (map[stsSettingsMod
 	}
 
 	var errs []error
-	settingsMap := make(map[stsSettingsModel.SettingType][]cachedSetting)
+	settingsByType := make(stsSettingsCommon.SettingsByType)
 	for _, setting := range rawSettings {
 		jsonBytes, err := json.Marshal(setting)
 		if err != nil {
@@ -237,7 +185,7 @@ func (f *SettingsProvider) parseSettings(fileContent []byte) (map[stsSettingsMod
 			continue
 		}
 
-		settingType, err := stsProviderCommon.GetSettingType(settingModel)
+		settingType, err := stsSettingsCommon.GetSettingType(settingModel)
 		if err != nil {
 			errs = append(errs, err)
 			f.logger.Error("Failed to get setting type.",
@@ -246,49 +194,13 @@ func (f *SettingsProvider) parseSettings(fileContent []byte) (map[stsSettingsMod
 			continue
 		}
 
-		cachedSetting := cachedSetting{
-			raw:                 settingModel,
-			concreteSettingType: nil,
-		}
-		settingsMap[settingType] = append(settingsMap[settingType], cachedSetting)
+		settingEntry := stsSettingsCommon.NewSettingEntry(settingModel)
+		settingsByType[settingType] = append(settingsByType[settingType], settingEntry)
 	}
-	return settingsMap, errors.Join(errs...)
+	return settingsByType, errors.Join(errs...)
 }
 
 // readSettingsFile is a private helper method to read the file content from disk.
 func (f *SettingsProvider) readSettingsFile() ([]byte, error) {
 	return os.ReadFile(f.cfg.Path)
-}
-
-func diffSettingsMaps(oldMap, newMap map[stsSettingsModel.SettingType][]cachedSetting) []stsSettingsModel.SettingType {
-	var diff []stsSettingsModel.SettingType
-
-	// Detect added or changed
-	for k, newVals := range newMap {
-		oldVals, ok := oldMap[k]
-		if !ok || !equalCachedSettings(oldVals, newVals) {
-			diff = append(diff, k)
-		}
-	}
-
-	// Detect removed
-	for k := range oldMap {
-		if _, ok := newMap[k]; !ok {
-			diff = append(diff, k)
-		}
-	}
-
-	return diff
-}
-
-func equalCachedSettings(a, b []cachedSetting) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if !reflect.DeepEqual(a[i].raw, b[i].raw) {
-			return false
-		}
-	}
-	return true
 }

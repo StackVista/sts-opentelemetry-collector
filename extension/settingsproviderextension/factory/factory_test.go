@@ -11,19 +11,19 @@ import (
 	"time"
 )
 
-func TestCreateDefaultConfig(t *testing.T) {
+func TestFactory_CreateDefaultConfig(t *testing.T) {
 	cfg := createDefaultConfig()
 	assert.NoError(t, componenttest.CheckConfigStruct(cfg))
 	assert.NotNil(t, cfg)
 }
 
-func TestNewFactory(t *testing.T) {
+func TestFactory_NewFactory(t *testing.T) {
 	f := NewFactory()
 	assert.NotNil(t, f)
 	assert.Equal(t, f.Type(), Type)
 }
 
-func TestCreateExtension(t *testing.T) {
+func TestFactory_CreateExtension(t *testing.T) {
 	tests := []struct {
 		name        string
 		cfg         *stsSettingsConfig.Config
@@ -33,7 +33,7 @@ func TestCreateExtension(t *testing.T) {
 			name: "Valid File Config",
 			cfg: &stsSettingsConfig.Config{
 				File: &stsSettingsConfig.FileSettingsProviderConfig{
-					Path:           "./provider/file/testdata/settings.yaml",
+					Path:           "../provider/file/testdata/settings.yaml",
 					UpdateInterval: 30 * time.Second,
 				},
 			},

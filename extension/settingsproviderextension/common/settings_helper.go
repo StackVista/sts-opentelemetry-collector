@@ -8,6 +8,8 @@ import (
 
 type ConverterFunc func(stsSettingsModel.Setting) (any, error)
 
+// converters is a private converter map of setting type to concrete setting type conversion
+// add settings that need to be supported by the settings provider to this map
 var converters = map[stsSettingsModel.SettingType]func(stsSettingsModel.Setting) (any, error){
 	stsSettingsModel.SettingTypeOtelComponentMapping: func(s stsSettingsModel.Setting) (any, error) {
 		return s.AsOtelComponentMapping()
@@ -17,9 +19,30 @@ var converters = map[stsSettingsModel.SettingType]func(stsSettingsModel.Setting)
 	},
 }
 
+// used for testing
+func registerConverter(settingType stsSettingsModel.SettingType, converter ConverterFunc) {
+	converters[settingType] = converter
+}
+
 func ConverterFor(t stsSettingsModel.SettingType) (ConverterFunc, bool) {
 	fn, ok := converters[t]
 	return fn, ok
+}
+
+func CastAndCopySlice[T any](raw []any) ([]T, error) {
+	out := make([]T, 0, len(raw))
+	for _, v := range raw {
+		t, ok := v.(T)
+		if !ok {
+			return nil, fmt.Errorf("expected element of type %T but got %T", *new(T), v)
+		}
+		typedCopy, err := DeepCopyAs[T](t)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, typedCopy)
+	}
+	return out, nil
 }
 
 func DeepCopyAs[T any](val any) (T, error) {
@@ -30,15 +53,6 @@ func DeepCopyAs[T any](val any) (T, error) {
 		return zero, fmt.Errorf("failed to cast deepcopy to expected type")
 	}
 	return typedCopy, nil
-}
-
-func processSetting[T any](setting stsSettingsModel.Setting, processor func(actualSetting interface{}) (T, error)) (T, error) {
-	actualSetting, err := setting.ValueByDiscriminator()
-	if err != nil {
-		var zero T
-		return zero, fmt.Errorf("failed to get setting value: %w", err)
-	}
-	return processor(actualSetting)
 }
 
 // GetSettingId returns the Id of a generic setting
@@ -67,4 +81,13 @@ func GetSettingType(setting stsSettingsModel.Setting) (stsSettingsModel.SettingT
 			return "", fmt.Errorf("unsupported setting value: %s", v)
 		}
 	})
+}
+
+func processSetting[T any](setting stsSettingsModel.Setting, processor func(actualSetting interface{}) (T, error)) (T, error) {
+	actualSetting, err := setting.ValueByDiscriminator()
+	if err != nil {
+		var zero T
+		return zero, fmt.Errorf("failed to get setting value: %w", err)
+	}
+	return processor(actualSetting)
 }

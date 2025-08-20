@@ -27,7 +27,6 @@ import (
 const (
 	kafkaImageName = "confluentinc/confluent-local:7.5.0"
 	updateTimeout  = 10 * time.Second
-	settleTime     = 2 * time.Second
 )
 
 type testContext struct {

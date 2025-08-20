@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestGetSettingId(t *testing.T) {
+func TestSettingsHelper_GetSettingId(t *testing.T) {
 	tests := []struct {
 		name          string
 		setting       stsSettingsModel.Setting
@@ -48,7 +48,7 @@ func TestGetSettingId(t *testing.T) {
 	}
 }
 
-func TestGetSettingType(t *testing.T) {
+func TestSettingsHelper_GetSettingType(t *testing.T) {
 	tests := []struct {
 		name          string
 		setting       stsSettingsModel.Setting
@@ -89,7 +89,7 @@ func TestGetSettingType(t *testing.T) {
 	}
 }
 
-func TestDeepCopyAs(t *testing.T) {
+func TestSettingsHelper_DeepCopyAs(t *testing.T) {
 	t.Run("struct with nested references", func(t *testing.T) {
 		mapping := newOtelComponentMapping("111")
 

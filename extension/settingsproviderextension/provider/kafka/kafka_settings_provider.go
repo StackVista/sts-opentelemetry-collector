@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	stsProviderCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/common"
+	stsSettingsCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/common"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/subscribers"
+	stsSettingsSubscribers "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/subscribers"
 	"go.opentelemetry.io/collector/component"
 	"go.uber.org/zap"
 	"sync"
@@ -18,11 +18,6 @@ import (
 	"github.com/segmentio/kafka-go"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 )
-
-type cachedSetting struct {
-	raw                 stsSettingsModel.Setting
-	concreteSettingType any // holds typed/concrete struct, lazy populated
-}
 
 // A helper struct to hold the state of a snapshot being received.
 type inProgressSnapshot struct {
@@ -37,12 +32,8 @@ type SettingsProvider struct {
 	reader      *kafka.Reader
 	readTimeout time.Duration
 
-	subscriberHub *subscribers.SubscriberHub
-
-	// Mutex for concurrent access to settings
-	settingsLock sync.RWMutex
-	// A map where the key is the SettingType and the value is a slice of all currently active settings of that type.
-	currentSettings map[stsSettingsModel.SettingType][]cachedSetting
+	settingsCache *stsSettingsCommon.SettingsCache
+	subscriberHub *stsSettingsSubscribers.SubscriberHub
 
 	// Mutex for concurrent access to inProgressSnapshots
 	snapshotsLock sync.RWMutex
@@ -73,8 +64,8 @@ func NewKafkaSettingsProvider(cfg *stsSettingsConfig.KafkaSettingsProviderConfig
 		logger:              logger,
 		reader:              reader,
 		client:              &kafka.Client{Addr: kafka.TCP(cfg.Brokers...)},
-		subscriberHub:       subscribers.NewSubscriberHub(),
-		currentSettings:     make(map[stsSettingsModel.SettingType][]cachedSetting),
+		subscriberHub:       stsSettingsSubscribers.NewSubscriberHub(),
+		settingsCache:       stsSettingsCommon.NewSettingsCache(),
 		inProgressSnapshots: make(map[string]*inProgressSnapshot),
 	}, nil
 }
@@ -87,34 +78,8 @@ func (k *SettingsProvider) Unregister(ch <-chan stsSettingsEvents.UpdateSettings
 	return k.subscriberHub.Unregister(ch)
 }
 
-func (k *SettingsProvider) GetCurrentSettingsByType(settingType stsSettingsModel.SettingType) (any, error) {
-	k.settingsLock.RLock()
-	defer k.settingsLock.RUnlock()
-
-	cachedSetting, ok := k.currentSettings[settingType]
-	if !ok {
-		return nil, fmt.Errorf("no settings for type %s", settingType)
-	}
-
-	converterFor, ok := stsProviderCommon.ConverterFor(settingType)
-	if !ok {
-		return nil, fmt.Errorf("no converter registered for type %s", settingType)
-	}
-
-	// hydrate cache on demand
-	out := make([]any, 0, len(cachedSetting))
-	for i := range cachedSetting {
-		if cachedSetting[i].concreteSettingType == nil {
-			val, err := converterFor(cachedSetting[i].raw)
-			if err != nil {
-				return nil, err
-			}
-			cachedSetting[i].concreteSettingType = val
-		}
-		out = append(out, cachedSetting[i].concreteSettingType)
-	}
-
-	return out, nil
+func (k *SettingsProvider) GetCurrentSettingsByType(settingType stsSettingsModel.SettingType) ([]any, error) {
+	return k.settingsCache.GetSettingsByType(settingType)
 }
 
 func (k *SettingsProvider) Start(ctx context.Context, host component.Host) error {
@@ -327,14 +292,12 @@ func (k *SettingsProvider) handleSnapshotStop(msg stsSettingsModel.SettingsSnaps
 		zap.String("settingType", string(snapshot.settingType)),
 		zap.Int("settingCount", len(snapshot.settings)))
 
-	cachedSettings := make([]cachedSetting, len(snapshot.settings))
+	settingEntries := make([]stsSettingsCommon.SettingEntry, len(snapshot.settings))
 	for i, s := range snapshot.settings {
-		cachedSettings[i] = cachedSetting{raw: s, concreteSettingType: nil}
+		settingEntries[i] = stsSettingsCommon.NewSettingEntry(s)
 	}
 
-	k.settingsLock.Lock()
-	k.currentSettings[snapshot.settingType] = cachedSettings
-	k.settingsLock.Unlock()
+	k.settingsCache.UpdateSettingsForType(snapshot.settingType, settingEntries)
 
 	k.subscriberHub.Notify(stsSettingsEvents.UpdateSettingsEvent{
 		Type: snapshot.settingType,

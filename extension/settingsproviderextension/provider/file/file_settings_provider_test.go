@@ -3,8 +3,9 @@ package file
 import (
 	"context"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
-	stsProviderCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/common"
+	stsSettingsCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/common"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
+	stsSettingsSubscribers "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/subscribers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -13,8 +14,7 @@ import (
 	"time"
 )
 
-// TestNewFileSettingsProvider verifies the constructor's behavior.
-func TestNewFileSettingsProvider(t *testing.T) {
+func TestFileSettingsProvider_NewFileSettingsProvider(t *testing.T) {
 	// Test case 1: Successful initialization.
 	t.Run("success", func(t *testing.T) {
 		cfg := &stsSettingsConfig.FileSettingsProviderConfig{
@@ -25,7 +25,7 @@ func TestNewFileSettingsProvider(t *testing.T) {
 		assert.NotNil(t, provider)
 		settings, err := provider.GetCurrentSettingsByType(stsSettingsModel.SettingTypeOtelComponentMapping)
 		require.NoError(t, err)
-		assert.Equal(t, 1, len(settings.([]interface{})))
+		assert.Equal(t, 1, len(settings))
 	})
 
 	// Test case 2: File not found error.
@@ -52,7 +52,7 @@ func TestNewFileSettingsProvider(t *testing.T) {
 }
 
 // TestParseSettings focuses on the YAML parsing and transformation logic.
-func TestParseSettings(t *testing.T) {
+func TestFileSettingsProvider_ParseSettings(t *testing.T) {
 	provider := &SettingsProvider{
 		cfg:    &stsSettingsConfig.FileSettingsProviderConfig{Path: "/dev/null"},
 		logger: zap.NewNop(),
@@ -163,7 +163,7 @@ func TestParseSettings(t *testing.T) {
 
 				if tc.expectedMappingCount > 0 {
 					require.Len(t, otelMappings, 1)
-					settingId, err := stsProviderCommon.GetSettingId(otelMappings[0].raw)
+					settingId, err := stsSettingsCommon.GetSettingId(otelMappings[0].Raw)
 					require.NoError(t, err)
 					assert.Equal(t, tc.expectedID, settingId)
 				}
@@ -172,14 +172,15 @@ func TestParseSettings(t *testing.T) {
 	}
 }
 
-func TestFileSettingsProviderShutdown(t *testing.T) {
+func TestFileSettingsProvider_Shutdown(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	provider := &SettingsProvider{
 		cfg: &stsSettingsConfig.FileSettingsProviderConfig{
 			Path:           "/dev/null",
 			UpdateInterval: 10 * time.Millisecond,
 		},
-		logger: logger,
+		subscriberHub: stsSettingsSubscribers.NewSubscriberHub(),
+		logger:        logger,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

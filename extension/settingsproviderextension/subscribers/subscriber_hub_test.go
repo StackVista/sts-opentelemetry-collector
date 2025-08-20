@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func TestRegisterAddsSubscriber(t *testing.T) {
+func TestSubscriberHub_RegisterAddsSubscriber(t *testing.T) {
 	h := NewSubscriberHub()
 
 	ch1 := h.Register()
@@ -23,7 +23,7 @@ func TestRegisterAddsSubscriber(t *testing.T) {
 	}
 }
 
-func TestNotifySendsSignal(t *testing.T) {
+func TestSubscriberHub_NotifySendsSignal(t *testing.T) {
 	h := NewSubscriberHub()
 	ch := h.Register() // no filter, receives all updates
 
@@ -43,7 +43,7 @@ func TestNotifySendsSignal(t *testing.T) {
 	}
 }
 
-func TestSubscriberReceivesOnlyMatchingTypes(t *testing.T) {
+func TestSubscriberHub_SubscriberReceivesOnlyMatchingTypes(t *testing.T) {
 	h := NewSubscriberHub()
 	ch := h.Register(stsSettingsModel.SettingTypeOtelComponentMapping)
 
@@ -76,7 +76,7 @@ func TestSubscriberReceivesOnlyMatchingTypes(t *testing.T) {
 	}
 }
 
-func TestSubscriberReceivesMultipleFilteredTypes(t *testing.T) {
+func TestSubscriberHub_SubscriberReceivesMultipleFilteredTypes(t *testing.T) {
 	h := NewSubscriberHub()
 	ch := h.Register(
 		stsSettingsModel.SettingTypeOtelComponentMapping,
@@ -104,7 +104,7 @@ func TestSubscriberReceivesMultipleFilteredTypes(t *testing.T) {
 	}
 }
 
-func TestSubscriberFilterExcludesIrrelevantEvents(t *testing.T) {
+func TestSubscriberHub_SubscriberFilterExcludesIrrelevantEvents(t *testing.T) {
 	h := NewSubscriberHub()
 	ch := h.Register(stsSettingsModel.SettingTypeOtelRelationMapping)
 
@@ -121,7 +121,7 @@ func TestSubscriberFilterExcludesIrrelevantEvents(t *testing.T) {
 	}
 }
 
-func TestNotifyDoesNotBlockOnUnconsumedSignal(t *testing.T) {
+func TestSubscriberHub_NotifyDoesNotBlockOnUnconsumedSignal(t *testing.T) {
 	h := NewSubscriberHub()
 	ch := h.Register() // no filter, receives all updates
 
@@ -163,7 +163,7 @@ func TestNotifyDoesNotBlockOnUnconsumedSignal(t *testing.T) {
 	}
 }
 
-func TestMultipleSubscribersReceiveSignal(t *testing.T) {
+func TestSubscriberHub_MultipleSubscribersReceiveSignal(t *testing.T) {
 	h := NewSubscriberHub()
 	ch1 := h.Register()
 	ch2 := h.Register()
@@ -192,7 +192,7 @@ func TestMultipleSubscribersReceiveSignal(t *testing.T) {
 }
 
 // edge case
-func TestNotifyWithNoSubscribersDoesNotPanic(t *testing.T) {
+func TestSubscriberHub_NotifyWithNoSubscribersDoesNotPanic(t *testing.T) {
 	h := NewSubscriberHub()
 
 	event := stsSettingsEvents.UpdateSettingsEvent{

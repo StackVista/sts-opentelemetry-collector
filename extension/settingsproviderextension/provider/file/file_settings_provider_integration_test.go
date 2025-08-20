@@ -4,6 +4,7 @@ package file_test
 
 import (
 	"context"
+	"fmt"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 	stsSettings "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
@@ -20,11 +21,48 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// TestFileSettingsProvider_StartAndShutdown verifies the lifecycle and change detection.
-func TestFileSettingsProvider_StartAndShutdown(t *testing.T) {
+func TestFileSettingsProvider_LoadsInitialSettings(t *testing.T) {
+	_, cancel, provider, _ := setupFileProvider(t, 100*time.Millisecond)
+	defer cancel()
+
+	currentSettings, err := stsSettings.GetSettingsAs[stsSettingsModel.OtelComponentMapping](provider, stsSettingsModel.SettingTypeOtelComponentMapping)
+	require.NoError(t, err)
+	assert.Len(t, currentSettings, 1, "should have one OtelComponentMapping")
+}
+
+func TestFileSettingsProvider_DetectsFileChanges(t *testing.T) {
+	_, cancel, provider, tempFilePath := setupFileProvider(t, 50*time.Millisecond)
+	defer cancel()
+
+	// Modify the file to trigger an update
+	content, err := os.ReadFile(tempFilePath)
+	require.NoError(t, err)
+	newMapping := newOtelComponentMapping("111")
+	addMappingToFile(t, tempFilePath, content, newMapping)
+
+	// Verify the state after the update
+	// The file-based provider polls the settings file at a fixed interval.
+	// Even though we write the file atomically, the provider may not see the update immediately.
+	// require.Eventually waits until the provider reads the updated file and updates its cache.
+	require.Eventually(t, func() bool {
+		current, err := stsSettings.GetSettingsAs[stsSettingsModel.OtelComponentMapping](
+			provider, stsSettingsModel.SettingTypeOtelComponentMapping)
+		if err != nil {
+			return false
+		}
+		return len(current) == 2 && settingExists(current, "111")
+	}, 500*time.Millisecond, 10*time.Millisecond)
+}
+
+func setupFileProvider(t *testing.T, updateInterval time.Duration) (ctx context.Context, cancel context.CancelFunc, provider *stsSettingsFile.SettingsProvider, tempFilePath string) {
+	t.Helper()
+
 	originalFilePath := filepath.Join("./testdata", "settings.yaml")
-	tempDir := t.TempDir()
-	tempFilePath := filepath.Join(tempDir, "temp_settings.yaml")
+
+	tempDir, err := os.MkdirTemp("", "file_provider_test")
+	require.NoError(t, err)
+
+	tempFilePath = filepath.Join(tempDir, fmt.Sprintf("temp_settings_%d.yaml", time.Now().UnixNano()))
 
 	content, err := os.ReadFile(originalFilePath)
 	require.NoError(t, err)
@@ -32,46 +70,17 @@ func TestFileSettingsProvider_StartAndShutdown(t *testing.T) {
 
 	cfg := &stsSettingsConfig.FileSettingsProviderConfig{
 		Path:           tempFilePath,
-		UpdateInterval: 100 * time.Millisecond,
+		UpdateInterval: updateInterval,
 	}
 	logger, _ := zap.NewDevelopment()
-	provider, err := stsSettingsFile.NewFileSettingsProvider(cfg, logger)
+	provider, err = stsSettingsFile.NewFileSettingsProvider(cfg, logger)
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, cancel = context.WithCancel(context.Background())
+	require.NoError(t, provider.Start(ctx, componenttest.NewNopHost()))
+	time.Sleep(100 * time.Millisecond)
 
-	// --- Start and Initial Verification ---
-	t.Run("loads initial settings on start", func(t *testing.T) {
-		require.NoError(t, provider.Start(ctx, componenttest.NewNopHost()))
-
-		currentSettings, err := stsSettings.GetSettingsAs[stsSettingsModel.OtelComponentMapping](provider, stsSettingsModel.SettingTypeOtelComponentMapping)
-		require.NoError(t, err)
-		assert.Len(t, currentSettings, 1, "should have one OtelComponentMapping")
-	})
-
-	// --- File Update Verification ---
-	t.Run("detects and applies file changes", func(t *testing.T) {
-		updates := provider.RegisterForUpdates()
-
-		// Modify the file to trigger an update
-		newMapping := newOtelComponentMapping("111")
-		addMappingToFile(t, tempFilePath, content, newMapping)
-
-		// Wait for the provider to signal an update
-		select {
-		case <-updates:
-			t.Log("Update signal received.")
-		case <-time.After(1 * time.Second): // Generous timeout
-			t.Fatal("Timed out waiting for settings update signal.")
-		}
-
-		// Verify the state after the update
-		currentSettings, err := stsSettings.GetSettingsAs[stsSettingsModel.OtelComponentMapping](provider, stsSettingsModel.SettingTypeOtelComponentMapping)
-		require.NoError(t, err)
-		assert.Len(t, currentSettings, 2, "should have two mappings after update")
-		assertSettingExists(t, currentSettings, "111")
-	})
+	return ctx, cancel, provider, tempFilePath
 }
 
 func addMappingToFile(t *testing.T, filePath string, originalContent []byte, newMapping stsSettingsModel.OtelComponentMapping) {
@@ -82,15 +91,14 @@ func addMappingToFile(t *testing.T, filePath string, originalContent []byte, new
 	require.NoError(t, err, "failed to unmarshal existing mappings")
 
 	updatedMappings := append(existingMappings, newMapping)
-
 	updatedContent, err := yaml.Marshal(updatedMappings)
 	require.NoError(t, err, "failed to marshal updated mappings")
+	// write content to file
 	require.NoError(t, os.WriteFile(filePath, updatedContent, 0644), "failed to write updated settings file")
+	t.Log("file at path", filePath, "updated with new mapping")
 }
 
-func assertSettingExists(t *testing.T, settings []stsSettingsModel.OtelComponentMapping, expectedId string) {
-	t.Helper()
-
+func settingExists(settings []stsSettingsModel.OtelComponentMapping, expectedId string) bool {
 	found := false
 	for _, setting := range settings {
 		if expectedId == setting.Id {
@@ -98,7 +106,7 @@ func assertSettingExists(t *testing.T, settings []stsSettingsModel.OtelComponent
 			break
 		}
 	}
-	assert.True(t, found, "setting with id '%s' should exist but was not found", expectedId)
+	return found
 }
 
 func newOtelComponentMapping(id string) stsSettingsModel.OtelComponentMapping {
