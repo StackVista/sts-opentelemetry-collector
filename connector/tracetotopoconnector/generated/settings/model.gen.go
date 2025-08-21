@@ -206,9 +206,8 @@ const (
 
 // Defines values for OtelConditionMappingAction.
 const (
-	CONTINUE OtelConditionMappingAction = "CONTINUE"
-	CREATE   OtelConditionMappingAction = "CREATE"
-	REJECT   OtelConditionMappingAction = "REJECT"
+	CREATE OtelConditionMappingAction = "CREATE"
+	REJECT OtelConditionMappingAction = "REJECT"
 )
 
 // Defines values for OtelRelationMappingType.
@@ -235,6 +234,21 @@ const (
 	SettingTypeSync                        SettingType = "Sync"
 	SettingTypeTeamsNotificationChannel    SettingType = "TeamsNotificationChannel"
 	SettingTypeWebhookNotificationChannel  SettingType = "WebhookNotificationChannel"
+)
+
+// Defines values for SettingsEnvelopeType.
+const (
+	SettingsEnvelopeTypeSettingsEnvelope SettingsEnvelopeType = "SettingsEnvelope"
+)
+
+// Defines values for SettingsSnapshotStartType.
+const (
+	SettingsSnapshotStartTypeSettingsSnapshotStart SettingsSnapshotStartType = "SettingsSnapshotStart"
+)
+
+// Defines values for SettingsSnapshotStopType.
+const (
+	SettingsSnapshotStopTypeSettingsSnapshotStop SettingsSnapshotStopType = "SettingsSnapshotStop"
 )
 
 // Defines values for SlackNotificationChannelType.
@@ -676,10 +690,11 @@ type OtelBooleanExpression struct {
 
 // OtelComponentMapping defines model for OtelComponentMapping.
 type OtelComponentMapping struct {
-	Conditions *[]OtelConditionMapping `json:"conditions,omitempty"`
+	Conditions []OtelConditionMapping `json:"conditions"`
 
 	// CreatedTimeStamp The timestamp of when the setting was created.
 	CreatedTimeStamp int64 `json:"createdTimeStamp"`
+	ExpireAfterMs    int64 `json:"expireAfterMs"`
 
 	// Id A Setting is uniquely identified by the combination of type+id
 	Id     SettingId                  `json:"id"`
@@ -778,10 +793,11 @@ type OtelMapping struct {
 
 // OtelRelationMapping defines model for OtelRelationMapping.
 type OtelRelationMapping struct {
-	Conditions *[]OtelConditionMapping `json:"conditions,omitempty"`
+	Conditions []OtelConditionMapping `json:"conditions"`
 
 	// CreatedTimeStamp The timestamp of when the setting was created.
 	CreatedTimeStamp int64 `json:"createdTimeStamp"`
+	ExpireAfterMs    int64 `json:"expireAfterMs"`
 
 	// Id A Setting is uniquely identified by the combination of type+id
 	Id     SettingId                 `json:"id"`
@@ -886,11 +902,43 @@ type SettingId = string
 // SettingType defines model for SettingType.
 type SettingType string
 
-// SettingsSnapshot defines model for SettingsSnapshot.
-type SettingsSnapshot struct {
-	SettingType SettingType        `json:"settingType"`
-	Settings    map[string]Setting `json:"settings"`
+// SettingsEnvelope defines model for SettingsEnvelope.
+type SettingsEnvelope struct {
+	// Id UUID to match snapshot start, stop and envelope
+	Id      string               `json:"id"`
+	Setting Setting              `json:"setting"`
+	Type    SettingsEnvelopeType `json:"type"`
 }
+
+// SettingsEnvelopeType defines model for SettingsEnvelope.Type.
+type SettingsEnvelopeType string
+
+// SettingsProtocol defines model for SettingsProtocol.
+type SettingsProtocol struct {
+	Type  string `json:"type"`
+	union json.RawMessage
+}
+
+// SettingsSnapshotStart defines model for SettingsSnapshotStart.
+type SettingsSnapshotStart struct {
+	// Id UUID to match snapshot start, stop and envelope
+	Id          string                    `json:"id"`
+	SettingType SettingType               `json:"settingType"`
+	Type        SettingsSnapshotStartType `json:"type"`
+}
+
+// SettingsSnapshotStartType defines model for SettingsSnapshotStart.Type.
+type SettingsSnapshotStartType string
+
+// SettingsSnapshotStop defines model for SettingsSnapshotStop.
+type SettingsSnapshotStop struct {
+	// Id UUID to match snapshot start, stop and envelope
+	Id   string                   `json:"id"`
+	Type SettingsSnapshotStopType `json:"type"`
+}
+
+// SettingsSnapshotStopType defines model for SettingsSnapshotStop.Type.
+type SettingsSnapshotStopType string
 
 // Shard defines model for Shard.
 type Shard = int32
@@ -2878,6 +2926,164 @@ func (t Setting) MarshalJSON() ([]byte, error) {
 }
 
 func (t *Setting) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	if err != nil {
+		return err
+	}
+	object := make(map[string]json.RawMessage)
+	err = json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["type"]; found {
+		err = json.Unmarshal(raw, &t.Type)
+		if err != nil {
+			return fmt.Errorf("error reading 'type': %w", err)
+		}
+	}
+
+	return err
+}
+
+// AsSettingsSnapshotStart returns the union data inside the SettingsProtocol as a SettingsSnapshotStart
+func (t SettingsProtocol) AsSettingsSnapshotStart() (SettingsSnapshotStart, error) {
+	var body SettingsSnapshotStart
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSettingsSnapshotStart overwrites any union data inside the SettingsProtocol as the provided SettingsSnapshotStart
+func (t *SettingsProtocol) FromSettingsSnapshotStart(v SettingsSnapshotStart) error {
+	t.Type = "SettingsSnapshotStart"
+
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSettingsSnapshotStart performs a merge with any union data inside the SettingsProtocol, using the provided SettingsSnapshotStart
+func (t *SettingsProtocol) MergeSettingsSnapshotStart(v SettingsSnapshotStart) error {
+	t.Type = "SettingsSnapshotStart"
+
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsSettingsSnapshotStop returns the union data inside the SettingsProtocol as a SettingsSnapshotStop
+func (t SettingsProtocol) AsSettingsSnapshotStop() (SettingsSnapshotStop, error) {
+	var body SettingsSnapshotStop
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSettingsSnapshotStop overwrites any union data inside the SettingsProtocol as the provided SettingsSnapshotStop
+func (t *SettingsProtocol) FromSettingsSnapshotStop(v SettingsSnapshotStop) error {
+	t.Type = "SettingsSnapshotStop"
+
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSettingsSnapshotStop performs a merge with any union data inside the SettingsProtocol, using the provided SettingsSnapshotStop
+func (t *SettingsProtocol) MergeSettingsSnapshotStop(v SettingsSnapshotStop) error {
+	t.Type = "SettingsSnapshotStop"
+
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsSettingsEnvelope returns the union data inside the SettingsProtocol as a SettingsEnvelope
+func (t SettingsProtocol) AsSettingsEnvelope() (SettingsEnvelope, error) {
+	var body SettingsEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSettingsEnvelope overwrites any union data inside the SettingsProtocol as the provided SettingsEnvelope
+func (t *SettingsProtocol) FromSettingsEnvelope(v SettingsEnvelope) error {
+	t.Type = "SettingsEnvelope"
+
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSettingsEnvelope performs a merge with any union data inside the SettingsProtocol, using the provided SettingsEnvelope
+func (t *SettingsProtocol) MergeSettingsEnvelope(v SettingsEnvelope) error {
+	t.Type = "SettingsEnvelope"
+
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t SettingsProtocol) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"type"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t SettingsProtocol) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "SettingsEnvelope":
+		return t.AsSettingsEnvelope()
+	case "SettingsSnapshotStart":
+		return t.AsSettingsSnapshotStart()
+	case "SettingsSnapshotStop":
+		return t.AsSettingsSnapshotStop()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t SettingsProtocol) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	object := make(map[string]json.RawMessage)
+	if t.union != nil {
+		err = json.Unmarshal(b, &object)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	object["type"], err = json.Marshal(t.Type)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'type': %w", err)
+	}
+
+	b, err = json.Marshal(object)
+	return b, err
+}
+
+func (t *SettingsProtocol) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	if err != nil {
 		return err

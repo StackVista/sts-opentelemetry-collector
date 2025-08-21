@@ -19,19 +19,65 @@ externalDocs:
 paths: {}
 components:
   schemas:
-    SettingsSnapshot:
+    SettingsProtocol:
+      properties:
+        type: 
+          type: string
+      oneOf:
+        - $ref: "#/components/schemas/SettingsSnapshotStart"
+        - $ref: "#/components/schemas/SettingsSnapshotStop"
+        - $ref: "#/components/schemas/SettingsEnvelope"
+      discriminator:
+        propertyName: type
+      required:
+        - type
+        - id
+
+    SettingsSnapshotStart:
       type: object
       properties:
+        type: 
+          type: string
+          enum: [SettingsSnapshotStart]
+        id:
+          type: string
+          description: UUID to match snapshot start, stop and envelope
         settingType:
           $ref: "#/components/schemas/SettingType"
-        settings:
-          type: object
-          additionalProperties:
-            $ref: "#/components/schemas/Setting"
       required:
+        - type
+        - id
         - settingType
-        - settings
 
+    SettingsSnapshotStop:
+      type: object
+      properties:
+        type: 
+          type: string
+          enum: [SettingsSnapshotStop]
+        id:
+          type: string
+          description: UUID to match snapshot start, stop and envelope
+      required:
+        - type
+        - id
+
+    SettingsEnvelope:
+      type: object
+      properties:
+        type: 
+          type: string
+          enum: [SettingsEnvelope]
+        id:
+          type: string
+          description: UUID to match snapshot start, stop and envelope
+        setting:
+          $ref: "#/components/schemas/Setting"
+      required:
+        - type
+        - id
+        - setting
+  
     # Base types
 
     SettingType:
@@ -169,7 +215,7 @@ components:
       properties:
         id:
           type: string
-        type:
+        type: 
           type: string
           enum: [SlackNotificationChannelId]
       required:
@@ -181,7 +227,7 @@ components:
       properties:
         id:
           type: string
-        type:
+        type: 
           type: string
           enum: [WebhookNotificationChannelId]
       required:
@@ -193,7 +239,7 @@ components:
       properties:
         id:
           type: string
-        type:
+        type: 
           type: string
           enum: [OpsgenieNotificationChannelId]
       required:
@@ -205,7 +251,7 @@ components:
       properties:
         id:
           type: string
-        type:
+        type: 
           type: string
           enum: [TeamsNotificationChannelId]
       required:
@@ -217,13 +263,13 @@ components:
       properties:
         id:
           type: string
-        type:
+        type: 
           type: string
           enum: [EmailNotificationChannelId]
       required:
         - id
         - type
-
+  
     NotificationChannelType:
       type: string
       enum:
@@ -658,7 +704,7 @@ components:
         - $ref: "#/components/schemas/MonitorFunctionCall"
       discriminator:
         propertyName: type
-
+  
     MonitorFunctionCall:
       type: object
       properties:
@@ -668,14 +714,14 @@ components:
           type: object
           additionalProperties:
             $ref: "#/components/schemas/MonitorArgument"
-        type:
+        type: 
           type: string
           enum: [MonitorFunctionCall]
       required:
         - body
         - arguments
         - type
-
+    
     FunctionBody:
       properties:
         functionType:
@@ -686,6 +732,7 @@ components:
         - $ref: "#/components/schemas/HandlebarsFunctionBody"
         - $ref: "#/components/schemas/GroovyFunctionBody"
         - $ref: "#/components/schemas/NativeFunctionBody"
+
       discriminator:
         propertyName: functionType
       required:
@@ -709,7 +756,7 @@ components:
         argumentType:
           type: string
       oneOf:
-        - $ref: "#/components/schemas/MonitorArgument"
+        - $ref: "#/components/schemas/MonitorArgument"   
       discriminator:
         propertyName: argumentType
       required:
@@ -966,16 +1013,22 @@ components:
               $ref: "#/components/schemas/OtelComponentMappingOutput"
             vars:
               type: array
-              items:
+              items: 
                 $ref: "#/components/schemas/OtelVariableMapping"
             conditions:
               type: array
-              items:
+              items: 
                 $ref: "#/components/schemas/OtelConditionMapping"
+              minItems: 1
+            expireAfterMs:
+              type: integer
+              format: int64
           required:
             - type
             - name
             - output
+            - conditions
+            - expireAfterMs
 
     OtelRelationMapping:
       allOf:
@@ -992,16 +1045,21 @@ components:
               $ref: "#/components/schemas/OtelRelationMappingOutput"
             vars:
               type: array
-              items:
+              items: 
                 $ref: "#/components/schemas/OtelVariableMapping"
             conditions:
               type: array
-              items:
+              items: 
                 $ref: "#/components/schemas/OtelConditionMapping"
+            expireAfterMs:
+              type: integer
+              format: int64
           required:
             - type
             - name
             - output
+            - conditions
+            - expireAfterMs
 
     OtelComponentMappingOutput:
       type: object
@@ -1045,7 +1103,7 @@ components:
         tags:
           additionalProperties:
             $ref: "#/components/schemas/OtelStringExpression"
-
+    
     OtelRelationMappingOutput:
       type: object
       properties:
@@ -1068,7 +1126,7 @@ components:
         name:
           type: string
         value:
-          $ref: "#/components/schemas/OtelStringExpression"
+          $ref: "#/components/schemas/OtelStringExpression"        
       required:
         - name
         - value
@@ -1077,7 +1135,7 @@ components:
       type: object
       properties:
         expression:
-          $ref: "#/components/schemas/OtelBooleanExpression"
+          $ref: "#/components/schemas/OtelBooleanExpression"        
         action:
           $ref: "#/components/schemas/OtelConditionMappingAction"
       required:
@@ -1088,12 +1146,11 @@ components:
       type: string
       enum:
         - CREATE
-        - CONTINUE
         - REJECT
 
     OtelStringExpression:
       type: object
-      description: |-
+      description: |- 
         An expression that must produce a string. It must be one of these formats:
           - A plain string, for example `"this is a plain string"`
           - A string containing a CEL expression within curly braces `${}`, for example "a string with a cell expression: `${input.tags.namespace}"`
@@ -1101,7 +1158,7 @@ components:
       properties:
         expression:
           type: string
-      required:
+      required: 
         - expression
 
     OtelBooleanExpression:
@@ -1110,5 +1167,5 @@ components:
       properties:
         expression:
           type: string
-      required:
+      required: 
         - expression
