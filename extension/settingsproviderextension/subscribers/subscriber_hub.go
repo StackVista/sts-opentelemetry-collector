@@ -54,19 +54,25 @@ func (h *SubscriberHub) RegisterWithBuffer(bufferSize int, types ...stsSettingsM
 	return ch
 }
 
-func (h *SubscriberHub) Notify(event stsSettingsEvents.UpdateSettingsEvent) {
+func (h *SubscriberHub) Notify(types ...stsSettingsModel.SettingType) {
 	go func() {
 		h.subscribersLock.RLock()
 		defer h.subscribersLock.RUnlock()
 
 		for _, sub := range h.subscribers {
-			// If subscriber registered with no filter
+			// Subscriber with no filter: receives all types
 			if len(sub.settingTypes) == 0 {
-				h.nonBlockingSend(sub, event)
+				for _, t := range types {
+					h.nonBlockingSend(sub, stsSettingsEvents.UpdateSettingsEvent{Type: t})
+				}
 				continue
 			}
-			if _, ok := sub.settingTypes[event.Type]; ok {
-				h.nonBlockingSend(sub, event)
+
+			// Subscriber with filter: only receive matching types
+			for _, t := range types {
+				if _, ok := sub.settingTypes[t]; ok {
+					h.nonBlockingSend(sub, stsSettingsEvents.UpdateSettingsEvent{Type: t})
+				}
 			}
 		}
 	}()

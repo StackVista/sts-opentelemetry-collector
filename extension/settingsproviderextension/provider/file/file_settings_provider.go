@@ -7,7 +7,6 @@ import (
 	stsSettingsCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/common"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
-	stsSettingsSubscribers "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/subscribers"
 	"go.yaml.in/yaml/v3"
 	"os"
 	"sync"
@@ -24,7 +23,6 @@ type SettingsProvider struct {
 	logger *zap.Logger
 
 	settingsCache *stsSettingsCommon.SettingsCache
-	subscriberHub *stsSettingsSubscribers.SubscriberHub
 
 	providerCancelFunc context.CancelFunc
 	providerCancelWg   sync.WaitGroup
@@ -34,8 +32,7 @@ func NewFileSettingsProvider(cfg *stsSettingsConfig.FileSettingsProviderConfig, 
 	provider := &SettingsProvider{
 		cfg:           cfg,
 		logger:        logger,
-		subscriberHub: stsSettingsSubscribers.NewSubscriberHub(logger),
-		settingsCache: stsSettingsCommon.NewSettingsCache(),
+		settingsCache: stsSettingsCommon.NewSettingsCache(logger),
 	}
 
 	// Perform an initial load of the configuration file.
@@ -90,29 +87,28 @@ func (f *SettingsProvider) Shutdown(ctx context.Context) error {
 
 	select {
 	case <-done:
-		f.subscriberHub.Shutdown()
 		f.logger.Info("File provider shutdown complete.")
 	case <-ctx.Done():
 		return ctx.Err() // timed out waiting for goroutine
 	}
 
-	if f.subscriberHub != nil {
-		f.subscriberHub.Shutdown()
+	if f.settingsCache != nil {
+		f.settingsCache.Shutdown()
 	}
 
 	return nil
 }
 
 func (f *SettingsProvider) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
-	return f.subscriberHub.Register(types...)
+	return f.settingsCache.RegisterForUpdates(types...)
 }
 
 func (f *SettingsProvider) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
-	return f.subscriberHub.Unregister(ch)
+	return f.settingsCache.Unregister(ch)
 }
 
 func (f *SettingsProvider) GetCurrentSettingsByType(settingType stsSettingsModel.SettingType) ([]any, error) {
-	return f.settingsCache.GetSettingsByType(settingType)
+	return f.settingsCache.GetConcreteSettingsByType(settingType)
 }
 
 func (f *SettingsProvider) loadSettings() error {
@@ -148,14 +144,6 @@ func (f *SettingsProvider) checkAndUpdateSettings() {
 
 	// Note: since the file-based settings provider is not intended for production use, we're updating the entire cache.
 	f.settingsCache.Update(newSettingsByType)
-
-	// Notify only for changed types
-	for settingType, _ := range newSettingsByType {
-		f.logger.Debug("Notifying subscribers for setting type.", zap.String("type", string(settingType)))
-		f.subscriberHub.Notify(stsSettingsEvents.UpdateSettingsEvent{
-			Type: settingType,
-		})
-	}
 }
 
 // parseSettings is a private helper method to parse the file content.

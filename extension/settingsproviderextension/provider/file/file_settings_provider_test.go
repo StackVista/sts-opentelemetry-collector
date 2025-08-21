@@ -5,7 +5,6 @@ import (
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 	stsSettingsCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/common"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
-	stsSettingsSubscribers "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/subscribers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -179,8 +178,7 @@ func TestFileSettingsProvider_Shutdown(t *testing.T) {
 			Path:           "/dev/null",
 			UpdateInterval: 10 * time.Millisecond,
 		},
-		subscriberHub: stsSettingsSubscribers.NewSubscriberHub(logger),
-		logger:        logger,
+		logger: logger,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

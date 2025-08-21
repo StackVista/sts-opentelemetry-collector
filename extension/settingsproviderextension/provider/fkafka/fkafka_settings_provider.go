@@ -8,7 +8,6 @@ import (
 	stsSettingsCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/common"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
-	stsSettingsSubscribers "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/subscribers"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
@@ -35,7 +34,6 @@ type SettingsProvider struct {
 	readTimeout time.Duration
 
 	settingsCache *stsSettingsCommon.SettingsCache
-	subscriberHub *stsSettingsSubscribers.SubscriberHub
 
 	// Mutex for concurrent access to inProgressSnapshots
 	snapshotsLock sync.RWMutex
@@ -90,11 +88,22 @@ func NewKafkaSettingsProvider(cfg *stsSettingsConfig.KafkaSettingsProviderConfig
 		logger:              logger,
 		client:              client,
 		adminClient:         kadm.NewClient(client),
-		subscriberHub:       stsSettingsSubscribers.NewSubscriberHub(logger),
-		settingsCache:       stsSettingsCommon.NewSettingsCache(),
+		settingsCache:       stsSettingsCommon.NewSettingsCache(logger),
 		inProgressSnapshots: make(map[string]*inProgressSnapshot),
 		readTimeout:         30 * time.Second, // Default read timeout
 	}, nil
+}
+
+func (k *SettingsProvider) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
+	return k.settingsCache.RegisterForUpdates(types...)
+}
+
+func (k *SettingsProvider) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
+	return k.settingsCache.Unregister(ch)
+}
+
+func (k *SettingsProvider) GetCurrentSettingsByType(settingType stsSettingsModel.SettingType) ([]any, error) {
+	return k.settingsCache.GetConcreteSettingsByType(settingType)
 }
 
 func (k *SettingsProvider) Start(ctx context.Context, host component.Host) error {
@@ -120,6 +129,34 @@ func (k *SettingsProvider) Start(ctx context.Context, host component.Host) error
 	}()
 
 	return nil // started successfully
+}
+
+func (k *SettingsProvider) Shutdown(ctx context.Context) error {
+	k.logger.Info("Shutting down Kafka settings provider")
+	if k.readerCancelFunc != nil {
+		k.readerCancelFunc()
+	}
+
+	done := make(chan struct{})
+	go func() {
+		k.readerCancelWg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		k.logger.Warn("Timeout waiting for Kafka reader to exit")
+	}
+
+	if k.settingsCache != nil {
+		k.settingsCache.Shutdown()
+	}
+
+	k.client.Close()
+	k.adminClient.Close()
+
+	return nil
 }
 
 //func (k *SettingsProvider) Start(ctx context.Context, host component.Host) error {
@@ -397,9 +434,6 @@ func (k *SettingsProvider) handleSnapshotStop(msg stsSettingsModel.SettingsSnaps
 
 	k.settingsCache.UpdateSettingsForType(snapshot.settingType, settingEntries)
 
-	k.subscriberHub.Notify(stsSettingsEvents.UpdateSettingsEvent{
-		Type: snapshot.settingType,
-	})
 	return nil
 }
 

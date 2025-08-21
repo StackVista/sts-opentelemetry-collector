@@ -30,7 +30,7 @@ func TestSettingsHelper_GetSettingId(t *testing.T) {
 			name:          "invalid setting",
 			setting:       stsSettingsModel.Setting{},
 			expectedId:    "",
-			expectedError: "failed to get setting value",
+			expectedError: "unsupported setting type",
 		},
 	}
 
@@ -71,7 +71,7 @@ func TestSettingsHelper_GetSettingType(t *testing.T) {
 			name:          "invalid setting",
 			setting:       stsSettingsModel.Setting{},
 			expectedType:  "",
-			expectedError: "failed to get setting value",
+			expectedError: "unsupported setting type",
 		},
 	}
 

@@ -8,12 +8,13 @@ import (
 
 type ConverterFunc func(stsSettingsModel.Setting) (any, error)
 
-// converters is a private converter map of setting type to concrete setting type conversion
-// add settings that need to be supported by the settings provider to this map
+// converters is a private converter map of setting type to concrete setting type converter.
+// Add settings that need to be supported by a settings provider to this map.
 var converters = map[stsSettingsModel.SettingType]func(stsSettingsModel.Setting) (any, error){
 	stsSettingsModel.SettingTypeOtelComponentMapping: func(s stsSettingsModel.Setting) (any, error) {
 		return s.AsOtelComponentMapping()
 	},
+
 	stsSettingsModel.SettingTypeOtelRelationMapping: func(s stsSettingsModel.Setting) (any, error) {
 		return s.AsOtelRelationMapping()
 	},
@@ -55,39 +56,40 @@ func DeepCopyAs[T any](val any) (T, error) {
 	return typedCopy, nil
 }
 
-// GetSettingId returns the Id of a generic setting
-func GetSettingId(setting stsSettingsModel.Setting) (stsSettingsModel.SettingId, error) {
-	return processSetting(setting, func(actualSetting interface{}) (stsSettingsModel.SettingId, error) {
-		switch v := actualSetting.(type) {
-		case stsSettingsModel.OtelComponentMapping:
-			return v.Id, nil
-		case stsSettingsModel.OtelRelationMapping:
-			return v.Id, nil
-		default:
-			return "", fmt.Errorf("failed to get setting value: %s", v)
-		}
-	})
-}
-
 // GetSettingType returns the SettingType of a generic setting
 func GetSettingType(setting stsSettingsModel.Setting) (stsSettingsModel.SettingType, error) {
-	return processSetting(setting, func(actualSetting interface{}) (stsSettingsModel.SettingType, error) {
-		switch v := actualSetting.(type) {
-		case stsSettingsModel.OtelComponentMapping:
-			return stsSettingsModel.SettingTypeOtelComponentMapping, nil
-		case stsSettingsModel.OtelRelationMapping:
-			return stsSettingsModel.SettingTypeOtelRelationMapping, nil
-		default:
-			return "", fmt.Errorf("unsupported setting value: %s", v)
-		}
-	})
+	if _, err := processSetting[stsSettingsModel.OtelComponentMapping](setting); err == nil {
+		return stsSettingsModel.SettingTypeOtelComponentMapping, nil
+	}
+	if _, err := processSetting[stsSettingsModel.OtelRelationMapping](setting); err == nil {
+		return stsSettingsModel.SettingTypeOtelRelationMapping, nil
+	}
+	return "", fmt.Errorf("unsupported setting type")
 }
 
-func processSetting[T any](setting stsSettingsModel.Setting, processor func(actualSetting interface{}) (T, error)) (T, error) {
-	actualSetting, err := setting.ValueByDiscriminator()
+// GetSettingId returns the Id of a generic setting
+func GetSettingId(setting stsSettingsModel.Setting) (stsSettingsModel.SettingId, error) {
+	if v, err := processSetting[stsSettingsModel.OtelComponentMapping](setting); err == nil {
+		return v.Id, nil
+	}
+	if v, err := processSetting[stsSettingsModel.OtelRelationMapping](setting); err == nil {
+		return v.Id, nil
+	}
+	return "", fmt.Errorf("unsupported setting type")
+}
+
+func processSetting[T any](setting stsSettingsModel.Setting) (T, error) {
+	var zero T
+
+	val, err := setting.ValueByDiscriminator()
 	if err != nil {
-		var zero T
 		return zero, fmt.Errorf("failed to get setting value: %w", err)
 	}
-	return processor(actualSetting)
+
+	typed, ok := val.(T)
+	if !ok {
+		return zero, fmt.Errorf("unexpected type: got %T, want %T", val, zero)
+	}
+
+	return typed, nil
 }

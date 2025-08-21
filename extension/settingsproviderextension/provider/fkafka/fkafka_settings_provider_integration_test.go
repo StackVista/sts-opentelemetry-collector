@@ -73,7 +73,7 @@ func TestKafkaSettingsProvider_Compaction(t *testing.T) {
 	otelComponentMappings := waitForSettingsUpdate[stsSettingsModel.OtelComponentMapping](t, tc, stsSettingsModel.SettingTypeOtelComponentMapping)
 	assert.Len(t, otelComponentMappings, 1, "Unexpected number of settings")
 	assertComponentMapping(t, otelComponentMappings, updatedMapping.id, updatedMapping.name)
-	// Get otel relation mappings again to check that they're the same
+	// GetConcreteSettings otel relation mappings again to check that they're the same
 	otelRelationMappings, err := stsSettings.GetSettingsAs[stsSettingsModel.OtelRelationMapping](tc.provider, stsSettingsModel.SettingTypeOtelRelationMapping)
 	require.NoError(t, err)
 	assertRelationMapping(t, otelRelationMappings, relationMapping.id, relationMapping.name)

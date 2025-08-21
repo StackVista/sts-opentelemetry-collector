@@ -32,12 +32,13 @@ func TestSubscriberHub_RegisterAddsSubscriber(t *testing.T) {
 func TestSubscriberHub_NotifySendsSignal(t *testing.T) {
 	h := newSubscriberHub()
 	ch := h.Register() // no filter, receives all updates
+	typ := stsSettingsModel.SettingTypeOtelComponentMapping
 
 	event := stsSettingsEvents.UpdateSettingsEvent{
-		Type: stsSettingsModel.SettingTypeOtelComponentMapping,
+		Type: typ,
 	}
 
-	h.Notify(event)
+	h.Notify(typ)
 
 	select {
 	case received := <-ch:
@@ -52,27 +53,25 @@ func TestSubscriberHub_NotifySendsSignal(t *testing.T) {
 func TestSubscriberHub_SubscriberReceivesOnlyMatchingTypes(t *testing.T) {
 	h := newSubscriberHub()
 	ch := h.Register(stsSettingsModel.SettingTypeOtelComponentMapping)
+	matchingType := stsSettingsModel.SettingTypeOtelComponentMapping
 
 	// Notify with a matching type
-	matching := stsSettingsEvents.UpdateSettingsEvent{
-		Type: stsSettingsModel.SettingTypeOtelComponentMapping,
+	matchingEvent := stsSettingsEvents.UpdateSettingsEvent{
+		Type: matchingType,
 	}
-	h.Notify(matching)
+	h.Notify(matchingType)
 
 	select {
 	case got := <-ch:
-		if got != matching {
-			t.Errorf("expected %+v, got %+v", matching, got)
+		if got != matchingEvent {
+			t.Errorf("expected %+v, got %+v", matchingEvent, got)
 		}
 	case <-time.After(50 * time.Millisecond):
-		t.Fatalf("expected matching event, got none")
+		t.Fatalf("expected matchingEvent event, got none")
 	}
 
-	// Notify with a non-matching type
-	nonMatching := stsSettingsEvents.UpdateSettingsEvent{
-		Type: stsSettingsModel.SettingTypeOtelRelationMapping,
-	}
-	h.Notify(nonMatching)
+	// Notify with a non-matchingEvent type
+	h.Notify(stsSettingsModel.SettingTypeOtelRelationMapping)
 
 	select {
 	case got := <-ch:
@@ -84,27 +83,21 @@ func TestSubscriberHub_SubscriberReceivesOnlyMatchingTypes(t *testing.T) {
 
 func TestSubscriberHub_SubscriberReceivesMultipleFilteredTypes(t *testing.T) {
 	h := newSubscriberHub()
-	ch := h.Register(
+	settingTypes := []stsSettingsModel.SettingType{
 		stsSettingsModel.SettingTypeOtelComponentMapping,
 		stsSettingsModel.SettingTypeOtelRelationMapping,
-	)
-
-	events := []stsSettingsEvents.UpdateSettingsEvent{
-		{Type: stsSettingsModel.SettingTypeOtelComponentMapping},
-		{Type: stsSettingsModel.SettingTypeOtelRelationMapping},
 	}
 
-	for _, e := range events {
-		h.Notify(e)
-	}
+	ch := h.Register(settingTypes...)
+	h.Notify(settingTypes...)
 
 	received := []stsSettingsEvents.UpdateSettingsEvent{}
-	for len(received) < len(events) {
+	for len(received) < len(settingTypes) {
 		select {
 		case got := <-ch:
 			received = append(received, got)
 		case <-time.After(100 * time.Millisecond):
-			t.Fatalf("expected %d events, got %d", len(events), len(received))
+			t.Fatalf("expected %d events, got %d", len(settingTypes), len(received))
 		}
 	}
 }
@@ -113,10 +106,7 @@ func TestSubscriberHub_SubscriberFilterExcludesIrrelevantEvents(t *testing.T) {
 	h := newSubscriberHub()
 	ch := h.Register(stsSettingsModel.SettingTypeOtelRelationMapping)
 
-	irrelevant := stsSettingsEvents.UpdateSettingsEvent{
-		Type: stsSettingsModel.SettingTypeOtelComponentMapping,
-	}
-	h.Notify(irrelevant)
+	h.Notify(stsSettingsModel.SettingTypeOtelComponentMapping)
 
 	select {
 	case got := <-ch:
@@ -131,11 +121,7 @@ func TestSubscriberHub_MultipleSubscribersReceiveSignal(t *testing.T) {
 	ch1 := h.Register()
 	ch2 := h.Register()
 
-	event := stsSettingsEvents.UpdateSettingsEvent{
-		Type: stsSettingsModel.SettingTypeOtelComponentMapping,
-	}
-
-	h.Notify(event)
+	h.Notify(stsSettingsModel.SettingTypeOtelComponentMapping)
 
 	got1, got2 := false, false
 	select {
@@ -158,10 +144,6 @@ func TestSubscriberHub_MultipleSubscribersReceiveSignal(t *testing.T) {
 func TestSubscriberHub_NotifyWithNoSubscribersDoesNotPanic(t *testing.T) {
 	h := newSubscriberHub()
 
-	event := stsSettingsEvents.UpdateSettingsEvent{
-		Type: stsSettingsModel.SettingTypeOtelComponentMapping,
-	}
-
 	// Just make sure it doesn’t panic or deadlock
-	h.Notify(event)
+	h.Notify(stsSettingsModel.SettingTypeOtelComponentMapping)
 }
