@@ -5,7 +5,6 @@ go 1.21.13
 require (
 	github.com/google/uuid v1.6.0
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
-	github.com/segmentio/kafka-go v0.4.48
 	github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector v0.0.0-20250814093050-792e5fb7c1bf
 	github.com/stretchr/testify v1.9.0
 	github.com/testcontainers/testcontainers-go/modules/kafka v0.33.0

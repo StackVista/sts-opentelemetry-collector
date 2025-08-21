@@ -6,20 +6,19 @@ import (
 	"context"
 	"fmt"
 	"github.com/google/uuid"
+	stsSettingsFkafka "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/provider/kafka"
 	"github.com/stretchr/testify/assert"
+	"github.com/twmb/franz-go/pkg/kadm"
+	"github.com/twmb/franz-go/pkg/kgo"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.uber.org/zap"
 	"log"
-	"net"
-	"strconv"
 	"testing"
 	"time"
 
-	"github.com/segmentio/kafka-go"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 	stsSettings "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
-	stsSettingsKafka "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/provider/kafka"
 	"github.com/stretchr/testify/require"
 	testContainersKafka "github.com/testcontainers/testcontainers-go/modules/kafka"
 )
@@ -30,10 +29,11 @@ const (
 )
 
 type testContext struct {
-	ctx      context.Context
-	provider *stsSettingsKafka.SettingsProvider
-	writer   *kafka.Writer
-	cleanup  func()
+	ctx       context.Context
+	provider  *stsSettingsFkafka.SettingsProvider
+	client    *kgo.Client
+	cleanup   func()
+	topicName string
 }
 
 func TestKafkaSettingsProvider_InitialState(t *testing.T) {
@@ -42,10 +42,8 @@ func TestKafkaSettingsProvider_InitialState(t *testing.T) {
 
 	// Setup initial state
 	componentMapping := publishComponentMapping(t, tc, "11111", "Host component V1")
-	relationMapping := publishRelationMapping(t, tc, "22222", "Runs on host")
-
-	// Verify initial state
 	waitForSettingsUpdate[stsSettingsModel.OtelComponentMapping](t, tc, stsSettingsModel.SettingTypeOtelComponentMapping)
+	relationMapping := publishRelationMapping(t, tc, "22222", "Runs on host")
 	waitForSettingsUpdate[stsSettingsModel.OtelRelationMapping](t, tc, stsSettingsModel.SettingTypeOtelRelationMapping)
 
 	otelComponentMappings, err := stsSettings.GetSettingsAs[stsSettingsModel.OtelComponentMapping](tc.provider, stsSettingsModel.SettingTypeOtelComponentMapping)
@@ -61,11 +59,11 @@ func TestKafkaSettingsProvider_Compaction(t *testing.T) {
 	tc := setupTest(t)
 	defer tc.cleanup()
 
-	// Setup initial state
+	// Setup initial state and wait for it to be processed
 	publishComponentMapping(t, tc, "11111", "Host component V1")
-	relationMapping := publishRelationMapping(t, tc, "22222", "Runs on host")
-	// Wait for initial state to be processed
 	waitForSettingsUpdate[stsSettingsModel.OtelComponentMapping](t, tc, stsSettingsModel.SettingTypeOtelComponentMapping)
+
+	relationMapping := publishRelationMapping(t, tc, "22222", "Runs on host")
 	waitForSettingsUpdate[stsSettingsModel.OtelRelationMapping](t, tc, stsSettingsModel.SettingTypeOtelRelationMapping)
 
 	// Update component mapping
@@ -75,7 +73,8 @@ func TestKafkaSettingsProvider_Compaction(t *testing.T) {
 	otelComponentMappings := waitForSettingsUpdate[stsSettingsModel.OtelComponentMapping](t, tc, stsSettingsModel.SettingTypeOtelComponentMapping)
 	assert.Len(t, otelComponentMappings, 1, "Unexpected number of settings")
 	assertComponentMapping(t, otelComponentMappings, updatedMapping.id, updatedMapping.name)
-	// GetConcreteSettings otel relation mappings again to check that they're the same
+
+	// Get otel relation mappings again to check that they're the same
 	otelRelationMappings, err := stsSettings.GetSettingsAs[stsSettingsModel.OtelRelationMapping](tc.provider, stsSettingsModel.SettingTypeOtelRelationMapping)
 	require.NoError(t, err)
 	assertRelationMapping(t, otelRelationMappings, relationMapping.id, relationMapping.name)
@@ -110,15 +109,41 @@ type mappingInfo struct {
 func publishComponentMapping(t *testing.T, tc *testContext, id, name string) mappingInfo {
 	snapshotID := uuid.New().String()
 	messages := newOtelComponentMappingSnapshot(t, snapshotID, id, name)
-	require.NoError(t, tc.writer.WriteMessages(tc.ctx, messages...))
+	produceMessages(t, tc.client, tc.topicName, messages)
 	return mappingInfo{id: id, name: name}
 }
 
 func publishRelationMapping(t *testing.T, tc *testContext, id, name string) mappingInfo {
 	snapshotID := uuid.New().String()
 	messages := newOtelRelationMappingSnapshot(t, snapshotID, id, name)
-	require.NoError(t, tc.writer.WriteMessages(tc.ctx, messages...))
+	produceMessages(t, tc.client, tc.topicName, messages)
 	return mappingInfo{id: id, name: name}
+}
+
+func produceMessages(t *testing.T, client *kgo.Client, topic string, messages []*kgo.Record) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Set the topic for all records
+	for i := range messages {
+		messages[i].Topic = topic
+	}
+
+	results := client.ProduceSync(ctx, messages...)
+	require.NoError(t, results.FirstErr(), "failed to produce batch messages")
+
+	// Log results
+	successCount := 0
+	for _, result := range results {
+		if result.Err == nil {
+			successCount++
+		} else {
+			t.Logf("Failed to produce message: %v", result.Err)
+		}
+	}
+	t.Logf("Successfully produced %d/%d messages", successCount, len(messages))
 }
 
 func waitForSettingsUpdate[T any](t *testing.T, tc *testContext, settingType stsSettingsModel.SettingType) []T {
@@ -176,14 +201,17 @@ func setupTest(t *testing.T) *testContext {
 	require.NoError(t, err)
 
 	topicName := fmt.Sprintf("sts-internal-settings-%s", uuid.New().String())
-	createCompactedTopic(t, brokers[0], topicName)
+
+	client := createProducerClient(t, brokers)
+	createCompactedTopic(t, client, topicName)
 
 	provider := createProvider(t, ctx, brokers, topicName)
-	writer := createWriter(brokers, topicName)
 
 	cleanup := func() {
-		err := writer.Close()
-		assert.NoError(t, err)
+		if err := provider.Shutdown(ctx); err != nil {
+			log.Printf("failed to shutdown provider: %s", err)
+		}
+		client.Close()
 		if err := kafkaContainer.Terminate(ctx); err != nil {
 			log.Printf("failed to terminate container: %s", err)
 		}
@@ -191,14 +219,15 @@ func setupTest(t *testing.T) *testContext {
 	}
 
 	return &testContext{
-		ctx:      ctx,
-		provider: provider,
-		writer:   writer,
-		cleanup:  cleanup,
+		ctx:       ctx,
+		provider:  provider,
+		client:    client,
+		cleanup:   cleanup,
+		topicName: topicName,
 	}
 }
 
-func createProvider(t *testing.T, ctx context.Context, brokers []string, topicName string) *stsSettingsKafka.SettingsProvider {
+func createProvider(t *testing.T, ctx context.Context, brokers []string, topicName string) *stsSettingsFkafka.SettingsProvider {
 	providerCfg := &stsSettingsConfig.KafkaSettingsProviderConfig{
 		Brokers:     brokers,
 		Topic:       topicName,
@@ -206,24 +235,68 @@ func createProvider(t *testing.T, ctx context.Context, brokers []string, topicNa
 		ReadTimeout: 60 * time.Second,
 	}
 	logger, _ := zap.NewDevelopment()
-	provider, err := stsSettingsKafka.NewKafkaSettingsProvider(providerCfg, logger)
+	provider, err := stsSettingsFkafka.NewKafkaSettingsProvider(providerCfg, logger)
 	require.NoError(t, err)
 
 	go provider.Start(ctx, componenttest.NewNopHost())
-	time.Sleep(3 * time.Second)
+	time.Sleep(2 * time.Second)
 
 	return provider
 }
 
-func createWriter(brokers []string, topicName string) *kafka.Writer {
-	return &kafka.Writer{
-		Addr:     kafka.TCP(brokers...),
-		Topic:    topicName,
-		Balancer: &kafka.Hash{},
+func createProducerClient(t *testing.T, brokers []string) *kgo.Client {
+	t.Helper()
+
+	opts := []kgo.Opt{
+		kgo.SeedBrokers(brokers...),
+		kgo.ProducerLinger(5 * time.Millisecond), // Small linger for test responsiveness
+
+		// Retry configuration
+		kgo.RequestRetries(3),
+		kgo.RetryBackoffFn(func(tries int) time.Duration {
+			return time.Duration(tries) * 100 * time.Millisecond
+		}),
+
+		// Timeout configurations
+		kgo.ProduceRequestTimeout(10 * time.Second),
+		kgo.RequestTimeoutOverhead(2 * time.Second),
 	}
+
+	client, err := kgo.NewClient(opts...)
+	require.NoError(t, err, "failed to create kafka producer client")
+
+	return client
 }
 
-func newOtelComponentMappingSnapshot(t *testing.T, snapshotId, mappingId, mappingName string) []kafka.Message {
+func createCompactedTopic(t *testing.T, client *kgo.Client, topicName string) {
+	t.Helper()
+
+	adminClient := kadm.NewClient(client)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Create topic with compaction enabled
+	resp, err := adminClient.CreateTopics(ctx, 1, 1, map[string]*string{
+		"cleanup.policy":            stringPtr("compact"),
+		"segment.ms":                stringPtr("1000"), // 1 second for faster compaction in tests
+		"min.cleanable.dirty.ratio": stringPtr("0.01"), // More aggressive compaction
+	}, topicName)
+	require.NoError(t, err, "failed to create topic")
+
+	for topic, topicResponse := range resp {
+		if topicResponse.Err != nil {
+			t.Fatalf("failed to create topic %s: %v", topic, err)
+		}
+	}
+
+	t.Logf("Created compacted topic: %s", topicName)
+}
+
+func stringPtr(s string) *string {
+	return &s
+}
+
+func newOtelComponentMappingSnapshot(t *testing.T, snapshotId, mappingId, mappingName string) []*kgo.Record {
 	t.Helper()
 
 	// Start Message
@@ -246,14 +319,14 @@ func newOtelComponentMappingSnapshot(t *testing.T, snapshotId, mappingId, mappin
 	// Stop Message
 	snapshotSopMessageKey, snapshotStopPayload := newSnapshotStopMessageKeyAndPayload(t, stsSettingsModel.SettingTypeOtelComponentMapping, snapshotId)
 
-	return []kafka.Message{
+	return []*kgo.Record{
 		{Key: []byte(snapshotStartMessageKey), Value: snapshotStartPayload},
 		{Key: []byte(settingsEnvelopeMessageKey), Value: settingsEnvelopePayload},
 		{Key: []byte(snapshotSopMessageKey), Value: snapshotStopPayload},
 	}
 }
 
-func newOtelRelationMappingSnapshot(t *testing.T, snapshotId, mappingId, mappingName string) []kafka.Message {
+func newOtelRelationMappingSnapshot(t *testing.T, snapshotId, mappingId, mappingName string) []*kgo.Record {
 	t.Helper()
 
 	// Start Message
@@ -276,7 +349,7 @@ func newOtelRelationMappingSnapshot(t *testing.T, snapshotId, mappingId, mapping
 	// Stop Message
 	snapshotSopMessageKey, snapshotStopPayload := newSnapshotStopMessageKeyAndPayload(t, stsSettingsModel.SettingTypeOtelRelationMapping, snapshotId)
 
-	return []kafka.Message{
+	return []*kgo.Record{
 		{Key: []byte(snapshotStartMessageKey), Value: snapshotStartPayload},
 		{Key: []byte(settingsEnvelopeMessageKey), Value: settingsEnvelopePayload},
 		{Key: []byte(snapshotSopMessageKey), Value: snapshotStopPayload},
@@ -338,43 +411,4 @@ func newSettingsEnvelopeMessageKeyAndPayload(t *testing.T, settingType stsSettin
 	require.NoError(t, err)
 
 	return newSettingsEnvelopeMessageKey(settingType, settingId), settingsEnvelopePayload
-}
-
-// createCompactedTopic is a helper to create a topic with the correct compaction policy
-// using the segmentio/kafka-go client.
-func createCompactedTopic(t *testing.T, brokerAddress, topicName string) {
-	conn, err := kafka.Dial("tcp", brokerAddress)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	controller, err := conn.Controller()
-	require.NoError(t, err)
-
-	controllerConn, err := kafka.Dial("tcp", net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port)))
-	require.NoError(t, err)
-	defer controllerConn.Close()
-
-	topicConfigs := []kafka.TopicConfig{
-		{
-			Topic:             topicName,
-			NumPartitions:     1,
-			ReplicationFactor: 1,
-			// the below config must align with the topic configuration for the sts-internal-settings topic as per the
-			// job-kafka-topic-create.sh script in the helm-charts repo.
-			ConfigEntries: []kafka.ConfigEntry{
-				{
-					ConfigName:  "cleanup.policy",
-					ConfigValue: "compact",
-				},
-				{
-					ConfigName:  "min.cleanable.dirty.ratio",
-					ConfigValue: "0.1",
-				},
-			},
-		},
-	}
-
-	err = controllerConn.CreateTopics(topicConfigs...)
-	time.Sleep(2 * time.Second)
-	require.NoError(t, err)
 }

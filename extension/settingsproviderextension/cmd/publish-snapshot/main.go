@@ -3,12 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/twmb/franz-go/pkg/kgo"
 	"log"
 	"os"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/segmentio/kafka-go"
 
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 )
@@ -25,35 +25,65 @@ func main() {
 
 	broker := os.Args[1]
 
-	// Use fixed IDs or generate new ones for each run
 	snapshotId := uuid.New().String()
 	mappingId := uuid.New().String()
 
-	writer := createWriter([]string{broker}, topicName)
-	defer writer.Close()
+	producer := createProducerClient([]string{broker})
+	defer producer.Close()
 
 	messages := newOtelComponentMappingSnapshot(snapshotId, mappingId, "host")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := writer.WriteMessages(ctx, messages...); err != nil {
-		log.Fatalf("failed to write messages: %v", err)
-	}
-
-	log.Printf("Successfully published %d messages to %s", len(messages), topicName)
+	produceMessages(ctx, producer, topicName, messages)
 }
 
-func createWriter(brokers []string, topicName string) *kafka.Writer {
-	return &kafka.Writer{
-		Addr:     kafka.TCP(brokers...),
-		Topic:    topicName,
-		Balancer: &kafka.Hash{},
+func createProducerClient(brokers []string) *kgo.Client {
+	opts := []kgo.Opt{
+		kgo.SeedBrokers(brokers...),
+
+		// Retry configuration
+		kgo.RequestRetries(2),
+		kgo.RetryBackoffFn(func(tries int) time.Duration {
+			return time.Duration(tries) * 100 * time.Millisecond
+		}),
+
+		// Timeout configurations
+		kgo.ProduceRequestTimeout(10 * time.Second),
+		kgo.RequestTimeoutOverhead(2 * time.Second),
 	}
+
+	client, err := kgo.NewClient(opts...)
+	if err != nil {
+		log.Fatalf("failed to create kafka producer client: %v", err)
+	}
+
+	return client
+}
+
+func produceMessages(ctx context.Context, client *kgo.Client, topic string, messages []*kgo.Record) {
+	// Set the topic for all records
+	for i := range messages {
+		messages[i].Topic = topic
+	}
+
+	results := client.ProduceSync(ctx, messages...)
+
+	// Log results
+	successCount := 0
+	for _, result := range results {
+		if result.Err == nil {
+			successCount++
+		} else {
+			log.Printf("Failed to produce message: %v", result.Err)
+		}
+	}
+	log.Printf("Successfully produced %d/%d messages", successCount, len(messages))
 }
 
 // This version doesn’t need *testing.T
-func newOtelComponentMappingSnapshot(snapshotId, mappingId, mappingName string) []kafka.Message {
+func newOtelComponentMappingSnapshot(snapshotId, mappingId, mappingName string) []*kgo.Record {
 	// Snapshot Start
 	snapshotStartMessageKey, snapshotStartPayload := newSnapshotStartMessageKeyAndPayload(
 		stsSettingsModel.SettingTypeOtelComponentMapping, snapshotId)
@@ -77,7 +107,7 @@ func newOtelComponentMappingSnapshot(snapshotId, mappingId, mappingName string) 
 	snapshotStopMessageKey, snapshotStopPayload := newSnapshotStopMessageKeyAndPayload(
 		stsSettingsModel.SettingTypeOtelComponentMapping, snapshotId)
 
-	return []kafka.Message{
+	return []*kgo.Record{
 		{Key: []byte(snapshotStartMessageKey), Value: snapshotStartPayload},
 		{Key: []byte(settingsEnvelopeMessageKey), Value: settingsEnvelopePayload},
 		{Key: []byte(snapshotStopMessageKey), Value: snapshotStopPayload},

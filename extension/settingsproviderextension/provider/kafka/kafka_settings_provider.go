@@ -1,21 +1,22 @@
 package kafka
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
+	"github.com/google/uuid"
+	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 	stsSettingsCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/common"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
-	"go.opentelemetry.io/collector/component"
+	"github.com/twmb/franz-go/pkg/kadm"
+	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
 	"sync"
 	"time"
 
-	"fmt"
-	"github.com/google/uuid"
-	"github.com/segmentio/kafka-go"
-	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
+	"context"
+	"errors"
+	"go.opentelemetry.io/collector/component"
 )
 
 // A helper struct to hold the state of a snapshot being received.
@@ -25,10 +26,11 @@ type inProgressSnapshot struct {
 }
 
 type SettingsProvider struct {
-	cfg         *stsSettingsConfig.KafkaSettingsProviderConfig
-	logger      *zap.Logger
-	client      *kafka.Client
-	reader      *kafka.Reader
+	cfg    *stsSettingsConfig.KafkaSettingsProviderConfig
+	logger *zap.Logger
+
+	client      *kgo.Client
+	adminClient *kadm.Client
 	readTimeout time.Duration
 
 	settingsCache *stsSettingsCommon.SettingsCache
@@ -46,24 +48,39 @@ type SettingsProvider struct {
 func NewKafkaSettingsProvider(cfg *stsSettingsConfig.KafkaSettingsProviderConfig, logger *zap.Logger) (*SettingsProvider, error) {
 	consumerGroupID := fmt.Sprintf("sts-otel-collector-internal-settings-%s", uuid.New().String())
 
-	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:        cfg.Brokers,
-		Topic:          cfg.Topic,
-		GroupID:        consumerGroupID,
-		MaxBytes:       cfg.BufferSize,
-		MinBytes:       1,
-		CommitInterval: time.Second,
-		MaxWait:        100 * time.Millisecond,
-		StartOffset:    kafka.FirstOffset,
-	})
+	// Create Franz-go client options
+	opts := []kgo.Opt{
+		kgo.SeedBrokers(cfg.Brokers...),
+		kgo.ConsumerGroup(consumerGroupID),
+		kgo.ConsumeTopics(cfg.Topic),
+
+		// Session and rebalancing configuration
+		kgo.SessionTimeout(30 * time.Second),
+		kgo.RebalanceTimeout(30 * time.Second),
+
+		kgo.Balancers(kgo.CooperativeStickyBalancer()),
+
+		// Enable auto-commit of processed records
+		kgo.AutoCommitMarks(),
+
+		// Fetch configuration
+		kgo.FetchMaxBytes(int32(cfg.BufferSize)),
+	}
+
+	// Create the client
+	client, err := kgo.NewClient(opts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create kafka client: %w", err)
+	}
 
 	return &SettingsProvider{
 		cfg:                 cfg,
 		logger:              logger,
-		reader:              reader,
-		client:              &kafka.Client{Addr: kafka.TCP(cfg.Brokers...)},
+		client:              client,
+		adminClient:         kadm.NewClient(client),
 		settingsCache:       stsSettingsCommon.NewSettingsCache(logger),
 		inProgressSnapshots: make(map[string]*inProgressSnapshot),
+		readTimeout:         30 * time.Second,
 	}, nil
 }
 
@@ -84,35 +101,24 @@ func (k *SettingsProvider) Start(ctx context.Context, host component.Host) error
 		zap.Strings("brokers", k.cfg.Brokers),
 		zap.String("topic", k.cfg.Topic))
 
-	// Fail fast if topic doesn't exist
+	// Fail fast: check if topic exists
 	if err := k.checkTopicExists(ctx); err != nil {
 		return fmt.Errorf("failed to start kafka settings provider: %w", err)
 	}
 
-	readerCtx, readerCancelFunc := context.WithCancel(ctx)
-	k.readerCancelFunc = readerCancelFunc
+	// Setup cancellation
+	readerCtx, readerCancel := context.WithCancel(ctx)
+	k.readerCancelFunc = readerCancel
 
-	errChan := make(chan error, 1)
 	k.ReaderCancelWg.Add(1)
-
 	go func() {
 		defer k.ReaderCancelWg.Done()
-		if err := k.readMessages(readerCtx); err != nil && !errors.Is(err, context.Canceled) {
-			select {
-			case errChan <- err:
-			default:
-			}
+		if err := k.consumeMessages(readerCtx); err != nil && !errors.Is(err, context.Canceled) {
+			k.logger.Error("Kafka reader failed", zap.Error(err))
 		}
 	}()
 
-	// Wait a short time for startup errors
-	select {
-	case err := <-errChan:
-		readerCancelFunc()
-		return fmt.Errorf("failed to start message consumption: %w", err)
-	case <-time.After(5 * time.Second):
-		return nil // started successfully
-	}
+	return nil // started successfully
 }
 
 func (k *SettingsProvider) Shutdown(ctx context.Context) error {
@@ -137,91 +143,88 @@ func (k *SettingsProvider) Shutdown(ctx context.Context) error {
 		k.settingsCache.Shutdown()
 	}
 
-	if err := k.reader.Close(); err != nil {
-		return fmt.Errorf("failed to close kafka reader: %w", err)
+	k.client.Close()
+	k.adminClient.Close()
+
+	return nil
+}
+
+func (k *SettingsProvider) checkTopicExists(ctx context.Context) error {
+	timeoutCtx, cancel := context.WithTimeout(ctx, k.readTimeout)
+	defer cancel()
+
+	// Use admin client to check topic metadata
+	topicDetails, err := k.adminClient.ListTopics(timeoutCtx, k.cfg.Topic)
+	if err != nil {
+		return fmt.Errorf("failed to list topics: %w", err)
+	}
+
+	if len(topicDetails) == 0 {
+		return fmt.Errorf("topic %s not found", k.cfg.Topic)
+	}
+
+	for topic, detail := range topicDetails {
+		if detail.Err != nil {
+			return fmt.Errorf("topic %s error: %w", topic, detail.Err)
+		}
+
+		k.logger.Info("Topic found",
+			zap.String("topic", topic),
+			zap.Int32("partitions", int32(len(detail.Partitions))))
 	}
 
 	return nil
 }
 
-func (k *SettingsProvider) readMessages(ctx context.Context) error {
-	backoff := time.Second
-	maxBackoff := time.Minute
+func (k *SettingsProvider) consumeMessages(ctx context.Context) error {
+	k.logger.Info("Starting message consumption")
 
 	for {
 		select {
 		case <-ctx.Done():
-			k.logger.Info("Reader context done, stopping consumption")
+			k.logger.Info("Consumer context done, stopping consumption")
 			return ctx.Err()
 		default:
-			// Per-message timeout
-			msgCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-			err := k.processNextMessage(msgCtx)
-			cancel()
+		}
 
-			if err != nil {
-				if isShutdownError(err) || errors.Is(err, context.Canceled) {
-					return err
+		// Simple poll - franz-go handles retries and backoff internally
+		fetches := k.client.PollFetches(ctx)
+
+		// Check for context cancellation in fetch errors
+		if errs := fetches.Errors(); len(errs) > 0 {
+			for _, err := range errs {
+				if errors.Is(err.Err, context.Canceled) {
+					return err.Err
 				}
+				k.logger.Error("Fetch error", zap.Error(err.Err))
+			}
+			continue // franz-go will handle backoff
+		}
 
-				if errors.Is(err, context.DeadlineExceeded) {
-					k.logger.Warn("Message processing timed out", zap.Duration("backoff", backoff))
-				} else {
-					k.logger.Error("Failed to process message", zap.Error(err), zap.Duration("backoff", backoff))
-				}
-
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case <-time.After(backoff):
-					backoff = min(backoff*2, maxBackoff)
-					continue
+		// Process records
+		fetches.EachPartition(func(p kgo.FetchTopicPartition) {
+			for _, record := range p.Records {
+				if err := k.processRecord(record); err != nil {
+					k.logger.Error("Failed to process record", zap.Error(err))
+					// Continue processing other records
 				}
 			}
-			backoff = time.Second
-		}
+		})
 	}
 }
 
-func (k *SettingsProvider) checkTopicExists(ctx context.Context) error {
-	metadata, err := k.client.Metadata(ctx, &kafka.MetadataRequest{
-		Topics: []string{k.cfg.Topic},
-	})
+func (k *SettingsProvider) processRecord(record *kgo.Record) error {
+	message, err := k.unmarshalMessage(record.Value)
 	if err != nil {
-		return fmt.Errorf("failed to get topic metadata: %w", err)
-	}
-
-	// Additional check for topic existence in metadata
-	if len(metadata.Topics) == 0 {
-		return fmt.Errorf("topic %s not found", k.cfg.Topic)
-	}
-
-	for _, topic := range metadata.Topics {
-		if topic.Error != nil {
-			return fmt.Errorf("topic %s error: %w", k.cfg.Topic, topic.Error)
-		}
-	}
-
-	return nil
-}
-
-func (k *SettingsProvider) processNextMessage(ctx context.Context) error {
-	msg, err := k.reader.ReadMessage(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to read message: %w", err)
-	}
-
-	message, err := k.unmarshalMessage(msg.Value)
-	if err != nil {
-		return err
+		return fmt.Errorf("failed to unmarshal message: %w", err)
 	}
 
 	return k.handleMessage(message)
 }
 
-func (k *SettingsProvider) unmarshalMessage(value []byte) (*stsSettingsModel.SettingsProtocol, error) {
+func (k *SettingsProvider) unmarshalMessage(data []byte) (*stsSettingsModel.SettingsProtocol, error) {
 	var message stsSettingsModel.SettingsProtocol
-	if err := json.Unmarshal(value, &message); err != nil {
+	if err := json.Unmarshal(data, &message); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal message: %w", err)
 	}
 	return &message, nil
@@ -301,8 +304,4 @@ func (k *SettingsProvider) handleSnapshotStop(msg stsSettingsModel.SettingsSnaps
 	k.settingsCache.UpdateSettingsForType(snapshot.settingType, settingEntries)
 
 	return nil
-}
-
-func isShutdownError(err error) bool {
-	return errors.Is(err, context.Canceled) || err.Error() == "kafka: context canceled"
 }
