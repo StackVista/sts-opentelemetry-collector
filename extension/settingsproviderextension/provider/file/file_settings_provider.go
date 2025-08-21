@@ -34,7 +34,7 @@ func NewFileSettingsProvider(cfg *stsSettingsConfig.FileSettingsProviderConfig, 
 	provider := &SettingsProvider{
 		cfg:           cfg,
 		logger:        logger,
-		subscriberHub: stsSettingsSubscribers.NewSubscriberHub(),
+		subscriberHub: stsSettingsSubscribers.NewSubscriberHub(logger),
 		settingsCache: stsSettingsCommon.NewSettingsCache(),
 	}
 

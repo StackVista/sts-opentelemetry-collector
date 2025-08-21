@@ -3,7 +3,12 @@ package subscribers
 import (
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
+	"go.uber.org/zap"
 	"sync"
+)
+
+const (
+	defaultBufferSize = 2
 )
 
 type subscriber struct {
@@ -12,19 +17,26 @@ type subscriber struct {
 }
 
 type SubscriberHub struct {
+	logger *zap.Logger
+
 	// Mutex for concurrent access to subscribers
 	subscribersLock sync.RWMutex
 	// The list of subscribers to which signals that settings have been updated will be sent
 	subscribers []subscriber
 }
 
-func NewSubscriberHub() *SubscriberHub {
+func NewSubscriberHub(logger *zap.Logger) *SubscriberHub {
 	return &SubscriberHub{
+		logger:      logger,
 		subscribers: make([]subscriber, 0),
 	}
 }
 
 func (h *SubscriberHub) Register(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
+	return h.RegisterWithBuffer(defaultBufferSize, types...)
+}
+
+func (h *SubscriberHub) RegisterWithBuffer(bufferSize int, types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
 	h.subscribersLock.Lock()
 	defer h.subscribersLock.Unlock()
 
@@ -34,7 +46,7 @@ func (h *SubscriberHub) Register(types ...stsSettingsModel.SettingType) <-chan s
 	}
 
 	// buffered so sender won’t block
-	ch := make(chan stsSettingsEvents.UpdateSettingsEvent, len(types))
+	ch := make(chan stsSettingsEvents.UpdateSettingsEvent, bufferSize)
 	h.subscribers = append(h.subscribers, subscriber{
 		settingTypes: typeSet,
 		channel:      ch,
@@ -43,18 +55,31 @@ func (h *SubscriberHub) Register(types ...stsSettingsModel.SettingType) <-chan s
 }
 
 func (h *SubscriberHub) Notify(event stsSettingsEvents.UpdateSettingsEvent) {
-	h.subscribersLock.RLock()
-	defer h.subscribersLock.RUnlock()
+	go func() {
+		h.subscribersLock.RLock()
+		defer h.subscribersLock.RUnlock()
 
-	for _, sub := range h.subscribers {
-		// If subscriber registered with no filter
-		if len(sub.settingTypes) == 0 {
-			sub.channel <- event
-			continue
+		for _, sub := range h.subscribers {
+			// If subscriber registered with no filter
+			if len(sub.settingTypes) == 0 {
+				h.nonBlockingSend(sub, event)
+				continue
+			}
+			if _, ok := sub.settingTypes[event.Type]; ok {
+				h.nonBlockingSend(sub, event)
+			}
 		}
-		if _, ok := sub.settingTypes[event.Type]; ok {
-			sub.channel <- event
-		}
+	}()
+}
+
+func (h *SubscriberHub) nonBlockingSend(sub subscriber, event stsSettingsEvents.UpdateSettingsEvent) {
+	select {
+	case sub.channel <- event:
+		// Successfully sent
+	default:
+		// Subscriber buffer full, drop event (and wait for the next update)
+		// TODO: have metrics for a slow subscriber?
+		h.logger.Debug("Dropped settings event, subscriber buffer full", zap.String("settingType", string(event.Type)))
 	}
 }
 

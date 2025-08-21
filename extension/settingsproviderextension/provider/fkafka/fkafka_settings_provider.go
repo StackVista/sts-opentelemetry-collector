@@ -43,8 +43,8 @@ type SettingsProvider struct {
 	// The key is the snapshot UUID (from the SnapshotStart/SettingsEnvelope/SnapshotStop's 'Id' field).
 	inProgressSnapshots map[string]*inProgressSnapshot
 
-	cancelFunc context.CancelFunc
-	wg         sync.WaitGroup
+	readerCancelFunc context.CancelFunc
+	readerCancelWg   sync.WaitGroup
 }
 
 func NewKafkaSettingsProvider(cfg *stsSettingsConfig.KafkaSettingsProviderConfig, logger *zap.Logger) (*SettingsProvider, error) {
@@ -90,7 +90,7 @@ func NewKafkaSettingsProvider(cfg *stsSettingsConfig.KafkaSettingsProviderConfig
 		logger:              logger,
 		client:              client,
 		adminClient:         kadm.NewClient(client),
-		subscriberHub:       stsSettingsSubscribers.NewSubscriberHub(),
+		subscriberHub:       stsSettingsSubscribers.NewSubscriberHub(logger),
 		settingsCache:       stsSettingsCommon.NewSettingsCache(),
 		inProgressSnapshots: make(map[string]*inProgressSnapshot),
 		readTimeout:         30 * time.Second, // Default read timeout
@@ -98,44 +98,69 @@ func NewKafkaSettingsProvider(cfg *stsSettingsConfig.KafkaSettingsProviderConfig
 }
 
 func (k *SettingsProvider) Start(ctx context.Context, host component.Host) error {
-	k.logger.Info("Starting Franz-go Kafka settings provider",
+	k.logger.Info("Starting Kafka settings provider",
 		zap.Strings("brokers", k.cfg.Brokers),
 		zap.String("topic", k.cfg.Topic))
 
-	// Check if topic exists before starting consumption
+	// Fail fast: check if topic exists
 	if err := k.checkTopicExists(ctx); err != nil {
-		k.client.Close()
 		return fmt.Errorf("failed to start kafka settings provider: %w", err)
 	}
 
-	// Start consuming in a separate goroutine
-	consumerCtx, cancelFunc := context.WithCancel(ctx)
-	k.cancelFunc = cancelFunc
+	// Setup cancellation
+	readerCtx, readerCancel := context.WithCancel(ctx)
+	k.readerCancelFunc = readerCancel
 
-	errChan := make(chan error, 1)
-	k.wg.Add(1)
-
+	k.readerCancelWg.Add(1)
 	go func() {
-		defer k.wg.Done()
-		if err := k.consumeMessages(consumerCtx); err != nil && !errors.Is(err, context.Canceled) {
-			select {
-			case errChan <- err:
-			default:
-			}
+		defer k.readerCancelWg.Done()
+		if err := k.consumeMessages(readerCtx); err != nil && !errors.Is(err, context.Canceled) {
+			k.logger.Error("Kafka reader failed", zap.Error(err))
 		}
 	}()
 
-	// Wait for startup errors or successful initialization
-	select {
-	case err := <-errChan:
-		cancelFunc()
-		k.client.Close()
-		return fmt.Errorf("failed to start message consumption: %w", err)
-	case <-time.After(5 * time.Second):
-		k.logger.Info("Kafka settings provider started successfully")
-		return nil
-	}
+	return nil // started successfully
 }
+
+//func (k *SettingsProvider) Start(ctx context.Context, host component.Host) error {
+//	k.logger.Info("Starting Franz-go Kafka settings provider",
+//		zap.Strings("brokers", k.cfg.Brokers),
+//		zap.String("topic", k.cfg.Topic))
+//
+//	// Check if topic exists before starting consumption
+//	if err := k.checkTopicExists(ctx); err != nil {
+//		k.client.Close()
+//		return fmt.Errorf("failed to start kafka settings provider: %w", err)
+//	}
+//
+//	// Start consuming in a separate goroutine
+//	consumerCtx, readerCancelFunc := context.WithCancel(ctx)
+//	k.readerCancelFunc = readerCancelFunc
+//
+//	errChan := make(chan error, 1)
+//	k.readerCancelWg.Add(1)
+//
+//	go func() {
+//		defer k.readerCancelWg.Done()
+//		if err := k.consumeMessages(consumerCtx); err != nil && !errors.Is(err, context.Canceled) {
+//			select {
+//			case errChan <- err:
+//			default:
+//			}
+//		}
+//	}()
+//
+//	// Wait for startup errors or successful initialization
+//	select {
+//	case err := <-errChan:
+//		readerCancelFunc()
+//		k.client.Close()
+//		return fmt.Errorf("failed to start message consumption: %w", err)
+//	case <-time.After(5 * time.Second):
+//		k.logger.Info("Kafka settings provider started successfully")
+//		return nil
+//	}
+//}
 
 func (k *SettingsProvider) consumeMessages(ctx context.Context) error {
 	k.logger.Info("Starting message consumption")

@@ -179,7 +179,7 @@ func TestFileSettingsProvider_Shutdown(t *testing.T) {
 			Path:           "/dev/null",
 			UpdateInterval: 10 * time.Millisecond,
 		},
-		subscriberHub: stsSettingsSubscribers.NewSubscriberHub(),
+		subscriberHub: stsSettingsSubscribers.NewSubscriberHub(logger),
 		logger:        logger,
 	}
 

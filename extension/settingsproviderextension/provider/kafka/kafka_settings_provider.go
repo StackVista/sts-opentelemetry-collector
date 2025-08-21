@@ -64,7 +64,7 @@ func NewKafkaSettingsProvider(cfg *stsSettingsConfig.KafkaSettingsProviderConfig
 		logger:              logger,
 		reader:              reader,
 		client:              &kafka.Client{Addr: kafka.TCP(cfg.Brokers...)},
-		subscriberHub:       stsSettingsSubscribers.NewSubscriberHub(),
+		subscriberHub:       stsSettingsSubscribers.NewSubscriberHub(logger),
 		settingsCache:       stsSettingsCommon.NewSettingsCache(),
 		inProgressSnapshots: make(map[string]*inProgressSnapshot),
 	}, nil

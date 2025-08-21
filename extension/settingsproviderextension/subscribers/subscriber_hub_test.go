@@ -3,12 +3,18 @@ package subscribers
 import (
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
+	"go.uber.org/zap"
 	"testing"
 	"time"
 )
 
+func newSubscriberHub() *SubscriberHub {
+	logger, _ := zap.NewDevelopment()
+	return NewSubscriberHub(logger)
+}
+
 func TestSubscriberHub_RegisterAddsSubscriber(t *testing.T) {
-	h := NewSubscriberHub()
+	h := newSubscriberHub()
 
 	ch1 := h.Register()
 	ch2 := h.Register()
@@ -24,7 +30,7 @@ func TestSubscriberHub_RegisterAddsSubscriber(t *testing.T) {
 }
 
 func TestSubscriberHub_NotifySendsSignal(t *testing.T) {
-	h := NewSubscriberHub()
+	h := newSubscriberHub()
 	ch := h.Register() // no filter, receives all updates
 
 	event := stsSettingsEvents.UpdateSettingsEvent{
@@ -44,7 +50,7 @@ func TestSubscriberHub_NotifySendsSignal(t *testing.T) {
 }
 
 func TestSubscriberHub_SubscriberReceivesOnlyMatchingTypes(t *testing.T) {
-	h := NewSubscriberHub()
+	h := newSubscriberHub()
 	ch := h.Register(stsSettingsModel.SettingTypeOtelComponentMapping)
 
 	// Notify with a matching type
@@ -77,7 +83,7 @@ func TestSubscriberHub_SubscriberReceivesOnlyMatchingTypes(t *testing.T) {
 }
 
 func TestSubscriberHub_SubscriberReceivesMultipleFilteredTypes(t *testing.T) {
-	h := NewSubscriberHub()
+	h := newSubscriberHub()
 	ch := h.Register(
 		stsSettingsModel.SettingTypeOtelComponentMapping,
 		stsSettingsModel.SettingTypeOtelRelationMapping,
@@ -93,19 +99,18 @@ func TestSubscriberHub_SubscriberReceivesMultipleFilteredTypes(t *testing.T) {
 	}
 
 	received := []stsSettingsEvents.UpdateSettingsEvent{}
-	timeout := time.After(100 * time.Millisecond)
 	for len(received) < len(events) {
 		select {
 		case got := <-ch:
 			received = append(received, got)
-		case <-timeout:
+		case <-time.After(100 * time.Millisecond):
 			t.Fatalf("expected %d events, got %d", len(events), len(received))
 		}
 	}
 }
 
 func TestSubscriberHub_SubscriberFilterExcludesIrrelevantEvents(t *testing.T) {
-	h := NewSubscriberHub()
+	h := newSubscriberHub()
 	ch := h.Register(stsSettingsModel.SettingTypeOtelRelationMapping)
 
 	irrelevant := stsSettingsEvents.UpdateSettingsEvent{
@@ -121,50 +126,8 @@ func TestSubscriberHub_SubscriberFilterExcludesIrrelevantEvents(t *testing.T) {
 	}
 }
 
-func TestSubscriberHub_NotifyDoesNotBlockOnUnconsumedSignal(t *testing.T) {
-	h := NewSubscriberHub()
-	ch := h.Register() // no filter, receives all updates
-
-	event := stsSettingsEvents.UpdateSettingsEvent{
-		Type: stsSettingsModel.SettingTypeOtelComponentMapping,
-	}
-
-	// Fill the buffer with one pending signal (buffer size is 1).
-	h.Notify(event)
-
-	// Second notify should not block and should be skipped (since channel is full).
-	done := make(chan struct{})
-	go func() {
-		h.Notify(event)
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		// should not block
-	case <-time.After(50 * time.Millisecond):
-		t.Fatalf("Notify blocked on a full channel")
-	}
-
-	// There should be one pending signal now. First non-blocking receive should succeed...
-	select {
-	case <-ch:
-		// got one pending signal
-	default:
-		t.Fatalf("expected exactly one pending signal after skipped notify")
-	}
-
-	// ...and a second non-blocking receive should fail (no extra signal sent).
-	select {
-	case <-ch:
-		t.Fatalf("unexpected extra signal: second notify should have been skipped")
-	default:
-		// no extra signal
-	}
-}
-
 func TestSubscriberHub_MultipleSubscribersReceiveSignal(t *testing.T) {
-	h := NewSubscriberHub()
+	h := newSubscriberHub()
 	ch1 := h.Register()
 	ch2 := h.Register()
 
@@ -193,7 +156,7 @@ func TestSubscriberHub_MultipleSubscribersReceiveSignal(t *testing.T) {
 
 // edge case
 func TestSubscriberHub_NotifyWithNoSubscribersDoesNotPanic(t *testing.T) {
-	h := NewSubscriberHub()
+	h := newSubscriberHub()
 
 	event := stsSettingsEvents.UpdateSettingsEvent{
 		Type: stsSettingsModel.SettingTypeOtelComponentMapping,
