@@ -1051,6 +1051,7 @@ components:
               type: array
               items: 
                 $ref: "#/components/schemas/OtelConditionMapping"
+              minItems: 1
             expireAfterMs:
               type: integer
               format: int64
