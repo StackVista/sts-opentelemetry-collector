@@ -1,8 +1,7 @@
-package subscribers
+package core
 
 import (
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
-	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
 	"go.uber.org/zap"
 	"testing"
 	"time"
@@ -19,8 +18,8 @@ func TestSubscriberHub_RegisterAddsSubscriber(t *testing.T) {
 	ch1 := h.Register()
 	ch2 := h.Register()
 
-	if h.SubscriberCount() != 2 {
-		t.Errorf("expected 2 subscribers, got %d", h.SubscriberCount())
+	if h.SubscriptionCount() != 2 {
+		t.Errorf("expected 2 subscription, got %d", h.SubscriptionCount())
 	}
 
 	// sanity check that channels are different
@@ -34,9 +33,7 @@ func TestSubscriberHub_NotifySendsSignal(t *testing.T) {
 	ch := h.Register() // no filter, receives all updates
 	typ := stsSettingsModel.SettingTypeOtelComponentMapping
 
-	event := stsSettingsEvents.UpdateSettingsEvent{
-		Type: typ,
-	}
+	event := UpdateSettingsEvent{}
 
 	h.Notify(typ)
 
@@ -56,9 +53,7 @@ func TestSubscriberHub_SubscriberReceivesOnlyMatchingTypes(t *testing.T) {
 	matchingType := stsSettingsModel.SettingTypeOtelComponentMapping
 
 	// Notify with a matching type
-	matchingEvent := stsSettingsEvents.UpdateSettingsEvent{
-		Type: matchingType,
-	}
+	matchingEvent := UpdateSettingsEvent{}
 	h.Notify(matchingType)
 
 	select {
@@ -91,7 +86,7 @@ func TestSubscriberHub_SubscriberReceivesMultipleFilteredTypes(t *testing.T) {
 	ch := h.Register(settingTypes...)
 	h.Notify(settingTypes...)
 
-	received := []stsSettingsEvents.UpdateSettingsEvent{}
+	received := []UpdateSettingsEvent{}
 	for len(received) < len(settingTypes) {
 		select {
 		case got := <-ch:
@@ -136,7 +131,7 @@ func TestSubscriberHub_MultipleSubscribersReceiveSignal(t *testing.T) {
 	}
 
 	if !got1 || !got2 {
-		t.Errorf("expected both subscribers to get signal, got1=%v got2=%v", got1, got2)
+		t.Errorf("expected both subscription to get signal, got1=%v got2=%v", got1, got2)
 	}
 }
 

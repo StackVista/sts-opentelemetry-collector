@@ -1,17 +1,15 @@
-package common
+package core
 
 import (
 	"fmt"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
-	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/subscribers"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"sort"
 	"testing"
 )
 
-func newSettingsCache(subscriptionService subscribers.SubscriptionService) *DefaultSettingsCache {
+func newSettingsCache(subscriptionService Subscriber) *DefaultSettingsCache {
 	logger := zap.NewNop()
 
 	return &DefaultSettingsCache{
@@ -28,10 +26,10 @@ type mockSubscriberHub struct {
 func (m *mockSubscriberHub) Notify(settingTypes ...stsSettingsModel.SettingType) {
 	m.notified = append(m.notified, settingTypes...)
 }
-func (m *mockSubscriberHub) Register(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
+func (m *mockSubscriberHub) Register(types ...stsSettingsModel.SettingType) <-chan UpdateSettingsEvent {
 	return nil
 }
-func (m *mockSubscriberHub) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
+func (m *mockSubscriberHub) Unregister(ch <-chan UpdateSettingsEvent) bool {
 	return false
 }
 

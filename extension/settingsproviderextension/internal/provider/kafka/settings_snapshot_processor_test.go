@@ -1,7 +1,7 @@
 package kafka
 
 import (
-	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
+	stsSettingsCore "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/core"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,28 +9,27 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
-	stsSettingsCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/common"
 )
 
 type mockSettingsCache struct {
 	mock.Mock
 }
 
-func (m *mockSettingsCache) UpdateSettingsForType(t stsSettingsModel.SettingType, entries []stsSettingsCommon.SettingEntry) {
+func (m *mockSettingsCache) UpdateSettingsForType(t stsSettingsModel.SettingType, entries []stsSettingsCore.SettingEntry) {
 	m.Called(t, entries)
 }
-func (m *mockSettingsCache) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
+func (m *mockSettingsCache) Unregister(ch <-chan stsSettingsCore.UpdateSettingsEvent) bool {
 	return false
 }
 func (m *mockSettingsCache) GetAvailableSettingTypes() []stsSettingsModel.SettingType { return nil }
 func (m *mockSettingsCache) GetConcreteSettingsByType(settingType stsSettingsModel.SettingType) ([]any, error) {
 	return nil, nil
 }
-func (m *mockSettingsCache) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
+func (m *mockSettingsCache) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsCore.UpdateSettingsEvent {
 	return nil
 }
-func (m *mockSettingsCache) Update(settingsByType stsSettingsCommon.SettingsByType) {}
-func (m *mockSettingsCache) Shutdown()                                              {}
+func (m *mockSettingsCache) Update(settingsByType stsSettingsCore.SettingsByType) {}
+func (m *mockSettingsCache) Shutdown()                                            {}
 
 func newProcessorWithMockCache(t *testing.T) (*DefaultSettingsSnapshotProcessor, *mockSettingsCache) {
 	logger := zaptest.NewLogger(t)

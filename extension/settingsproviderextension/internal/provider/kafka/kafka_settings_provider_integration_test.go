@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/google/uuid"
-	stsSettingsFkafka "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/provider/kafka"
+	stsSettingsFkafka "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/provider/kafka"
 	"github.com/stretchr/testify/assert"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"

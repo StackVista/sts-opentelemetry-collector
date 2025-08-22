@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
-	stsFileSettingsSource "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/provider/file"
-	stsKafkaSettingsSource "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/provider/kafka"
+	stsFileSettingsSource "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/provider/file"
+	stsKafkaSettingsSource "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/provider/kafka"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/extension"
 )

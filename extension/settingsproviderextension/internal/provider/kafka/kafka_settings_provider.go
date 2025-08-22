@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
-	stsSettingsCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/common"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
-	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
+	stsSettingsCore "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/core"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
@@ -27,7 +26,7 @@ type SettingsProvider struct {
 	adminClient *kadm.Client
 	readTimeout time.Duration
 
-	settingsCache             stsSettingsCommon.SettingsCache
+	settingsCache             stsSettingsCore.SettingsCache
 	settingsSnapshotProcessor SettingsSnapshotProcessor
 
 	// Mutex for concurrent access to inProgressSnapshots
@@ -68,7 +67,7 @@ func NewKafkaSettingsProvider(cfg *stsSettingsConfig.KafkaSettingsProviderConfig
 		return nil, fmt.Errorf("failed to create kafka client: %w", err)
 	}
 
-	settingsCache := stsSettingsCommon.NewDefaultSettingsCache(logger)
+	settingsCache := stsSettingsCore.NewDefaultSettingsCache(logger)
 
 	return &SettingsProvider{
 		cfg:                       cfg,
@@ -82,11 +81,11 @@ func NewKafkaSettingsProvider(cfg *stsSettingsConfig.KafkaSettingsProviderConfig
 	}, nil
 }
 
-func (k *SettingsProvider) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
+func (k *SettingsProvider) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsCore.UpdateSettingsEvent {
 	return k.settingsCache.RegisterForUpdates(types...)
 }
 
-func (k *SettingsProvider) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
+func (k *SettingsProvider) Unregister(ch <-chan stsSettingsCore.UpdateSettingsEvent) bool {
 	return k.settingsCache.Unregister(ch)
 }
 

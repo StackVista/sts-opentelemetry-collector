@@ -1,18 +1,17 @@
-package common
+package core
 
 import (
 	"fmt"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
-	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
-	stsSettingsSubscribers "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/subscribers"
 	"go.uber.org/zap"
 	"reflect"
 	"sync"
 )
 
 type SettingEntry struct {
-	Raw      stsSettingsModel.Setting
-	Concrete any // holds the typed/Concrete struct, lazy populated
+	Raw stsSettingsModel.Setting
+	// Concrete holds the typed/Concrete struct, eagerly populated on cache update
+	Concrete any
 }
 
 func NewSettingEntry(raw stsSettingsModel.Setting) SettingEntry {
@@ -42,8 +41,8 @@ func (s *SettingsByType) GetConcreteSettings(settingType stsSettingsModel.Settin
 }
 
 type SettingsCache interface {
-	RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent
-	Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool
+	RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan UpdateSettingsEvent
+	Unregister(ch <-chan UpdateSettingsEvent) bool
 	GetAvailableSettingTypes() []stsSettingsModel.SettingType
 	GetConcreteSettingsByType(settingType stsSettingsModel.SettingType) ([]any, error)
 	Update(settingsByType SettingsByType)
@@ -53,7 +52,7 @@ type SettingsCache interface {
 
 type DefaultSettingsCache struct {
 	logger              *zap.Logger
-	subscriptionService stsSettingsSubscribers.SubscriptionService
+	subscriptionService Subscriber
 
 	// Mutex for concurrent access to settingsByType
 	settingsLock sync.RWMutex
@@ -63,16 +62,16 @@ type DefaultSettingsCache struct {
 
 func NewDefaultSettingsCache(logger *zap.Logger) *DefaultSettingsCache {
 	return &DefaultSettingsCache{
-		subscriptionService: stsSettingsSubscribers.NewSubscriberHub(logger),
+		subscriptionService: NewSubscriberHub(logger),
 		settingsByType:      make(SettingsByType),
 	}
 }
 
-func (s *DefaultSettingsCache) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
+func (s *DefaultSettingsCache) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan UpdateSettingsEvent {
 	return s.subscriptionService.Register(types...)
 }
 
-func (s *DefaultSettingsCache) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
+func (s *DefaultSettingsCache) Unregister(ch <-chan UpdateSettingsEvent) bool {
 	return s.subscriptionService.Unregister(ch)
 }
 

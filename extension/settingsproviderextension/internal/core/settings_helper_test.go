@@ -1,4 +1,4 @@
-package common
+package core
 
 import (
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"

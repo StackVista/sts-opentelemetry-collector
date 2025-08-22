@@ -4,9 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	stsSettingsCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/common"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
-	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
+	stsSettingsCore "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/core"
 	"go.yaml.in/yaml/v3"
 	"os"
 	"sync"
@@ -32,7 +31,7 @@ type SettingsProvider struct {
 	cfg    *stsSettingsConfig.FileSettingsProviderConfig
 	logger *zap.Logger
 
-	settingsCache stsSettingsCommon.SettingsCache
+	settingsCache stsSettingsCore.SettingsCache
 
 	providerCancelFunc context.CancelFunc
 	providerCancelWg   sync.WaitGroup
@@ -42,7 +41,7 @@ func NewFileSettingsProvider(cfg *stsSettingsConfig.FileSettingsProviderConfig, 
 	provider := &SettingsProvider{
 		cfg:           cfg,
 		logger:        logger,
-		settingsCache: stsSettingsCommon.NewDefaultSettingsCache(logger),
+		settingsCache: stsSettingsCore.NewDefaultSettingsCache(logger),
 	}
 
 	// Perform an initial load of the configuration file.
@@ -109,11 +108,11 @@ func (f *SettingsProvider) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (f *SettingsProvider) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
+func (f *SettingsProvider) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsCore.UpdateSettingsEvent {
 	return f.settingsCache.RegisterForUpdates(types...)
 }
 
-func (f *SettingsProvider) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
+func (f *SettingsProvider) Unregister(ch <-chan stsSettingsCore.UpdateSettingsEvent) bool {
 	return f.settingsCache.Unregister(ch)
 }
 
@@ -157,7 +156,7 @@ func (f *SettingsProvider) checkAndUpdateSettings() {
 }
 
 // parseSettings is a private helper method to parse the file content.
-func (f *SettingsProvider) parseSettings(fileContent []byte) (stsSettingsCommon.SettingsByType, error) {
+func (f *SettingsProvider) parseSettings(fileContent []byte) (stsSettingsCore.SettingsByType, error) {
 	if len(fileContent) == 0 {
 		return nil, errors.New("file content is empty")
 	}
@@ -168,7 +167,7 @@ func (f *SettingsProvider) parseSettings(fileContent []byte) (stsSettingsCommon.
 	}
 
 	var errs []error
-	settingsByType := make(stsSettingsCommon.SettingsByType)
+	settingsByType := make(stsSettingsCore.SettingsByType)
 	for _, setting := range rawSettings {
 		jsonBytes, err := json.Marshal(setting)
 		if err != nil {
@@ -188,7 +187,7 @@ func (f *SettingsProvider) parseSettings(fileContent []byte) (stsSettingsCommon.
 			continue
 		}
 
-		settingType, err := stsSettingsCommon.GetSettingType(settingModel)
+		settingType, err := stsSettingsCore.GetSettingType(settingModel)
 		if err != nil {
 			errs = append(errs, err)
 			f.logger.Error("Failed to get setting type.",
@@ -197,7 +196,7 @@ func (f *SettingsProvider) parseSettings(fileContent []byte) (stsSettingsCommon.
 			continue
 		}
 
-		settingEntry := stsSettingsCommon.NewSettingEntry(settingModel)
+		settingEntry := stsSettingsCore.NewSettingEntry(settingModel)
 		settingsByType[settingType] = append(settingsByType[settingType], settingEntry)
 	}
 	return settingsByType, errors.Join(errs...)

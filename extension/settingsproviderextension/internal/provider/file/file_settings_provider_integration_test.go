@@ -8,7 +8,7 @@ import (
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 	stsSettings "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
-	stsSettingsFile "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/provider/file"
+	stsSettingsFile "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/provider/file"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"os"
 	"path/filepath"
