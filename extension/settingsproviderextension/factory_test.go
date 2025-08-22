@@ -1,4 +1,4 @@
-package factory
+package settingsproviderextension
 
 import (
 	"context"

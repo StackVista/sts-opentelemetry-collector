@@ -28,7 +28,7 @@ docker-compose -f docker/kafka/docker-compose down
 
 ### Run the collector using config with extension enabled
 
-Assuming the dependencies are generated and the OTel collector image built, add to your dev-config.yaml (see the main README), the following segments:
+Assuming the dependencies are generated and the OTel collector image built, add to your dev-config.yaml (see the main README, or the [full config](#full-config) at the bottom), the following segments:
 ```yaml
 extensions:
   sts_settings_provider:
@@ -90,4 +90,53 @@ have been processed and added to the internal state of the Kafka settings provid
 ```shell
 2025-08-16T12:57:15.264Z        info    kafka/kafka_settings_provider.go:253    Received snapshot start.        {"kind": "extension", "name": "sts_settings_provider", "snapshotId": "36b6a4e1-1a44-42da-ac72-bd17cefbd4ee", "settingType": "OtelComponentMapping"}
 2025-08-16T12:57:15.264Z        info    kafka/kafka_settings_provider.go:298    Received snapshot stop. Processing complete snapshot.   {"kind": "extension", "name": "sts_settings_provider", "snapshotId": "36b6a4e1-1a44-42da-ac72-bd17cefbd4ee", "settingType": "OtelComponentMapping", "settingCount": 1}
+```
+
+## Full config
+
+```yaml
+extensions:
+  sts_settings_provider:
+#    file:
+#      path: "/settings.yaml"
+#      update_interval: 30s
+    # Or for Kafka:
+   kafka:
+     brokers: ["localhost:9092"]
+     topic: "sts-internal-settings"
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+connectors:
+  tracetotopo:
+  # the extension wiring is done in the source code, by looking up the extension through the component.Host interface
+
+processors:
+  batch:
+
+exporters:
+  debug:
+    verbosity: detailed
+
+service:
+  extensions: [ sts_settings_provider ]
+  pipelines:
+    traces:
+      receivers: [ otlp ]
+      processors: [ batch ]
+      exporters: [ debug, tracetotopo ]
+    metrics:
+      receivers: [ otlp ]
+      processors: [ batch ]
+      exporters: [ debug ]
+    logs:
+      receivers: [ otlp, tracetotopo ]
+      processors: [ batch ]
+      exporters: [ debug ]
 ```

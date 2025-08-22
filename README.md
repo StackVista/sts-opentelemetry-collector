@@ -48,13 +48,13 @@ service:
     traces:
       receivers: [ otlp ]
       processors: [ batch ]
-      exporters: [ debug, tracetotopo ]
+      exporters: [ debug ]
     metrics:
       receivers: [ otlp ]
       processors: [ batch ]
       exporters: [ debug ]
     logs:
-      receivers: [ otlp, tracetotopo ]
+      receivers: [ otlp ]
       processors: [ batch ]
       exporters: [ debug ]]
 ```
@@ -62,6 +62,8 @@ service:
 ```shell
 docker run --rm -p 4317:4317 -p 4318:4318  -v ./dev-config.yaml:/config.yaml --network="host" sts-opentelemetry-collector:latest  --config /config.yaml
 ```
+
+To run with an extension enabled, see as an example the guide for the [STS Settings Provider](./docs/settings_provider_extension.md) extension.
 
 ## Generate traces
 ```shell
