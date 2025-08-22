@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
+	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
@@ -25,7 +26,7 @@ func TestFilter_evalCondition(t *testing.T) {
 		scope          *ptrace.ScopeSpans
 		resource       *ptrace.ResourceSpans
 		condition      settings.OtelConditionMapping
-		expectedAction settings.OtelConditionMappingAction
+		expectedAction *settings.OtelConditionMappingAction
 	}{
 		{
 			name:     "Matched condition with CREATE action",
@@ -36,7 +37,7 @@ func TestFilter_evalCondition(t *testing.T) {
 				Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.test-attr"},
 				Action:     settings.CREATE,
 			},
-			expectedAction: settings.CREATE,
+			expectedAction: Ptr(settings.CREATE),
 		},
 		{
 			name:     "Non-matched condition with CREATE action",
@@ -47,7 +48,7 @@ func TestFilter_evalCondition(t *testing.T) {
 				Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.non-existing-attr"},
 				Action:     settings.CREATE,
 			},
-			expectedAction: settings.CONTINUE,
+			expectedAction: nil,
 		},
 		{
 			name:     "Matched condition with REJECT action",
@@ -58,7 +59,7 @@ func TestFilter_evalCondition(t *testing.T) {
 				Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.test-attr"},
 				Action:     settings.REJECT,
 			},
-			expectedAction: settings.REJECT,
+			expectedAction: Ptr(settings.REJECT),
 		},
 		{
 			name:     "Non-matched condition with REJECT action",
@@ -69,29 +70,7 @@ func TestFilter_evalCondition(t *testing.T) {
 				Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.non-existing-attr"},
 				Action:     settings.REJECT,
 			},
-			expectedAction: settings.CONTINUE,
-		},
-		{
-			name:     "Matched condition with CONTINUE action",
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			condition: settings.OtelConditionMapping{
-				Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.test-attr"},
-				Action:     settings.CONTINUE,
-			},
-			expectedAction: settings.CONTINUE,
-		},
-		{
-			name:     "Non-matched condition with CONTINUE action",
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			condition: settings.OtelConditionMapping{
-				Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.non-existing-attr"},
-				Action:     settings.CONTINUE,
-			},
-			expectedAction: settings.CONTINUE,
+			expectedAction: nil,
 		},
 		{
 			name:     "Support scope attributes",
@@ -102,7 +81,7 @@ func TestFilter_evalCondition(t *testing.T) {
 				Expression: settings.OtelBooleanExpression{Expression: "scopeAttributes.test-attr-scope"},
 				Action:     settings.CREATE,
 			},
-			expectedAction: settings.CREATE,
+			expectedAction: Ptr(settings.CREATE),
 		},
 		{
 			name:     "Support resource attributes",
@@ -113,16 +92,14 @@ func TestFilter_evalCondition(t *testing.T) {
 				Expression: settings.OtelBooleanExpression{Expression: "resourceAttributes.test-attr-resource"},
 				Action:     settings.CREATE,
 			},
-			expectedAction: settings.CREATE,
+			expectedAction: Ptr(settings.CREATE),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			resultAction := evalCondition(tc.span, tc.scope, tc.resource, &tc.condition)
-			if resultAction != tc.expectedAction {
-				t.Errorf("Expected action %v, got %v", tc.expectedAction, resultAction)
-			}
+			assert.Equal(t, tc.expectedAction, resultAction)
 		})
 	}
 }
@@ -153,7 +130,7 @@ func TestFilter_filterByConditions(t *testing.T) {
 			scope:      &testScope,
 			resource:   &testResource,
 			conditions: []settings.OtelConditionMapping{},
-			expected:   true,
+			expected:   false,
 		},
 		{
 			name:     "Single CREATE condition - matched",
@@ -179,7 +156,7 @@ func TestFilter_filterByConditions(t *testing.T) {
 					Action:     settings.CREATE,
 				},
 			},
-			expected: true,
+			expected: false,
 		},
 		{
 			name:     "Single REJECT condition - matched",
@@ -205,33 +182,7 @@ func TestFilter_filterByConditions(t *testing.T) {
 					Action:     settings.REJECT,
 				},
 			},
-			expected: true,
-		},
-		{
-			name:     "Single CONTINUE condition - matched",
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			conditions: []settings.OtelConditionMapping{
-				{
-					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.test-attr"},
-					Action:     settings.CONTINUE,
-				},
-			},
-			expected: true,
-		},
-		{
-			name:     "Single CONTINUE condition - not matched",
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			conditions: []settings.OtelConditionMapping{
-				{
-					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.non-existing-attr"},
-					Action:     settings.CONTINUE,
-				},
-			},
-			expected: true,
+			expected: false,
 		},
 		{
 			name:     "CREATE matched then REJECT matched",
@@ -301,14 +252,29 @@ func TestFilter_filterByConditions(t *testing.T) {
 			},
 			expected: true,
 		},
+				{
+			name:     "REJECT not matched then CREATE not-matched",
+			span:     &testSpan,
+			scope:    &testScope,
+			resource: &testResource,
+			conditions: []settings.OtelConditionMapping{
+				{
+					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.non-existing-attr"},
+					Action:     settings.REJECT,
+				},
+				{
+					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.non-existing-attr"},
+					Action:     settings.CREATE,
+				},
+			},
+			expected: false,
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result := filterByConditions(tc.span, tc.scope, tc.resource, &tc.conditions)
-			if result != tc.expected {
-				t.Errorf("Expected %v, got %v", tc.expected, result)
-			}
+			assert.Equal(t, tc.expected, result)
 		})
 	}
 }
