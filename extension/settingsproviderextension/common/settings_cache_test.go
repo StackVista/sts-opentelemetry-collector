@@ -11,10 +11,10 @@ import (
 	"testing"
 )
 
-func newSettingsCache(subscriptionService subscribers.SubscriptionService) *SettingsCache {
+func newSettingsCache(subscriptionService subscribers.SubscriptionService) *DefaultSettingsCache {
 	logger := zap.NewNop()
 
-	return &SettingsCache{
+	return &DefaultSettingsCache{
 		logger:              logger,
 		settingsByType:      make(SettingsByType),
 		subscriptionService: subscriptionService,
@@ -28,11 +28,9 @@ type mockSubscriberHub struct {
 func (m *mockSubscriberHub) Notify(settingTypes ...stsSettingsModel.SettingType) {
 	m.notified = append(m.notified, settingTypes...)
 }
-
 func (m *mockSubscriberHub) Register(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
 	return nil
 }
-
 func (m *mockSubscriberHub) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
 	return false
 }

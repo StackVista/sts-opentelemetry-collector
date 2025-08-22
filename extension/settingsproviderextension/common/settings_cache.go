@@ -41,7 +41,17 @@ func (s *SettingsByType) GetConcreteSettings(settingType stsSettingsModel.Settin
 	return concreteSettings, nil
 }
 
-type SettingsCache struct {
+type SettingsCache interface {
+	RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent
+	Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool
+	GetAvailableSettingTypes() []stsSettingsModel.SettingType
+	GetConcreteSettingsByType(settingType stsSettingsModel.SettingType) ([]any, error)
+	Update(settingsByType SettingsByType)
+	UpdateSettingsForType(settingType stsSettingsModel.SettingType, newEntries []SettingEntry)
+	Shutdown()
+}
+
+type DefaultSettingsCache struct {
 	logger              *zap.Logger
 	subscriptionService stsSettingsSubscribers.SubscriptionService
 
@@ -51,35 +61,35 @@ type SettingsCache struct {
 	settingsByType SettingsByType
 }
 
-func NewSettingsCache(logger *zap.Logger) *SettingsCache {
-	return &SettingsCache{
+func NewDefaultSettingsCache(logger *zap.Logger) *DefaultSettingsCache {
+	return &DefaultSettingsCache{
 		subscriptionService: stsSettingsSubscribers.NewSubscriberHub(logger),
 		settingsByType:      make(SettingsByType),
 	}
 }
 
-func (s *SettingsCache) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
+func (s *DefaultSettingsCache) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
 	return s.subscriptionService.Register(types...)
 }
 
-func (s *SettingsCache) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
+func (s *DefaultSettingsCache) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
 	return s.subscriptionService.Unregister(ch)
 }
 
-func (s *SettingsCache) Shutdown() {
+func (s *DefaultSettingsCache) Shutdown() {
 	if s.subscriptionService != nil {
 		s.subscriptionService.Shutdown()
 	}
 }
 
-func (s *SettingsCache) GetAvailableSettingTypes() []stsSettingsModel.SettingType {
+func (s *DefaultSettingsCache) GetAvailableSettingTypes() []stsSettingsModel.SettingType {
 	s.settingsLock.RLock()
 	defer s.settingsLock.RUnlock()
 
 	return s.settingsByType.GetTypes()
 }
 
-func (s *SettingsCache) GetConcreteSettingsByType(settingType stsSettingsModel.SettingType) ([]any, error) {
+func (s *DefaultSettingsCache) GetConcreteSettingsByType(settingType stsSettingsModel.SettingType) ([]any, error) {
 	s.settingsLock.RLock()
 	cachedConcreteEntries, err := s.settingsByType.GetConcreteSettings(settingType)
 	s.settingsLock.RUnlock()
@@ -87,7 +97,7 @@ func (s *SettingsCache) GetConcreteSettingsByType(settingType stsSettingsModel.S
 	return cachedConcreteEntries, err
 }
 
-func (s *SettingsCache) Update(settingsByType SettingsByType) {
+func (s *DefaultSettingsCache) Update(settingsByType SettingsByType) {
 	// Iterate new snapshot and apply type-by-type
 	for t, newEntries := range settingsByType {
 		s.UpdateSettingsForType(t, newEntries)
@@ -109,7 +119,7 @@ func (s *SettingsCache) Update(settingsByType SettingsByType) {
 	s.subscriptionService.Notify(deletedTypes...)
 }
 
-func (s *SettingsCache) UpdateSettingsForType(settingType stsSettingsModel.SettingType, newEntries []SettingEntry) {
+func (s *DefaultSettingsCache) UpdateSettingsForType(settingType stsSettingsModel.SettingType, newEntries []SettingEntry) {
 	var validEntries []SettingEntry
 	var hasConversionFailures bool
 
@@ -163,7 +173,7 @@ func concreteSettingsChanged(oldEntries, newEntries []SettingEntry) bool {
 	return false
 }
 
-func (s *SettingsCache) toConcreteTypeIfNeeded(entry *SettingEntry, converter ConverterFunc) (any, error) {
+func (s *DefaultSettingsCache) toConcreteTypeIfNeeded(entry *SettingEntry, converter ConverterFunc) (any, error) {
 	if entry.Concrete != nil {
 		return entry.Concrete, nil
 	}
@@ -176,45 +186,3 @@ func (s *SettingsCache) toConcreteTypeIfNeeded(entry *SettingEntry, converter Co
 	entry.Concrete = val
 	return val, nil
 }
-
-//func (s *SettingsCache) GetConcreteSettingsByType(settingType stsSettingsModel.SettingType) ([]any, error) {
-//	// read lock to fetch cached entries
-//	s.settingsLock.RLock()
-//	cached, ok := s.settingsByType[settingType]
-//	s.settingsLock.RUnlock()
-//
-//	if !ok {
-//		return nil, fmt.Errorf("no settings for type %s", settingType)
-//	}
-//
-//	// GetConcreteSettings converter (assume ConverterFor is thread-safe)
-//	converter, ok := ConverterFor(settingType)
-//	if !ok {
-//		return nil, fmt.Errorf("no converter registered for type %s", settingType)
-//	}
-//
-//	concreteSettings := make([]any, len(cached))
-//
-//	for i := range cached {
-//		// Fast path: already hydrated
-//		if cached[i].Concrete != nil {
-//			concreteSettings[i] = cached[i].Concrete
-//			continue
-//		}
-//
-//		// Hydrate lazily with write lock
-//		s.settingsLock.Lock()
-//		if cached[i].Concrete == nil { // double-check
-//			val, err := converter(cached[i].Raw)
-//			if err != nil {
-//				s.settingsLock.Unlock()
-//				return nil, err
-//			}
-//			cached[i].Concrete = val
-//		}
-//		concreteSettings[i] = cached[i].Concrete
-//		s.settingsLock.Unlock()
-//	}
-//
-//	return concreteSettings, nil
-//}

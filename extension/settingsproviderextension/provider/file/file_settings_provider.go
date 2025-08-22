@@ -18,11 +18,21 @@ import (
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 )
 
+// ---------------------------------------------------------------------------------------
+// Take note! The file settings provider as-is (08/2025) isn't suited for production use.
+// There needs to be at least a few improvements before the file settings provider can be
+// used in other use cases.
+// 1. Use a custom (and friendlier) model for reading settings from a file. Currently, it uses
+// the same settings model generated from the OpenAPI settings spec as the model to read settings from the file.
+// 2. Observability - no metrics are being emitted.
+// For production use-cases, use the Kafka settings provider.
+// ---------------------------------------------------------------------------------------
+
 type SettingsProvider struct {
 	cfg    *stsSettingsConfig.FileSettingsProviderConfig
 	logger *zap.Logger
 
-	settingsCache *stsSettingsCommon.SettingsCache
+	settingsCache stsSettingsCommon.SettingsCache
 
 	providerCancelFunc context.CancelFunc
 	providerCancelWg   sync.WaitGroup
@@ -32,7 +42,7 @@ func NewFileSettingsProvider(cfg *stsSettingsConfig.FileSettingsProviderConfig, 
 	provider := &SettingsProvider{
 		cfg:           cfg,
 		logger:        logger,
-		settingsCache: stsSettingsCommon.NewSettingsCache(logger),
+		settingsCache: stsSettingsCommon.NewDefaultSettingsCache(logger),
 	}
 
 	// Perform an initial load of the configuration file.
