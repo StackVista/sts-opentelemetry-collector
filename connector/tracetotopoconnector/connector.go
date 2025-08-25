@@ -47,7 +47,10 @@ func (p *connectorImpl) Start(ctx context.Context, host component.Host) error {
 	p.logger.Info("StsSettingsProvider extension found and bound to the tracetotopo connector")
 	p.settingsProvider = settingsProvider
 
-	subscriptionCh := p.settingsProvider.RegisterForUpdates(stsSettingsModel.SettingTypeOtelComponentMapping, stsSettingsModel.SettingTypeOtelRelationMapping)
+	subscriptionCh, err := p.settingsProvider.RegisterForUpdates(stsSettingsModel.SettingTypeOtelComponentMapping, stsSettingsModel.SettingTypeOtelRelationMapping)
+	if err != nil {
+		return err
+	}
 	p.subscriptionCh = subscriptionCh
 
 	return nil

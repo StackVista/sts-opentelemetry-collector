@@ -82,7 +82,6 @@ func produceMessages(ctx context.Context, client *kgo.Client, topic string, mess
 	log.Printf("Successfully produced %d/%d messages", successCount, len(messages))
 }
 
-// This version doesn’t need *testing.T
 func newOtelComponentMappingSnapshot(snapshotId, mappingId, mappingName string) []*kgo.Record {
 	// Snapshot Start
 	snapshotStartMessageKey, snapshotStartPayload := newSnapshotStartMessageKeyAndPayload(

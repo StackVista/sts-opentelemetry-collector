@@ -109,7 +109,7 @@ func (f *SettingsProvider) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (f *SettingsProvider) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
+func (f *SettingsProvider) RegisterForUpdates(types ...stsSettingsModel.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
 	return f.settingsCache.RegisterForUpdates(types...)
 }
 

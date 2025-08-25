@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
 	"go.uber.org/zap"
@@ -8,12 +9,12 @@ import (
 )
 
 const (
-	defaultBufferSize = 2
+	defaultBufferSize = 1
 )
 
 type Subscriber interface {
 	Notify(types ...stsSettingsModel.SettingType)
-	Register(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent
+	Register(types ...stsSettingsModel.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error)
 	Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool
 	Shutdown()
 }
@@ -39,26 +40,31 @@ func NewSubscriberHub(logger *zap.Logger) *SubscriberHub {
 	}
 }
 
-func (h *SubscriberHub) Register(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
-	return h.RegisterWithBuffer(defaultBufferSize, types...)
-}
-
-func (h *SubscriberHub) RegisterWithBuffer(bufferSize int, types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
+func (h *SubscriberHub) Register(types ...stsSettingsModel.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
 	h.subscriptionsLock.Lock()
 	defer h.subscriptionsLock.Unlock()
 
 	typeSet := make(map[stsSettingsModel.SettingType]struct{}, len(types))
+	var missing []stsSettingsModel.SettingType
 	for _, t := range types {
-		typeSet[t] = struct{}{}
+		if _, ok := ConverterFor(t); !ok {
+			missing = append(missing, t)
+		} else {
+			typeSet[t] = struct{}{}
+		}
+	}
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("no converters registered for setting types: %v", missing)
 	}
 
 	// buffered so sender won’t block
-	ch := make(chan stsSettingsEvents.UpdateSettingsEvent, bufferSize)
+	ch := make(chan stsSettingsEvents.UpdateSettingsEvent, defaultBufferSize)
 	h.subscriptions = append(h.subscriptions, subscription{
 		settingTypes: typeSet,
 		channel:      ch,
 	})
-	return ch
+
+	return ch, nil
 }
 
 func (h *SubscriberHub) Notify(types ...stsSettingsModel.SettingType) {

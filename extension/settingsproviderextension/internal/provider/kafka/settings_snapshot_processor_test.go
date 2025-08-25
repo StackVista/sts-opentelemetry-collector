@@ -28,8 +28,8 @@ func (m *mockSettingsCache) GetAvailableSettingTypes() []stsSettingsModel.Settin
 func (m *mockSettingsCache) GetConcreteSettingsByType(settingType stsSettingsModel.SettingType) ([]any, error) {
 	return nil, nil
 }
-func (m *mockSettingsCache) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
-	return nil
+func (m *mockSettingsCache) RegisterForUpdates(types ...stsSettingsModel.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
+	return nil, nil
 }
 func (m *mockSettingsCache) Update(settingsByType stsSettingsCore.SettingsByType) {}
 func (m *mockSettingsCache) Shutdown()                                            {}
