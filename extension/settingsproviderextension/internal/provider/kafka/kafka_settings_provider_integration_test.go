@@ -11,7 +11,7 @@ import (
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.opentelemetry.io/collector/component/componenttest"
-	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest"
 	"log"
 	"testing"
 	"time"
@@ -234,8 +234,8 @@ func createProvider(t *testing.T, ctx context.Context, brokers []string, topicNa
 		BufferSize:  1000,
 		ReadTimeout: 60 * time.Second,
 	}
-	logger, _ := zap.NewDevelopment()
-	provider, err := stsSettingsFkafka.NewKafkaSettingsProvider(providerCfg, logger)
+	logger := zaptest.NewLogger(t)
+	provider, err := stsSettingsFkafka.NewKafkaSettingsProvider(ctx, providerCfg, componenttest.NewNopTelemetrySettings(), logger)
 	require.NoError(t, err)
 
 	go provider.Start(ctx, componenttest.NewNopHost())

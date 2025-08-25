@@ -10,7 +10,7 @@ import (
 )
 
 func newSettingsCache(subscriptionService Subscriber) *DefaultSettingsCache {
-	logger := zap.NewNop()
+	logger := Nop()
 
 	return &DefaultSettingsCache{
 		logger:              logger,

@@ -29,7 +29,7 @@ func createDefaultConfig() component.Config {
 	return &stsSettingsConfig.Config{}
 }
 
-func createExtension(_ context.Context, set extension.CreateSettings, cfg component.Config) (extension.Extension, error) {
+func createExtension(ctx context.Context, set extension.CreateSettings, cfg component.Config) (extension.Extension, error) {
 	topoCfg := cfg.(*stsSettingsConfig.Config)
 	logger := set.Logger
 
@@ -42,7 +42,7 @@ func createExtension(_ context.Context, set extension.CreateSettings, cfg compon
 	}
 
 	if topoCfg.Kafka != nil {
-		kafkaProvider, err := stsKafkaSettingsSource.NewKafkaSettingsProvider(topoCfg.Kafka, logger)
+		kafkaProvider, err := stsKafkaSettingsSource.NewKafkaSettingsProvider(ctx, topoCfg.Kafka, set.TelemetrySettings, logger)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create kafka provider: %w", err)
 		}

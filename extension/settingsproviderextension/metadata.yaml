@@ -3,7 +3,7 @@ type: settings_provider
 status:
   class: extension
   stability:
-    development: [extension]
-  distributions: [contrib]
+    development: [ extension ]
+  distributions: [ contrib ]
   codeowners:
     active: StackState B.V.

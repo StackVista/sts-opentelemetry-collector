@@ -39,7 +39,7 @@ type SettingsProvider struct {
 	ReaderCancelWg   sync.WaitGroup
 }
 
-func NewKafkaSettingsProvider(cfg *stsSettingsConfig.KafkaSettingsProviderConfig, logger *zap.Logger) (*SettingsProvider, error) {
+func NewKafkaSettingsProvider(ctx context.Context, cfg *stsSettingsConfig.KafkaSettingsProviderConfig, telemetrySettings component.TelemetrySettings, logger *zap.Logger) (*SettingsProvider, error) {
 	consumerGroupID := fmt.Sprintf("sts-otel-collector-internal-settings-%s", uuid.New().String())
 
 	// Create Franz-go client options
@@ -69,13 +69,18 @@ func NewKafkaSettingsProvider(cfg *stsSettingsConfig.KafkaSettingsProviderConfig
 
 	settingsCache := stsSettingsCore.NewDefaultSettingsCache(logger)
 
+	processor, err := NewDefaultSettingsSnapshotProcessor(ctx, logger, telemetrySettings, settingsCache)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create settings snapshot processor: %w", err)
+	}
+
 	return &SettingsProvider{
 		cfg:                       cfg,
 		logger:                    logger,
 		client:                    client,
 		adminClient:               kadm.NewClient(client),
 		settingsCache:             settingsCache,
-		settingsSnapshotProcessor: NewDefaultSettingsSnapshotProcessor(logger, settingsCache),
+		settingsSnapshotProcessor: processor,
 		inProgressSnapshots:       make(map[string]*InProgressSnapshot),
 		readTimeout:               30 * time.Second,
 	}, nil

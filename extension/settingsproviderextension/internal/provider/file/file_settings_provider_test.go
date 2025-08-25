@@ -7,7 +7,7 @@ import (
 	stsSettingsCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest"
 	"path/filepath"
 	"testing"
 	"time"
@@ -19,7 +19,7 @@ func TestFileSettingsProvider_NewFileSettingsProvider(t *testing.T) {
 		cfg := &stsSettingsConfig.FileSettingsProviderConfig{
 			Path: filepath.Join("./testdata", "settings.yaml"),
 		}
-		provider, err := NewFileSettingsProvider(cfg, zap.NewNop())
+		provider, err := NewFileSettingsProvider(cfg, zaptest.NewLogger(t))
 		require.NoError(t, err)
 		assert.NotNil(t, provider)
 		settings, err := provider.GetCurrentSettingsByType(stsSettingsModel.SettingTypeOtelComponentMapping)
@@ -32,7 +32,7 @@ func TestFileSettingsProvider_NewFileSettingsProvider(t *testing.T) {
 		cfg := &stsSettingsConfig.FileSettingsProviderConfig{
 			Path: "/non-existent/file",
 		}
-		provider, err := NewFileSettingsProvider(cfg, zap.NewNop())
+		provider, err := NewFileSettingsProvider(cfg, zaptest.NewLogger(t))
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "no such file or directory")
 		assert.Nil(t, provider)
@@ -43,7 +43,7 @@ func TestFileSettingsProvider_NewFileSettingsProvider(t *testing.T) {
 		cfg := &stsSettingsConfig.FileSettingsProviderConfig{
 			Path: filepath.Join("./testdata", "settings_malformed.yaml"),
 		}
-		provider, err := NewFileSettingsProvider(cfg, zap.NewNop())
+		provider, err := NewFileSettingsProvider(cfg, zaptest.NewLogger(t))
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "yaml: line 3")
 		assert.Nil(t, provider)
@@ -54,7 +54,7 @@ func TestFileSettingsProvider_NewFileSettingsProvider(t *testing.T) {
 func TestFileSettingsProvider_ParseSettings(t *testing.T) {
 	provider := &SettingsProvider{
 		cfg:    &stsSettingsConfig.FileSettingsProviderConfig{Path: "/dev/null"},
-		logger: zap.NewNop(),
+		logger: zaptest.NewLogger(t),
 	}
 
 	// Define test cases
@@ -172,7 +172,7 @@ func TestFileSettingsProvider_ParseSettings(t *testing.T) {
 }
 
 func TestFileSettingsProvider_Shutdown(t *testing.T) {
-	logger, _ := zap.NewDevelopment()
+	logger := zaptest.NewLogger(t)
 	provider := &SettingsProvider{
 		cfg: &stsSettingsConfig.FileSettingsProviderConfig{
 			Path:           "/dev/null",

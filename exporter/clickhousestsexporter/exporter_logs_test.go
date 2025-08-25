@@ -59,7 +59,7 @@ func TestLogsExporter_New(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 
 			var err error
-			exporter, err := newLogsExporter(zap.NewNop(), test.config)
+			exporter, err := newLogsExporter(Nop(), test.config)
 			err = errors.Join(err, err)
 
 			if exporter != nil {

@@ -10,6 +10,7 @@ import (
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
 	stsSettingsFile "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/provider/file"
 	"go.opentelemetry.io/collector/component/componenttest"
+	"go.uber.org/zap/zaptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -17,7 +18,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
 
@@ -72,7 +72,7 @@ func setupFileProvider(t *testing.T, updateInterval time.Duration) (ctx context.
 		Path:           tempFilePath,
 		UpdateInterval: updateInterval,
 	}
-	logger, _ := zap.NewDevelopment()
+	logger := zaptest.NewLogger(t)
 	provider, err = stsSettingsFile.NewFileSettingsProvider(cfg, logger)
 	require.NoError(t, err)
 

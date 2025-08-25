@@ -8,7 +8,7 @@ import (
 )
 
 func newSubscriberHub() *SubscriberHub {
-	logger, _ := zap.NewDevelopment()
+	logger, _ := zaptest.NewLogger(t)
 	return NewSubscriberHub(logger)
 }
 

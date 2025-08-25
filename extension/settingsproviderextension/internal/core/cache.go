@@ -10,7 +10,9 @@ import (
 
 type SettingEntry struct {
 	Raw stsSettingsModel.Setting
-	// Concrete holds the typed/Concrete struct, eagerly populated on cache update
+	// Concrete is the typed representation of Raw, eagerly materialized when the
+	// cache is updated. This avoids repeated JSON (un)marshaling when converting
+	// from the generic Setting into its concrete type (e.g. when retrieving a setting (by type) from the cache).
 	Concrete any
 }
 
@@ -120,7 +122,6 @@ func (s *DefaultSettingsCache) Update(settingsByType SettingsByType) {
 
 func (s *DefaultSettingsCache) UpdateSettingsForType(settingType stsSettingsModel.SettingType, newEntries []SettingEntry) {
 	var validEntries []SettingEntry
-	var hasConversionFailures bool
 
 	// Convert all new entries to concrete type first
 	if converter, ok := ConverterFor(settingType); ok {
@@ -128,7 +129,6 @@ func (s *DefaultSettingsCache) UpdateSettingsForType(settingType stsSettingsMode
 			_, err := s.toConcreteTypeIfNeeded(&entry, converter)
 			if err != nil {
 				s.logger.Warn("skipping setting entry due to conversion failure", zap.Error(err), zap.String("type", string(settingType)))
-				hasConversionFailures = true
 				continue
 			}
 			validEntries = append(validEntries, entry)
@@ -150,11 +150,6 @@ func (s *DefaultSettingsCache) UpdateSettingsForType(settingType stsSettingsMode
 	// Only notify if we have valid changes
 	if changed && len(validEntries) > 0 {
 		s.subscriptionService.Notify(settingType)
-	}
-
-	// Optional: track conversion failures in metrics
-	if hasConversionFailures {
-		// TODO: increment conversion failure metric
 	}
 }
 
