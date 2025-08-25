@@ -52,7 +52,7 @@ type InternalRawSettingsProvider interface {
 // Internally, it:
 //  1. Downcasts the provider to InternalRawSettingsProvider
 //  2. Calls the untyped UnsafeGetCurrentSettingsByType method
-//  3. Casts and copies the results into a type-safe []T slice
+//  3. Casts the results into a type-safe []T slice
 //
 // All StsSettingsProvider implementations must also implement InternalRawSettingsProvider
 // for this function to work.
@@ -68,5 +68,5 @@ func GetSettingsAs[T any](p StsSettingsProvider, typ stsSettingsModel.SettingTyp
 	if err != nil {
 		return nil, err
 	}
-	return stsSettingsCore.CastAndCopySlice[T](vals)
+	return stsSettingsCore.CastSlice[T](vals)
 }

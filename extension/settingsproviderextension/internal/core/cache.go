@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"github.com/mohae/deepcopy"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
 	"go.uber.org/zap"
@@ -25,7 +26,7 @@ func NewSettingEntry(raw stsSettingsModel.Setting) SettingEntry {
 
 type SettingsByType map[stsSettingsModel.SettingType][]SettingEntry
 
-func (s *SettingsByType) GetTypes() []stsSettingsModel.SettingType {
+func (s *SettingsByType) getTypes() []stsSettingsModel.SettingType {
 	types := make([]stsSettingsModel.SettingType, 0, len(*s))
 	for t := range *s {
 		types = append(types, t)
@@ -33,12 +34,11 @@ func (s *SettingsByType) GetTypes() []stsSettingsModel.SettingType {
 	return types
 }
 
-func (s *SettingsByType) GetConcreteSettings(settingType stsSettingsModel.SettingType) ([]any, error) {
+func (s *SettingsByType) getConcreteSettings(settingType stsSettingsModel.SettingType) ([]any, error) {
 	entries := (*s)[settingType] // returns nil if missing
 	concreteSettings := make([]any, len(entries))
 	for i := range entries {
-		// TODO: we could do a deep copy here?
-		concreteSettings[i] = entries[i].Concrete
+		concreteSettings[i] = deepcopy.Copy(entries[i].Concrete)
 	}
 	return concreteSettings, nil
 }
@@ -88,12 +88,12 @@ func (s *DefaultSettingsCache) GetAvailableSettingTypes() []stsSettingsModel.Set
 	s.settingsLock.RLock()
 	defer s.settingsLock.RUnlock()
 
-	return s.settingsByType.GetTypes()
+	return s.settingsByType.getTypes()
 }
 
 func (s *DefaultSettingsCache) GetConcreteSettingsByType(settingType stsSettingsModel.SettingType) ([]any, error) {
 	s.settingsLock.RLock()
-	cachedConcreteEntries, err := s.settingsByType.GetConcreteSettings(settingType)
+	cachedConcreteEntries, err := s.settingsByType.getConcreteSettings(settingType)
 	s.settingsLock.RUnlock()
 
 	return cachedConcreteEntries, err

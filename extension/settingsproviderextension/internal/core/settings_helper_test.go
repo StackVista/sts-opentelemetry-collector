@@ -3,7 +3,6 @@ package core
 import (
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"testing"
 )
 
@@ -87,24 +86,6 @@ func TestSettingsHelper_GetSettingType(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestSettingsHelper_DeepCopyAs(t *testing.T) {
-	t.Run("struct with nested references", func(t *testing.T) {
-		mapping := newOtelComponentMapping("111")
-
-		mappingCopy, err := DeepCopyAs[stsSettingsModel.OtelComponentMapping](mapping)
-		require.NoError(t, err)
-
-		// Values match
-		require.Equal(t, mapping, mappingCopy)
-
-		// Slices are not the same reference
-		require.NotSame(t, mapping.Conditions, mappingCopy.Conditions)
-
-		// Nested pointer fields also independent
-		require.NotSame(t, &mapping.Output.DomainIdentifier, &mappingCopy.Output.DomainIdentifier)
-	})
 }
 
 func newOtelComponentMapping(id string) stsSettingsModel.OtelComponentMapping {

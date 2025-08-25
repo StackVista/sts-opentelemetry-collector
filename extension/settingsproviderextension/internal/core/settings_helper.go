@@ -2,7 +2,6 @@ package core
 
 import (
 	"fmt"
-	"github.com/mohae/deepcopy"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 )
 
@@ -30,30 +29,16 @@ func ConverterFor(t stsSettingsModel.SettingType) (ConverterFunc, bool) {
 	return fn, ok
 }
 
-func CastAndCopySlice[T any](raw []any) ([]T, error) {
+func CastSlice[T any](raw []any) ([]T, error) {
 	out := make([]T, 0, len(raw))
 	for _, v := range raw {
-		t, ok := v.(T)
+		typed, ok := v.(T)
 		if !ok {
 			return nil, fmt.Errorf("expected element of type %T but got %T", *new(T), v)
 		}
-		typedCopy, err := DeepCopyAs[T](t)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, typedCopy)
+		out = append(out, typed)
 	}
 	return out, nil
-}
-
-func DeepCopyAs[T any](val any) (T, error) {
-	valCopy := deepcopy.Copy(val)
-	typedCopy, ok := valCopy.(T)
-	if !ok {
-		var zero T
-		return zero, fmt.Errorf("failed to cast deepcopy to expected type")
-	}
-	return typedCopy, nil
 }
 
 // GetSettingType returns the SettingType of a generic setting
