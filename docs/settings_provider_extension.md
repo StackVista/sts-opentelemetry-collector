@@ -1,13 +1,13 @@
 # Settings provider extension
-Provides the capability to retrieve internal SUSE Observability/Stackstate settings to components.
+Provides the capability to supply internal SUSE Observability/StackState settings to components.
 
 The settings provider can use either a file or Kafka topic as a source for the settings (based on the protocol defined in
 [stackstate-openapi](https://gitlab.com/stackvista/platform/stackstate-openapi/-/blob/master/spec_settings/openapi.yaml?ref_type=heads)).
 
 ## Run locally
 
-What the following setup achieves is the following:
-- OTel Collector with Extension consuming internal settings message from Kafka
+What the setup achieves is the following:
+- OTel Collector with Extension consuming internal settings messages from Kafka
 
 Follow the [install dependencies](../README.md#install-dependencies) section in the main README.
 
@@ -58,7 +58,7 @@ docker run --rm \
   --network="host" sts-opentelemetry-collector:latest --config /config.yaml
 ```
 
-**with file-based settings provider**
+**with file-based settings provider (remember to update the extension config)**
 ```shell
 docker run --rm \
   -p 4317:4317 -p 4318:4318 \
@@ -86,10 +86,10 @@ go run ./extension/settingsproviderextension/cmd/publish-snapshot/main.go localh
 ```
 
 In the terminal tab where the OTel collector container is running, you should see in the logs that the settings messages
-have been processed and added to the internal state of the Kafka settings provider. Along the lines of:
+have been processed and added to the internal state of the Kafka settings provider (if debug logging is enabled):
 ```shell
-2025-08-16T12:57:15.264Z        info    kafka/kafka_settings_provider.go:253    Received snapshot start.        {"kind": "extension", "name": "sts_settings_provider", "snapshotId": "36b6a4e1-1a44-42da-ac72-bd17cefbd4ee", "settingType": "OtelComponentMapping"}
-2025-08-16T12:57:15.264Z        info    kafka/kafka_settings_provider.go:298    Received snapshot stop. Processing complete snapshot.   {"kind": "extension", "name": "sts_settings_provider", "snapshotId": "36b6a4e1-1a44-42da-ac72-bd17cefbd4ee", "settingType": "OtelComponentMapping", "settingCount": 1}
+2025-08-16T12:57:15.264Z        debug    kafka/kafka_settings_provider.go:253    Received snapshot start.        {"kind": "extension", "name": "sts_settings_provider", "snapshotId": "36b6a4e1-1a44-42da-ac72-bd17cefbd4ee", "settingType": "OtelComponentMapping"}
+2025-08-16T12:57:15.264Z        debug    kafka/kafka_settings_provider.go:298    Received snapshot stop. Processing complete snapshot.   {"kind": "extension", "name": "sts_settings_provider", "snapshotId": "36b6a4e1-1a44-42da-ac72-bd17cefbd4ee", "settingType": "OtelComponentMapping", "settingCount": 1}
 ```
 
 ## Full config
@@ -125,6 +125,9 @@ exporters:
     verbosity: detailed
 
 service:
+  telemetry:
+    logs:
+      level: debug
   extensions: [ sts_settings_provider ]
   pipelines:
     traces:
