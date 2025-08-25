@@ -121,7 +121,7 @@ func newOtelComponentMapping(id string) stsSettingsModel.OtelComponentMapping {
 			Name:             *newOtelStringExpression("${input.attributes['service.name']}"),
 			TypeName:         *newOtelStringExpression("host-component-type"),
 		},
-		Conditions: &[]stsSettingsModel.OtelConditionMapping{
+		Conditions: []stsSettingsModel.OtelConditionMapping{
 			{
 				Action: stsSettingsModel.CREATE,
 				Expression: stsSettingsModel.OtelBooleanExpression{
