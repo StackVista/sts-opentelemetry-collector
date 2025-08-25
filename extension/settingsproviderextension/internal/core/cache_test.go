@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
+	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	"sort"
@@ -28,10 +29,10 @@ type mockSubscriberHub struct {
 func (m *mockSubscriberHub) Notify(settingTypes ...stsSettingsModel.SettingType) {
 	m.notified = append(m.notified, settingTypes...)
 }
-func (m *mockSubscriberHub) Register(types ...stsSettingsModel.SettingType) <-chan UpdateSettingsEvent {
+func (m *mockSubscriberHub) Register(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
 	return nil
 }
-func (m *mockSubscriberHub) Unregister(ch <-chan UpdateSettingsEvent) bool {
+func (m *mockSubscriberHub) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
 	return false
 }
 

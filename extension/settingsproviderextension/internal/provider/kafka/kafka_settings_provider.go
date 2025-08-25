@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
+	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
 	stsSettingsCore "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/core"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -86,11 +87,11 @@ func NewKafkaSettingsProvider(ctx context.Context, cfg *stsSettingsConfig.KafkaS
 	}, nil
 }
 
-func (k *SettingsProvider) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsCore.UpdateSettingsEvent {
+func (k *SettingsProvider) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
 	return k.settingsCache.RegisterForUpdates(types...)
 }
 
-func (k *SettingsProvider) Unregister(ch <-chan stsSettingsCore.UpdateSettingsEvent) bool {
+func (k *SettingsProvider) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
 	return k.settingsCache.Unregister(ch)
 }
 

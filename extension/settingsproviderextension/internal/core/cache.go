@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
+	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
 	"go.uber.org/zap"
 	"reflect"
 	"sync"
@@ -43,8 +44,8 @@ func (s *SettingsByType) GetConcreteSettings(settingType stsSettingsModel.Settin
 }
 
 type SettingsCache interface {
-	RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan UpdateSettingsEvent
-	Unregister(ch <-chan UpdateSettingsEvent) bool
+	RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent
+	Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool
 	GetAvailableSettingTypes() []stsSettingsModel.SettingType
 	GetConcreteSettingsByType(settingType stsSettingsModel.SettingType) ([]any, error)
 	Update(settingsByType SettingsByType)
@@ -69,11 +70,11 @@ func NewDefaultSettingsCache(logger *zap.Logger) *DefaultSettingsCache {
 	}
 }
 
-func (s *DefaultSettingsCache) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan UpdateSettingsEvent {
+func (s *DefaultSettingsCache) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
 	return s.subscriptionService.Register(types...)
 }
 
-func (s *DefaultSettingsCache) Unregister(ch <-chan UpdateSettingsEvent) bool {
+func (s *DefaultSettingsCache) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
 	return s.subscriptionService.Unregister(ch)
 }
 

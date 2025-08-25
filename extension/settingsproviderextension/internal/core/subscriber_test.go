@@ -2,6 +2,7 @@ package core
 
 import (
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
+	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
 	"go.uber.org/zap/zaptest"
 	"testing"
 	"time"
@@ -33,7 +34,7 @@ func TestSubscriberHub_NotifySendsSignal(t *testing.T) {
 	ch := h.Register() // no filter, receives all updates
 	typ := stsSettingsModel.SettingTypeOtelComponentMapping
 
-	event := UpdateSettingsEvent{}
+	event := stsSettingsEvents.UpdateSettingsEvent{}
 
 	h.Notify(typ)
 
@@ -53,7 +54,7 @@ func TestSubscriberHub_SubscriberReceivesOnlyMatchingTypes(t *testing.T) {
 	matchingType := stsSettingsModel.SettingTypeOtelComponentMapping
 
 	// Notify with a matching type
-	matchingEvent := UpdateSettingsEvent{}
+	matchingEvent := stsSettingsEvents.UpdateSettingsEvent{}
 	h.Notify(matchingType)
 
 	select {
@@ -86,7 +87,7 @@ func TestSubscriberHub_SubscriberReceivesMultipleFilteredTypes(t *testing.T) {
 	ch := h.Register(settingTypes...)
 	h.Notify(settingTypes...)
 
-	received := []UpdateSettingsEvent{}
+	received := []stsSettingsEvents.UpdateSettingsEvent{}
 	for len(received) < len(settingTypes) {
 		select {
 		case got := <-ch:

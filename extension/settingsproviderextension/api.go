@@ -2,6 +2,7 @@ package settingsproviderextension
 
 import (
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
+	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
 	stsSettingsCore "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/core"
 	"go.opentelemetry.io/collector/extension"
 )
@@ -11,9 +12,9 @@ type StsSettingsProvider interface {
 	extension.Extension
 
 	// RegisterForUpdates returns a channel that receives a signal when settings change.
-	RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsCore.UpdateSettingsEvent
+	RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent
 	// Unregister allows a subscriber to unregister for further setting changes.
-	Unregister(ch <-chan stsSettingsCore.UpdateSettingsEvent) bool
+	Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool
 
 	// GetCurrentSettingsByType using as unexported and untyped as a way to define a contract, but it's not what
 	// clients/subscribers should be using because we can't define methods with type parameters on interfaces, e.g.:

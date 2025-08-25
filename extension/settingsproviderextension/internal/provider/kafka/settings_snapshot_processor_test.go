@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
 	stsSettingsCore "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/core"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"testing"
@@ -20,14 +21,14 @@ type mockSettingsCache struct {
 func (m *mockSettingsCache) UpdateSettingsForType(t stsSettingsModel.SettingType, entries []stsSettingsCore.SettingEntry) {
 	m.Called(t, entries)
 }
-func (m *mockSettingsCache) Unregister(ch <-chan stsSettingsCore.UpdateSettingsEvent) bool {
+func (m *mockSettingsCache) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
 	return false
 }
 func (m *mockSettingsCache) GetAvailableSettingTypes() []stsSettingsModel.SettingType { return nil }
 func (m *mockSettingsCache) GetConcreteSettingsByType(settingType stsSettingsModel.SettingType) ([]any, error) {
 	return nil, nil
 }
-func (m *mockSettingsCache) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsCore.UpdateSettingsEvent {
+func (m *mockSettingsCache) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
 	return nil
 }
 func (m *mockSettingsCache) Update(settingsByType stsSettingsCore.SettingsByType) {}

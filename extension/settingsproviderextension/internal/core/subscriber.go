@@ -2,6 +2,7 @@ package core
 
 import (
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
+	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
 	"go.uber.org/zap"
 	"sync"
 )
@@ -12,16 +13,14 @@ const (
 
 type Subscriber interface {
 	Notify(types ...stsSettingsModel.SettingType)
-	Register(types ...stsSettingsModel.SettingType) <-chan UpdateSettingsEvent
-	Unregister(ch <-chan UpdateSettingsEvent) bool
+	Register(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent
+	Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool
 	Shutdown()
 }
 
-type UpdateSettingsEvent struct{}
-
 type subscription struct {
 	settingTypes map[stsSettingsModel.SettingType]struct{}
-	channel      chan UpdateSettingsEvent
+	channel      chan stsSettingsEvents.UpdateSettingsEvent
 }
 
 type SubscriberHub struct {
@@ -40,11 +39,11 @@ func NewSubscriberHub(logger *zap.Logger) *SubscriberHub {
 	}
 }
 
-func (h *SubscriberHub) Register(types ...stsSettingsModel.SettingType) <-chan UpdateSettingsEvent {
+func (h *SubscriberHub) Register(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
 	return h.RegisterWithBuffer(defaultBufferSize, types...)
 }
 
-func (h *SubscriberHub) RegisterWithBuffer(bufferSize int, types ...stsSettingsModel.SettingType) <-chan UpdateSettingsEvent {
+func (h *SubscriberHub) RegisterWithBuffer(bufferSize int, types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
 	h.subscriptionsLock.Lock()
 	defer h.subscriptionsLock.Unlock()
 
@@ -54,7 +53,7 @@ func (h *SubscriberHub) RegisterWithBuffer(bufferSize int, types ...stsSettingsM
 	}
 
 	// buffered so sender won’t block
-	ch := make(chan UpdateSettingsEvent, bufferSize)
+	ch := make(chan stsSettingsEvents.UpdateSettingsEvent, bufferSize)
 	h.subscriptions = append(h.subscriptions, subscription{
 		settingTypes: typeSet,
 		channel:      ch,
@@ -88,7 +87,7 @@ func (h *SubscriberHub) Notify(types ...stsSettingsModel.SettingType) {
 
 func (h *SubscriberHub) nonBlockingSend(sub subscription, settingType stsSettingsModel.SettingType) {
 	select {
-	case sub.channel <- UpdateSettingsEvent{}:
+	case sub.channel <- stsSettingsEvents.UpdateSettingsEvent{}:
 		// Successfully sent
 	default:
 		// Subscriber buffer full, drop event (and wait for the next update)
@@ -97,7 +96,7 @@ func (h *SubscriberHub) nonBlockingSend(sub subscription, settingType stsSetting
 	}
 }
 
-func (h *SubscriberHub) Unregister(ch <-chan UpdateSettingsEvent) bool {
+func (h *SubscriberHub) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
 	h.subscriptionsLock.Lock()
 	defer h.subscriptionsLock.Unlock()
 

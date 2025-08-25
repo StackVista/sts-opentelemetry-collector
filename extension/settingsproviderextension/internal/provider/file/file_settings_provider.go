@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
+	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
 	stsSettingsCore "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/core"
 	"go.yaml.in/yaml/v3"
 	"os"
@@ -108,11 +109,11 @@ func (f *SettingsProvider) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (f *SettingsProvider) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsCore.UpdateSettingsEvent {
+func (f *SettingsProvider) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
 	return f.settingsCache.RegisterForUpdates(types...)
 }
 
-func (f *SettingsProvider) Unregister(ch <-chan stsSettingsCore.UpdateSettingsEvent) bool {
+func (f *SettingsProvider) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
 	return f.settingsCache.Unregister(ch)
 }
 
