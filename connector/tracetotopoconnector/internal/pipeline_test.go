@@ -73,7 +73,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							Tags: &map[string]settings.OtelStringExpression{
 								"instrumentation-lib":      {"scopeAttributes.otel.scope.name"},
 								"instrumentation-version":  {"scopeAttributes.otel.scope.version"},
-								"instrumentation-provider": {"scopeAttributes.otel.scope.provider"},
+								"instrumentation-provider": {"scopeAttributes.otel.scope.provider"}, //this attribute doesn't exist in the span but it is Optional tag so it ignored by mapping
 							},
 						},
 					},
@@ -113,7 +113,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 								DomainName:       "shop",
 								DomainIdentifier: nil,
 								LayerName:        "backend",
-								Tags: []string{ //TODO we have to fix sorting of tags
+								Tags: []string{
 									"instrumentation-lib:io.opentelemetry.instrumentation.http",
 									"instrumentation-version:1.17.0",
 									"host:ip-10-1-2-3.ec2.internal",
@@ -128,7 +128,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 								Name:             "",
 								TypeName:         "http-request",
 								TypeIdentifier:   nil,
-								Tags:             []string{},
+								Tags:             nil,
 							},
 						},
 						Errors: []string{},
