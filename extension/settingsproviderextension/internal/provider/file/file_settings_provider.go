@@ -117,7 +117,8 @@ func (f *SettingsProvider) Unregister(ch <-chan stsSettingsEvents.UpdateSettings
 	return f.settingsCache.Unregister(ch)
 }
 
-func (f *SettingsProvider) GetCurrentSettingsByType(settingType stsSettingsModel.SettingType) ([]any, error) {
+// UnsafeGetCurrentSettingsByType implements the internal interface (InternalRawSettingsProvider in api.go)
+func (f *SettingsProvider) UnsafeGetCurrentSettingsByType(settingType stsSettingsModel.SettingType) ([]any, error) {
 	return f.settingsCache.GetConcreteSettingsByType(settingType)
 }
 

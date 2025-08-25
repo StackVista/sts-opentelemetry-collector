@@ -69,6 +69,57 @@ func TestSettingsCache_GetConcreteSettingsByType(t *testing.T) {
 	require.Equal(t, vals, vals2)
 }
 
+func TestSettingsCache_GetConcreteSettingsByType_DeepCopy(t *testing.T) {
+	cache := newSettingsCache(t, &mockSubscriberHub{})
+
+	type complexSetting struct {
+		Name   string
+		Labels map[string]string
+		Values []int
+	}
+
+	settingType := stsSettingsModel.SettingType("Complex")
+
+	// Entry with underlying Setting -> converted into a *complexSetting
+	entry := NewSettingEntry(stsSettingsModel.Setting{Type: string(settingType)})
+	registerConverter(settingType, func(s stsSettingsModel.Setting) (any, error) {
+		return &complexSetting{
+			Name:   "original",
+			Labels: map[string]string{"env": "dev"},
+			Values: []int{1, 2, 3},
+		}, nil
+	})
+
+	cache.UpdateSettingsForType(settingType, []SettingEntry{entry})
+
+	// First retrieval
+	vals, err := cache.GetConcreteSettingsByType(settingType)
+	require.NoError(t, err)
+	require.Len(t, vals, 1)
+
+	first := vals[0].(*complexSetting)
+	require.Equal(t, "original", first.Name)
+	require.Equal(t, map[string]string{"env": "dev"}, first.Labels)
+	require.Equal(t, []int{1, 2, 3}, first.Values)
+
+	// Mutate the returned copy
+	first.Name = "mutated"
+	first.Labels["env"] = "prod"
+	first.Values[0] = 99
+
+	// Fetch again
+	vals2, err := cache.GetConcreteSettingsByType(settingType)
+	require.NoError(t, err)
+	require.Len(t, vals2, 1)
+
+	second := vals2[0].(*complexSetting)
+
+	// Ensure deepcopy worked (no mutations leaked back)
+	require.Equal(t, "original", second.Name)
+	require.Equal(t, map[string]string{"env": "dev"}, second.Labels)
+	require.Equal(t, []int{1, 2, 3}, second.Values)
+}
+
 func TestSettingsCache_UpdateSettingsForType_InitialUpdateTriggersNotification(t *testing.T) {
 	subscriptionService := &mockSubscriberHub{}
 	cache := newSettingsCache(t, subscriptionService)
