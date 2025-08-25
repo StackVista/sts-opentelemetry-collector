@@ -48,25 +48,55 @@ func TestSettingsCache_GetAvailableSettingTypes(t *testing.T) {
 	require.Contains(t, types, stsSettingsModel.SettingType("bar"))
 }
 
-func TestSettingsCache_GetConcreteSettingsByType(t *testing.T) {
+func TestSettingsCache_GetConcreteSettingsByType_DeepCopy(t *testing.T) {
 	cache := newSettingsCache(t, &mockSubscriberHub{})
 
-	// custom type with converter
-	typeA := stsSettingsModel.SettingType("A")
-	entry := NewSettingEntry(stsSettingsModel.Setting{Type: string(typeA)})
-	registerConverter(typeA, func(s stsSettingsModel.Setting) (any, error) { return "A", nil })
+	type complexSetting struct {
+		Name   string
+		Labels map[string]string
+		Values []int
+	}
 
-	cache.UpdateSettingsForType(typeA, []SettingEntry{entry})
+	settingType := stsSettingsModel.SettingType("Complex")
 
-	// first call returns concrete (converted) type
-	vals, err := cache.GetConcreteSettingsByType(typeA)
+	// Entry with underlying Setting -> converted into a *complexSetting
+	entry := NewSettingEntry(stsSettingsModel.Setting{Type: string(settingType)})
+	registerConverter(settingType, func(s stsSettingsModel.Setting) (any, error) {
+		return &complexSetting{
+			Name:   "original",
+			Labels: map[string]string{"env": "dev"},
+			Values: []int{1, 2, 3},
+		}, nil
+	})
+
+	cache.UpdateSettingsForType(settingType, []SettingEntry{entry})
+
+	// First retrieval
+	vals, err := cache.GetConcreteSettingsByType(settingType)
 	require.NoError(t, err)
-	require.Equal(t, []any{"A"}, vals)
+	require.Len(t, vals, 1)
 
-	// second call should reuse same concrete (converted) type
-	vals2, err := cache.GetConcreteSettingsByType(typeA)
+	first := vals[0].(*complexSetting)
+	require.Equal(t, "original", first.Name)
+	require.Equal(t, map[string]string{"env": "dev"}, first.Labels)
+	require.Equal(t, []int{1, 2, 3}, first.Values)
+
+	// Mutate the returned copy
+	first.Name = "mutated"
+	first.Labels["env"] = "prod"
+	first.Values[0] = 99
+
+	// Fetch again
+	vals2, err := cache.GetConcreteSettingsByType(settingType)
 	require.NoError(t, err)
-	require.Equal(t, vals, vals2)
+	require.Len(t, vals2, 1)
+
+	second := vals2[0].(*complexSetting)
+
+	// Ensure deepcopy worked (no mutations leaked back)
+	require.Equal(t, "original", second.Name)
+	require.Equal(t, map[string]string{"env": "dev"}, second.Labels)
+	require.Equal(t, []int{1, 2, 3}, second.Values)
 }
 
 func TestSettingsCache_UpdateSettingsForType_InitialUpdateTriggersNotification(t *testing.T) {
