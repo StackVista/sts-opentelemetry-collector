@@ -29,8 +29,8 @@ type mockSubscriberHub struct {
 func (m *mockSubscriberHub) Notify(settingTypes ...stsSettingsModel.SettingType) {
 	m.notified = append(m.notified, settingTypes...)
 }
-func (m *mockSubscriberHub) Register(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
-	return nil
+func (m *mockSubscriberHub) Register(types ...stsSettingsModel.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
+	return nil, nil
 }
 func (m *mockSubscriberHub) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
 	return false

@@ -87,7 +87,7 @@ func NewKafkaSettingsProvider(ctx context.Context, cfg *stsSettingsConfig.KafkaS
 	}, nil
 }
 
-func (k *SettingsProvider) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
+func (k *SettingsProvider) RegisterForUpdates(types ...stsSettingsModel.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
 	return k.settingsCache.RegisterForUpdates(types...)
 }
 

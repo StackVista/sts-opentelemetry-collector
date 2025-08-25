@@ -3,6 +3,7 @@ package core
 import (
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	"testing"
 	"time"
@@ -16,8 +17,10 @@ func newSubscriberHub(t *testing.T) *SubscriberHub {
 func TestSubscriberHub_RegisterAddsSubscriber(t *testing.T) {
 	h := newSubscriberHub(t)
 
-	ch1 := h.Register()
-	ch2 := h.Register()
+	ch1, err := h.Register()
+	require.NoError(t, err)
+	ch2, err := h.Register()
+	require.NoError(t, err)
 
 	if h.SubscriptionCount() != 2 {
 		t.Errorf("expected 2 subscription, got %d", h.SubscriptionCount())
@@ -31,7 +34,8 @@ func TestSubscriberHub_RegisterAddsSubscriber(t *testing.T) {
 
 func TestSubscriberHub_NotifySendsSignal(t *testing.T) {
 	h := newSubscriberHub(t)
-	ch := h.Register() // no filter, receives all updates
+	ch, err := h.Register() // no filter, receives all updates
+	require.NoError(t, err)
 	typ := stsSettingsModel.SettingTypeOtelComponentMapping
 
 	event := stsSettingsEvents.UpdateSettingsEvent{}
@@ -50,7 +54,8 @@ func TestSubscriberHub_NotifySendsSignal(t *testing.T) {
 
 func TestSubscriberHub_SubscriberReceivesOnlyMatchingTypes(t *testing.T) {
 	h := newSubscriberHub(t)
-	ch := h.Register(stsSettingsModel.SettingTypeOtelComponentMapping)
+	ch, err := h.Register(stsSettingsModel.SettingTypeOtelComponentMapping)
+	require.NoError(t, err)
 	matchingType := stsSettingsModel.SettingTypeOtelComponentMapping
 
 	// Notify with a matching type
@@ -84,7 +89,8 @@ func TestSubscriberHub_SubscriberReceivesMultipleFilteredTypes(t *testing.T) {
 		stsSettingsModel.SettingTypeOtelRelationMapping,
 	}
 
-	ch := h.Register(settingTypes...)
+	ch, err := h.Register(settingTypes...)
+	require.NoError(t, err)
 	h.Notify(settingTypes...)
 
 	received := []stsSettingsEvents.UpdateSettingsEvent{}
@@ -100,7 +106,8 @@ func TestSubscriberHub_SubscriberReceivesMultipleFilteredTypes(t *testing.T) {
 
 func TestSubscriberHub_SubscriberFilterExcludesIrrelevantEvents(t *testing.T) {
 	h := newSubscriberHub(t)
-	ch := h.Register(stsSettingsModel.SettingTypeOtelRelationMapping)
+	ch, err := h.Register(stsSettingsModel.SettingTypeOtelRelationMapping)
+	require.NoError(t, err)
 
 	h.Notify(stsSettingsModel.SettingTypeOtelComponentMapping)
 
@@ -114,8 +121,10 @@ func TestSubscriberHub_SubscriberFilterExcludesIrrelevantEvents(t *testing.T) {
 
 func TestSubscriberHub_MultipleSubscribersReceiveSignal(t *testing.T) {
 	h := newSubscriberHub(t)
-	ch1 := h.Register()
-	ch2 := h.Register()
+	ch1, err := h.Register()
+	require.NoError(t, err)
+	ch2, err := h.Register()
+	require.NoError(t, err)
 
 	h.Notify(stsSettingsModel.SettingTypeOtelComponentMapping)
 

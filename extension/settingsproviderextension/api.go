@@ -12,7 +12,7 @@ type StsSettingsProvider interface {
 	extension.Extension
 
 	// RegisterForUpdates returns a channel that receives a signal when settings change.
-	RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent
+	RegisterForUpdates(types ...stsSettingsModel.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error)
 	// Unregister allows a subscriber to unregister for further setting changes.
 	Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool
 
