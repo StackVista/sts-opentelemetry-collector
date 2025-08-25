@@ -71,7 +71,9 @@ func TestFactory_CreateExtension(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			set := extension.CreateSettings{}
+			set := extension.CreateSettings{
+				TelemetrySettings: componenttest.NewNopTelemetrySettings(),
+			}
 			ctx := context.Background()
 			ext, err := createExtension(ctx, set, tt.cfg)
 

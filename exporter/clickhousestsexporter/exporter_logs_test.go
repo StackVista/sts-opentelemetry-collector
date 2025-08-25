@@ -16,7 +16,6 @@ import (
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 	conventions "go.opentelemetry.io/collector/semconv/v1.18.0"
-	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 )
 
@@ -59,7 +58,7 @@ func TestLogsExporter_New(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 
 			var err error
-			exporter, err := newLogsExporter(Nop(), test.config)
+			exporter, err := newLogsExporter(zaptest.NewLogger(t), test.config)
 			err = errors.Join(err, err)
 
 			if exporter != nil {

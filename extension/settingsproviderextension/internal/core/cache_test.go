@@ -4,13 +4,15 @@ import (
 	"fmt"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest"
 	"sort"
 	"testing"
 )
 
-func newSettingsCache(subscriptionService Subscriber) *DefaultSettingsCache {
-	logger := Nop()
+func newSettingsCache(t *testing.T, subscriptionService Subscriber) *DefaultSettingsCache {
+	t.Helper()
+
+	logger := zaptest.NewLogger(t)
 
 	return &DefaultSettingsCache{
 		logger:              logger,
@@ -36,7 +38,7 @@ func (m *mockSubscriberHub) Unregister(ch <-chan UpdateSettingsEvent) bool {
 func (m *mockSubscriberHub) Shutdown() {}
 
 func TestSettingsCache_GetAvailableSettingTypes(t *testing.T) {
-	cache := newSettingsCache(&mockSubscriberHub{})
+	cache := newSettingsCache(t, &mockSubscriberHub{})
 	require.Empty(t, cache.GetAvailableSettingTypes())
 
 	cache.UpdateSettingsForType("bar", []SettingEntry{})
@@ -46,7 +48,7 @@ func TestSettingsCache_GetAvailableSettingTypes(t *testing.T) {
 }
 
 func TestSettingsCache_GetConcreteSettingsByType(t *testing.T) {
-	cache := newSettingsCache(&mockSubscriberHub{})
+	cache := newSettingsCache(t, &mockSubscriberHub{})
 
 	// custom type with converter
 	typeA := stsSettingsModel.SettingType("A")
@@ -68,7 +70,7 @@ func TestSettingsCache_GetConcreteSettingsByType(t *testing.T) {
 
 func TestSettingsCache_UpdateSettingsForType_InitialUpdateTriggersNotification(t *testing.T) {
 	subscriptionService := &mockSubscriberHub{}
-	cache := newSettingsCache(subscriptionService)
+	cache := newSettingsCache(t, subscriptionService)
 
 	// custom type with converter
 	typeA := stsSettingsModel.SettingType("A")
@@ -84,7 +86,7 @@ func TestSettingsCache_UpdateSettingsForType_InitialUpdateTriggersNotification(t
 
 func TestSettingsCache_UpdateSettingsForType_WithSameValueDoesNotNotify(t *testing.T) {
 	subscriptionService := &mockSubscriberHub{}
-	cache := newSettingsCache(subscriptionService)
+	cache := newSettingsCache(t, subscriptionService)
 
 	// custom type with converter
 	typeA := stsSettingsModel.SettingType("A")
@@ -105,7 +107,7 @@ func TestSettingsCache_UpdateSettingsForType_WithSameValueDoesNotNotify(t *testi
 
 func TestSettingsCache_UpdateSettingsForType_WithDifferentValueTriggersNotification(t *testing.T) {
 	subscriptionService := &mockSubscriberHub{}
-	cache := newSettingsCache(subscriptionService)
+	cache := newSettingsCache(t, subscriptionService)
 
 	// custom type with converter
 	typeA := stsSettingsModel.SettingType("A")
@@ -132,7 +134,7 @@ func TestSettingsCache_UpdateSettingsForType_WithDifferentValueTriggersNotificat
 // edge case - a conversion failing means there's no converter registered for the type, or the setting is malformed
 func TestSettingsCache_UpdateSettingsForType_ConverterErrorDoesNotTriggerNotification(t *testing.T) {
 	subscriptionService := &mockSubscriberHub{}
-	cache := newSettingsCache(subscriptionService)
+	cache := newSettingsCache(t, subscriptionService)
 
 	// custom type with converter
 	errorType := stsSettingsModel.SettingType("Error")
@@ -148,7 +150,7 @@ func TestSettingsCache_UpdateSettingsForType_ConverterErrorDoesNotTriggerNotific
 
 func TestSettingsCache_Update_AddNewTypesTriggersNotifications(t *testing.T) {
 	subscriptionService := &mockSubscriberHub{}
-	cache := newSettingsCache(subscriptionService)
+	cache := newSettingsCache(t, subscriptionService)
 
 	// custom type with converter
 	typeA := stsSettingsModel.SettingType("A")
@@ -166,7 +168,7 @@ func TestSettingsCache_Update_AddNewTypesTriggersNotifications(t *testing.T) {
 
 func TestSettingsCache_Update_UpdateExistingTypeWithChangeTriggersNotification(t *testing.T) {
 	subscriptionService := &mockSubscriberHub{}
-	cache := newSettingsCache(subscriptionService)
+	cache := newSettingsCache(t, subscriptionService)
 
 	typeA := stsSettingsModel.SettingType("A")
 	entry := NewSettingEntry(stsSettingsModel.Setting{Type: string(typeA)})
@@ -191,7 +193,7 @@ func TestSettingsCache_Update_UpdateExistingTypeWithChangeTriggersNotification(t
 
 func TestSettingsCache_Update_DeletedTypeTriggersNotification(t *testing.T) {
 	subscriptionService := &mockSubscriberHub{}
-	cache := newSettingsCache(subscriptionService)
+	cache := newSettingsCache(t, subscriptionService)
 
 	typeA := stsSettingsModel.SettingType("A")
 	entry := NewSettingEntry(stsSettingsModel.Setting{Type: string(typeA)})
@@ -213,7 +215,7 @@ func TestSettingsCache_Update_DeletedTypeTriggersNotification(t *testing.T) {
 
 func TestSettingsCache_Update_MixedAddUpdateDeleteTriggersAllNotifications(t *testing.T) {
 	subscriptionService := &mockSubscriberHub{}
-	cache := newSettingsCache(subscriptionService)
+	cache := newSettingsCache(t, subscriptionService)
 
 	// Prepare multiple types
 	typeA := stsSettingsModel.SettingType("A")

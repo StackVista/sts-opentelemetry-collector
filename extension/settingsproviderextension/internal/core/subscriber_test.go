@@ -2,18 +2,18 @@ package core
 
 import (
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
-	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest"
 	"testing"
 	"time"
 )
 
-func newSubscriberHub() *SubscriberHub {
-	logger, _ := zaptest.NewLogger(t)
-	return NewSubscriberHub(logger)
+func newSubscriberHub(t *testing.T) *SubscriberHub {
+	t.Helper()
+	return NewSubscriberHub(zaptest.NewLogger(t))
 }
 
 func TestSubscriberHub_RegisterAddsSubscriber(t *testing.T) {
-	h := newSubscriberHub()
+	h := newSubscriberHub(t)
 
 	ch1 := h.Register()
 	ch2 := h.Register()
@@ -29,7 +29,7 @@ func TestSubscriberHub_RegisterAddsSubscriber(t *testing.T) {
 }
 
 func TestSubscriberHub_NotifySendsSignal(t *testing.T) {
-	h := newSubscriberHub()
+	h := newSubscriberHub(t)
 	ch := h.Register() // no filter, receives all updates
 	typ := stsSettingsModel.SettingTypeOtelComponentMapping
 
@@ -48,7 +48,7 @@ func TestSubscriberHub_NotifySendsSignal(t *testing.T) {
 }
 
 func TestSubscriberHub_SubscriberReceivesOnlyMatchingTypes(t *testing.T) {
-	h := newSubscriberHub()
+	h := newSubscriberHub(t)
 	ch := h.Register(stsSettingsModel.SettingTypeOtelComponentMapping)
 	matchingType := stsSettingsModel.SettingTypeOtelComponentMapping
 
@@ -77,7 +77,7 @@ func TestSubscriberHub_SubscriberReceivesOnlyMatchingTypes(t *testing.T) {
 }
 
 func TestSubscriberHub_SubscriberReceivesMultipleFilteredTypes(t *testing.T) {
-	h := newSubscriberHub()
+	h := newSubscriberHub(t)
 	settingTypes := []stsSettingsModel.SettingType{
 		stsSettingsModel.SettingTypeOtelComponentMapping,
 		stsSettingsModel.SettingTypeOtelRelationMapping,
@@ -98,7 +98,7 @@ func TestSubscriberHub_SubscriberReceivesMultipleFilteredTypes(t *testing.T) {
 }
 
 func TestSubscriberHub_SubscriberFilterExcludesIrrelevantEvents(t *testing.T) {
-	h := newSubscriberHub()
+	h := newSubscriberHub(t)
 	ch := h.Register(stsSettingsModel.SettingTypeOtelRelationMapping)
 
 	h.Notify(stsSettingsModel.SettingTypeOtelComponentMapping)
@@ -112,7 +112,7 @@ func TestSubscriberHub_SubscriberFilterExcludesIrrelevantEvents(t *testing.T) {
 }
 
 func TestSubscriberHub_MultipleSubscribersReceiveSignal(t *testing.T) {
-	h := newSubscriberHub()
+	h := newSubscriberHub(t)
 	ch1 := h.Register()
 	ch2 := h.Register()
 
@@ -137,7 +137,7 @@ func TestSubscriberHub_MultipleSubscribersReceiveSignal(t *testing.T) {
 
 // edge case
 func TestSubscriberHub_NotifyWithNoSubscribersDoesNotPanic(t *testing.T) {
-	h := newSubscriberHub()
+	h := newSubscriberHub(t)
 
 	// Just make sure it doesn’t panic or deadlock
 	h.Notify(stsSettingsModel.SettingTypeOtelComponentMapping)
