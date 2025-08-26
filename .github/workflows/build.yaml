@@ -1,4 +1,4 @@
-name: Build tagged Docker image
+name: CI
 
 on:
   push:
@@ -10,6 +10,8 @@ on:
 env:
   REGISTRY: quay.io
   IMAGE_NAME: stackstate/sts-opentelemetry-collector
+  GO_VERSION: 1.21.6
+  GOLANGCI_LINT_VERSION: v2.1
 
 jobs:
   build:
@@ -46,6 +48,37 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  detect-modules:
+    runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.set-modules.outputs.modules }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - id: set-modules
+        run: echo "modules=$(go list -m -json | jq -s '.' | jq -c '[.[].Dir]')" >> $GITHUB_OUTPUT
+
+  lint:
+    needs: detect-modules
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        modules: ${{ fromJSON(needs.detect-modules.outputs.modules) }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: golangci-lint ${{ matrix.modules }}
+        uses: golangci/golangci-lint-action@v8
+        continue-on-error: true
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          working-directory: ${{ matrix.modules }}
+
   test:
     runs-on: ubuntu-latest
     services:
@@ -60,7 +93,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21.6'
+          go-version: ${{ env.GO_VERSION }}
       - name: Run tests
         run: |
           go test ./exporter/clickhousestsexporter/...
