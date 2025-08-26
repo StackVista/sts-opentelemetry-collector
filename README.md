@@ -56,7 +56,7 @@ service:
     logs:
       receivers: [ otlp ]
       processors: [ batch ]
-      exporters: [ debug ]]
+      exporters: [ debug ]
 ```
 ### Run with above config (and no extension config)
 ```shell
