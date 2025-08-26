@@ -9,7 +9,7 @@ go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 ## Generate 
 To generate a `settings` model from OpenAPI definition, execute following command:
 ```shell
-go generate ./connector/tracetotopoconnector/generated/settings/model.go
+go generate ./extension/settingsproviderextension/generated/settings/model.go
 ```
 
 To generate a `topo_stream` model from Protobuf schema execute following command:

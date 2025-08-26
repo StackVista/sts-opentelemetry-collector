@@ -3,7 +3,7 @@ package kafka
 import (
 	"context"
 	"fmt"
-	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
+	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	stsSettingsCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/core"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/otel/attribute"
