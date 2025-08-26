@@ -81,8 +81,8 @@ func (exCtx *extensionContext) authenticate(ctx context.Context, headers map[str
 	}
 
 	cl := client.FromContext(ctx)
-	cl.Auth = &stsauth.AuthData{
-		ApiKey: matches[2],
+	cl.Auth = &stsauth.Data{
+		APIKey: matches[2],
 	}
 	return client.NewContext(ctx, cl), nil
 }

@@ -1,25 +1,25 @@
 package auth
 
-const StsAPIKeyHeader = "Sts-Api-Key"
+const StsAPIKeyHeader = "Sts-Api-Key" //nolint:gosec
 const StsTenantContextKey = "Sts-Tenant"
 
-type AuthData struct {
-	ApiKey string
+type Data struct {
+	APIKey string
 }
 
-func (a *AuthData) GetApiKey() string {
-	return a.ApiKey
+func (a *Data) GetAPIKey() string {
+	return a.APIKey
 }
 
-func (a *AuthData) GetAttribute(name string) any {
+func (a *Data) GetAttribute(name string) any {
 	switch name {
 	case "apiKey":
-		return a.ApiKey
+		return a.APIKey
 	default:
 		return nil
 	}
 }
 
-func (*AuthData) GetAttributeNames() []string {
+func (*Data) GetAttributeNames() []string {
 	return []string{"apiKey"}
 }
