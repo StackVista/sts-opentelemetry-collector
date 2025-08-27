@@ -30,6 +30,10 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{github.repository_owner}}/${{ github.repository }}
+      - name: Generate go model
+        run: ./connector/tracetotopoconnector/scripts/generate_protobuf_model.sh
+        env:
+          GITLAB_READ_TOKEN: ${{ secrets.GITLAB_READ_TOKEN }}
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx

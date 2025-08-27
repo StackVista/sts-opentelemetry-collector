@@ -6,15 +6,23 @@
 go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 ```
 
-## Generate 
+## Update spec versions and code generation
+The project uses Protobuf and OpenAPI schema to generate go lang models. We have scripts to download the latest versions of the schemas and update the models.
+
+### Protobuf
+1. To update protobuf version, you have to past git hash to `connector/tracetotopoconnector/topostream_version`
+2. Run script `connector/tracetotopoconnector/scripts/generate_protobuf_model.sh`
+
+The script will download the latest version of Protobuf schema to `connector/tracetotopoconnector/spec` and generate a `topo_stream` model.
+Optionally you can run the following command to generate a `topo_stream` model from Protobuf schema.
+```shell
+go generate ./connector/tracetotopoconnector/generated/topostream/model.go
+```
+
+### OpenAPI
 To generate a `settings` model from OpenAPI definition, execute following command:
 ```shell
 go generate ./extension/settingsproviderextension/generated/settings/model.go
-```
-
-To generate a `topo_stream` model from Protobuf schema execute following command:
-```shell
-go generate ./generated/topostream/model.go
 ```
 
 ## Build collector locally
