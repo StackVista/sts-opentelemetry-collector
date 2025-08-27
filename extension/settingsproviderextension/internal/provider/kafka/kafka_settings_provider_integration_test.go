@@ -150,7 +150,8 @@ func waitForSettingsUpdate[T any](t *testing.T, tc *testContext, settingType sts
 	t.Helper()
 
 	// Subscribe only for the setting type we care about
-	ch := tc.provider.RegisterForUpdates(settingType)
+	ch, err := tc.provider.RegisterForUpdates(settingType)
+	require.NoError(t, err)
 	defer tc.provider.Unregister(ch)
 
 	select {

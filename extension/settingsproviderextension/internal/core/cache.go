@@ -44,7 +44,7 @@ func (s *SettingsByType) getConcreteSettings(settingType stsSettingsModel.Settin
 }
 
 type SettingsCache interface {
-	RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent
+	RegisterForUpdates(types ...stsSettingsModel.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error)
 	Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool
 	GetAvailableSettingTypes() []stsSettingsModel.SettingType
 	GetConcreteSettingsByType(settingType stsSettingsModel.SettingType) ([]any, error)
@@ -70,7 +70,7 @@ func NewDefaultSettingsCache(logger *zap.Logger) *DefaultSettingsCache {
 	}
 }
 
-func (s *DefaultSettingsCache) RegisterForUpdates(types ...stsSettingsModel.SettingType) <-chan stsSettingsEvents.UpdateSettingsEvent {
+func (s *DefaultSettingsCache) RegisterForUpdates(types ...stsSettingsModel.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
 	return s.subscriptionService.Register(types...)
 }
 
