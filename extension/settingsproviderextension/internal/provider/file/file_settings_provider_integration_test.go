@@ -31,8 +31,12 @@ func TestFileSettingsProvider_LoadsInitialSettings(t *testing.T) {
 }
 
 func TestFileSettingsProvider_DetectsFileChanges(t *testing.T) {
-	_, cancel, provider, tempFilePath := setupFileProvider(t, 50*time.Millisecond)
-	defer cancel()
+	ctx, cancel, provider, tempFilePath := setupFileProvider(t, 50*time.Millisecond)
+	defer func() {
+		// ensure background goroutines stop before test ends
+		_ = provider.Shutdown(ctx)
+		cancel()
+	}()
 
 	// Modify the file to trigger an update
 	content, err := os.ReadFile(tempFilePath)
