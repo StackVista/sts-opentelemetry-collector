@@ -22,7 +22,7 @@ func TestFileSettingsProvider_NewFileSettingsProvider(t *testing.T) {
 		provider, err := NewFileSettingsProvider(cfg, zaptest.NewLogger(t))
 		require.NoError(t, err)
 		assert.NotNil(t, provider)
-		settings, err := provider.GetCurrentSettingsByType(stsSettingsModel.SettingTypeOtelComponentMapping)
+		settings, err := provider.UnsafeGetCurrentSettingsByType(stsSettingsModel.SettingTypeOtelComponentMapping)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(settings))
 	})
