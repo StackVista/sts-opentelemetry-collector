@@ -2,9 +2,9 @@ package internal
 
 import (
 	"errors"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"testing"
 
-	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )

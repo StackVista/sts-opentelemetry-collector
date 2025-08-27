@@ -1,8 +1,8 @@
 package internal
 
 import (
-	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 

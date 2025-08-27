@@ -1,7 +1,7 @@
 package internal
 
 import (
-	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 

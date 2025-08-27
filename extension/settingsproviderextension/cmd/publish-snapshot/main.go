@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
-	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
+	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 )
 
 const (

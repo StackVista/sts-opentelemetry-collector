@@ -5,9 +5,9 @@ package file_test
 import (
 	"context"
 	"fmt"
-	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/settings"
 	stsSettings "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
+	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	stsSettingsFile "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/provider/file"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.uber.org/zap/zaptest"
@@ -31,8 +31,12 @@ func TestFileSettingsProvider_LoadsInitialSettings(t *testing.T) {
 }
 
 func TestFileSettingsProvider_DetectsFileChanges(t *testing.T) {
-	_, cancel, provider, tempFilePath := setupFileProvider(t, 50*time.Millisecond)
-	defer cancel()
+	ctx, cancel, provider, tempFilePath := setupFileProvider(t, 50*time.Millisecond)
+	defer func() {
+		// ensure background goroutines stop before test ends
+		_ = provider.Shutdown(ctx)
+		cancel()
+	}()
 
 	// Modify the file to trigger an update
 	content, err := os.ReadFile(tempFilePath)
