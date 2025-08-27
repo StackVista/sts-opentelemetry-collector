@@ -72,7 +72,7 @@ func convertToComponent(resourceSpan *ptrace.ResourceSpans, scopeSpan *ptrace.Sc
 		if len(err) > 0 {
 			return nil, err
 		}
-		return component, err
+		return component, nil
 	}
 	return nil, nil
 }
@@ -84,7 +84,7 @@ func convertToRelation(resourceSpan *ptrace.ResourceSpans, scopeSpan *ptrace.Sco
 		if len(err) > 0 {
 			return nil, err
 		}
-		return relation, err
+		return relation, nil
 	}
 	return nil, nil
 }

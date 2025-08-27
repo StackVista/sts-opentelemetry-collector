@@ -83,7 +83,7 @@ func TestMapping_MapComponent(t *testing.T) {
 				LayerIdentifier:  Ptr("backend_id"),
 				Tags:             []string{"priority:urgent", "kind:licence", "amount:1000", "scopeName:kamon", "resourceName:microservice"},
 			},
-			expectErr: []error{},
+			expectErr: nil,
 		},
 		{
 			name: "valid mapping with minimal set of properties",
@@ -109,7 +109,7 @@ func TestMapping_MapComponent(t *testing.T) {
 				LayerName:   "backend",
 				Tags:        []string{},
 			},
-			expectErr: []error{},
+			expectErr: nil,
 		},
 		{
 			name: "missing required fields",
@@ -142,18 +142,7 @@ func TestMapping_MapComponent(t *testing.T) {
 			vars: &map[string]string{
 				"namespace": "payments_ns",
 			},
-			want: &topo_stream_v1.TopologyStreamComponent{
-				ExternalId:       "billing",
-				Identifiers:      []string{},
-				Name:             "",
-				TypeName:         "service",
-				TypeIdentifier:   Ptr("service_id"),
-				DomainName:       "",
-				DomainIdentifier: Ptr("payments_ns"),
-				LayerName:        "backend",
-				LayerIdentifier:  Ptr("backend_id"),
-				Tags:             []string{"priority:urgent", "kind:licence", "amount:1000"},
-			},
+			want:      nil,
 			expectErr: []error{errors.New("Not found span attribute with name: non-existing-attr"), errors.New("Not found variable with name: non-existing-var")},
 		},
 	}
@@ -162,8 +151,12 @@ func TestMapping_MapComponent(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := MapComponent(tt.mapping, tt.span, tt.scope, tt.resource, tt.vars)
 			assert.Equal(t, tt.expectErr, err)
-			sort.Strings(got.Tags)
-			sort.Strings(tt.want.Tags)
+			if got != nil {
+				sort.Strings(got.Tags)
+			}
+			if tt.want != nil {
+				sort.Strings(tt.want.Tags)
+			}
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -215,9 +208,9 @@ func TestMapping_MapRelation(t *testing.T) {
 				Name:             "",
 				TypeName:         "query",
 				TypeIdentifier:   Ptr("licence"),
-				Tags:             []string{},
+				Tags:             nil,
 			},
-			expectErr: []error{},
+			expectErr: nil,
 		},
 		{
 			name: "missing mandatory attributes",
@@ -228,19 +221,11 @@ func TestMapping_MapRelation(t *testing.T) {
 					TypeName: settings.OtelStringExpression{"query"},
 				},
 			},
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			vars:     &map[string]string{},
-			want: &topo_stream_v1.TopologyStreamRelation{
-				ExternalId:       "-database",
-				SourceIdentifier: "",
-				TargetIdentifier: "database",
-				Name:             "",
-				TypeName:         "query",
-				TypeIdentifier:   nil,
-				Tags:             []string{},
-			},
+			span:      &testSpan,
+			scope:     &testScope,
+			resource:  &testResource,
+			vars:      &map[string]string{},
+			want:      nil,
 			expectErr: []error{errors.New("Not found span attribute with name: non-existing")},
 		},
 	}
@@ -249,8 +234,12 @@ func TestMapping_MapRelation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := MapRelation(tt.mapping, tt.span, tt.scope, tt.resource, tt.vars)
 			assert.Equal(t, tt.expectErr, err)
-			sort.Strings(got.Tags)
-			sort.Strings(tt.want.Tags)
+			if got != nil {
+				sort.Strings(got.Tags)
+			}
+			if tt.want != nil {
+				sort.Strings(tt.want.Tags)
+			}
 			assert.Equal(t, tt.want, got)
 		})
 	}

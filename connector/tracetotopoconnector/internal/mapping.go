@@ -72,7 +72,10 @@ func MapComponent(mapping *settings.OtelComponentMapping, span *ptrace.Span, sco
 		StatusData:         nil,
 		Tags:               tagsList,
 	}
-	return &result, errors
+	if len(errors) > 0 {
+		return nil, errors
+	}
+	return &result, nil
 }
 
 // MapRelation creates and returns a TopologyStreamRelation based on the provided OtelRelationMapping, span, and variables.
@@ -100,10 +103,13 @@ func MapRelation(mapping *settings.OtelRelationMapping, span *ptrace.Span, scope
 		ExternalId:       sourceId + "-" + targetId,
 		SourceIdentifier: sourceId,
 		TargetIdentifier: targetId,
-		Name:             "", //TODO
+		Name:             "", //TODO the name should be nil
 		TypeName:         evalStr(mapping.Output.TypeName),
 		TypeIdentifier:   evalOptStr(mapping.Output.TypeIdentifier),
-		Tags:             []string{},
+		Tags:             nil,
 	}
-	return &result, errors
+	if len(errors) > 0 {
+		return nil, errors
+	}
+	return &result, nil
 }
