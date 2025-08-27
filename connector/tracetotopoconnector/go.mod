@@ -5,6 +5,7 @@ go 1.21.0
 require (
 	github.com/oapi-codegen/oapi-codegen/v2 v2.4.1
 	github.com/oapi-codegen/runtime v1.1.2
+	github.com/google/cel-go v0.26.0
 	go.opentelemetry.io/collector/component v0.100.0
 	go.opentelemetry.io/collector/connector v0.100.0
 	go.opentelemetry.io/collector/consumer v0.100.0
