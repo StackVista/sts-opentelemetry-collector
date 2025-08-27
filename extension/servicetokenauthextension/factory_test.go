@@ -31,7 +31,7 @@ func TestCreateExtension_ValidConfig(t *testing.T) {
 		},
 		Cache: &CacheSettings{
 			ValidSize:   2,
-			ValidTtl:    30,
+			ValidTtl:    30 * time.Second,
 			InvalidSize: 3,
 		},
 		Schema: "StackState",
