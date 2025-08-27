@@ -1,0 +1,81 @@
+package config
+
+import (
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestConfig_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     *Config
+		wantErr error
+	}{
+		{
+			name:    "Valid File Config",
+			cfg:     &Config{File: &FileSettingsProviderConfig{Path: "/some/path"}},
+			wantErr: nil,
+		},
+		{
+			name:    "Valid Kafka Config",
+			cfg:     &Config{Kafka: &KafkaSettingsProviderConfig{Brokers: []string{"localhost:9092"}, Topic: "test-topic"}},
+			wantErr: nil,
+		},
+		{
+			name:    "Missing Config",
+			cfg:     &Config{},
+			wantErr: errors.New("must specify either 'file' or 'kafka' configuration"),
+		},
+		{
+			name:    "Both Configs Specified",
+			cfg:     &Config{File: &FileSettingsProviderConfig{Path: "/some/path"}, Kafka: &KafkaSettingsProviderConfig{Brokers: []string{"localhost:9092"}, Topic: "test-topic"}},
+			wantErr: errors.New("cannot specify both 'file' and 'kafka' configuration"),
+		},
+		{
+			name:    "File Config Missing Path",
+			cfg:     &Config{File: &FileSettingsProviderConfig{}},
+			wantErr: errors.New("'path' must be specified when using file source"),
+		},
+		{
+			name:    "Kafka Config Missing Brokers",
+			cfg:     &Config{Kafka: &KafkaSettingsProviderConfig{Topic: "test-topic"}},
+			wantErr: errors.New("at least one kafka broker must be specified"),
+		},
+		{
+			name:    "Kafka Config Missing Topic",
+			cfg:     &Config{Kafka: &KafkaSettingsProviderConfig{Brokers: []string{"localhost:9092"}}},
+			wantErr: errors.New("'topic' must be specified when using kafka source"),
+		},
+		{
+			name:    "File Config with Zero UpdateInterval (should be defaulted)",
+			cfg:     &Config{File: &FileSettingsProviderConfig{Path: "/some/path", UpdateInterval: 0}},
+			wantErr: nil,
+		},
+		{
+			name:    "Kafka Config with Zero BufferSize (should be defaulted)",
+			cfg:     &Config{Kafka: &KafkaSettingsProviderConfig{Brokers: []string{"localhost:9092"}, Topic: "test-topic", BufferSize: 0}},
+			wantErr: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cfg.Validate()
+			if tt.wantErr != nil {
+				assert.EqualError(t, err, tt.wantErr.Error())
+			} else {
+				assert.NoError(t, err)
+				// Check for defaults if no error is expected
+				if tt.cfg.File != nil && tt.cfg.File.UpdateInterval == 0 {
+					assert.Equal(t, 30*time.Second, tt.cfg.File.UpdateInterval)
+				}
+				if tt.cfg.Kafka != nil && tt.cfg.Kafka.BufferSize == 0 {
+					assert.Equal(t, 1000, tt.cfg.Kafka.BufferSize)
+				}
+			}
+		})
+	}
+}

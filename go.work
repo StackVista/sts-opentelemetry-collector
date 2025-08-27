@@ -7,5 +7,6 @@ use (
 	./exporter/clickhousestsexporter
 	./exporter/ststopologyexporter
 	./extension/servicetokenauthextension
+	./extension/settingsproviderextension
 	./processor/stsusageprocessor
 )
