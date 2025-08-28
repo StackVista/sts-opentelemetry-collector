@@ -8,118 +8,88 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
+type mockFilterExpressionEvaluator struct {
+	conditionExpressionLookup map[string]bool
+}
+
+func (f *mockFilterExpressionEvaluator) EvalStringExpression(expr settings.OtelStringExpression, _ *ExpressionEvalContext) (string, error) {
+	return "", nil
+}
+
+func (f *mockFilterExpressionEvaluator) EvalOptionalStringExpression(_ *settings.OtelStringExpression, _ *ExpressionEvalContext) (*string, error) {
+	return nil, nil
+}
+
+func (f *mockFilterExpressionEvaluator) EvalBooleanExpression(expr settings.OtelBooleanExpression, _ *ExpressionEvalContext) (bool, error) {
+	if _, ok := f.conditionExpressionLookup[expr.Expression]; ok {
+		return true, nil
+	}
+	return false, nil
+}
+
+func createConditionMapping(expr string) settings.OtelConditionMapping {
+	return conditionMapping(expr, settings.CREATE)
+}
+
+func rejectConditionMapping(expr string) settings.OtelConditionMapping {
+	return conditionMapping(expr, settings.REJECT)
+}
+
+func conditionMapping(expr string, action settings.OtelConditionMappingAction) settings.OtelConditionMapping {
+	return settings.OtelConditionMapping{
+		Expression: settings.OtelBooleanExpression{Expression: expr},
+		Action:     action,
+	}
+}
+
 func TestFilter_evalCondition(t *testing.T) {
 	t.Parallel()
 
-	testSpan := ptrace.NewSpan()
-	testSpan.Attributes().PutBool("test-attr", true)
+	evalCtx := ExpressionEvalContext{ptrace.NewSpan(), ptrace.NewScopeSpans(), ptrace.NewResourceSpans(), map[string]string{}}
 
-	testScope := ptrace.NewScopeSpans()
-	testScope.Scope().Attributes().PutBool("test-attr-scope", true)
-
-	testResource := ptrace.NewResourceSpans()
-	testResource.Resource().Attributes().PutBool("test-attr-resource", true)
+	matchingExpr := "spanAttributes.test-attr"
+	nonMatchingExpr := "spanAttributes.non-existing-attr"
 
 	testCases := []struct {
-		name           string
-		span           *ptrace.Span
-		scope          *ptrace.ScopeSpans
-		resource       *ptrace.ResourceSpans
-		vars           *map[string]string
-		condition      settings.OtelConditionMapping
-		expectedAction *settings.OtelConditionMappingAction
+		name                      string
+		condition                 settings.OtelConditionMapping
+		conditionExpressionLookup map[string]bool
+		expectedAction            *settings.OtelConditionMappingAction
 	}{
 		{
-			name:     "Matched condition with CREATE action",
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			vars:     &map[string]string{},
-			condition: settings.OtelConditionMapping{
-				Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.test-attr"},
-				Action:     settings.CREATE,
-			},
-			expectedAction: Ptr(settings.CREATE),
+			name:                      "matched condition with CREATE action",
+			condition:                 createConditionMapping(matchingExpr),
+			conditionExpressionLookup: map[string]bool{matchingExpr: true},
+			expectedAction:            ptr(settings.CREATE),
 		},
 		{
-			name:     "Non-matched condition with CREATE action",
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			vars:     &map[string]string{},
-			condition: settings.OtelConditionMapping{
-				Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.non-existing-attr"},
-				Action:     settings.CREATE,
-			},
-			expectedAction: nil,
+			name:                      "non-matched condition with CREATE action",
+			condition:                 createConditionMapping(nonMatchingExpr),
+			conditionExpressionLookup: map[string]bool{},
+			expectedAction:            nil,
 		},
 		{
-			name:     "Matched condition with REJECT action",
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			vars:     &map[string]string{},
-			condition: settings.OtelConditionMapping{
-				Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.test-attr"},
-				Action:     settings.REJECT,
-			},
-			expectedAction: Ptr(settings.REJECT),
+			name:                      "matched condition with REJECT action",
+			condition:                 rejectConditionMapping(matchingExpr),
+			conditionExpressionLookup: map[string]bool{matchingExpr: true},
+			expectedAction:            ptr(settings.REJECT),
 		},
 		{
-			name:     "Non-matched condition with REJECT action",
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			vars:     &map[string]string{},
-			condition: settings.OtelConditionMapping{
-				Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.non-existing-attr"},
-				Action:     settings.REJECT,
-			},
-			expectedAction: nil,
-		},
-		{
-			name:     "Support scope attributes",
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			vars:     &map[string]string{},
-			condition: settings.OtelConditionMapping{
-				Expression: settings.OtelBooleanExpression{Expression: "scopeAttributes.test-attr-scope"},
-				Action:     settings.CREATE,
-			},
-			expectedAction: Ptr(settings.CREATE),
-		},
-		{
-			name:     "Support resource attributes",
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			vars:     &map[string]string{},
-			condition: settings.OtelConditionMapping{
-				Expression: settings.OtelBooleanExpression{Expression: "resourceAttributes.test-attr-resource"},
-				Action:     settings.CREATE,
-			},
-			expectedAction: Ptr(settings.CREATE),
-		},
-		{
-			name:     "Support variables",
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			vars: &map[string]string{
-				"namespace": "payments_ns",
-			},
-			condition: settings.OtelConditionMapping{
-				Expression: settings.OtelBooleanExpression{Expression: "vars.namespace"},
-				Action:     settings.CREATE,
-			},
-			expectedAction: Ptr(settings.CREATE),
+			name:                      "non-matched condition with REJECT action",
+			condition:                 rejectConditionMapping(nonMatchingExpr),
+			conditionExpressionLookup: map[string]bool{},
+			expectedAction:            nil,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			resultAction := evalCondition(tc.span, tc.scope, tc.resource, tc.vars, &tc.condition)
+			resultAction := evalCondition(
+				&mockFilterExpressionEvaluator{
+					conditionExpressionLookup: tc.conditionExpressionLookup,
+				},
+				&evalCtx, &tc.condition,
+			)
 			assert.Equal(t, tc.expectedAction, resultAction)
 		})
 	}
@@ -128,176 +98,93 @@ func TestFilter_evalCondition(t *testing.T) {
 func TestFilter_filterByConditions(t *testing.T) {
 	t.Parallel()
 
-	testSpan := ptrace.NewSpan()
-	testSpan.Attributes().PutBool("test-attr", true)
+	evalCtx := ExpressionEvalContext{ptrace.NewSpan(), ptrace.NewScopeSpans(), ptrace.NewResourceSpans(), map[string]string{}}
 
-	testScope := ptrace.NewScopeSpans()
-	testScope.Scope().Attributes().PutBool("test-attr-scope", true)
-
-	testResource := ptrace.NewResourceSpans()
-	testResource.Resource().Attributes().PutBool("test-attr-resource", true)
+	matchingExpr := "spanAttributes.test-attr"
+	nonMatchingExpr := "spanAttributes.non-existing-attr"
 
 	testCases := []struct {
-		name       string
-		span       *ptrace.Span
-		scope      *ptrace.ScopeSpans
-		resource   *ptrace.ResourceSpans
-		vars       *map[string]string
-		conditions []settings.OtelConditionMapping
-		expected   bool
+		name                      string
+		conditions                []settings.OtelConditionMapping
+		conditionExpressionLookup map[string]bool
+		expected                  bool
 	}{
 		{
 			name:       "Empty conditions list",
-			span:       &testSpan,
-			scope:      &testScope,
-			resource:   &testResource,
-			vars:       &map[string]string{},
 			conditions: []settings.OtelConditionMapping{},
 			expected:   false,
 		},
 		{
-			name:     "Single CREATE condition - matched",
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			vars:     &map[string]string{},
+			name: "Single CREATE condition - matched",
 			conditions: []settings.OtelConditionMapping{
-				{
-					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.test-attr"},
-					Action:     settings.CREATE,
-				},
+				createConditionMapping(matchingExpr),
 			},
-			expected: true,
+			conditionExpressionLookup: map[string]bool{matchingExpr: true},
+			expected:                  true,
 		},
 		{
-			name:     "Single CREATE condition - not matched",
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			vars:     &map[string]string{},
+			name: "Single CREATE condition - not matched",
 			conditions: []settings.OtelConditionMapping{
-				{
-					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.non-existing-attr"},
-					Action:     settings.CREATE,
-				},
+				createConditionMapping(nonMatchingExpr),
 			},
 			expected: false,
 		},
 		{
-			name:     "Single REJECT condition - matched",
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			vars:     &map[string]string{},
+			name: "Single REJECT condition - matched",
 			conditions: []settings.OtelConditionMapping{
-				{
-					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.test-attr"},
-					Action:     settings.REJECT,
-				},
+				rejectConditionMapping(matchingExpr),
+			},
+			conditionExpressionLookup: map[string]bool{matchingExpr: true},
+			expected:                  false,
+		},
+		{
+			name: "Single REJECT condition - not matched",
+			conditions: []settings.OtelConditionMapping{
+				rejectConditionMapping(nonMatchingExpr),
 			},
 			expected: false,
 		},
 		{
-			name:     "Single REJECT condition - not matched",
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			vars:     &map[string]string{},
+			name: "CREATE matched then REJECT matched",
 			conditions: []settings.OtelConditionMapping{
-				{
-					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.non-existing-attr"},
-					Action:     settings.REJECT,
-				},
+				createConditionMapping(matchingExpr),
+				rejectConditionMapping(matchingExpr),
 			},
-			expected: false,
+			conditionExpressionLookup: map[string]bool{matchingExpr: true},
+			expected:                  true,
 		},
 		{
-			name:     "CREATE matched then REJECT matched",
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			vars:     &map[string]string{},
+			name: "CREATE not matched then REJECT matched",
 			conditions: []settings.OtelConditionMapping{
-				{
-					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.test-attr"},
-					Action:     settings.CREATE,
-				},
-				{
-					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.test-attr"},
-					Action:     settings.REJECT,
-				},
+				createConditionMapping(nonMatchingExpr),
+				rejectConditionMapping(matchingExpr),
 			},
-			expected: true,
+			conditionExpressionLookup: map[string]bool{matchingExpr: true},
+			expected:                  false,
 		},
 		{
-			name:     "CREATE not matched then REJECT matched",
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			vars:     &map[string]string{},
+			name: "REJECT matched then CREATE matched",
 			conditions: []settings.OtelConditionMapping{
-				{
-					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.non-existing-attr"},
-					Action:     settings.CREATE,
-				},
-				{
-					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.test-attr"},
-					Action:     settings.REJECT,
-				},
+				rejectConditionMapping(matchingExpr),
+				createConditionMapping(matchingExpr),
 			},
-			expected: false,
+			conditionExpressionLookup: map[string]bool{matchingExpr: true},
+			expected:                  false,
 		},
 		{
-			name:     "REJECT matched then CREATE matched",
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			vars:     &map[string]string{},
+			name: "REJECT not matched then CREATE matched",
 			conditions: []settings.OtelConditionMapping{
-				{
-					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.test-attr"},
-					Action:     settings.REJECT,
-				},
-				{
-					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.test-attr"},
-					Action:     settings.CREATE,
-				},
+				rejectConditionMapping(nonMatchingExpr),
+				createConditionMapping(matchingExpr),
 			},
-			expected: false,
+			conditionExpressionLookup: map[string]bool{matchingExpr: true},
+			expected:                  true,
 		},
 		{
-			name:     "REJECT not matched then CREATE matched",
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			vars:     &map[string]string{},
+			name: "REJECT not matched then CREATE not-matched",
 			conditions: []settings.OtelConditionMapping{
-				{
-					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.non-existing-attr"},
-					Action:     settings.REJECT,
-				},
-				{
-					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.test-attr"},
-					Action:     settings.CREATE,
-				},
-			},
-			expected: true,
-		},
-		{
-			name:     "REJECT not matched then CREATE not-matched",
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			vars:     &map[string]string{},
-			conditions: []settings.OtelConditionMapping{
-				{
-					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.non-existing-attr"},
-					Action:     settings.REJECT,
-				},
-				{
-					Expression: settings.OtelBooleanExpression{Expression: "spanAttributes.non-existing-attr"},
-					Action:     settings.CREATE,
-				},
+				rejectConditionMapping(nonMatchingExpr),
+				createConditionMapping(nonMatchingExpr),
 			},
 			expected: false,
 		},
@@ -305,7 +192,12 @@ func TestFilter_filterByConditions(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := filterByConditions(tc.span, tc.scope, tc.resource, tc.vars, &tc.conditions)
+			result := filterByConditions(
+				&mockFilterExpressionEvaluator{
+					conditionExpressionLookup: tc.conditionExpressionLookup,
+				},
+				&evalCtx, &tc.conditions,
+			)
 			assert.Equal(t, tc.expected, result)
 		})
 	}

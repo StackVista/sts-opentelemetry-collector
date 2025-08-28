@@ -2,12 +2,11 @@ package internal
 
 import (
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
-	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
-func filterByConditions(span *ptrace.Span, scope *ptrace.ScopeSpans, resource *ptrace.ResourceSpans, vars *map[string]string, conditions *[]settings.OtelConditionMapping) bool {
+func filterByConditions(expressionEvaluator ExpressionEvaluator, expressionEvalCtx *ExpressionEvalContext, conditions *[]settings.OtelConditionMapping) bool {
 	for _, condition := range *conditions {
-		action := evalCondition(span, scope, resource, vars, &condition)
+		action := evalCondition(expressionEvaluator, expressionEvalCtx, &condition)
 		if action == nil {
 			continue
 		}
@@ -22,8 +21,11 @@ func filterByConditions(span *ptrace.Span, scope *ptrace.ScopeSpans, resource *p
 	return false
 }
 
-func evalCondition(span *ptrace.Span, scope *ptrace.ScopeSpans, resource *ptrace.ResourceSpans, vars *map[string]string, condition *settings.OtelConditionMapping) *settings.OtelConditionMappingAction {
-	expressionResult := EvalBooleanExpression(&condition.Expression, span, scope, resource, vars)
+func evalCondition(expressionEvaluator ExpressionEvaluator, expressionEvalCtx *ExpressionEvalContext, condition *settings.OtelConditionMapping) *settings.OtelConditionMappingAction {
+	expressionResult, err := expressionEvaluator.EvalBooleanExpression(condition.Expression, expressionEvalCtx)
+	if err != nil {
+		return nil
+	}
 
 	if expressionResult {
 		return &condition.Action

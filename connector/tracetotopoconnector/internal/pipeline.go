@@ -6,7 +6,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
-func ConvertSpanToTopologyStreamMessage(trace ptrace.Traces, componentMappings []settings.OtelComponentMapping, relationMappings []settings.OtelRelationMapping, now int64) topo_stream_v1.TopologyStreamMessage {
+func ConvertSpanToTopologyStreamMessage(eval ExpressionEvaluator, trace ptrace.Traces, componentMappings []settings.OtelComponentMapping, relationMappings []settings.OtelRelationMapping, now int64) topo_stream_v1.TopologyStreamMessage {
 	components := make([]*topo_stream_v1.TopologyStreamComponent, 0)
 	relations := make([]*topo_stream_v1.TopologyStreamRelation, 0)
 	errors := make([]error, 0)
@@ -22,7 +22,7 @@ func ConvertSpanToTopologyStreamMessage(trace ptrace.Traces, componentMappings [
 				span := spans.At(k)
 
 				for _, componentMapping := range componentMappings {
-					component, errs := convertToComponent(&rs, &ss, &span, &componentMapping)
+					component, errs := convertToComponent(eval, &rs, &ss, &span, &componentMapping)
 					if component != nil {
 						components = append(components, component)
 					}
@@ -32,7 +32,7 @@ func ConvertSpanToTopologyStreamMessage(trace ptrace.Traces, componentMappings [
 				}
 
 				for _, relationMapping := range relationMappings {
-					relation, errs := convertToRelation(&rs, &ss, &span, &relationMapping)
+					relation, errs := convertToRelation(eval, &rs, &ss, &span, &relationMapping)
 					if relation != nil {
 						relations = append(relations, relation)
 					}
@@ -65,10 +65,12 @@ func ConvertSpanToTopologyStreamMessage(trace ptrace.Traces, componentMappings [
 	}
 }
 
-func convertToComponent(resourceSpan *ptrace.ResourceSpans, scopeSpan *ptrace.ScopeSpans, span *ptrace.Span, mapping *settings.OtelComponentMapping) (*topo_stream_v1.TopologyStreamComponent, []error) {
-	evaluatedVars, _ := EvalVariables(span, scopeSpan, resourceSpan, mapping.Vars)
-	if filterByConditions(span, scopeSpan, resourceSpan, &evaluatedVars, &mapping.Conditions) {
-		component, err := MapComponent(mapping, span, scopeSpan, resourceSpan, &evaluatedVars)
+func convertToComponent(expressionEvaluator ExpressionEvaluator, resourceSpan *ptrace.ResourceSpans, scopeSpan *ptrace.ScopeSpans, span *ptrace.Span, mapping *settings.OtelComponentMapping) (*topo_stream_v1.TopologyStreamComponent, []error) {
+	evaluatedVars, _ := EvalVariables(expressionEvaluator, span, scopeSpan, resourceSpan, mapping.Vars)
+	expressionEvalCtx := &ExpressionEvalContext{*span, *scopeSpan, *resourceSpan, evaluatedVars}
+
+	if filterByConditions(expressionEvaluator, expressionEvalCtx, &mapping.Conditions) {
+		component, err := MapComponent(mapping, expressionEvaluator, expressionEvalCtx)
 		if len(err) > 0 {
 			return nil, err
 		}
@@ -77,10 +79,12 @@ func convertToComponent(resourceSpan *ptrace.ResourceSpans, scopeSpan *ptrace.Sc
 	return nil, nil
 }
 
-func convertToRelation(resourceSpan *ptrace.ResourceSpans, scopeSpan *ptrace.ScopeSpans, span *ptrace.Span, mapping *settings.OtelRelationMapping) (*topo_stream_v1.TopologyStreamRelation, []error) {
-	evaluatedVars, _ := EvalVariables(span, scopeSpan, resourceSpan, mapping.Vars)
-	if filterByConditions(span, scopeSpan, resourceSpan, &evaluatedVars, &mapping.Conditions) {
-		relation, err := MapRelation(mapping, span, scopeSpan, resourceSpan, &evaluatedVars)
+func convertToRelation(expressionEvaluator ExpressionEvaluator, resourceSpan *ptrace.ResourceSpans, scopeSpan *ptrace.ScopeSpans, span *ptrace.Span, mapping *settings.OtelRelationMapping) (*topo_stream_v1.TopologyStreamRelation, []error) {
+	evaluatedVars, _ := EvalVariables(expressionEvaluator, span, scopeSpan, resourceSpan, mapping.Vars)
+	expressionEvalCtx := &ExpressionEvalContext{*span, *scopeSpan, *resourceSpan, evaluatedVars}
+
+	if filterByConditions(expressionEvaluator, expressionEvalCtx, &mapping.Conditions) {
+		relation, err := MapRelation(mapping, expressionEvaluator, expressionEvalCtx)
 		if len(err) > 0 {
 			return nil, err
 		}

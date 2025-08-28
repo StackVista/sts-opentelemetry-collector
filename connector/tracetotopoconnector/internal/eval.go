@@ -7,15 +7,26 @@ import (
 
 // EvalVariables evaluates a list of OtelVariableMapping objects and resolves variable values based on span data or expressions.
 // It returns a map of variable names and their resolved values and a map of variable names and any encountered errors.
-func EvalVariables(span *ptrace.Span, scope *ptrace.ScopeSpans, resource *ptrace.ResourceSpans, vars *[]settings.OtelVariableMapping) (map[string]string, map[string]error) {
+func EvalVariables(expressionEvaluator ExpressionEvaluator, span *ptrace.Span, scope *ptrace.ScopeSpans, resource *ptrace.ResourceSpans, vars *[]settings.OtelVariableMapping) (map[string]string, map[string]error) {
 	result := make(map[string]string)
 	errs := make(map[string]error)
 	if vars == nil {
 		return result, nil
 	}
 
+	evalContext := &ExpressionEvalContext{}
+	if span != nil {
+		evalContext.Span = *span
+	}
+	if scope != nil {
+		evalContext.Scope = *scope
+	}
+	if resource != nil {
+		evalContext.Resource = *resource
+	}
+
 	for _, variable := range *vars {
-		if value, err := EvalStringExpression(variable.Value, span, scope, resource, &result); err == nil {
+		if value, err := expressionEvaluator.EvalStringExpression(variable.Value, evalContext); err == nil {
 			result[variable.Name] = value
 		} else {
 			errs[variable.Name] = err

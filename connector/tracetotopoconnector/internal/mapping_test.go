@@ -11,8 +11,6 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
-func Ptr[T any](v T) *T { return &v }
-
 func TestMapping_MapComponent(t *testing.T) {
 
 	testSpan := ptrace.NewSpan()
@@ -42,14 +40,14 @@ func TestMapping_MapComponent(t *testing.T) {
 			name: "valid mapping with all required fields",
 			mapping: &settings.OtelComponentMapping{
 				Output: settings.OtelComponentMappingOutput{
-					Identifier:       settings.OtelStringExpression{"spanAttributes.service.name"},
-					Name:             settings.OtelStringExpression{"spanAttributes.service.name"},
-					TypeName:         settings.OtelStringExpression{"service"},
-					TypeIdentifier:   &settings.OtelStringExpression{"service_id"},
-					DomainName:       settings.OtelStringExpression{"vars.namespace"},
-					DomainIdentifier: &settings.OtelStringExpression{"vars.namespace"},
-					LayerName:        settings.OtelStringExpression{"backend"},
-					LayerIdentifier:  &settings.OtelStringExpression{"backend_id"},
+					Identifier:       strExpr(`spanAttributes["service.name"]`),
+					Name:             strExpr(`spanAttributes["service.name"]`),
+					TypeName:         strExpr(`"service"`),
+					TypeIdentifier:   ptr(strExpr(`"service_id"`)),
+					DomainName:       strExpr(`vars.namespace`),
+					DomainIdentifier: ptr(strExpr(`vars["namespace"]`)),
+					LayerName:        strExpr(`"backend"`),
+					LayerIdentifier:  ptr(strExpr(`"backend_id"`)),
 					Optional: &settings.OtelComponentMappingFieldMapping{
 						Tags: &map[string]settings.OtelStringExpression{
 							"priority":     {"spanAttributes.priority"},
@@ -59,8 +57,8 @@ func TestMapping_MapComponent(t *testing.T) {
 					},
 					Required: &settings.OtelComponentMappingFieldMapping{
 						Tags: &map[string]settings.OtelStringExpression{
-							"kind":   {"spanAttributes.kind"},
-							"amount": {"spanAttributes.amount"},
+							"kind":   {`spanAttributes["kind"]`},
+							"amount": {`spanAttributes.amount`},
 						},
 					},
 				},
@@ -76,11 +74,11 @@ func TestMapping_MapComponent(t *testing.T) {
 				Identifiers:      []string{},
 				Name:             "billing",
 				TypeName:         "service",
-				TypeIdentifier:   Ptr("service_id"),
+				TypeIdentifier:   ptr("service_id"),
 				DomainName:       "payments_ns",
-				DomainIdentifier: Ptr("payments_ns"),
+				DomainIdentifier: ptr("payments_ns"),
 				LayerName:        "backend",
-				LayerIdentifier:  Ptr("backend_id"),
+				LayerIdentifier:  ptr("backend_id"),
 				Tags:             []string{"priority:urgent", "kind:licence", "amount:1000", "scopeName:kamon", "resourceName:microservice"},
 			},
 			expectErr: nil,
@@ -89,11 +87,11 @@ func TestMapping_MapComponent(t *testing.T) {
 			name: "valid mapping with minimal set of properties",
 			mapping: &settings.OtelComponentMapping{
 				Output: settings.OtelComponentMappingOutput{
-					Identifier: settings.OtelStringExpression{"spanAttributes.service.name"},
-					Name:       settings.OtelStringExpression{"spanAttributes.service.name"},
-					TypeName:   settings.OtelStringExpression{"service"},
-					DomainName: settings.OtelStringExpression{"payment"},
-					LayerName:  settings.OtelStringExpression{"backend"},
+					Identifier: strExpr(`spanAttributes["service.name"]`),
+					Name:       strExpr(`spanAttributes["service.name"]`),
+					TypeName:   strExpr(`"service"`),
+					DomainName: strExpr(`"payment"`),
+					LayerName:  strExpr(`"backend"`),
 				},
 			},
 			span:     &testSpan,
@@ -115,14 +113,14 @@ func TestMapping_MapComponent(t *testing.T) {
 			name: "missing required fields",
 			mapping: &settings.OtelComponentMapping{
 				Output: settings.OtelComponentMappingOutput{
-					Identifier:       settings.OtelStringExpression{"spanAttributes.service.name"},
-					Name:             settings.OtelStringExpression{"spanAttributes.non-existing-attr"},
-					TypeName:         settings.OtelStringExpression{"service"},
-					TypeIdentifier:   &settings.OtelStringExpression{"service_id"},
-					DomainName:       settings.OtelStringExpression{"vars.non-existing-var"},
-					DomainIdentifier: &settings.OtelStringExpression{"vars.namespace"},
-					LayerName:        settings.OtelStringExpression{"backend"},
-					LayerIdentifier:  &settings.OtelStringExpression{"backend_id"},
+					Identifier:       strExpr(`spanAttributes["service.name"]`),
+					Name:             strExpr(`spanAttributes["non-existing-attr"]`),
+					TypeName:         strExpr(`"service"`),
+					TypeIdentifier:   ptr(strExpr(`"service_id"`)),
+					DomainName:       strExpr(`vars["non-existing-var"]`),
+					DomainIdentifier: ptr(strExpr("vars.namespace")),
+					LayerName:        strExpr(`"backend"`),
+					LayerIdentifier:  ptr(strExpr(`"backend_id"`)),
 					Optional: &settings.OtelComponentMappingFieldMapping{
 						Tags: &map[string]settings.OtelStringExpression{
 							"priority": {"spanAttributes.priority"},
@@ -143,14 +141,16 @@ func TestMapping_MapComponent(t *testing.T) {
 				"namespace": "payments_ns",
 			},
 			want:      nil,
-			expectErr: []error{errors.New("Not found span attribute with name: non-existing-attr"), errors.New("Not found variable with name: non-existing-var")},
+			expectErr: []error{errors.New("CEL evaluation error: no such key: non-existing-attr"), errors.New("CEL evaluation error: no such key: non-existing-var")},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := MapComponent(tt.mapping, tt.span, tt.scope, tt.resource, tt.vars)
-			assert.Equal(t, tt.expectErr, err)
+			eval, _ := NewCELEvaluator()
+			evalCtx := ExpressionEvalContext{*tt.span, *tt.scope, *tt.resource, *tt.vars}
+			got, err := MapComponent(tt.mapping, eval, &evalCtx)
+			assert.Equal(t, errorStrings(tt.expectErr), errorStrings(err))
 			if got != nil {
 				sort.Strings(got.Tags)
 			}
@@ -191,10 +191,10 @@ func TestMapping_MapRelation(t *testing.T) {
 			name: "valid relation mapping",
 			mapping: &settings.OtelRelationMapping{
 				Output: settings.OtelRelationMappingOutput{
-					SourceId:       settings.OtelStringExpression{"spanAttributes.service.name"},
-					TargetId:       settings.OtelStringExpression{"database"},
-					TypeName:       settings.OtelStringExpression{"query"},
-					TypeIdentifier: &settings.OtelStringExpression{"spanAttributes.kind"},
+					SourceId:       strExpr(`spanAttributes["service.name"]`),
+					TargetId:       strExpr(`"database"`),
+					TypeName:       strExpr(`"query"`),
+					TypeIdentifier: ptr(strExpr("spanAttributes.kind")),
 				},
 			},
 			span:     &testSpan,
@@ -207,7 +207,7 @@ func TestMapping_MapRelation(t *testing.T) {
 				TargetIdentifier: "database",
 				Name:             "",
 				TypeName:         "query",
-				TypeIdentifier:   Ptr("licence"),
+				TypeIdentifier:   ptr("licence"),
 				Tags:             nil,
 			},
 			expectErr: nil,
@@ -216,9 +216,9 @@ func TestMapping_MapRelation(t *testing.T) {
 			name: "missing mandatory attributes",
 			mapping: &settings.OtelRelationMapping{
 				Output: settings.OtelRelationMappingOutput{
-					SourceId: settings.OtelStringExpression{"spanAttributes.non-existing"},
-					TargetId: settings.OtelStringExpression{"database"},
-					TypeName: settings.OtelStringExpression{"query"},
+					SourceId: strExpr(`spanAttributes["non-existing"]`),
+					TargetId: strExpr(`"database"`),
+					TypeName: strExpr(`"query"`),
 				},
 			},
 			span:      &testSpan,
@@ -226,14 +226,16 @@ func TestMapping_MapRelation(t *testing.T) {
 			resource:  &testResource,
 			vars:      &map[string]string{},
 			want:      nil,
-			expectErr: []error{errors.New("Not found span attribute with name: non-existing")},
+			expectErr: []error{errors.New("CEL evaluation error: no such key: non-existing")},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := MapRelation(tt.mapping, tt.span, tt.scope, tt.resource, tt.vars)
-			assert.Equal(t, tt.expectErr, err)
+			eval, _ := NewCELEvaluator()
+			evalCtx := ExpressionEvalContext{*tt.span, *tt.scope, *tt.resource, *tt.vars}
+			got, err := MapRelation(tt.mapping, eval, &evalCtx)
+			assert.Equal(t, errorStrings(tt.expectErr), errorStrings(err))
 			if got != nil {
 				sort.Strings(got.Tags)
 			}
@@ -243,4 +245,12 @@ func TestMapping_MapRelation(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func errorStrings(errs []error) []string {
+	out := make([]string, len(errs))
+	for i, e := range errs {
+		out[i] = e.Error()
+	}
+	return out
 }
