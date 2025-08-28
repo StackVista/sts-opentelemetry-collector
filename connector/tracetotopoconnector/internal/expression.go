@@ -8,29 +8,43 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
-func EvalBooleanExpression(expression *settings.OtelBooleanExpression, span *ptrace.Span, scope *ptrace.ScopeSpans, resource *ptrace.ResourceSpans, vars *map[string]string) bool {
+func EvalBooleanExpression(
+	expression *settings.OtelBooleanExpression,
+	span *ptrace.Span,
+	scope *ptrace.ScopeSpans,
+	resource *ptrace.ResourceSpans,
+	vars *map[string]string,
+) bool {
+	// TODO migrate this to a switch statement according to gocritic
+	//nolint:gocritic
 	if strings.HasPrefix(expression.Expression, "spanAttributes.") {
 		attributeName := strings.TrimPrefix(expression.Expression, "spanAttributes.")
-		_, exists := span.Attributes().Get(attributeName) //TODO implement it
+		_, exists := span.Attributes().Get(attributeName) // TODO implement it
 		return exists
 	} else if strings.HasPrefix(expression.Expression, "scopeAttributes.") {
 		attributeName := strings.TrimPrefix(expression.Expression, "scopeAttributes.")
-		_, exists := scope.Scope().Attributes().Get(attributeName) //TODO implement it
+		_, exists := scope.Scope().Attributes().Get(attributeName) // TODO implement it
 		return exists
 	} else if strings.HasPrefix(expression.Expression, "resourceAttributes.") {
 		attributeName := strings.TrimPrefix(expression.Expression, "resourceAttributes.")
-		_, exists := resource.Resource().Attributes().Get(attributeName) //TODO implement it
+		_, exists := resource.Resource().Attributes().Get(attributeName) // TODO implement it
 		return exists
 	} else if strings.HasPrefix(expression.Expression, "vars.") {
 		varName := strings.TrimPrefix(expression.Expression, "vars.")
 		_, exists := (*vars)[varName]
 		return exists
-	} else {
-		return false
 	}
+
+	return false
 }
 
-func EvalStringExpression(expression settings.OtelStringExpression, span *ptrace.Span, scope *ptrace.ScopeSpans, resource *ptrace.ResourceSpans, vars *map[string]string) (string, error) {
+func EvalStringExpression(
+	expression settings.OtelStringExpression,
+	span *ptrace.Span,
+	scope *ptrace.ScopeSpans,
+	resource *ptrace.ResourceSpans,
+	vars *map[string]string,
+) (string, error) {
 	if strings.HasPrefix(expression.Expression, "spanAttributes.") {
 		attributeName := strings.TrimPrefix(expression.Expression, "spanAttributes.")
 		if val, exists := span.Attributes().Get(attributeName); exists {
@@ -62,11 +76,18 @@ func EvalStringExpression(expression settings.OtelStringExpression, span *ptrace
 	return expression.Expression, nil
 }
 
-func EvalOptionalStringExpression(expression *settings.OtelStringExpression, span *ptrace.Span, scope *ptrace.ScopeSpans, resource *ptrace.ResourceSpans, vars *map[string]string) (*string, error) {
+func EvalOptionalStringExpression(
+	expression *settings.OtelStringExpression,
+	span *ptrace.Span,
+	scope *ptrace.ScopeSpans,
+	resource *ptrace.ResourceSpans,
+	vars *map[string]string,
+) (*string, error) {
 	if expression == nil {
+		//nolint:nilnil
 		return nil, nil
-	} else {
-		result, err := EvalStringExpression(*expression, span, scope, resource, vars)
-		return &result, err
 	}
+
+	result, err := EvalStringExpression(*expression, span, scope, resource, vars)
+	return &result, err
 }

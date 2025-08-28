@@ -5,9 +5,15 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
-func filterByConditions(span *ptrace.Span, scope *ptrace.ScopeSpans, resource *ptrace.ResourceSpans, vars *map[string]string, conditions *[]settings.OtelConditionMapping) bool {
+func FilterByConditions(
+	span *ptrace.Span,
+	scope *ptrace.ScopeSpans,
+	resource *ptrace.ResourceSpans,
+	vars *map[string]string,
+	conditions *[]settings.OtelConditionMapping,
+) bool {
 	for _, condition := range *conditions {
-		action := evalCondition(span, scope, resource, vars, &condition)
+		action := EvalCondition(span, scope, resource, vars, &condition)
 		if action == nil {
 			continue
 		}
@@ -22,7 +28,13 @@ func filterByConditions(span *ptrace.Span, scope *ptrace.ScopeSpans, resource *p
 	return false
 }
 
-func evalCondition(span *ptrace.Span, scope *ptrace.ScopeSpans, resource *ptrace.ResourceSpans, vars *map[string]string, condition *settings.OtelConditionMapping) *settings.OtelConditionMappingAction {
+func EvalCondition(
+	span *ptrace.Span,
+	scope *ptrace.ScopeSpans,
+	resource *ptrace.ResourceSpans,
+	vars *map[string]string,
+	condition *settings.OtelConditionMapping,
+) *settings.OtelConditionMappingAction {
 	expressionResult := EvalBooleanExpression(&condition.Expression, span, scope, resource, vars)
 
 	if expressionResult {

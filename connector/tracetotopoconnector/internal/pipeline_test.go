@@ -1,12 +1,14 @@
-package internal
+package internal_test
 
 import (
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"sort"
 	"testing"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+
 	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
+	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/internal"
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
@@ -38,6 +40,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 	span.Attributes().PutStr("user.id", "123")
 	span.Attributes().PutStr("service.name", "web-service")
 
+	//nolint:dupl,govet
 	tests := []struct {
 		name              string
 		componentMappings []settings.OtelComponentMapping
@@ -73,7 +76,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							Tags: &map[string]settings.OtelStringExpression{
 								"instrumentation-lib":      {"scopeAttributes.otel.scope.name"},
 								"instrumentation-version":  {"scopeAttributes.otel.scope.version"},
-								"instrumentation-provider": {"scopeAttributes.otel.scope.provider"}, //this attribute doesn't exist in the span but it is Optional tag so it ignored by mapping
+								"instrumentation-provider": {"scopeAttributes.otel.scope.provider"}, // this attribute doesn't exist in the span but it is Optional tag so it ignored by mapping
 							},
 						},
 					},
@@ -270,17 +273,20 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 		},
 	}
 
+	//nolint:govet
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ConvertSpanToTopologyStreamMessage(traces, tt.componentMappings, tt.relationMappings, now)
+			result := internal.ConvertSpanToTopologyStreamMessage(traces, tt.componentMappings, tt.relationMappings, now)
 			unify(&result)
 			unify(&tt.expected)
+			//nolint:govet
 			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
 
 func unify(data *topo_stream_v1.TopologyStreamMessage) {
+	//nolint:forcetypeassert
 	for _, component := range data.Payload.(*topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData).TopologyStreamRepeatElementsData.Components {
 		sort.Strings(component.Tags)
 	}

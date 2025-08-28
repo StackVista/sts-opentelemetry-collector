@@ -8,6 +8,7 @@ import (
 	"go.opentelemetry.io/collector/consumer"
 )
 
+//nolint:gochecknoglobals
 var (
 	Type = component.MustNewType("tracetotopo")
 )
@@ -25,6 +26,11 @@ func createDefaultConfig() component.Config {
 	return &Config{}
 }
 
-func createTracesToLogsConnector(_ context.Context, params connector.CreateSettings, cfg component.Config, nextConsumer consumer.Logs) (connector.Traces, error) {
+func createTracesToLogsConnector(
+	_ context.Context,
+	params connector.CreateSettings,
+	cfg component.Config,
+	nextConsumer consumer.Logs,
+) (connector.Traces, error) {
 	return newConnector(params.Logger, cfg, nextConsumer)
 }

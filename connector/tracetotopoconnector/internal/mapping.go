@@ -6,9 +6,16 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
-// MapComponent maps an OpenTelemetry span and variables to a TopologyStreamComponent based on the given mapping configuration.
+// MapComponent maps an OpenTelemetry span and variables to a TopologyStreamComponent based on
+// the given mapping configuration.
 // It evaluates expressions, constructs a component, and returns it along with any encountered errors.
-func MapComponent(mapping *settings.OtelComponentMapping, span *ptrace.Span, scope *ptrace.ScopeSpans, resource *ptrace.ResourceSpans, vars *map[string]string) (*topo_stream_v1.TopologyStreamComponent, []error) {
+func MapComponent(
+	mapping *settings.OtelComponentMapping,
+	span *ptrace.Span,
+	scope *ptrace.ScopeSpans,
+	resource *ptrace.ResourceSpans,
+	vars *map[string]string,
+) (*topo_stream_v1.TopologyStreamComponent, []error) {
 	errors := make([]error, 0)
 	joinErr := func(err error) {
 		if err != nil {
@@ -78,8 +85,15 @@ func MapComponent(mapping *settings.OtelComponentMapping, span *ptrace.Span, sco
 	return &result, nil
 }
 
-// MapRelation creates and returns a TopologyStreamRelation based on the provided OtelRelationMapping, span, and variables.
-func MapRelation(mapping *settings.OtelRelationMapping, span *ptrace.Span, scope *ptrace.ScopeSpans, resource *ptrace.ResourceSpans, vars *map[string]string) (*topo_stream_v1.TopologyStreamRelation, []error) {
+// MapRelation creates and returns a TopologyStreamRelation based on the provided
+// OtelRelationMapping, span, and variables.
+func MapRelation(
+	mapping *settings.OtelRelationMapping,
+	span *ptrace.Span,
+	scope *ptrace.ScopeSpans,
+	resource *ptrace.ResourceSpans,
+	vars *map[string]string,
+) (*topo_stream_v1.TopologyStreamRelation, []error) {
 	errors := make([]error, 0)
 	joinErr := func(err error) {
 		if err != nil {
@@ -97,13 +111,13 @@ func MapRelation(mapping *settings.OtelRelationMapping, span *ptrace.Span, scope
 		return val
 	}
 
-	sourceId := evalStr(mapping.Output.SourceId)
-	targetId := evalStr(mapping.Output.TargetId)
+	sourceID := evalStr(mapping.Output.SourceId)
+	targetID := evalStr(mapping.Output.TargetId)
 	result := topo_stream_v1.TopologyStreamRelation{
-		ExternalId:       sourceId + "-" + targetId,
-		SourceIdentifier: sourceId,
-		TargetIdentifier: targetId,
-		Name:             "", //TODO the name should be nil
+		ExternalId:       sourceID + "-" + targetID,
+		SourceIdentifier: sourceID,
+		TargetIdentifier: targetID,
+		Name:             "", // TODO the name should be nil
 		TypeName:         evalStr(mapping.Output.TypeName),
 		TypeIdentifier:   evalOptStr(mapping.Output.TypeIdentifier),
 		Tags:             nil,
