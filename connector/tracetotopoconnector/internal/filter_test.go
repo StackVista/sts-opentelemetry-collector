@@ -1,8 +1,10 @@
-package internal
+package internal_test
 
 import (
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"testing"
+
+	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/internal"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/pdata/ptrace"
@@ -119,7 +121,7 @@ func TestFilter_evalCondition(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			resultAction := evalCondition(tc.span, tc.scope, tc.resource, tc.vars, &tc.condition)
+			resultAction := internal.EvalCondition(tc.span, tc.scope, tc.resource, tc.vars, &tc.condition)
 			assert.Equal(t, tc.expectedAction, resultAction)
 		})
 	}
@@ -305,7 +307,7 @@ func TestFilter_filterByConditions(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := filterByConditions(tc.span, tc.scope, tc.resource, tc.vars, &tc.conditions)
+			result := internal.FilterByConditions(tc.span, tc.scope, tc.resource, tc.vars, &tc.conditions)
 			assert.Equal(t, tc.expected, result)
 		})
 	}

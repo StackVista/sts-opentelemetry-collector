@@ -1,12 +1,14 @@
-package internal
+package internal_test
 
 import (
 	"errors"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"sort"
 	"testing"
 
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+
 	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
+	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/internal"
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
@@ -28,6 +30,7 @@ func TestMapping_MapComponent(t *testing.T) {
 	testResource := ptrace.NewResourceSpans()
 	testResource.Resource().Attributes().PutStr("name", "microservice")
 
+	//nolint:govet
 	tests := []struct {
 		name      string
 		mapping   *settings.OtelComponentMapping
@@ -149,7 +152,7 @@ func TestMapping_MapComponent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := MapComponent(tt.mapping, tt.span, tt.scope, tt.resource, tt.vars)
+			got, err := internal.MapComponent(tt.mapping, tt.span, tt.scope, tt.resource, tt.vars)
 			assert.Equal(t, tt.expectErr, err)
 			if got != nil {
 				sort.Strings(got.Tags)
@@ -177,6 +180,7 @@ func TestMapping_MapRelation(t *testing.T) {
 	testResource := ptrace.NewResourceSpans()
 	testResource.Resource().Attributes().PutStr("name", "microservice")
 
+	//nolint:govet
 	tests := []struct {
 		name      string
 		mapping   *settings.OtelRelationMapping
@@ -232,7 +236,7 @@ func TestMapping_MapRelation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := MapRelation(tt.mapping, tt.span, tt.scope, tt.resource, tt.vars)
+			got, err := internal.MapRelation(tt.mapping, tt.span, tt.scope, tt.resource, tt.vars)
 			assert.Equal(t, tt.expectErr, err)
 			if got != nil {
 				sort.Strings(got.Tags)

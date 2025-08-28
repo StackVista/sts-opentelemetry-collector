@@ -2,6 +2,7 @@ package tracetotopoconnector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
@@ -21,7 +22,8 @@ type connectorImpl struct {
 	subscriptionCh   <-chan stsSettingsEvents.UpdateSettingsEvent
 }
 
-func newConnector(logger *zap.Logger, config component.Config, nextConsumer consumer.Logs) (*connectorImpl, error) {
+//nolint:unparam
+func newConnector(logger *zap.Logger, _ component.Config, nextConsumer consumer.Logs) (*connectorImpl, error) {
 	logger.Info("Building tracetotopo connector")
 
 	return &connectorImpl{
@@ -30,10 +32,10 @@ func newConnector(logger *zap.Logger, config component.Config, nextConsumer cons
 	}, nil
 }
 
-func (p *connectorImpl) Start(ctx context.Context, host component.Host) error {
-	settingsProviderExtensionId := component.MustNewID("sts_settings_provider")
+func (p *connectorImpl) Start(_ context.Context, host component.Host) error {
+	settingsProviderExtensionID := component.MustNewID("sts_settings_provider")
 
-	ext, ok := host.GetExtensions()[settingsProviderExtensionId]
+	ext, ok := host.GetExtensions()[settingsProviderExtensionID]
 	if !ok {
 		return fmt.Errorf("sts_settings_provider extension not found")
 	}
@@ -47,7 +49,10 @@ func (p *connectorImpl) Start(ctx context.Context, host component.Host) error {
 	p.logger.Info("StsSettingsProvider extension found and bound to the tracetotopo connector")
 	p.settingsProvider = settingsProvider
 
-	subscriptionCh, err := p.settingsProvider.RegisterForUpdates(stsSettingsModel.SettingTypeOtelComponentMapping, stsSettingsModel.SettingTypeOtelRelationMapping)
+	subscriptionCh, err := p.settingsProvider.RegisterForUpdates(
+		stsSettingsModel.SettingTypeOtelComponentMapping,
+		stsSettingsModel.SettingTypeOtelRelationMapping,
+	)
 	if err != nil {
 		return err
 	}
@@ -64,16 +69,23 @@ func (p *connectorImpl) Capabilities() consumer.Capabilities {
 	return consumer.Capabilities{MutatesData: false}
 }
 
-func (p *connectorImpl) ConsumeTraces(ctx context.Context, td ptrace.Traces) error {
+func (p *connectorImpl) ConsumeTraces(ctx context.Context, _ ptrace.Traces) error {
 	// TODO: use channel for updates and retrieve settings using settings provider api
 
 	log := plog.NewLogs()
 	scopeLog := log.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
-	scopeLog.Scope().SetName("test")   //TODO
-	scopeLog.Scope().SetVersion("1.0") //TODO
+	scopeLog.Scope().SetName("test")   // TODO
+	scopeLog.Scope().SetVersion("1.0") // TODO
 
-	AddEvent(&scopeLog)
-	p.logsConsumer.ConsumeLogs(ctx, log)
+	err := AddEvent(&scopeLog)
+	if err != nil {
+		return errors.New("unable to add event")
+	}
+
+	err = p.logsConsumer.ConsumeLogs(ctx, log)
+	if err != nil {
+		return errors.New("unable to consume logs")
+	}
 
 	return nil
 }

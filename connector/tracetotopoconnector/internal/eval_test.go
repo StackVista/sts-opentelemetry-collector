@@ -1,9 +1,11 @@
-package internal
+package internal_test
 
 import (
 	"errors"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"testing"
+
+	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/internal"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/pdata/ptrace"
@@ -202,7 +204,7 @@ func TestEvalVariables(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := EvalVariables(tt.span, tt.scope, tt.resource, tt.vars)
+			got, err := internal.EvalVariables(tt.span, tt.scope, tt.resource, tt.vars)
 			assert.True(t, equalMaps(got, tt.want))
 			assert.Equal(t, tt.expectErr, err)
 		})
