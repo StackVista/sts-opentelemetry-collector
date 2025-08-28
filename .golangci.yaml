@@ -1,0 +1,57 @@
+version: "2"
+linters:
+  enable:
+    - containedctx
+    - copyloopvar
+    - dogsled
+    - dupl
+    - durationcheck
+    - errchkjson
+    - errorlint
+    - exhaustive
+    - forbidigo
+    - forcetypeassert
+    - gochecknoglobals
+    - goconst
+    - gocritic
+    - gomoddirectives
+    - gomodguard
+    - gosec
+    - importas
+    - lll
+    - misspell
+    - nilerr
+    - nilnil
+    - nonamedreturns
+    - prealloc
+    - predeclared
+    - revive
+    - testpackage
+    - unconvert
+    - unparam
+    - wastedassign
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - lll
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+
