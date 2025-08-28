@@ -1,13 +1,14 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package servicegraphconnector
+package servicegraphconnector_test
 
 import (
 	"context"
 	"testing"
 	"time"
 
+	servicegraphconnector "github.com/stackvista/sts-opentelemetry-collector/connector/stsservicegraphconnector"
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/connector/connectortest"
 	"go.opentelemetry.io/collector/consumer/consumertest"
@@ -21,7 +22,7 @@ func TestNewConnector(t *testing.T) {
 	}{
 		{
 			name:                            "simplest config (use defaults)",
-			expectedLatencyHistogramBuckets: defaultLatencyHistogramBuckets,
+			expectedLatencyHistogramBuckets: servicegraphconnector.DefaultLatencyHistogramBuckets,
 		},
 		{
 			name:                            "latency histogram configured with catch-all bucket to check no additional catch-all bucket inserted",
@@ -36,21 +37,24 @@ func TestNewConnector(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// Prepare
-			factory := NewFactory()
+			factory := servicegraphconnector.NewFactory()
 
 			creationParams := connectortest.NewNopCreateSettings()
-			cfg := factory.CreateDefaultConfig().(*Config)
+			cfg, ok := factory.CreateDefaultConfig().(*servicegraphconnector.Config)
+			assert.True(t, ok)
+
 			cfg.LatencyHistogramBuckets = tc.latencyHistogramBuckets
 
 			// Test
 			conn, err := factory.CreateTracesToMetrics(context.Background(), creationParams, cfg, consumertest.NewNop())
-			smc := conn.(*serviceGraphConnector)
+			smc, ok := conn.(*servicegraphconnector.ServiceGraphConnector)
+			assert.True(t, ok)
 
 			// Verify
 			assert.NoError(t, err)
 			assert.NotNil(t, smc)
 
-			assert.Equal(t, tc.expectedLatencyHistogramBuckets, smc.reqDurationBounds)
+			assert.Equal(t, tc.expectedLatencyHistogramBuckets, smc.GetReqDurationBounds())
 		})
 	}
 }

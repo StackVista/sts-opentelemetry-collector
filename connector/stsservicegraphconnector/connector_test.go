@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package servicegraphconnector
+package servicegraphconnector_test
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	servicegraphconnector "github.com/stackvista/sts-opentelemetry-collector/connector/stsservicegraphconnector"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
@@ -33,15 +34,18 @@ import (
 
 func TestConnectorStart(t *testing.T) {
 	// Create servicegraph connector
-	factory := NewFactory()
-	cfg := factory.CreateDefaultConfig().(*Config)
+	factory := servicegraphconnector.NewFactory()
+	cfg, ok := factory.CreateDefaultConfig().(*servicegraphconnector.Config)
+	assert.True(t, ok)
 
 	procCreationParams := connectortest.NewNopCreateSettings()
 	traceConnector, err := factory.CreateTracesToMetrics(context.Background(), procCreationParams, cfg, consumertest.NewNop())
 	require.NoError(t, err)
 
 	// Test
-	smp := traceConnector.(*serviceGraphConnector)
+	smp, ok := traceConnector.(*servicegraphconnector.ServiceGraphConnector)
+	assert.True(t, ok)
+
 	err = smp.Start(context.Background(), componenttest.NewNopHost())
 	defer require.NoError(t, smp.Shutdown(context.Background()))
 
@@ -51,15 +55,16 @@ func TestConnectorStart(t *testing.T) {
 
 func TestConnectorShutdown(t *testing.T) {
 	// Prepare
-	factory := NewFactory()
-	cfg := factory.CreateDefaultConfig().(*Config)
+	factory := servicegraphconnector.NewFactory()
+	cfg, ok := factory.CreateDefaultConfig().(*servicegraphconnector.Config)
+	assert.True(t, ok)
 
 	// Test
 	next := new(consumertest.MetricsSink)
 	set := componenttest.NewNopTelemetrySettings()
 	set.Logger = zaptest.NewLogger(t)
-	p := newConnector(set, cfg)
-	p.metricsConsumer = next
+	p := servicegraphconnector.NewConnector(set, cfg)
+	p.SetMetricsConsumer(next)
 	err := p.Shutdown(context.Background())
 
 	// Verify
@@ -68,15 +73,15 @@ func TestConnectorShutdown(t *testing.T) {
 
 func TestConnectorConsume(t *testing.T) {
 	// Prepare
-	cfg := &Config{
+	cfg := &servicegraphconnector.Config{
 		Dimensions: []string{"some-attribute", "non-existing-attribute"},
-		Store:      StoreConfig{MaxItems: 10},
+		Store:      servicegraphconnector.StoreConfig{MaxItems: 10},
 	}
 
 	set := componenttest.NewNopTelemetrySettings()
 	set.Logger = zaptest.NewLogger(t)
-	conn := newConnector(set, cfg)
-	conn.metricsConsumer = newMockMetricsExporter()
+	conn := servicegraphconnector.NewConnector(set, cfg)
+	conn.SetMetricsConsumer(newMockMetricsExporter())
 
 	assert.NoError(t, conn.Start(context.Background(), componenttest.NewNopHost()))
 
@@ -86,8 +91,8 @@ func TestConnectorConsume(t *testing.T) {
 	assert.NoError(t, conn.ConsumeTraces(context.Background(), td))
 
 	// Force collection
-	conn.store.Expire(time.Now())
-	md, err := conn.buildMetrics()
+	conn.SetExpire(time.Now())
+	md, err := conn.BuildMetrics()
 	assert.NoError(t, err)
 	verifyHappyCaseMetrics(t, md)
 
@@ -254,22 +259,9 @@ func (m *mockMetricsExporter) ConsumeMetrics(_ context.Context, md pmetric.Metri
 }
 
 func TestUpdateDurationMetrics(t *testing.T) {
-	p := serviceGraphConnector{
-		reqTotal:                             make(map[string]int64),
-		reqFailedTotal:                       make(map[string]int64),
-		reqServerDurationSecondsSum:          make(map[string]float64),
-		reqServerDurationSecondsCount:        make(map[string]uint64),
-		reqServerDurationSecondsBucketCounts: make(map[string][]uint64),
-		reqClientDurationSecondsSum:          make(map[string]float64),
-		reqClientDurationSecondsCount:        make(map[string]uint64),
-		reqClientDurationSecondsBucketCounts: make(map[string][]uint64),
-		reqDurationBounds:                    defaultLatencyHistogramBuckets,
-		keyToMetric:                          make(map[string]metricSeries),
-		config: &Config{
-			Dimensions: []string{},
-		},
-	}
-	metricKey := p.buildMetricKey("foo", "bar", "", map[string]string{})
+	p := servicegraphconnector.BuildTestService()
+
+	metricKey := p.BuildMetricKey("foo", "bar", "", map[string]string{})
 
 	testCases := []struct {
 		caseStr  string
@@ -291,7 +283,7 @@ func TestUpdateDurationMetrics(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.caseStr, func(_ *testing.T) {
-			p.updateDurationMetrics(metricKey, tc.duration, tc.duration, 1)
+			p.UpdateDurationMetrics(metricKey, tc.duration, tc.duration, 1)
 		})
 	}
 }
@@ -300,10 +292,10 @@ func TestCorrectForExpiredEdges(t *testing.T) {
 	testSize := 1000
 
 	// Prepare
-	cfg := &Config{
+	cfg := &servicegraphconnector.Config{
 		MetricsExporter: "mock",
 		Dimensions:      []string{"some-attribute", "non-existing-attribute"},
-		Store: StoreConfig{
+		Store: servicegraphconnector.StoreConfig{
 			MaxItems: testSize,
 			TTL:      time.Millisecond,
 		},
@@ -313,7 +305,7 @@ func TestCorrectForExpiredEdges(t *testing.T) {
 
 	set := componenttest.NewNopTelemetrySettings()
 	set.Logger = zaptest.NewLogger(t)
-	p := newConnector(set, cfg)
+	p := servicegraphconnector.NewConnector(set, cfg)
 
 	mHost := newMockHost(map[component.DataType]map[component.ID]component.Component{
 		component.DataTypeMetrics: {
@@ -343,7 +335,7 @@ func TestCorrectForExpiredEdges(t *testing.T) {
 	}
 	assert.NoError(t, p.ConsumeTraces(context.Background(), clientTraces))
 
-	p.store.Expire(time.Now().Add(2 * time.Millisecond))
+	p.SetExpire(time.Now().Add(2 * time.Millisecond))
 
 	serverTraces := ptrace.NewTraces()
 	td.CopyTo(serverTraces)
@@ -365,6 +357,8 @@ func TestCorrectForExpiredEdges(t *testing.T) {
 	// variance is determined by size of store - after expiration only 37% of the edges remained
 	// the rescheduled edges try to compensate
 	stderr := int(math.Sqrt(float64(testSize) / 0.37))
+
+	//nolint:forbidigo
 	println(fmt.Sprintf("Testing %d close to %d (within %d)", n, testSize, 4*stderr))
 	assert.Less(t, testSize-4*stderr, int(n))
 	assert.Greater(t, testSize+4*stderr, int(n))
@@ -375,10 +369,10 @@ func TestCorrectForExpiredEdges(t *testing.T) {
 
 func TestStaleSeriesCleanup(t *testing.T) {
 	// Prepare
-	cfg := &Config{
+	cfg := &servicegraphconnector.Config{
 		MetricsExporter: "mock",
 		Dimensions:      []string{"some-attribute", "non-existing-attribute"},
-		Store: StoreConfig{
+		Store: servicegraphconnector.StoreConfig{
 			MaxItems: 10,
 			TTL:      time.Second,
 		},
@@ -388,7 +382,7 @@ func TestStaleSeriesCleanup(t *testing.T) {
 
 	set := componenttest.NewNopTelemetrySettings()
 	set.Logger = zaptest.NewLogger(t)
-	p := newConnector(set, cfg)
+	p := servicegraphconnector.NewConnector(set, cfg)
 
 	mHost := newMockHost(map[component.DataType]map[component.ID]component.Component{
 		component.DataTypeMetrics: {
@@ -403,12 +397,12 @@ func TestStaleSeriesCleanup(t *testing.T) {
 	assert.NoError(t, p.ConsumeTraces(context.Background(), td))
 
 	// Make series stale and force a cache cleanup
-	for key, metric := range p.keyToMetric {
-		metric.lastUpdated = 0
-		p.keyToMetric[key] = metric
+	for key, metric := range p.GetKeyToMetric() {
+		metric.SetLastUpdated(0)
+		p.SetKeyToMetric(key, metric)
 	}
-	p.cleanCache()
-	assert.Equal(t, 0, len(p.keyToMetric))
+	p.CleanCache()
+	assert.Equal(t, 0, len(p.GetKeyToMetric()))
 
 	// ConsumeTraces with a trace with different attribute value
 	td = buildSampleTrace(t, "second")
@@ -420,10 +414,10 @@ func TestStaleSeriesCleanup(t *testing.T) {
 
 func TestMapsAreConsistentDuringCleanup(t *testing.T) {
 	// Prepare
-	cfg := &Config{
+	cfg := &servicegraphconnector.Config{
 		MetricsExporter: "mock",
 		Dimensions:      []string{"some-attribute", "non-existing-attribute"},
-		Store: StoreConfig{
+		Store: servicegraphconnector.StoreConfig{
 			MaxItems: 10,
 			TTL:      time.Second,
 		},
@@ -433,7 +427,7 @@ func TestMapsAreConsistentDuringCleanup(t *testing.T) {
 
 	set := componenttest.NewNopTelemetrySettings()
 	set.Logger = zaptest.NewLogger(t)
-	p := newConnector(set, cfg)
+	p := servicegraphconnector.NewConnector(set, cfg)
 
 	mHost := newMockHost(map[component.DataType]map[component.ID]component.Component{
 		component.DataTypeMetrics: {
@@ -448,38 +442,38 @@ func TestMapsAreConsistentDuringCleanup(t *testing.T) {
 	assert.NoError(t, p.ConsumeTraces(context.Background(), td))
 
 	// Make series stale and force a cache cleanup
-	for key, metric := range p.keyToMetric {
-		metric.lastUpdated = 0
-		p.keyToMetric[key] = metric
+	for key, metric := range p.GetKeyToMetric() {
+		metric.SetLastUpdated(0)
+		p.SetKeyToMetric(key, metric)
 	}
 
 	// Start cleanup, but use locks to pretend that we are:
 	// - currently collecting metrics (so seriesMutex is locked)
 	// - currently getting dimensions for that series (so metricMutex is locked)
-	p.seriesMutex.Lock()
-	p.metricMutex.RLock()
-	go p.cleanCache()
+	p.SeriesMutex.Lock()
+	p.MetricMutex.RLock()
+	go p.CleanCache()
 
 	// Since everything is locked, nothing has happened, so both should still have length 1
-	assert.Equal(t, 1, len(p.reqTotal))
-	assert.Equal(t, 1, len(p.keyToMetric))
+	assert.Equal(t, 1, len(p.GetReqTotal()))
+	assert.Equal(t, 1, len(p.GetKeyToMetric()))
 
 	// Now we pretend that we have stopped collecting metrics, by unlocking seriesMutex
-	p.seriesMutex.Unlock()
+	p.SeriesMutex.Unlock()
 
 	// Make sure cleanupCache has continued to the next mutex
 	time.Sleep(time.Millisecond)
-	p.seriesMutex.Lock()
+	p.SeriesMutex.Lock()
 
 	// The expired series should have been removed. The metrics collector now won't look
 	// for dimensions from that series. It's important that it happens this way around,
 	// instead of deleting it from `keyToMetric`, otherwise the metrics collector will try
 	// and fail to find dimensions for a series that is about to be removed.
-	assert.Equal(t, 0, len(p.reqTotal))
-	assert.Equal(t, 1, len(p.keyToMetric))
+	assert.Equal(t, 0, len(p.GetReqTotal()))
+	assert.Equal(t, 1, len(p.GetKeyToMetric()))
 
-	p.metricMutex.RUnlock()
-	p.seriesMutex.Unlock()
+	p.MetricMutex.RUnlock()
+	p.SeriesMutex.Unlock()
 
 	// Shutdown the connector
 	assert.NoError(t, p.Shutdown(context.Background()))
@@ -494,10 +488,10 @@ func setupTelemetry(reader *sdkmetric.ManualReader) component.TelemetrySettings 
 }
 
 func TestValidateOwnTelemetry(t *testing.T) {
-	cfg := &Config{
+	cfg := &servicegraphconnector.Config{
 		MetricsExporter: "mock",
 		Dimensions:      []string{"some-attribute", "non-existing-attribute"},
-		Store: StoreConfig{
+		Store: servicegraphconnector.StoreConfig{
 			MaxItems: 10,
 			TTL:      time.Second,
 		},
@@ -507,7 +501,7 @@ func TestValidateOwnTelemetry(t *testing.T) {
 
 	reader := sdkmetric.NewManualReader()
 	set := setupTelemetry(reader)
-	p := newConnector(set, cfg)
+	p := servicegraphconnector.NewConnector(set, cfg)
 
 	mHost := newMockHost(map[component.DataType]map[component.ID]component.Component{
 		component.DataTypeMetrics: {
@@ -522,12 +516,12 @@ func TestValidateOwnTelemetry(t *testing.T) {
 	assert.NoError(t, p.ConsumeTraces(context.Background(), td))
 
 	// Make series stale and force a cache cleanup
-	for key, metric := range p.keyToMetric {
-		metric.lastUpdated = 0
-		p.keyToMetric[key] = metric
+	for key, metric := range p.GetKeyToMetric() {
+		metric.SetLastUpdated(0)
+		p.SetKeyToMetric(key, metric)
 	}
-	p.cleanCache()
-	assert.Equal(t, 0, len(p.keyToMetric))
+	p.CleanCache()
+	assert.Equal(t, 0, len(p.GetKeyToMetric()))
 
 	// ConsumeTraces with a trace with different attribute value
 	td = buildSampleTrace(t, "second")
@@ -562,7 +556,7 @@ func TestFindDatabaseUsesPeer(t *testing.T) {
 	attrs.PutStr("db.system", "postgres")
 	attrs.PutStr("db.name", "the-db")
 	attrs.PutStr("peer.service", "the-peer")
-	db, found := findDatabase(attrs)
+	db, found := servicegraphconnector.FindDatabase(attrs)
 	assert.True(t, found)
 	assert.Equal(t, "the-peer", *db)
 }
@@ -571,7 +565,7 @@ func TestFindDatabaseUsesDbnameWithoutPeer(t *testing.T) {
 	attrs := pcommon.NewMap()
 	attrs.PutStr("db.system", "postgres")
 	attrs.PutStr("db.name", "the-db")
-	db, found := findDatabase(attrs)
+	db, found := servicegraphconnector.FindDatabase(attrs)
 	assert.True(t, found)
 	assert.Equal(t, "the-db", *db)
 }
@@ -579,7 +573,7 @@ func TestFindDatabaseUsesDbnameWithoutPeer(t *testing.T) {
 func TestFindDatabaseUsesIndexForRedis(t *testing.T) {
 	attrs := pcommon.NewMap()
 	attrs.PutStr("db.system", "redis")
-	db, found := findDatabase(attrs)
+	db, found := servicegraphconnector.FindDatabase(attrs)
 	assert.True(t, found)
 	assert.Equal(t, "redis", *db)
 }

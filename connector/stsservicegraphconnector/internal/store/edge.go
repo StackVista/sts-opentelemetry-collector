@@ -1,6 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
+//nolint:lll
 package store // import "github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector/internal/store"
 
 import (
@@ -41,6 +42,10 @@ type Edge struct {
 	logp float64
 
 	PeerService string
+}
+
+func (e *Edge) SetExpiration(expiration time.Time) {
+	e.expiration = expiration
 }
 
 func newEdge(key Key, ttl time.Duration) *Edge {
