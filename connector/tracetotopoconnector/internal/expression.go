@@ -58,8 +58,6 @@ func (e *CELEvaluator) EvalStringExpression(expr settings.OtelStringExpression, 
 		return v.String(), nil
 	case int, int32, int64, float32, float64:
 		return fmt.Sprint(v), nil
-	case nil:
-		return "", nil
 	default:
 		return "", fmt.Errorf("expression did not evaluate to string, got: %T", result)
 	}
