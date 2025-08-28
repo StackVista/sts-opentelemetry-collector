@@ -56,7 +56,7 @@ func (e *CELEvaluator) EvalStringExpression(expr settings.OtelStringExpression, 
 		return v, nil
 	case fmt.Stringer:
 		return v.String(), nil
-	case int, int32, int64, float32, float64, bool:
+	case int, int32, int64, float32, float64:
 		return fmt.Sprint(v), nil
 	case nil:
 		return "", nil
