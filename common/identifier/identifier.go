@@ -21,13 +21,6 @@ const (
 	ServiceURN            = "urn:kubernetes:/${sts.cluster.name}:${k8s.namespace.name}/service/${k8s.service.name}"
 )
 
-var (
-	mapping = map[string]string{
-		StsPodURN:     PodURN,
-		StsServiceURN: ServiceURN,
-	}
-)
-
 type Identifier interface {
 	Identify(ctx context.Context, m map[string]string) map[string]string
 }
@@ -38,6 +31,7 @@ type identifier struct {
 	templates   map[string]*fasttemplate.Template
 }
 
+//nolint:revive
 func NewIdentifier(logger *zap.Logger, clusterName string) (*identifier, error) {
 	templates, err := precompileTemplates()
 	if err != nil {
@@ -52,7 +46,7 @@ func NewIdentifier(logger *zap.Logger, clusterName string) (*identifier, error) 
 	}, nil
 }
 
-func (i *identifier) Identify(ctx context.Context, m map[string]string) map[string]string {
+func (i *identifier) Identify(_ context.Context, m map[string]string) map[string]string {
 	out := map[string]string{}
 	// Start by adding the cluster name to the map, as it is used in the templates
 	m[StsClusterName] = i.clusterName
@@ -88,6 +82,11 @@ func tagFunc(m map[string]string) func(w io.Writer, tag string) (int, error) {
 }
 
 func precompileTemplates() (map[string]*fasttemplate.Template, error) {
+	mapping := map[string]string{
+		StsPodURN:     PodURN,
+		StsServiceURN: ServiceURN,
+	}
+
 	m := map[string]*fasttemplate.Template{}
 	for k, v := range mapping {
 		t, err := fasttemplate.NewTemplate(v, "${", "}")
