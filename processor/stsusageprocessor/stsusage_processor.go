@@ -27,12 +27,12 @@ func (rp *stsUsageProcessor) processTraces(ctx context.Context, td ptrace.Traces
 	return td, nil
 }
 
-func (rp *stsUsageProcessor) processMetrics(ctx context.Context, md pmetric.Metrics) (pmetric.Metrics, error) {
+func (rp *stsUsageProcessor) processMetrics(_ context.Context, md pmetric.Metrics) (pmetric.Metrics, error) {
 	// For now noop
 	return md, nil
 }
 
-func (rp *stsUsageProcessor) processLogs(ctx context.Context, ld plog.Logs) (plog.Logs, error) {
+func (rp *stsUsageProcessor) processLogs(_ context.Context, ld plog.Logs) (plog.Logs, error) {
 	// For now noop
 	return ld, nil
 }

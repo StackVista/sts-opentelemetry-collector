@@ -1,13 +1,15 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package stsusageprocessor
+package stsusageprocessor_test
 
 import (
 	"context"
-	"go.opentelemetry.io/collector/pdata/testdata"
 	"testing"
 
+	"go.opentelemetry.io/collector/pdata/testdata"
+
+	"github.com/stackvista/sts-opentelemetry-collector/processor/stsusageprocessor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/consumer/consumertest"
@@ -15,12 +17,12 @@ import (
 	"go.opentelemetry.io/collector/processor/processortest"
 )
 
-var cfg = &Config{}
-
 func TestResourceProcessorAttributesUpsert(t *testing.T) {
+	var cfg = &stsusageprocessor.Config{}
+
 	tests := []struct {
 		name             string
-		config           *Config
+		config           *stsusageprocessor.Config
 		sourceAttributes map[string]string
 	}{
 		{
@@ -35,7 +37,7 @@ func TestResourceProcessorAttributesUpsert(t *testing.T) {
 			// Test trace consumer
 			ttn := new(consumertest.TracesSink)
 
-			factory := NewFactory()
+			factory := stsusageprocessor.NewFactory()
 			rtp, err := factory.CreateTracesProcessor(context.Background(), processortest.NewNopCreateSettings(), tt.config, ttn)
 			require.NoError(t, err)
 			assert.True(t, rtp.Capabilities().MutatesData)
