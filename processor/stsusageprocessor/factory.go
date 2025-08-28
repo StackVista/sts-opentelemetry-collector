@@ -17,7 +17,9 @@ import (
 	"go.opentelemetry.io/collector/processor/processorhelper"
 )
 
-var processorCapabilities = consumer.Capabilities{MutatesData: true}
+func GetProcessorCapabilities() *consumer.Capabilities {
+	return &consumer.Capabilities{MutatesData: true}
+}
 
 // NewFactory returns a new factory for the Resource processor.
 func NewFactory() processor.Factory {
@@ -54,7 +56,7 @@ func createTracesProcessor(
 		cfg,
 		nextConsumer,
 		proc.processTraces,
-		processorhelper.WithCapabilities(processorCapabilities))
+		processorhelper.WithCapabilities(*GetProcessorCapabilities()))
 }
 
 func createMetricsProcessor(
@@ -70,7 +72,7 @@ func createMetricsProcessor(
 		cfg,
 		nextConsumer,
 		proc.processMetrics,
-		processorhelper.WithCapabilities(processorCapabilities))
+		processorhelper.WithCapabilities(*GetProcessorCapabilities()))
 }
 
 func createLogsProcessor(
@@ -86,5 +88,5 @@ func createLogsProcessor(
 		cfg,
 		nextConsumer,
 		proc.processLogs,
-		processorhelper.WithCapabilities(processorCapabilities))
+		processorhelper.WithCapabilities(*GetProcessorCapabilities()))
 }
