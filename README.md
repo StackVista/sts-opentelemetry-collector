@@ -20,7 +20,11 @@ go generate ./connector/tracetotopoconnector/generated/topostream/model.go
 ```
 
 ### OpenAPI
-To generate a `settings` model from OpenAPI definition, execute following command:
+1. To update OpenAPI version, you have to past git hash to `extension/settingsproviderextension/settings_version`
+2. Run script `extension/settingsproviderextension/scripts/generate_openapi_model.sh`
+
+The script will download the latest version of OpenAPI schema to `extension/settingsproviderextension/spec` and generate a `settings` model.
+Optionally you can run the following command to generate a `settings` model from OpenAPI schema.
 ```shell
 go generate ./extension/settingsproviderextension/generated/settings/model.go
 ```
