@@ -35,9 +35,11 @@ jobs:
           sudo apt-get install -y protobuf-compiler
           go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
       - name: Generate go model
-        run: ./connector/tracetotopoconnector/scripts/generate_protobuf_model.sh
         env:
           GITLAB_READ_TOKEN: ${{ secrets.GITLAB_READ_TOKEN }}
+        run: |
+          ./connector/tracetotopoconnector/scripts/generate_protobuf_model.sh
+          ./extension/settingsproviderextension/scripts/generate_openapi_model.sh
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx

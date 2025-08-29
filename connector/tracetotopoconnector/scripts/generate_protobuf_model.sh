@@ -8,7 +8,6 @@ CHECKOUT_DIR="checkout"
 
 rm -rf "$CHECKOUT_DIR"
 
-# In gitlab we authenticate with the job token when cloning
 if [ -z "${GITLAB_READ_TOKEN}" ]; then
   git clone git@gitlab.com:stackvista/platform/shared-protobuf-protocols.git "$CHECKOUT_DIR"
 else
