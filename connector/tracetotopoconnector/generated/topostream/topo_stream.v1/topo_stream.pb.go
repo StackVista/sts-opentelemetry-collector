@@ -589,7 +589,7 @@ type isTopologyStreamMessage_Payload interface {
 }
 
 type TopologyStreamMessage_TopologyStreamSnapshotData struct {
-	TopologyStreamSnapshotData *TopologyStreamSnapshotData `protobuf:"bytes,3,opt,name=topology_stream_snapshot_data,json=topologyStreamSnapshotData,proto3,oneof"`
+	TopologyStreamSnapshotData *TopologyStreamSnapshotData `protobuf:"bytes,3,opt,name=topology_stream_snapshot_data1,json=topologyStreamSnapshotData,proto3,oneof"`
 }
 
 type TopologyStreamMessage_TopologyStreamRepeatElementsData struct {
