@@ -954,7 +954,7 @@ type SlackNotificationChannel struct {
 	Id SettingId `json:"id"`
 
 	// LastUpdateTimestamp The timestamp of when the setting was last updated.
-	LastUpdateTimestamp int     `json:"lastUpdateTimestamp"`
+	LastUpdateTimestamp int     `json:"lastUpdateTimestamp1"`
 	Shard               Shard   `json:"shard"`
 	SlackChannel        *string `json:"slackChannel,omitempty"`
 	SlackChannelId      *string `json:"slackChannelId,omitempty"`

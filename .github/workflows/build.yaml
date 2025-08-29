@@ -40,6 +40,7 @@ jobs:
         run: |
           ./connector/tracetotopoconnector/scripts/generate_protobuf_model.sh
           ./extension/settingsproviderextension/scripts/generate_openapi_model.sh
+          ./scripts/check_no_changes.sh
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
