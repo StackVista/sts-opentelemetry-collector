@@ -19,6 +19,8 @@ Optionally you can run the following command to generate a `topo_stream` model f
 go generate ./connector/tracetotopoconnector/generated/topostream/model.go
 ```
 
+**NOTE:** The generated files have headers with protoc version. Your version may be different than used by github actions. It is recommended to update the version manually.
+
 ### OpenAPI
 1. To update OpenAPI version, you have to past git hash to `extension/settingsproviderextension/settings_version`
 2. Run script `extension/settingsproviderextension/scripts/generate_openapi_model.sh`
