@@ -16,10 +16,10 @@ import (
 )
 
 var (
-	errNoAuth                = errors.New("missing Authorization header")
-	errInternal              = errors.New("internal error")
-	errAuthServerUnavailable = errors.New("auth server unavailable")
-	errForbidden             = errors.New("forbidden")
+	ErrNoAuth                = errors.New("missing Authorization header")
+	ErrInternal              = errors.New("internal error")
+	ErrAuthServerUnavailable = errors.New("auth server unavailable")
+	ErrForbidden             = errors.New("forbidden")
 
 	tokenRegex = regexp.MustCompile(`(\w+) (.*)$`)
 )
@@ -64,16 +64,16 @@ func (exCtx *extensionContext) serverStart(context.Context, component.Host) erro
 func (exCtx *extensionContext) authenticate(ctx context.Context, headers map[string][]string) (context.Context, error) {
 	authorizationHeader := getAuthHeader(headers)
 	if authorizationHeader == "" {
-		return ctx, errNoAuth
+		return ctx, ErrNoAuth
 	}
 
 	// checks schema
 	matches := tokenRegex.FindStringSubmatch(authorizationHeader)
 	if len(matches) != 3 {
-		return ctx, errForbidden
+		return ctx, ErrForbidden
 	}
 	if matches[1] != exCtx.config.Schema {
-		return ctx, errForbidden
+		return ctx, ErrForbidden
 	}
 
 	err := checkAuthorizationHeaderUseCache(matches[2], exCtx)
@@ -134,7 +134,7 @@ func checkAuthorizationHeader(token string, exCtx *extensionContext) error {
 	req, err := http.NewRequest(http.MethodGet, exCtx.config.Endpoint.URL, nil)
 	if err != nil {
 		log.Print("Can't create authorization request ", err)
-		return errInternal
+		return ErrInternal
 	}
 
 	// Add the token to the header
@@ -143,13 +143,13 @@ func checkAuthorizationHeader(token string, exCtx *extensionContext) error {
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		log.Print("Authorization endpoint returned an error ", err)
-		return errAuthServerUnavailable
+		return ErrAuthServerUnavailable
 	}
 
 	log.Printf("Result for ...%s: %d\n", headerSample, res.StatusCode)
 	if res.StatusCode == 403 {
-		exCtx.invalidKeysCache.Add(token, errForbidden)
-		return errForbidden
+		exCtx.invalidKeysCache.Add(token, ErrForbidden)
+		return ErrForbidden
 	}
 
 	if res.StatusCode >= 200 && res.StatusCode < 300 {
@@ -157,5 +157,5 @@ func checkAuthorizationHeader(token string, exCtx *extensionContext) error {
 		return nil
 	}
 
-	return errInternal
+	return ErrInternal
 }
