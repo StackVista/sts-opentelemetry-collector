@@ -1,28 +1,41 @@
-package servicetokenauthextension
+package servicetokenauthextension_test
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/collector/component/componenttest"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/stackvista/sts-opentelemetry-collector/extension/servicetokenauthextension"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/component/componenttest"
+)
+
+const KEY = "key"
+
+var (
+	errNoAuth                = errors.New("missing Authorization header")
+	errInternal              = errors.New("internal error")
+	errAuthServerUnavailable = errors.New("auth server unavailable")
+	errForbidden             = errors.New("forbidden")
 )
 
 func TestExtension_NoHeader(t *testing.T) {
-	ext, err := newServerAuthExtension(&Config{
-		Endpoint: &EndpointSettings{
-			Url: "http://localhost:8091/authorize",
-		},
-		Cache: &CacheSettings{
-			ValidSize:   2,
-			ValidTtl:    30 * time.Second,
-			InvalidSize: 3,
-		},
-		Schema: "StackState",
-	})
+	ext, err := servicetokenauthextension.NewServerAuthExtension(
+		&servicetokenauthextension.Config{
+			Endpoint: &servicetokenauthextension.EndpointSettings{
+				URL: "http://localhost:8091/authorize",
+			},
+			Cache: &servicetokenauthextension.CacheSettings{
+				ValidSize:   2,
+				ValidTTL:    30 * time.Second,
+				InvalidSize: 3,
+			},
+			Schema: "StackState",
+		})
 	require.NoError(t, err)
 	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
 	_, err = ext.Authenticate(context.Background(), map[string][]string{})
@@ -30,13 +43,13 @@ func TestExtension_NoHeader(t *testing.T) {
 }
 
 func TestExtension_AuthServerUnavailable(t *testing.T) {
-	ext, err := newServerAuthExtension(&Config{
-		Endpoint: &EndpointSettings{
-			Url: "http://localhost:1/authorize",
+	ext, err := servicetokenauthextension.NewServerAuthExtension(&servicetokenauthextension.Config{
+		Endpoint: &servicetokenauthextension.EndpointSettings{
+			URL: "http://localhost:1/authorize",
 		},
-		Cache: &CacheSettings{
+		Cache: &servicetokenauthextension.CacheSettings{
 			ValidSize:   2,
-			ValidTtl:    30 * time.Second,
+			ValidTTL:    30 * time.Second,
 			InvalidSize: 3,
 		},
 		Schema: "StackState",
@@ -50,7 +63,7 @@ func TestExtension_AuthServerUnavailable(t *testing.T) {
 func TestExtension_InvalidKey(t *testing.T) {
 	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		token := req.Header.Get("sts-api-key")
-		if token == "key" {
+		if token == KEY {
 			res.WriteHeader(403)
 			return
 		}
@@ -58,13 +71,13 @@ func TestExtension_InvalidKey(t *testing.T) {
 		res.WriteHeader(204)
 	}))
 
-	ext, err := newServerAuthExtension(&Config{
-		Endpoint: &EndpointSettings{
-			Url: testServer.URL,
+	ext, err := servicetokenauthextension.NewServerAuthExtension(&servicetokenauthextension.Config{
+		Endpoint: &servicetokenauthextension.EndpointSettings{
+			URL: testServer.URL,
 		},
-		Cache: &CacheSettings{
+		Cache: &servicetokenauthextension.CacheSettings{
 			ValidSize:   2,
-			ValidTtl:    30 * time.Second,
+			ValidTTL:    30 * time.Second,
 			InvalidSize: 3,
 		},
 		Schema: "StackState",
@@ -75,23 +88,24 @@ func TestExtension_InvalidKey(t *testing.T) {
 	assert.Equal(t, errForbidden, err)
 }
 
+//nolint:dupl
 func TestExtension_Authorized(t *testing.T) {
 	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		token := req.Header.Get("sts-api-key")
-		if token == "key" {
+		if token == KEY {
 			res.WriteHeader(204)
 			return
 		}
 		res.WriteHeader(403)
 	}))
 
-	ext, err := newServerAuthExtension(&Config{
-		Endpoint: &EndpointSettings{
-			Url: testServer.URL,
+	ext, err := servicetokenauthextension.NewServerAuthExtension(&servicetokenauthextension.Config{
+		Endpoint: &servicetokenauthextension.EndpointSettings{
+			URL: testServer.URL,
 		},
-		Cache: &CacheSettings{
+		Cache: &servicetokenauthextension.CacheSettings{
 			ValidSize:   2,
-			ValidTtl:    30 * time.Second,
+			ValidTTL:    30 * time.Second,
 			InvalidSize: 3,
 		},
 		Schema: "StackState",
@@ -105,20 +119,20 @@ func TestExtension_Authorized(t *testing.T) {
 func TestExtension_WrongSchema(t *testing.T) {
 	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		token := req.Header.Get("sts-api-key")
-		if token == "key" {
+		if token == KEY {
 			res.WriteHeader(204)
 			return
 		}
 		res.WriteHeader(403)
 	}))
 
-	ext, err := newServerAuthExtension(&Config{
-		Endpoint: &EndpointSettings{
-			Url: testServer.URL,
+	ext, err := servicetokenauthextension.NewServerAuthExtension(&servicetokenauthextension.Config{
+		Endpoint: &servicetokenauthextension.EndpointSettings{
+			URL: testServer.URL,
 		},
-		Cache: &CacheSettings{
+		Cache: &servicetokenauthextension.CacheSettings{
 			ValidSize:   2,
-			ValidTtl:    30 * time.Second,
+			ValidTTL:    30 * time.Second,
 			InvalidSize: 3,
 		},
 		Schema: "StackState",
@@ -135,27 +149,29 @@ func TestExtension_WrongSchema(t *testing.T) {
 	assert.Equal(t, errForbidden, err)
 }
 
+//nolint:dupl
 func TestExtension_AuthorizedWithCamelcaseHeader(t *testing.T) {
 	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		token := req.Header.Get("sts-api-key")
-		if token == "key" {
+		if token == KEY {
 			res.WriteHeader(204)
 			return
 		}
 		res.WriteHeader(403)
 	}))
 
-	ext, err := newServerAuthExtension(&Config{
-		Endpoint: &EndpointSettings{
-			Url: testServer.URL,
-		},
-		Cache: &CacheSettings{
-			ValidSize:   2,
-			ValidTtl:    30 * time.Second,
-			InvalidSize: 3,
-		},
-		Schema: "StackState",
-	})
+	ext, err := servicetokenauthextension.NewServerAuthExtension(
+		&servicetokenauthextension.Config{
+			Endpoint: &servicetokenauthextension.EndpointSettings{
+				URL: testServer.URL,
+			},
+			Cache: &servicetokenauthextension.CacheSettings{
+				ValidSize:   2,
+				ValidTTL:    30 * time.Second,
+				InvalidSize: 3,
+			},
+			Schema: "StackState",
+		})
 	require.NoError(t, err)
 	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
 	_, err = ext.Authenticate(context.Background(), map[string][]string{"Authorization": {"StackState key"}})
@@ -164,75 +180,81 @@ func TestExtension_AuthorizedWithCamelcaseHeader(t *testing.T) {
 
 func TestExtension_ValidKeysShouldBeCached(t *testing.T) {
 	var requestCounter = 0
-	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, _ *http.Request) {
+		//nolint:forbidigo
 		println(requestCounter)
-		if requestCounter == 0 {
+		switch requestCounter {
+		case 0:
 			res.WriteHeader(204)
-		} else if requestCounter == 1 {
+		case 1:
 			res.WriteHeader(403)
-		} else {
+		default:
 			t.Fatal("The second request should be cached so it shouldn't hit the server")
 		}
-		requestCounter += 1
+
+		requestCounter++
 	}))
 
-	ext, err := newServerAuthExtension(&Config{
-		Endpoint: &EndpointSettings{
-			Url: testServer.URL,
-		},
-		Cache: &CacheSettings{
-			ValidSize:   2,
-			ValidTtl:    30 * time.Second,
-			InvalidSize: 3,
-		},
-		Schema: "StackState",
-	})
+	ext, err := servicetokenauthextension.NewServerAuthExtension(
+		&servicetokenauthextension.Config{
+			Endpoint: &servicetokenauthextension.EndpointSettings{
+				URL: testServer.URL,
+			},
+			Cache: &servicetokenauthextension.CacheSettings{
+				ValidSize:   2,
+				ValidTTL:    30 * time.Second,
+				InvalidSize: 3,
+			},
+			Schema: "StackState",
+		})
 	require.NoError(t, err)
 	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
 	_, err = ext.Authenticate(context.Background(), map[string][]string{"Authorization": {"StackState key"}})
 	require.NoError(t, err)
-	//it should be loaded from the cache, it is the same cache as in the previous request
+	// it should be loaded from the cache, it is the same cache as in the previous request
 	_, err = ext.Authenticate(context.Background(), map[string][]string{"Authorization": {"StackState key"}})
 	require.NoError(t, err)
-	//send one more request, but with a different key, it shouldn't hit the cache
+	// send one more request, but with a different key, it shouldn't hit the cache
 	_, err = ext.Authenticate(context.Background(), map[string][]string{"authorization": {"StackState key_new"}})
 	assert.Equal(t, errForbidden, err)
 }
 
 func TestExtension_InvalidKeyShouldBeCached(t *testing.T) {
 	var requestCounter = 0
-	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, _ *http.Request) {
+		//nolint:forbidigo
 		println(requestCounter)
-		if requestCounter == 0 {
+		switch requestCounter {
+		case 0:
 			res.WriteHeader(503)
-		} else if requestCounter == 1 {
+		case 1:
 			res.WriteHeader(403)
-		} else {
+		default:
 			t.Fatal("The second request should be cached so it shouldn't hit the server")
 		}
-		requestCounter += 1
+		requestCounter++
 	}))
 
-	ext, err := newServerAuthExtension(&Config{
-		Endpoint: &EndpointSettings{
-			Url: testServer.URL,
+	ext, err := servicetokenauthextension.NewServerAuthExtension(&servicetokenauthextension.Config{
+		Endpoint: &servicetokenauthextension.EndpointSettings{
+			URL: testServer.URL,
 		},
-		Cache: &CacheSettings{
+		Cache: &servicetokenauthextension.CacheSettings{
 			ValidSize:   2,
-			ValidTtl:    30 * time.Second,
+			ValidTTL:    30 * time.Second,
 			InvalidSize: 1,
 		},
 		Schema: "StackState",
 	})
 	require.NoError(t, err)
 	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
-	//server is broken and returns 503, it shouldn't be cached
+	// server is broken and returns 503, it shouldn't be cached
 	_, err = ext.Authenticate(context.Background(), map[string][]string{"Authorization": {"StackState invalid_key"}})
 	assert.Equal(t, errInternal, err)
-	//The server is fixed so teh response should be cached
+	// The server is fixed so the response should be cached
 	_, err = ext.Authenticate(context.Background(), map[string][]string{"Authorization": {"StackState invalid_key"}})
 	assert.Equal(t, errForbidden, err)
-	//the previous request is cached so it shouldn't hit the server
+	// the previous request is cached so it shouldn't hit the server
 	_, err = ext.Authenticate(context.Background(), map[string][]string{"authorization": {"StackState invalid_key"}})
 	assert.Equal(t, errForbidden, err)
 }

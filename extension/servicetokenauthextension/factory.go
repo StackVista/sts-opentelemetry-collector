@@ -2,6 +2,7 @@ package servicetokenauthextension
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"go.opentelemetry.io/collector/component"
@@ -9,29 +10,35 @@ import (
 )
 
 var (
+	//nolint:gochecknoglobals
 	Type = component.MustNewType("service_token_auth")
 )
 
 func NewFactory() extension.Factory {
 	return extension.NewFactory(
 		Type,
-		createDefaultConfig,
-		createExtension,
+		CreateDefaultConfig,
+		CreateExtension,
 		component.StabilityLevelAlpha,
 	)
 }
 
-func createDefaultConfig() component.Config {
+func CreateDefaultConfig() component.Config {
 	return &Config{
 		Cache: &CacheSettings{
 			ValidSize:   100,
-			ValidTtl:    5 * time.Minute,
+			ValidTTL:    5 * time.Minute,
 			InvalidSize: 100,
 		},
 		Schema: "StackState",
 	}
 }
 
-func createExtension(_ context.Context, _ extension.CreateSettings, cfg component.Config) (extension.Extension, error) {
-	return newServerAuthExtension(cfg.(*Config))
+func CreateExtension(_ context.Context, _ extension.CreateSettings, cfg component.Config) (extension.Extension, error) {
+	config, ok := cfg.(*Config)
+	if !ok {
+		return nil, errors.New("error casting the configuration")
+	}
+
+	return NewServerAuthExtension(config)
 }
