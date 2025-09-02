@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package topo_stream.v1;
+option go_package = "topo_stream.v1";
+option java_package = "com.stackstate.topoStream.protocol";
+
+message TopologyStreamMessageKey {
+  /**
+    Datasource could be the Component/Relation mapping identifier probably
+   */
+  TopologyStreamOwner owner = 1;
+  string data_source = 2;
+  string shard_id = 3;
+}
+
+enum TopologyStreamOwner {
+  TOPOLOGY_STREAM_OWNER_UNSPECIFIED = 0;
+  TOPOLOGY_STREAM_OWNER_OTEL = 1;
+  TOPOLOGY_STREAM_OWNER_EXTERNAL = 2; // Anyone that sends to the receiver data
+  TOPOLOGY_STREAM_OWNER_AGENT = 3;
+}
