@@ -5,6 +5,7 @@ use (
 	./connector/stsservicegraphconnector
 	./connector/tracetotopoconnector
 	./exporter/clickhousestsexporter
+	./exporter/stskafkaexporter
 	./exporter/ststopologyexporter
 	./extension/servicetokenauthextension
 	./extension/settingsproviderextension
