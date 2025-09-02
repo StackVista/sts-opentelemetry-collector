@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package clickhousestsexporter
+package clickhousestsexporter_test
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
@@ -83,12 +84,13 @@ func TestExporter_pushTracesData(t *testing.T) {
 	})
 }
 
-func newTestTracesExporter(t *testing.T, dsn string, fns ...func(*Config)) *tracesExporter {
-	exporter, err := newTracesExporter(zaptest.NewLogger(t), withTestExporterConfig(fns...)(dsn))
+//nolint:unparam
+func newTestTracesExporter(t *testing.T, dsn string, fns ...func(*clickhousestsexporter.Config)) *clickhousestsexporter.TracesExporter {
+	exporter, err := clickhousestsexporter.NewTracesExporter(zaptest.NewLogger(t), withTestExporterConfig(fns...)(dsn))
 	require.NoError(t, err)
-	require.NoError(t, exporter.start(context.TODO(), nil))
+	require.NoError(t, exporter.Start(context.TODO(), nil))
 
-	t.Cleanup(func() { _ = exporter.shutdown(context.TODO()) })
+	t.Cleanup(func() { _ = exporter.Shutdown(context.TODO()) })
 	return exporter
 }
 
@@ -125,7 +127,7 @@ func simpleTraces(count int) ptrace.Traces {
 	return traces
 }
 
-func mustPushTracesData(t *testing.T, exporter *tracesExporter, td ptrace.Traces) {
-	err := exporter.pushTraceData(context.TODO(), td)
+func mustPushTracesData(t *testing.T, exporter *clickhousestsexporter.TracesExporter, td ptrace.Traces) {
+	err := exporter.PushTraceData(context.TODO(), td)
 	require.NoError(t, err)
 }

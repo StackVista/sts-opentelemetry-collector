@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type resourcesExporter struct {
+type ResourcesExporter struct {
 	client    *sql.DB
 	insertSQL string
 
@@ -23,13 +23,13 @@ type resourcesExporter struct {
 	cfg    *Config
 }
 
-type resourceModel struct {
+type ResourceModel struct {
 	resourceRef uuid.UUID
 	attributes  map[string]string
 	authScope   []string
 }
 
-func newResourceModel(resource pcommon.Resource) (*resourceModel, error) {
+func NewResourceModel(resource pcommon.Resource) (*ResourceModel, error) {
 	resourceRef := pdatautil.MapHash(resource.Attributes())
 	refUUID, err := uuid.FromBytes(resourceRef[:])
 	if err != nil {
@@ -38,7 +38,7 @@ func newResourceModel(resource pcommon.Resource) (*resourceModel, error) {
 
 	resAttr := attributesToMap(resource.Attributes())
 	authScope := attributesToAuthScope(resource.Attributes())
-	return &resourceModel{
+	return &ResourceModel{
 		resourceRef: refUUID,
 		attributes:  resAttr,
 		authScope:   authScope,
@@ -62,13 +62,13 @@ func attributesToAuthScope(attrs pcommon.Map) []string {
 	return []string{}
 }
 
-func newResourceExporter(logger *zap.Logger, cfg *Config) (*resourcesExporter, error) {
+func NewResourceExporter(logger *zap.Logger, cfg *Config) (*ResourcesExporter, error) {
 	client, err := newClickhouseClient(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	return &resourcesExporter{
+	return &ResourcesExporter{
 		client: client,
 		logger: logger,
 
@@ -78,14 +78,14 @@ func newResourceExporter(logger *zap.Logger, cfg *Config) (*resourcesExporter, e
 }
 
 // shutdown will shut down the exporter.
-func (e *resourcesExporter) shutdown(_ context.Context) error {
+func (e *ResourcesExporter) Shutdown(_ context.Context) error {
 	if e.client != nil {
 		return e.client.Close()
 	}
 	return nil
 }
 
-func (e *resourcesExporter) start(ctx context.Context, _ component.Host) error {
+func (e *ResourcesExporter) Start(ctx context.Context, _ component.Host) error {
 	if !e.cfg.CreateResourcesTable {
 		return nil
 	}
@@ -97,7 +97,7 @@ func (e *resourcesExporter) start(ctx context.Context, _ component.Host) error {
 	return createResourcesTable(ctx, e.cfg.TTLDays, e.cfg.TTL, e.cfg.ResourcesTableName, e.client)
 }
 
-func (e *resourcesExporter) InsertResources(ctx context.Context, resources []*resourceModel) error {
+func (e *ResourcesExporter) InsertResources(ctx context.Context, resources []*ResourceModel) error {
 	start := time.Now()
 
 	err := doWithTx(ctx, e.client, func(tx *sql.Tx) error {
@@ -144,6 +144,7 @@ ORDER BY (ResourceRef, toUnixTimestamp(Timestamp))
 SETTINGS index_granularity=512, ttl_only_drop_parts = 1;
 `
 	// language=ClickHouse SQL
+	//nolint:lll
 	insertResourcesSQLTemplate = `INSERT INTO %s (Timestamp, ResourceRef, ResourceAttributes, AuthScope) VALUES (?, ?, ?, ?)`
 )
 

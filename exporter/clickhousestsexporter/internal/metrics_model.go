@@ -18,6 +18,7 @@ import (
 	"go.uber.org/zap"
 )
 
+//nolint:gochecknoglobals
 var supportedMetricTypes = map[string]struct{}{
 	createGaugeTableSQL:        {},
 	createSumTableSQL:          {},
@@ -26,13 +27,23 @@ var supportedMetricTypes = map[string]struct{}{
 	createSummaryTableSQL:      {},
 }
 
+//nolint:gochecknoglobals
 var logger *zap.Logger
 
 // MetricsModel is used to group metric data and insert into clickhouse
 // any type of metrics need implement it.
 type MetricsModel interface {
 	// Add used to bind MetricsMetaData to a specific metric then put them into a slice
-	Add(resAttr map[string]string, resURL string, scopeInstr pcommon.InstrumentationScope, scopeURL string, metrics any, name string, description string, unit string) error
+	Add(
+		resAttr map[string]string,
+		resURL string,
+		scopeInstr pcommon.InstrumentationScope,
+		scopeURL string,
+		metrics any,
+		name string,
+		description string,
+		unit string,
+	) error
 	// insert is used to insert metric data to clickhouse
 	insert(ctx context.Context, db *sql.DB) error
 }
@@ -102,7 +113,15 @@ func InsertMetrics(ctx context.Context, db *sql.DB, metricsMap map[pmetric.Metri
 	return errs
 }
 
-func convertExemplars(exemplars pmetric.ExemplarSlice) (clickhouse.ArraySet, clickhouse.ArraySet, clickhouse.ArraySet, clickhouse.ArraySet, clickhouse.ArraySet) {
+func convertExemplars(
+	exemplars pmetric.ExemplarSlice,
+) (
+	clickhouse.ArraySet,
+	clickhouse.ArraySet,
+	clickhouse.ArraySet,
+	clickhouse.ArraySet,
+	clickhouse.ArraySet,
+) {
 	var (
 		attrs    clickhouse.ArraySet
 		times    clickhouse.ArraySet
@@ -176,7 +195,9 @@ func convertSliceToArraySet[T any](slice []T) clickhouse.ArraySet {
 	return set
 }
 
-func convertValueAtQuantile(valueAtQuantile pmetric.SummaryDataPointValueAtQuantileSlice) (clickhouse.ArraySet, clickhouse.ArraySet) {
+func convertValueAtQuantile(
+	valueAtQuantile pmetric.SummaryDataPointValueAtQuantileSlice,
+) (clickhouse.ArraySet, clickhouse.ArraySet) {
 	var (
 		quantiles clickhouse.ArraySet
 		values    clickhouse.ArraySet

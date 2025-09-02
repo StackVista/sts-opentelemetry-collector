@@ -1,11 +1,13 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
+//nolint:lll
 package clickhousestsexporter // import "github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter"
 
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -18,26 +20,26 @@ import (
 	"go.uber.org/zap"
 )
 
-type tracesExporter struct {
+type TracesExporter struct {
 	client           *sql.DB
 	insertSQL        string
-	resourceExporter *resourcesExporter
+	resourceExporter *ResourcesExporter
 
 	logger *zap.Logger
 	cfg    *Config
 }
 
-func newTracesExporter(logger *zap.Logger, cfg *Config) (*tracesExporter, error) {
+func NewTracesExporter(logger *zap.Logger, cfg *Config) (*TracesExporter, error) {
 	client, err := newClickhouseClient(cfg)
 	if err != nil {
 		return nil, err
 	}
-	resourceExporter, err := newResourceExporter(logger, cfg)
+	resourceExporter, err := NewResourceExporter(logger, cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	return &tracesExporter{
+	return &TracesExporter{
 		client:           client,
 		insertSQL:        renderInsertTracesSQL(cfg),
 		resourceExporter: resourceExporter,
@@ -46,8 +48,8 @@ func newTracesExporter(logger *zap.Logger, cfg *Config) (*tracesExporter, error)
 	}, nil
 }
 
-func (e *tracesExporter) start(ctx context.Context, host component.Host) error {
-	if err := e.resourceExporter.start(ctx, host); err != nil {
+func (e *TracesExporter) Start(ctx context.Context, host component.Host) error {
+	if err := e.resourceExporter.Start(ctx, host); err != nil {
 		return err
 	}
 
@@ -63,14 +65,19 @@ func (e *tracesExporter) start(ctx context.Context, host component.Host) error {
 }
 
 // shutdown will shut down the exporter.
-func (e *tracesExporter) shutdown(ctx context.Context) error {
-	e.resourceExporter.shutdown(ctx)
+func (e *TracesExporter) Shutdown(ctx context.Context) error {
+	err := e.resourceExporter.Shutdown(ctx)
+	if err != nil {
+		return errors.New("unable to shutdown the resource exporter")
+	}
 
 	if e.client != nil {
 		return e.client.Close()
 	}
 	return nil
 }
+
+const SpanParentTypeInternal = "SPAN_PARENT_TYPE_INTERNAL"
 
 func getSpanParentType(r ptrace.Span) string {
 	if r.ParentSpanID().IsEmpty() {
@@ -81,14 +88,22 @@ func getSpanParentType(r ptrace.Span) string {
 		return "SPAN_PARENT_TYPE_EXTERNAL"
 	case ptrace.SpanKindConsumer:
 		return "SPAN_PARENT_TYPE_EXTERNAL"
+	case ptrace.SpanKindClient:
+		return SpanParentTypeInternal
+	case ptrace.SpanKindInternal:
+		return SpanParentTypeInternal
+	case ptrace.SpanKindProducer:
+		return SpanParentTypeInternal
+	case ptrace.SpanKindUnspecified:
+		return SpanParentTypeInternal
 	default:
-		return "SPAN_PARENT_TYPE_INTERNAL"
+		return SpanParentTypeInternal
 	}
 }
 
-func (e *tracesExporter) pushTraceData(ctx context.Context, td ptrace.Traces) error {
+func (e *TracesExporter) PushTraceData(ctx context.Context, td ptrace.Traces) error {
 	start := time.Now()
-	resources := []*resourceModel{}
+	resources := []*ResourceModel{}
 
 	err := doWithTx(ctx, e.client, func(tx *sql.Tx) error {
 		traceStatement, err := tx.PrepareContext(ctx, e.insertSQL)
@@ -100,7 +115,7 @@ func (e *tracesExporter) pushTraceData(ctx context.Context, td ptrace.Traces) er
 		}()
 		for i := 0; i < td.ResourceSpans().Len(); i++ {
 			spans := td.ResourceSpans().At(i)
-			res, err := newResourceModel(spans.Resource())
+			res, err := NewResourceModel(spans.Resource())
 			if err != nil {
 				return err
 			}
@@ -158,7 +173,7 @@ func (e *tracesExporter) pushTraceData(ctx context.Context, td ptrace.Traces) er
 	duration := time.Since(start)
 	e.logger.Debug("insert traces", zap.Int("records", td.SpanCount()),
 		zap.String("cost", duration.String()))
-	e.resourceExporter.InsertResources(ctx, resources)
+	_ = e.resourceExporter.InsertResources(ctx, resources)
 	return err
 }
 

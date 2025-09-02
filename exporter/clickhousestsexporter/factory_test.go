@@ -1,12 +1,13 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package clickhousestsexporter
+package clickhousestsexporter_test
 
 import (
 	"context"
 	"testing"
 
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component/componenttest"
@@ -14,15 +15,15 @@ import (
 )
 
 func TestCreateDefaultConfig(t *testing.T) {
-	factory := NewFactory()
+	factory := clickhousestsexporter.NewFactory()
 	cfg := factory.CreateDefaultConfig()
 	assert.NotNil(t, cfg, "failed to create default config")
 	assert.NoError(t, componenttest.CheckConfigStruct(cfg))
 }
 
 func TestFactory_CreateLogsExporter(t *testing.T) {
-	factory := NewFactory()
-	cfg := withDefaultConfig(func(cfg *Config) {
+	factory := clickhousestsexporter.NewFactory()
+	cfg := withDefaultConfig(func(cfg *clickhousestsexporter.Config) {
 		cfg.Endpoint = defaultEndpoint
 	})
 	params := exportertest.NewNopCreateSettings()
@@ -34,8 +35,8 @@ func TestFactory_CreateLogsExporter(t *testing.T) {
 }
 
 func TestFactory_CreateTracesExporter(t *testing.T) {
-	factory := NewFactory()
-	cfg := withDefaultConfig(func(cfg *Config) {
+	factory := clickhousestsexporter.NewFactory()
+	cfg := withDefaultConfig(func(cfg *clickhousestsexporter.Config) {
 		cfg.Endpoint = defaultEndpoint
 	})
 	params := exportertest.NewNopCreateSettings()
@@ -47,8 +48,8 @@ func TestFactory_CreateTracesExporter(t *testing.T) {
 }
 
 func TestFactory_CreateMetricsExporter(t *testing.T) {
-	factory := NewFactory()
-	cfg := withDefaultConfig(func(cfg *Config) {
+	factory := clickhousestsexporter.NewFactory()
+	cfg := withDefaultConfig(func(cfg *clickhousestsexporter.Config) {
 		cfg.Endpoint = defaultEndpoint
 	})
 	params := exportertest.NewNopCreateSettings()

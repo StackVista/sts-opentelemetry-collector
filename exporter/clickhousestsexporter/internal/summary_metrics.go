@@ -144,7 +144,16 @@ func (s *summaryMetrics) insert(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-func (s *summaryMetrics) Add(resAttr map[string]string, resURL string, scopeInstr pcommon.InstrumentationScope, scopeURL string, metrics any, name string, description string, unit string) error {
+func (s *summaryMetrics) Add(
+	resAttr map[string]string,
+	resURL string,
+	scopeInstr pcommon.InstrumentationScope,
+	scopeURL string,
+	metrics any,
+	name string,
+	description string,
+	unit string,
+) error {
 	summary, ok := metrics.(pmetric.Summary)
 	if !ok {
 		return fmt.Errorf("metrics param is not type of Summary")

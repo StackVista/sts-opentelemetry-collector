@@ -1,6 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
+//nolint:lll
 package clickhousestsexporter // import "github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter"
 
 import (
@@ -16,27 +17,27 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter/internal"
 )
 
-type metricsExporter struct {
+type MetricsExporter struct {
 	client *sql.DB
 
 	logger *zap.Logger
 	cfg    *Config
 }
 
-func newMetricsExporter(logger *zap.Logger, cfg *Config) (*metricsExporter, error) {
+func NewMetricsExporter(logger *zap.Logger, cfg *Config) (*MetricsExporter, error) {
 	client, err := newClickhouseClient(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	return &metricsExporter{
+	return &MetricsExporter{
 		client: client,
 		logger: logger,
 		cfg:    cfg,
 	}, nil
 }
 
-func (e *metricsExporter) start(ctx context.Context, _ component.Host) error {
+func (e *MetricsExporter) Start(ctx context.Context, _ component.Host) error {
 	if err := createDatabase(ctx, e.cfg); err != nil {
 		return err
 	}
@@ -48,14 +49,14 @@ func (e *metricsExporter) start(ctx context.Context, _ component.Host) error {
 }
 
 // shutdown will shut down the exporter.
-func (e *metricsExporter) shutdown(_ context.Context) error {
+func (e *MetricsExporter) Shutdown(_ context.Context) error {
 	if e.client != nil {
 		return e.client.Close()
 	}
 	return nil
 }
 
-func (e *metricsExporter) pushMetricsData(ctx context.Context, md pmetric.Metrics) error {
+func (e *MetricsExporter) PushMetricsData(ctx context.Context, md pmetric.Metrics) error {
 	metricsMap := internal.NewMetricsModel(e.cfg.MetricsTableName)
 	for i := 0; i < md.ResourceMetrics().Len(); i++ {
 		metrics := md.ResourceMetrics().At(i)
