@@ -39,9 +39,6 @@ docker build . -t sts-opentelemetry-collector:latest
 ## Run it locally 
 Create a file (`dev-config.yaml`) with configuration for OpenTelemetry Collector.
 ```yaml
-connectors:
-  tracetotopo:
-
 receivers:
   otlp:
     protocols:
