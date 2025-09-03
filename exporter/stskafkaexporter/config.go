@@ -2,6 +2,7 @@ package stskafkaexporter
 
 import (
 	"errors"
+	"fmt"
 	"go.opentelemetry.io/collector/config/configretry"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"time"
@@ -19,6 +20,9 @@ type Config struct {
 	ReadTimeout time.Duration `mapstructure:"read_timeout"`
 	// ProduceTimeout is the max time to wait for a single produce.
 	ProduceTimeout time.Duration `mapstructure:"produce_timeout"`
+	// RequiredAcks controls the acknowledgement level for produced messages.
+	// Supported values: "none", "leader", "all".
+	RequiredAcks string `mapstructure:"required_acks"`
 }
 
 func (cfg *Config) Validate() error {
@@ -36,6 +40,13 @@ func (cfg *Config) Validate() error {
 
 	if cfg.ProduceTimeout <= 0 {
 		return errors.New("'produce_timeout' must be greater than 0")
+	}
+
+	switch cfg.RequiredAcks {
+	case "none", "leader", "all":
+		// ok
+	default:
+		return fmt.Errorf("invalid 'required_acks' value: '%s' (must be one of: none, leader, all)", cfg.RequiredAcks)
 	}
 
 	return nil

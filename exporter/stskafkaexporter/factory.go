@@ -14,16 +14,30 @@ var (
 	Type = component.MustNewType("stskafkaexporter") //nolint:gochecknoglobals
 )
 
-// NewFactory creates a factory for the stskafkaexporter.
-func NewFactory() exporter.Factory {
-	return exporter.NewFactory(
-		Type,
-		createDefaultConfig,
-		exporter.WithLogs(createLogsExporter, component.StabilityLevelAlpha),
-	)
+// Factory wraps the otel exporter.Factory but allows constructor injection for testing.
+type Factory struct {
+	exporter.Factory
+	NewExporterFn func(Config, exporter.CreateSettings) (InternalExporterComponent, error)
 }
 
-func createDefaultConfig() component.Config {
+// NewFactory creates a new Kafka exporter factory.
+func NewFactory() *Factory {
+	f := &Factory{
+		NewExporterFn: KafkaExporterConstructor, // default production constructor
+	}
+	f.Factory = exporter.NewFactory(
+		Type,
+		CreateDefaultConfig,
+		exporter.WithLogs(f.CreateLogsExporter, component.StabilityLevelAlpha),
+	)
+	return f
+}
+
+func KafkaExporterConstructor(c Config, set exporter.CreateSettings) (InternalExporterComponent, error) {
+	return NewKafkaExporter(c, set) // returns KafkaExporter, which satisfies the interface
+}
+
+func CreateDefaultConfig() component.Config {
 	queueSettings := exporterhelper.NewDefaultQueueSettings()
 	queueSettings.NumConsumers = 1
 
@@ -36,17 +50,12 @@ func createDefaultConfig() component.Config {
 		Topic:          "otel-topology-stream",
 		ReadTimeout:    2 * time.Second,
 		ProduceTimeout: 5 * time.Second,
+		RequiredAcks:   "leader",
 	}
 }
 
-func kafkaExporterConstructor(c Config, set exporter.CreateSettings) (exporterComponent, error) {
-	return newKafkaExporter(c, set) // returns *kafkaExporter, which satisfies the interface
-}
-
-var newKafkaExporterFn = kafkaExporterConstructor //nolint:gochecknoglobals
-
-// createLogsExporter creates a new Kafka exporter for logs.
-func createLogsExporter(
+// CreateLogsExporter creates a new Kafka exporter for logs.
+func (f *Factory) CreateLogsExporter(
 	ctx context.Context,
 	set exporter.CreateSettings,
 	cfg component.Config,
@@ -56,19 +65,18 @@ func createLogsExporter(
 		return nil, fmt.Errorf("invalid config type: %T", cfg)
 	}
 
-	exp, err := newKafkaExporterFn(*typedCfg, set)
+	exp, err := f.NewExporterFn(*typedCfg, set)
 	if err != nil {
 		return nil, fmt.Errorf("cannot configure kafka logs exp: %w", err)
 	}
 
-	// Use exporterhelper to get built-in queue, retry, timeouts (configurable in the collector-config.yaml).
 	return exporterhelper.NewLogsExporter(
 		ctx,
 		set,
 		cfg,
-		exp.exportData,
-		exporterhelper.WithStart(exp.start),
-		exporterhelper.WithShutdown(exp.shutdown),
+		exp.ExportData,
+		exporterhelper.WithStart(exp.Start),
+		exporterhelper.WithShutdown(exp.Shutdown),
 		exporterhelper.WithTimeout(typedCfg.TimeoutSettings),
 		exporterhelper.WithQueue(typedCfg.QueueSettings),
 		exporterhelper.WithRetry(typedCfg.BackOffConfig),
