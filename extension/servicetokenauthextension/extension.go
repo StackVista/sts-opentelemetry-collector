@@ -16,10 +16,10 @@ import (
 )
 
 var (
-	errNoAuth                = errors.New("missing Authorization header")
-	errInternal              = errors.New("internal error")
-	errAuthServerUnavailable = errors.New("auth server unavailable")
-	errForbidden             = errors.New("forbidden")
+	ErrNoAuth                = errors.New("missing Authorization header")
+	ErrInternal              = errors.New("internal error")
+	ErrAuthServerUnavailable = errors.New("auth server unavailable")
+	ErrForbidden             = errors.New("forbidden")
 
 	tokenRegex = regexp.MustCompile(`(\w+) (.*)$`)
 )
@@ -27,21 +27,22 @@ var (
 type extensionContext struct {
 	config     *Config
 	httpClient http.Client
-	//we have two caches one for invalid keys, it maps auth key to nothing now but in the future we can map it to tenant ID
-	//it is LRU cache with TTL to delete unused keys after some time, the key should be always expired even if is constantly
-	//used, otherwise a key ma be invalidated and not deleted from the cache (because is still used).
+	// we have two caches one for invalid keys, it maps auth key to nothing now but in the future
+	// we can map it to tenant ID
+	// it is LRU cache with TTL to delete unused keys after some time, the key should be always expired even
+	// if it is constantly used, otherwise a key ma be invalidated and not deleted from the cache (because is still used).
 	validKeysCache *expirable.LRU[string, string]
-	//the cache stores last invalid keys to reject only valid collectors but without updated API key (e.g. expired)
-	//the cache can't prevent DoS or brute force attacks, it should be prevented on LB or API Gateway
-	//the cache maps maps auth key to an error but only "non transient" errors like Forbidden and shouldn't be used for transient
-	//issues (like authorization service unavailable).
+	// the cache stores last invalid keys to reject only valid collectors but without updated API key (e.g. expired)
+	// the cache can't prevent DoS or brute force attacks, it should be prevented on LB or API Gateway
+	// the cache maps maps auth key to an error but only "non transient" errors like Forbidden and shouldn't be
+	// used for transient issues (like authorization service unavailable).
 	invalidKeysCache *expirable.LRU[string, error]
 }
 
-func newServerAuthExtension(cfg *Config) (auth.Server, error) {
+func NewServerAuthExtension(cfg *Config) (auth.Server, error) {
 	exCtx := extensionContext{
 		config:           cfg,
-		validKeysCache:   expirable.NewLRU[string, string](cfg.Cache.ValidSize, nil, cfg.Cache.ValidTtl),
+		validKeysCache:   expirable.NewLRU[string, string](cfg.Cache.ValidSize, nil, cfg.Cache.ValidTTL),
 		invalidKeysCache: expirable.NewLRU[string, error](cfg.Cache.InvalidSize, nil, 0),
 	}
 	return auth.NewServer(
@@ -63,16 +64,16 @@ func (exCtx *extensionContext) serverStart(context.Context, component.Host) erro
 func (exCtx *extensionContext) authenticate(ctx context.Context, headers map[string][]string) (context.Context, error) {
 	authorizationHeader := getAuthHeader(headers)
 	if authorizationHeader == "" {
-		return ctx, errNoAuth
+		return ctx, ErrNoAuth
 	}
 
 	// checks schema
 	matches := tokenRegex.FindStringSubmatch(authorizationHeader)
 	if len(matches) != 3 {
-		return ctx, errForbidden
+		return ctx, ErrForbidden
 	}
 	if matches[1] != exCtx.config.Schema {
-		return ctx, errForbidden
+		return ctx, ErrForbidden
 	}
 
 	err := checkAuthorizationHeaderUseCache(matches[2], exCtx)
@@ -87,10 +88,10 @@ func (exCtx *extensionContext) authenticate(ctx context.Context, headers map[str
 	return client.NewContext(ctx, cl), nil
 }
 
-var authHeaders = [2]string{"authorization", "Authorization"}
-
 // Extract value of "Authorization" header, empty string - the header is missing.
 func getAuthHeader(headers map[string][]string) string {
+	authHeaders := [2]string{"authorization", "Authorization"}
+
 	for _, authHeaderName := range authHeaders {
 		authHeader, ok := headers[authHeaderName]
 
@@ -121,7 +122,7 @@ func checkAuthorizationHeaderUseCache(authorizationHeader string, exCtx *extensi
 }
 
 type AuthorizeRequestBody struct {
-	ApiKey string `json:"apiKey"`
+	APIKey string `json:"apiKey"`
 }
 
 // Authorizes an API Key or Service Token (value of Authorization header) with the remote authorization server.
@@ -130,10 +131,10 @@ func checkAuthorizationHeader(token string, exCtx *extensionContext) error {
 	headerSample := token[max(0, len(token)-4):]
 	log.Printf("Sending authorization request for ...%s\n", headerSample)
 
-	req, err := http.NewRequest(http.MethodGet, exCtx.config.Endpoint.Url, nil)
+	req, err := http.NewRequest(http.MethodGet, exCtx.config.Endpoint.URL, nil)
 	if err != nil {
 		log.Print("Can't create authorization request ", err)
-		return errInternal
+		return ErrInternal
 	}
 
 	// Add the token to the header
@@ -142,19 +143,19 @@ func checkAuthorizationHeader(token string, exCtx *extensionContext) error {
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		log.Print("Authorization endpoint returned an error ", err)
-		return errAuthServerUnavailable
+		return ErrAuthServerUnavailable
 	}
 
 	log.Printf("Result for ...%s: %d\n", headerSample, res.StatusCode)
 	if res.StatusCode == 403 {
-		exCtx.invalidKeysCache.Add(token, errForbidden)
-		return errForbidden
+		exCtx.invalidKeysCache.Add(token, ErrForbidden)
+		return ErrForbidden
 	}
 
 	if res.StatusCode >= 200 && res.StatusCode < 300 {
-		exCtx.validKeysCache.Add(token, "") //In future we can store tenant ID in the cache
+		exCtx.validKeysCache.Add(token, "") // In future we can store tenant ID in the cache
 		return nil
 	}
 
-	return errInternal
+	return ErrInternal
 }

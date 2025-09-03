@@ -6,12 +6,12 @@ import (
 )
 
 type EndpointSettings struct {
-	Url string `mapstructure:"url"`
+	URL string `mapstructure:"url"`
 }
 
 type CacheSettings struct {
 	ValidSize   int           `mapstructure:"valid_size"`
-	ValidTtl    time.Duration `mapstructure:"valid_ttl"`
+	ValidTTL    time.Duration `mapstructure:"valid_ttl"`
 	InvalidSize int           `mapstructure:"invalid_size"`
 }
 
@@ -25,7 +25,7 @@ func (cfg *Config) Validate() error {
 	if cfg.Endpoint == nil {
 		return fmt.Errorf("required endpoint paramater")
 	}
-	if len(cfg.Endpoint.Url) == 0 {
+	if len(cfg.Endpoint.URL) == 0 {
 		return fmt.Errorf("required endpoint.url paramater")
 	}
 
@@ -33,9 +33,9 @@ func (cfg *Config) Validate() error {
 		return fmt.Errorf("required cache paramater")
 	}
 	if cfg.Cache.ValidSize <= 0 {
-		return fmt.Errorf("paramater cache.valid_size must be a postive value")
+		return fmt.Errorf("paramater cache.valid_size must be a positive value")
 	}
-	if cfg.Cache.ValidTtl <= time.Duration(100) {
+	if cfg.Cache.ValidTTL <= time.Duration(100) {
 		// It must be greater than 100 because the caching library being used (hashicorp/golang-lru)
 		// uses this value as the default number of expiry buckets. This number of expiry buckets is used to calculate the
 		// cache entry expiry goroutine (ticker) tick's interval.
@@ -44,7 +44,7 @@ func (cfg *Config) Validate() error {
 		return fmt.Errorf("paramater cache.valid_ttl must be a positive value greater than 100")
 	}
 	if cfg.Cache.InvalidSize <= 0 {
-		return fmt.Errorf("paramater cache.invalid_size must be a postive value")
+		return fmt.Errorf("paramater cache.invalid_size must be a positive value")
 	}
 
 	if len(cfg.Schema) == 0 {

@@ -1,13 +1,15 @@
-package servicetokenauthextension
+package servicetokenauthextension_test
 
 import (
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/stackvista/sts-opentelemetry-collector/extension/servicetokenauthextension"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap/confmaptest"
-	"path/filepath"
-	"testing"
-	"time"
 )
 
 func TestLoadConfig(t *testing.T) {
@@ -17,54 +19,54 @@ func TestLoadConfig(t *testing.T) {
 		expectedErr bool
 	}{
 		{
-			id:          component.NewID(Type),
+			id:          component.NewID(servicetokenauthextension.Type),
 			expectedErr: true,
 		},
 		{
-			id:          component.NewIDWithName(Type, "empty_endpoint"),
+			id:          component.NewIDWithName(servicetokenauthextension.Type, "empty_endpoint"),
 			expectedErr: true,
 		},
 		{
-			id:          component.NewIDWithName(Type, "empty_url"),
+			id:          component.NewIDWithName(servicetokenauthextension.Type, "empty_url"),
 			expectedErr: true,
 		},
 		{
-			id: component.NewIDWithName(Type, "missing_cache"),
-			expected: &Config{
-				Endpoint: &EndpointSettings{
-					Url: "http://localhost:8091/authorize",
+			id: component.NewIDWithName(servicetokenauthextension.Type, "missing_cache"),
+			expected: &servicetokenauthextension.Config{
+				Endpoint: &servicetokenauthextension.EndpointSettings{
+					URL: "http://localhost:8091/authorize",
 				},
-				Cache: &CacheSettings{
+				Cache: &servicetokenauthextension.CacheSettings{
 					ValidSize:   100,
-					ValidTtl:    5 * time.Minute,
+					ValidTTL:    5 * time.Minute,
 					InvalidSize: 100,
 				},
 				Schema: "StackState",
 			},
 		},
 		{
-			id: component.NewIDWithName(Type, "empty_cache"),
-			expected: &Config{
-				Endpoint: &EndpointSettings{
-					Url: "http://localhost:8091/authorize",
+			id: component.NewIDWithName(servicetokenauthextension.Type, "empty_cache"),
+			expected: &servicetokenauthextension.Config{
+				Endpoint: &servicetokenauthextension.EndpointSettings{
+					URL: "http://localhost:8091/authorize",
 				},
-				Cache: &CacheSettings{
+				Cache: &servicetokenauthextension.CacheSettings{
 					ValidSize:   100,
-					ValidTtl:    5 * time.Minute,
+					ValidTTL:    5 * time.Minute,
 					InvalidSize: 100,
 				},
 				Schema: "StackState",
 			},
 		},
 		{
-			id: component.NewIDWithName(Type, "valid"),
-			expected: &Config{
-				Endpoint: &EndpointSettings{
-					Url: "http://localhost:8091/authorize",
+			id: component.NewIDWithName(servicetokenauthextension.Type, "valid"),
+			expected: &servicetokenauthextension.Config{
+				Endpoint: &servicetokenauthextension.EndpointSettings{
+					URL: "http://localhost:8091/authorize",
 				},
-				Cache: &CacheSettings{
+				Cache: &servicetokenauthextension.CacheSettings{
 					ValidSize:   10,
-					ValidTtl:    20 * time.Second,
+					ValidTTL:    20 * time.Second,
 					InvalidSize: 30,
 				},
 				Schema: "StackStack2",
@@ -75,7 +77,7 @@ func TestLoadConfig(t *testing.T) {
 		t.Run(tt.id.String(), func(t *testing.T) {
 			cm, err := confmaptest.LoadConf(filepath.Join("testdata", "config.yaml"))
 			require.NoError(t, err)
-			factory := NewFactory()
+			factory := servicetokenauthextension.NewFactory()
 			cfg := factory.CreateDefaultConfig()
 			sub, err := cm.Sub(tt.id.String())
 			require.NoError(t, err)
