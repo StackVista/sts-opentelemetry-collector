@@ -4,6 +4,7 @@ package ststopologyexporter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -48,7 +49,7 @@ func createMetricsExporter(
 	}
 	c, ok := cfg.(*Config)
 	if !ok {
-		c = &Config{}
+		return nil, errors.New("unable to cast config")
 	}
 
 	return exporterhelper.NewMetricsExporter(
@@ -71,7 +72,7 @@ func createTracesExporter(
 ) (exporter.Traces, error) {
 	c, ok := cfg.(*Config)
 	if !ok {
-		c = &Config{}
+		return nil, errors.New("unable to cast config")
 	}
 	exporter, err := NewTopologyExporter(set.Logger, c)
 	if err != nil {
