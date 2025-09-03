@@ -86,7 +86,7 @@ func TestExporter_pushTracesData(t *testing.T) {
 
 //nolint:unparam
 func newTestTracesExporter(t *testing.T, dsn string, fns ...func(*clickhousestsexporter.Config)) *clickhousestsexporter.TracesExporter {
-	exporter, err := clickhousestsexporter.NewTracesExporter(zaptest.NewLogger(t), withTestExporterConfig(fns...)(dsn))
+	exporter, err := clickhousestsexporter.NewTracesExporter(zaptest.NewLogger(t), withTestExporterConfig(t, fns...)(dsn))
 	require.NoError(t, err)
 	require.NoError(t, exporter.Start(context.TODO(), nil))
 

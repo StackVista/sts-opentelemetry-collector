@@ -51,7 +51,7 @@ func TestExporter_pushResourcesData(t *testing.T) {
 }
 
 func newTestResourceExporter(t *testing.T, dsn string, fns ...func(*clickhousestsexporter.Config)) *clickhousestsexporter.ResourcesExporter {
-	exporter, err := clickhousestsexporter.NewResourceExporter(zaptest.NewLogger(t), withTestExporterConfig(fns...)(dsn))
+	exporter, err := clickhousestsexporter.NewResourceExporter(zaptest.NewLogger(t), withTestExporterConfig(t, fns...)(dsn))
 	require.NoError(t, err)
 	require.NoError(t, exporter.Start(context.TODO(), nil))
 

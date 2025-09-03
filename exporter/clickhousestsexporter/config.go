@@ -50,12 +50,11 @@ type Config struct {
 	CreateTracesTable bool `mapstructure:"create_traces_table"`
 	// Create the resources table on startup
 	CreateResourcesTable bool `mapstructure:"create_resources_table"`
+
+	driverName string
 }
 
 const defaultDatabase = "default"
-
-//nolint:gochecknoglobals
-var driverName = "clickhouse"
 
 var (
 	ErrConfigNoEndpoint      = errors.New("endpoint must be specified")
@@ -137,14 +136,24 @@ func (cfg *Config) BuildDB(database string) (*sql.DB, error) {
 		return nil, err
 	}
 
+	// Safeguard against zero-values
+	if cfg.driverName == "" {
+		cfg.driverName = "clickhouse"
+	}
+
 	// ClickHouse sql driver will read clickhouse settings from the DSN string.
 	// It also ensures defaults.
 	// See https://github.com/ClickHouse/clickhouse-go/blob/08b27884b899f587eb5c509769cd2bdf74a9e2a1/clickhouse_std.go#L189
-	conn, err := sql.Open(driverName, dsn)
+	conn, err := sql.Open(cfg.driverName, dsn)
 	if err != nil {
 		return nil, err
 	}
 
 	return conn, nil
 
+}
+
+// utility testing function
+func (cfg *Config) SetDriverName(driverName string) {
+	cfg.driverName = driverName
 }

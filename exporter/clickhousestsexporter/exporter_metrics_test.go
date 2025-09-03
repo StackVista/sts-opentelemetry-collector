@@ -479,7 +479,7 @@ func mustPushMetricsData(t *testing.T, exporter *clickhousestsexporter.MetricsEx
 }
 
 func newTestMetricsExporter(t *testing.T) *clickhousestsexporter.MetricsExporter {
-	exporter, err := clickhousestsexporter.NewMetricsExporter(zaptest.NewLogger(t), withTestExporterConfig()(defaultEndpoint))
+	exporter, err := clickhousestsexporter.NewMetricsExporter(zaptest.NewLogger(t), withTestExporterConfig(t)(defaultEndpoint))
 	require.NoError(t, err)
 	require.NoError(t, exporter.Start(context.TODO(), nil))
 

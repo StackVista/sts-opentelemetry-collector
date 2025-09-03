@@ -20,11 +20,6 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
-// Needed for testing
-//
-//nolint:gochecknoglobals
-var driverName = "clickhouse"
-
 func TestLogsExporter_New(t *testing.T) {
 	type validate func(*testing.T, *clickhousestsexporter.LogsExporter, error)
 
@@ -127,7 +122,7 @@ func TestExporter_pushLogsData(t *testing.T) {
 }
 
 func newTestLogsExporter(t *testing.T, dsn string, fns ...func(*clickhousestsexporter.Config)) *clickhousestsexporter.LogsExporter {
-	exporter, err := clickhousestsexporter.NewLogsExporter(zaptest.NewLogger(t), withTestExporterConfig(fns...)(dsn))
+	exporter, err := clickhousestsexporter.NewLogsExporter(zaptest.NewLogger(t), withTestExporterConfig(t, fns...)(dsn))
 	require.NoError(t, err)
 	require.NoError(t, exporter.Start(context.TODO(), nil))
 
@@ -135,11 +130,12 @@ func newTestLogsExporter(t *testing.T, dsn string, fns ...func(*clickhousestsexp
 	return exporter
 }
 
-func withTestExporterConfig(fns ...func(*clickhousestsexporter.Config)) func(string) *clickhousestsexporter.Config {
+func withTestExporterConfig(t *testing.T, fns ...func(*clickhousestsexporter.Config)) func(string) *clickhousestsexporter.Config {
 	return func(endpoint string) *clickhousestsexporter.Config {
 		var configMods []func(*clickhousestsexporter.Config)
 		configMods = append(configMods, func(cfg *clickhousestsexporter.Config) {
 			cfg.Endpoint = endpoint
+			cfg.SetDriverName(t.Name())
 		})
 		configMods = append(configMods, fns...)
 		return withDefaultConfig(configMods...)
@@ -170,7 +166,6 @@ func mustPushLogsData(t *testing.T, exporter *clickhousestsexporter.LogsExporter
 }
 
 func initClickhouseTestServer(t *testing.T, recorder recorder) {
-	driverName = t.Name()
 	sql.Register(t.Name(), &testClickhouseDriver{
 		recorder: recorder,
 	})
