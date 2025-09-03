@@ -1,14 +1,15 @@
-package internal
+package internal_test
 
 import (
 	"testing"
 
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/ststopologyexporter/internal"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 )
 
 func TestTopology_addResource(t *testing.T) {
-	collection := NewCollection()
+	collection := internal.NewCollection()
 	attrs := pcommon.NewMap()
 	attrs.PutStr("service.name", "demo 1")
 	attrs.PutStr("service.namespace", "demo")
@@ -17,13 +18,14 @@ func TestTopology_addResource(t *testing.T) {
 	collection.AddResource(&attrs)
 
 	components := collection.GetComponents()
-	require.Equal(t, []*Component{
+	//nolint:dupl
+	require.Equal(t, []*internal.Component{
 		{
-			ExternalId: "urn:opentelemetry:namespace/demo",
-			Type: ComponentType{
+			ExternalID: "urn:opentelemetry:namespace/demo",
+			Type: internal.ComponentType{
 				Name: "namespace",
 			},
-			Data: &ComponentData{
+			Data: &internal.ComponentData{
 				Name:        "demo",
 				Version:     "",
 				Layer:       "urn:stackpack:common:layer:applications",
@@ -34,11 +36,11 @@ func TestTopology_addResource(t *testing.T) {
 			},
 		},
 		{
-			ExternalId: "urn:opentelemetry:namespace/demo:service/demo 1",
-			Type: ComponentType{
+			ExternalID: "urn:opentelemetry:namespace/demo:service/demo 1",
+			Type: internal.ComponentType{
 				Name: "service",
 			},
-			Data: &ComponentData{
+			Data: &internal.ComponentData{
 				Name:        "demo 1",
 				Version:     "",
 				Layer:       "urn:stackpack:common:layer:services",
@@ -53,11 +55,11 @@ func TestTopology_addResource(t *testing.T) {
 			},
 		},
 		{
-			ExternalId: "urn:opentelemetry:namespace/demo:service/demo 1:serviceInstance/demo 1",
-			Type: ComponentType{
+			ExternalID: "urn:opentelemetry:namespace/demo:service/demo 1:serviceInstance/demo 1",
+			Type: internal.ComponentType{
 				Name: "service-instance",
 			},
-			Data: &ComponentData{
+			Data: &internal.ComponentData{
 				Name:        "demo 1 - instance",
 				Version:     "",
 				Layer:       "urn:stackpack:common:layer:containers",
@@ -75,15 +77,15 @@ func TestTopology_addResource(t *testing.T) {
 	}, components)
 
 	relations := collection.GetRelations()
-	require.Equal(t, []*Relation{
+	require.Equal(t, []*internal.Relation{
 		{
-			ExternalId: "urn:opentelemetry:namespace/demo:service/demo 1-urn:opentelemetry:namespace/demo:service/demo 1:serviceInstance/demo 1",
-			SourceId:   "urn:opentelemetry:namespace/demo:service/demo 1",
-			TargetId:   "urn:opentelemetry:namespace/demo:service/demo 1:serviceInstance/demo 1",
-			Type: RelationType{
+			ExternalID: "urn:opentelemetry:namespace/demo:service/demo 1-urn:opentelemetry:namespace/demo:service/demo 1:serviceInstance/demo 1",
+			SourceID:   "urn:opentelemetry:namespace/demo:service/demo 1",
+			TargetID:   "urn:opentelemetry:namespace/demo:service/demo 1:serviceInstance/demo 1",
+			Type: internal.RelationType{
 				Name: "provided-by",
 			},
-			Data: &RelationData{
+			Data: &internal.RelationData{
 				Tags: map[string]string{},
 			},
 		},
@@ -91,7 +93,7 @@ func TestTopology_addResource(t *testing.T) {
 }
 
 func TestTopology_addSynchronousConnection(t *testing.T) {
-	collection := NewCollection()
+	collection := internal.NewCollection()
 	attrs := pcommon.NewMap()
 	attrs.PutStr("client", "frontend")
 	attrs.PutStr("client_service.namespace", "ns")
@@ -102,15 +104,15 @@ func TestTopology_addSynchronousConnection(t *testing.T) {
 	require.True(t, ok)
 
 	relations := collection.GetRelations()
-	require.Equal(t, []*Relation{
+	require.Equal(t, []*internal.Relation{
 		{
-			ExternalId: "urn:opentelemetry:namespace/ns:service/frontend:serviceInstance/frontend-urn:opentelemetry:namespace/ns:service/backend:serviceInstance/backend",
-			SourceId:   "urn:opentelemetry:namespace/ns:service/frontend:serviceInstance/frontend",
-			TargetId:   "urn:opentelemetry:namespace/ns:service/backend:serviceInstance/backend",
-			Type: RelationType{
+			ExternalID: "urn:opentelemetry:namespace/ns:service/frontend:serviceInstance/frontend-urn:opentelemetry:namespace/ns:service/backend:serviceInstance/backend",
+			SourceID:   "urn:opentelemetry:namespace/ns:service/frontend:serviceInstance/frontend",
+			TargetID:   "urn:opentelemetry:namespace/ns:service/backend:serviceInstance/backend",
+			Type: internal.RelationType{
 				Name: "synchronous",
 			},
-			Data: &RelationData{
+			Data: &internal.RelationData{
 				Tags: map[string]string{},
 			},
 		},
@@ -118,7 +120,7 @@ func TestTopology_addSynchronousConnection(t *testing.T) {
 }
 
 func TestTopology_failIncompleteConnection(t *testing.T) {
-	collection := NewCollection()
+	collection := internal.NewCollection()
 	attrs := pcommon.NewMap()
 	attrs.PutStr("client", "frontend")
 	attrs.PutStr("client_service.namespace", "ns")
@@ -139,7 +141,7 @@ func TestTopology_failIncompleteConnection(t *testing.T) {
 }
 
 func TestTopology_addAsynchronousConnection(t *testing.T) {
-	collection := NewCollection()
+	collection := internal.NewCollection()
 	attrs := pcommon.NewMap()
 	attrs.PutStr("client", "frontend")
 	attrs.PutStr("client_service.namespace", "ns")
@@ -150,15 +152,15 @@ func TestTopology_addAsynchronousConnection(t *testing.T) {
 	require.True(t, ok)
 
 	relations := collection.GetRelations()
-	require.Equal(t, []*Relation{
+	require.Equal(t, []*internal.Relation{
 		{
-			ExternalId: "urn:opentelemetry:namespace/ns:service/frontend:serviceInstance/frontend-urn:opentelemetry:namespace/ns:service/backend:serviceInstance/backend",
-			SourceId:   "urn:opentelemetry:namespace/ns:service/frontend:serviceInstance/frontend",
-			TargetId:   "urn:opentelemetry:namespace/ns:service/backend:serviceInstance/backend",
-			Type: RelationType{
+			ExternalID: "urn:opentelemetry:namespace/ns:service/frontend:serviceInstance/frontend-urn:opentelemetry:namespace/ns:service/backend:serviceInstance/backend",
+			SourceID:   "urn:opentelemetry:namespace/ns:service/frontend:serviceInstance/frontend",
+			TargetID:   "urn:opentelemetry:namespace/ns:service/backend:serviceInstance/backend",
+			Type: internal.RelationType{
 				Name: "asynchronous",
 			},
-			Data: &RelationData{
+			Data: &internal.RelationData{
 				Tags: map[string]string{},
 			},
 		},
@@ -166,7 +168,7 @@ func TestTopology_addAsynchronousConnection(t *testing.T) {
 }
 
 func TestTopology_addDatabase(t *testing.T) {
-	collection := NewCollection()
+	collection := internal.NewCollection()
 	attrs := pcommon.NewMap()
 	attrs.PutStr("client", "frontend")
 	attrs.PutStr("client_service.namespace", "ns")
@@ -176,28 +178,28 @@ func TestTopology_addDatabase(t *testing.T) {
 	require.True(t, ok)
 
 	relations := collection.GetRelations()
-	require.Equal(t, []*Relation{
+	require.Equal(t, []*internal.Relation{
 		{
-			ExternalId: "urn:opentelemetry:namespace/ns:service/frontend:serviceInstance/frontend-urn:opentelemetry:namespace/ns:service/frontend:database/mydb",
-			SourceId:   "urn:opentelemetry:namespace/ns:service/frontend:serviceInstance/frontend",
-			TargetId:   "urn:opentelemetry:namespace/ns:service/frontend:database/mydb",
-			Type: RelationType{
+			ExternalID: "urn:opentelemetry:namespace/ns:service/frontend:serviceInstance/frontend-urn:opentelemetry:namespace/ns:service/frontend:database/mydb",
+			SourceID:   "urn:opentelemetry:namespace/ns:service/frontend:serviceInstance/frontend",
+			TargetID:   "urn:opentelemetry:namespace/ns:service/frontend:database/mydb",
+			Type: internal.RelationType{
 				Name: "database",
 			},
-			Data: &RelationData{
+			Data: &internal.RelationData{
 				Tags: map[string]string{},
 			},
 		},
 	}, relations)
 
 	components := collection.GetComponents()
-	require.Equal(t, []*Component{
+	require.Equal(t, []*internal.Component{
 		{
-			ExternalId: "urn:opentelemetry:namespace/ns:service/frontend:database/mydb",
-			Type: ComponentType{
+			ExternalID: "urn:opentelemetry:namespace/ns:service/frontend:database/mydb",
+			Type: internal.ComponentType{
 				Name: "database",
 			},
-			Data: &ComponentData{
+			Data: &internal.ComponentData{
 				Name:        "mydb",
 				Version:     "",
 				Layer:       "urn:stackpack:common:layer:databases",
@@ -213,8 +215,9 @@ func TestTopology_addDatabase(t *testing.T) {
 	}, components)
 }
 
+//nolint:dupl
 func TestTopology_addHost(t *testing.T) {
-	collection := NewCollection()
+	collection := internal.NewCollection()
 	attrs := pcommon.NewMap()
 	attrs.PutStr("service.name", "ye-service")
 	attrs.PutStr("service.namespace", "ns")
@@ -223,13 +226,13 @@ func TestTopology_addHost(t *testing.T) {
 	require.True(t, ok)
 
 	components := collection.GetComponents()
-	require.Equal(t, []*Component{
+	require.Equal(t, []*internal.Component{
 		{
-			ExternalId: "urn:opentelemetry:host/ye-host",
-			Type: ComponentType{
+			ExternalID: "urn:opentelemetry:host/ye-host",
+			Type: internal.ComponentType{
 				Name: "host",
 			},
-			Data: &ComponentData{
+			Data: &internal.ComponentData{
 				Name:        "ye-host",
 				Version:     "",
 				Layer:       "urn:stackpack:common:layer:machines",
@@ -242,11 +245,11 @@ func TestTopology_addHost(t *testing.T) {
 			},
 		},
 		{
-			ExternalId: "urn:opentelemetry:namespace/ns",
-			Type: ComponentType{
+			ExternalID: "urn:opentelemetry:namespace/ns",
+			Type: internal.ComponentType{
 				Name: "namespace",
 			},
-			Data: &ComponentData{
+			Data: &internal.ComponentData{
 				Name:        "ns",
 				Version:     "",
 				Layer:       "urn:stackpack:common:layer:applications",
@@ -257,11 +260,11 @@ func TestTopology_addHost(t *testing.T) {
 			},
 		},
 		{
-			ExternalId: "urn:opentelemetry:namespace/ns:service/ye-service",
-			Type: ComponentType{
+			ExternalID: "urn:opentelemetry:namespace/ns:service/ye-service",
+			Type: internal.ComponentType{
 				Name: "service",
 			},
-			Data: &ComponentData{
+			Data: &internal.ComponentData{
 				Name:        "ye-service",
 				Version:     "",
 				Layer:       "urn:stackpack:common:layer:services",
@@ -275,11 +278,11 @@ func TestTopology_addHost(t *testing.T) {
 			},
 		},
 		{
-			ExternalId: "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
-			Type: ComponentType{
+			ExternalID: "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			Type: internal.ComponentType{
 				Name: "service-instance",
 			},
-			Data: &ComponentData{
+			Data: &internal.ComponentData{
 				Name:        "ye-service - instance",
 				Version:     "",
 				Layer:       "urn:stackpack:common:layer:containers",
@@ -296,34 +299,35 @@ func TestTopology_addHost(t *testing.T) {
 	}, components)
 
 	relations := collection.GetRelations()
-	require.Equal(t, []*Relation{
+	require.Equal(t, []*internal.Relation{
 		{
-			ExternalId: "urn:opentelemetry:host/ye-host-urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
-			SourceId:   "urn:opentelemetry:host/ye-host",
-			TargetId:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
-			Type: RelationType{
+			ExternalID: "urn:opentelemetry:host/ye-host-urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			SourceID:   "urn:opentelemetry:host/ye-host",
+			TargetID:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			Type: internal.RelationType{
 				Name: "executes",
 			},
-			Data: &RelationData{
+			Data: &internal.RelationData{
 				Tags: map[string]string{},
 			},
 		},
 		{
-			ExternalId: "urn:opentelemetry:namespace/ns:service/ye-service-urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
-			SourceId:   "urn:opentelemetry:namespace/ns:service/ye-service",
-			TargetId:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
-			Type: RelationType{
+			ExternalID: "urn:opentelemetry:namespace/ns:service/ye-service-urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			SourceID:   "urn:opentelemetry:namespace/ns:service/ye-service",
+			TargetID:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			Type: internal.RelationType{
 				Name: "provided-by",
 			},
-			Data: &RelationData{
+			Data: &internal.RelationData{
 				Tags: map[string]string{},
 			},
 		},
 	}, relations)
 }
 
+//nolint:dupl
 func TestTopology_addFaas(t *testing.T) {
-	collection := NewCollection()
+	collection := internal.NewCollection()
 	attrs := pcommon.NewMap()
 	attrs.PutStr("service.name", "ye-service")
 	attrs.PutStr("service.namespace", "ns")
@@ -332,13 +336,13 @@ func TestTopology_addFaas(t *testing.T) {
 	require.True(t, ok)
 
 	components := collection.GetComponents()
-	require.Equal(t, []*Component{
+	require.Equal(t, []*internal.Component{
 		{
-			ExternalId: "urn:opentelemetry:function/ye-faas",
-			Type: ComponentType{
+			ExternalID: "urn:opentelemetry:function/ye-faas",
+			Type: internal.ComponentType{
 				Name: "function",
 			},
-			Data: &ComponentData{
+			Data: &internal.ComponentData{
 				Name:        "ye-faas",
 				Version:     "",
 				Layer:       "urn:stackpack:common:layer:serverless",
@@ -351,11 +355,11 @@ func TestTopology_addFaas(t *testing.T) {
 			},
 		},
 		{
-			ExternalId: "urn:opentelemetry:namespace/ns",
-			Type: ComponentType{
+			ExternalID: "urn:opentelemetry:namespace/ns",
+			Type: internal.ComponentType{
 				Name: "namespace",
 			},
-			Data: &ComponentData{
+			Data: &internal.ComponentData{
 				Name:        "ns",
 				Version:     "",
 				Layer:       "urn:stackpack:common:layer:applications",
@@ -366,11 +370,11 @@ func TestTopology_addFaas(t *testing.T) {
 			},
 		},
 		{
-			ExternalId: "urn:opentelemetry:namespace/ns:service/ye-service",
-			Type: ComponentType{
+			ExternalID: "urn:opentelemetry:namespace/ns:service/ye-service",
+			Type: internal.ComponentType{
 				Name: "service",
 			},
-			Data: &ComponentData{
+			Data: &internal.ComponentData{
 				Name:        "ye-service",
 				Version:     "",
 				Layer:       "urn:stackpack:common:layer:services",
@@ -384,11 +388,11 @@ func TestTopology_addFaas(t *testing.T) {
 			},
 		},
 		{
-			ExternalId: "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
-			Type: ComponentType{
+			ExternalID: "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			Type: internal.ComponentType{
 				Name: "service-instance",
 			},
-			Data: &ComponentData{
+			Data: &internal.ComponentData{
 				Name:        "ye-service - instance",
 				Version:     "",
 				Layer:       "urn:stackpack:common:layer:containers",
@@ -405,26 +409,26 @@ func TestTopology_addFaas(t *testing.T) {
 	}, components)
 
 	relations := collection.GetRelations()
-	require.Equal(t, []*Relation{
+	require.Equal(t, []*internal.Relation{
 		{
-			ExternalId: "urn:opentelemetry:function/ye-faas-urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
-			SourceId:   "urn:opentelemetry:function/ye-faas",
-			TargetId:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
-			Type: RelationType{
+			ExternalID: "urn:opentelemetry:function/ye-faas-urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			SourceID:   "urn:opentelemetry:function/ye-faas",
+			TargetID:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			Type: internal.RelationType{
 				Name: "executes",
 			},
-			Data: &RelationData{
+			Data: &internal.RelationData{
 				Tags: map[string]string{},
 			},
 		},
 		{
-			ExternalId: "urn:opentelemetry:namespace/ns:service/ye-service-urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
-			SourceId:   "urn:opentelemetry:namespace/ns:service/ye-service",
-			TargetId:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
-			Type: RelationType{
+			ExternalID: "urn:opentelemetry:namespace/ns:service/ye-service-urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			SourceID:   "urn:opentelemetry:namespace/ns:service/ye-service",
+			TargetID:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			Type: internal.RelationType{
 				Name: "provided-by",
 			},
-			Data: &RelationData{
+			Data: &internal.RelationData{
 				Tags: map[string]string{},
 			},
 		},
@@ -432,7 +436,7 @@ func TestTopology_addFaas(t *testing.T) {
 }
 
 func TestTopology_addKubernetes(t *testing.T) {
-	collection := NewCollection()
+	collection := internal.NewCollection()
 	attrs := pcommon.NewMap()
 	attrs.PutStr("service.name", "ye-service")
 	attrs.PutStr("service.namespace", "ns")
@@ -443,13 +447,13 @@ func TestTopology_addKubernetes(t *testing.T) {
 	require.True(t, ok)
 
 	components := collection.GetComponents()
-	require.Equal(t, []*Component{
+	require.Equal(t, []*internal.Component{
 		{
-			ExternalId: "urn:opentelemetry:kubernetes:/ye-cluster:ye-k8s-namespace:pod/ye-pod-name",
-			Type: ComponentType{
+			ExternalID: "urn:opentelemetry:kubernetes:/ye-cluster:ye-k8s-namespace:pod/ye-pod-name",
+			Type: internal.ComponentType{
 				Name: "pod",
 			},
-			Data: &ComponentData{
+			Data: &internal.ComponentData{
 				Name:        "ye-pod-name",
 				Version:     "",
 				Layer:       "",
@@ -466,28 +470,28 @@ func TestTopology_addKubernetes(t *testing.T) {
 			},
 		},
 		{
-			ExternalId: "urn:opentelemetry:namespace/ns",
-			Type: ComponentType{
+			ExternalID: "urn:opentelemetry:namespace/ns",
+			Type: internal.ComponentType{
 				Name: "namespace",
 			},
-			Data: &ComponentData{
+			Data: &internal.ComponentData{
 				Name:        "ns",
 				Version:     "",
 				Layer:       "urn:stackpack:common:layer:applications",
 				Domain:      "",
 				Environment: "",
 				Identifiers: []string{},
-				Tags:        map[string]string{
-					"k8s-scope":    "ye-cluster/ye-k8s-namespace",
+				Tags: map[string]string{
+					"k8s-scope": "ye-cluster/ye-k8s-namespace",
 				},
 			},
 		},
 		{
-			ExternalId: "urn:opentelemetry:namespace/ns:service/ye-service",
-			Type: ComponentType{
+			ExternalID: "urn:opentelemetry:namespace/ns:service/ye-service",
+			Type: internal.ComponentType{
 				Name: "service",
 			},
-			Data: &ComponentData{
+			Data: &internal.ComponentData{
 				Name:        "ye-service",
 				Version:     "",
 				Layer:       "urn:stackpack:common:layer:services",
@@ -502,11 +506,11 @@ func TestTopology_addKubernetes(t *testing.T) {
 			},
 		},
 		{
-			ExternalId: "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
-			Type: ComponentType{
+			ExternalID: "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			Type: internal.ComponentType{
 				Name: "service-instance",
 			},
-			Data: &ComponentData{
+			Data: &internal.ComponentData{
 				Name:        "ye-service - instance",
 				Version:     "",
 				Layer:       "urn:stackpack:common:layer:containers",
@@ -526,26 +530,26 @@ func TestTopology_addKubernetes(t *testing.T) {
 	}, components)
 
 	relations := collection.GetRelations()
-	require.Equal(t, []*Relation{
+	require.Equal(t, []*internal.Relation{
 		{
-			ExternalId: "urn:opentelemetry:kubernetes:/ye-cluster:ye-k8s-namespace:pod/ye-pod-name-urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
-			SourceId:   "urn:opentelemetry:kubernetes:/ye-cluster:ye-k8s-namespace:pod/ye-pod-name",
-			TargetId:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
-			Type: RelationType{
+			ExternalID: "urn:opentelemetry:kubernetes:/ye-cluster:ye-k8s-namespace:pod/ye-pod-name-urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			SourceID:   "urn:opentelemetry:kubernetes:/ye-cluster:ye-k8s-namespace:pod/ye-pod-name",
+			TargetID:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			Type: internal.RelationType{
 				Name: "kubernetes-to-otel",
 			},
-			Data: &RelationData{
+			Data: &internal.RelationData{
 				Tags: map[string]string{},
 			},
 		},
 		{
-			ExternalId: "urn:opentelemetry:namespace/ns:service/ye-service-urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
-			SourceId:   "urn:opentelemetry:namespace/ns:service/ye-service",
-			TargetId:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
-			Type: RelationType{
+			ExternalID: "urn:opentelemetry:namespace/ns:service/ye-service-urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			SourceID:   "urn:opentelemetry:namespace/ns:service/ye-service",
+			TargetID:   "urn:opentelemetry:namespace/ns:service/ye-service:serviceInstance/ye-service",
+			Type: internal.RelationType{
 				Name: "provided-by",
 			},
-			Data: &RelationData{
+			Data: &internal.RelationData{
 				Tags: map[string]string{},
 			},
 		},
@@ -553,7 +557,7 @@ func TestTopology_addKubernetes(t *testing.T) {
 }
 
 func TestTopology_addResourceWithoutNamespace(t *testing.T) {
-	collection := NewCollection()
+	collection := internal.NewCollection()
 	attrs := pcommon.NewMap()
 	attrs.PutStr("service.name", "demo 1")
 	attrs.PutStr("telemetry.sdk.language", "go")
@@ -561,13 +565,14 @@ func TestTopology_addResourceWithoutNamespace(t *testing.T) {
 	collection.AddResource(&attrs)
 
 	components := collection.GetComponents()
-	require.Equal(t, []*Component{
+	//nolint:dupl
+	require.Equal(t, []*internal.Component{
 		{
-			ExternalId: "urn:opentelemetry:namespace/default",
-			Type: ComponentType{
+			ExternalID: "urn:opentelemetry:namespace/default",
+			Type: internal.ComponentType{
 				Name: "namespace",
 			},
-			Data: &ComponentData{
+			Data: &internal.ComponentData{
 				Name:        "default",
 				Version:     "",
 				Layer:       "urn:stackpack:common:layer:applications",
@@ -578,11 +583,11 @@ func TestTopology_addResourceWithoutNamespace(t *testing.T) {
 			},
 		},
 		{
-			ExternalId: "urn:opentelemetry:namespace/default:service/demo 1",
-			Type: ComponentType{
+			ExternalID: "urn:opentelemetry:namespace/default:service/demo 1",
+			Type: internal.ComponentType{
 				Name: "service",
 			},
-			Data: &ComponentData{
+			Data: &internal.ComponentData{
 				Name:        "demo 1",
 				Version:     "",
 				Layer:       "urn:stackpack:common:layer:services",
@@ -597,11 +602,11 @@ func TestTopology_addResourceWithoutNamespace(t *testing.T) {
 			},
 		},
 		{
-			ExternalId: "urn:opentelemetry:namespace/default:service/demo 1:serviceInstance/demo 1",
-			Type: ComponentType{
+			ExternalID: "urn:opentelemetry:namespace/default:service/demo 1:serviceInstance/demo 1",
+			Type: internal.ComponentType{
 				Name: "service-instance",
 			},
-			Data: &ComponentData{
+			Data: &internal.ComponentData{
 				Name:        "demo 1 - instance",
 				Version:     "",
 				Layer:       "urn:stackpack:common:layer:containers",
@@ -619,15 +624,15 @@ func TestTopology_addResourceWithoutNamespace(t *testing.T) {
 	}, components)
 
 	relations := collection.GetRelations()
-	require.Equal(t, []*Relation{
+	require.Equal(t, []*internal.Relation{
 		{
-			ExternalId: "urn:opentelemetry:namespace/default:service/demo 1-urn:opentelemetry:namespace/default:service/demo 1:serviceInstance/demo 1",
-			SourceId:   "urn:opentelemetry:namespace/default:service/demo 1",
-			TargetId:   "urn:opentelemetry:namespace/default:service/demo 1:serviceInstance/demo 1",
-			Type: RelationType{
+			ExternalID: "urn:opentelemetry:namespace/default:service/demo 1-urn:opentelemetry:namespace/default:service/demo 1:serviceInstance/demo 1",
+			SourceID:   "urn:opentelemetry:namespace/default:service/demo 1",
+			TargetID:   "urn:opentelemetry:namespace/default:service/demo 1:serviceInstance/demo 1",
+			Type: internal.RelationType{
 				Name: "provided-by",
 			},
-			Data: &RelationData{
+			Data: &internal.RelationData{
 				Tags: map[string]string{},
 			},
 		},

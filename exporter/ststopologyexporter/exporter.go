@@ -23,13 +23,13 @@ var (
 	errInternal = errors.New("internal error")
 )
 
-type topologyExporter struct {
+type TopologyExporter struct {
 	logger     *zap.Logger
 	httpClient http.Client
 	cfg        *Config
 }
 
-func newTopologyExporter(logger *zap.Logger, cfg component.Config) (*topologyExporter, error) {
+func NewTopologyExporter(logger *zap.Logger, cfg component.Config) (*TopologyExporter, error) {
 	stsCfg, ok := cfg.(*Config)
 	if !ok {
 		return nil, fmt.Errorf("invalid config passed to stackstateexporter: %T", cfg)
@@ -38,19 +38,22 @@ func newTopologyExporter(logger *zap.Logger, cfg component.Config) (*topologyExp
 		Timeout: 5 * time.Second,
 	}
 
-	return &topologyExporter{logger: logger, httpClient: httpClient, cfg: stsCfg}, nil
+	return &TopologyExporter{logger: logger, httpClient: httpClient, cfg: stsCfg}, nil
 }
 
-func getOrDefault(componentsByApiKey map[string]*internal.ComponentsCollection, sts_api_key string) *internal.ComponentsCollection {
-	collection, has_siblings := componentsByApiKey[sts_api_key]
-	if !has_siblings {
+func getOrDefault(
+	componentsByAPIKey map[string]*internal.ComponentsCollection,
+	stsAPIKey string,
+) *internal.ComponentsCollection {
+	collection, hasSiblings := componentsByAPIKey[stsAPIKey]
+	if !hasSiblings {
 		collection = internal.NewCollection()
-		componentsByApiKey[sts_api_key] = collection
+		componentsByAPIKey[stsAPIKey] = collection
 	}
 	return collection
 }
 
-func (t *topologyExporter) logAttrs(msg string, attrs *pcommon.Map) {
+func (t *TopologyExporter) logAttrs(msg string, attrs *pcommon.Map) {
 	fields := make([]zap.Field, 0)
 	attrs.Range(func(k string, v pcommon.Value) bool {
 		fields = append(fields, zap.String(k, v.AsString()))
@@ -59,19 +62,18 @@ func (t *topologyExporter) logAttrs(msg string, attrs *pcommon.Map) {
 	t.logger.Warn(msg, fields...)
 }
 
-func (t *topologyExporter) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
-
-	componentsByApiKey := make(map[string]*internal.ComponentsCollection, 0)
+func (t *TopologyExporter) ConsumeMetrics(_ context.Context, md pmetric.Metrics) error {
+	componentsByAPIKey := make(map[string]*internal.ComponentsCollection, 0)
 	rms := md.ResourceMetrics()
 	for i := 0; i < rms.Len(); i++ {
 		rs := rms.At(i)
 		resource := rs.Resource()
 		attrs := resource.Attributes()
-		sts_api_key_value, key_exists := attrs.Get("sts_api_key")
-		if key_exists {
-			sts_api_key := sts_api_key_value.AsString()
+		stsAPIKeyValue, keyExists := attrs.Get("sts_api_key")
+		if keyExists {
+			stsAPIKey := stsAPIKeyValue.AsString()
 			attrs.Remove("sts_api_key")
-			collection := getOrDefault(componentsByApiKey, sts_api_key)
+			collection := getOrDefault(componentsByAPIKey, stsAPIKey)
 			if !collection.AddResource(&attrs) {
 				t.logAttrs("Skipping resource without necessary attributes", &attrs)
 			}
@@ -97,30 +99,30 @@ func (t *topologyExporter) ConsumeMetrics(ctx context.Context, md pmetric.Metric
 						continue
 					}
 
-					client_api_key_value, client_key_exists := connAttrs.Get("client_sts_api_key")
-					var client_api_key string
-					if client_key_exists {
-						client_api_key = client_api_key_value.AsString()
+					clientAPIKeyValue, clientKeyExists := connAttrs.Get("client_sts_api_key")
+					var clientAPIKey string
+					if clientKeyExists {
+						clientAPIKey = clientAPIKeyValue.AsString()
 					}
-					server_api_key_value, server_key_exists := connAttrs.Get("server_sts_api_key")
-					var server_api_key string
-					if server_key_exists {
-						server_api_key = server_api_key_value.AsString()
+					serverAPIKeyValue, serverKeyExists := connAttrs.Get("server_sts_api_key")
+					var serverAPIKey string
+					if serverKeyExists {
+						serverAPIKey = serverAPIKeyValue.AsString()
 					}
-					if !client_key_exists && !server_key_exists {
+					if !clientKeyExists && !serverKeyExists {
 						t.logAttrs("No sts_api_key attributes, found: ", &connAttrs)
 						continue
 					}
 					connAttrs.Remove("client_sts_api_key")
 					connAttrs.Remove("server_sts_api_key")
-					if client_key_exists {
-						collection := getOrDefault(componentsByApiKey, client_api_key)
+					if clientKeyExists {
+						collection := getOrDefault(componentsByAPIKey, clientAPIKey)
 						if !collection.AddConnection(&connAttrs) {
 							t.logAttrs("Unable to add connection from servicegraphconnector to client", &connAttrs)
 						}
 					}
-					if server_key_exists {
-						collection := getOrDefault(componentsByApiKey, server_api_key)
+					if serverKeyExists {
+						collection := getOrDefault(componentsByAPIKey, serverAPIKey)
 						if !collection.AddConnection(&connAttrs) {
 							t.logAttrs("Unable to add connection from servicegraphconnector to server", &connAttrs)
 						}
@@ -132,38 +134,38 @@ func (t *topologyExporter) ConsumeMetrics(ctx context.Context, md pmetric.Metric
 		}
 	}
 
-	t.sendCollection(componentsByApiKey)
+	_ = t.sendCollection(componentsByAPIKey)
 
 	return nil
 }
 
-func (t *topologyExporter) ConsumeTraces(ctx context.Context, td ptrace.Traces) error {
-	componentsByApiKey := make(map[string]*internal.ComponentsCollection, 0)
+func (t *TopologyExporter) ConsumeTraces(_ context.Context, td ptrace.Traces) error {
+	componentsByAPIKey := make(map[string]*internal.ComponentsCollection, 0)
 	rms := td.ResourceSpans()
 	for i := 0; i < rms.Len(); i++ {
 		rs := rms.At(i)
 		resource := rs.Resource()
 		attrs := resource.Attributes()
-		sts_api_key_value, key_exists := attrs.Get("sts_api_key")
-		if key_exists {
-			sts_api_key := sts_api_key_value.AsString()
+		stsAPIKeyValue, keyExists := attrs.Get("sts_api_key")
+		if keyExists {
+			stsAPIKey := stsAPIKeyValue.AsString()
 			attrs.Remove("sts_api_key")
-			collection := getOrDefault(componentsByApiKey, sts_api_key)
+			collection := getOrDefault(componentsByAPIKey, stsAPIKey)
 			if !collection.AddResource(&attrs) {
 				t.logAttrs("Skipping resource without necessary attributes", &attrs)
 			}
 		}
 	}
 
-	t.sendCollection(componentsByApiKey)
+	_ = t.sendCollection(componentsByAPIKey)
 
 	return nil
 }
 
-func (t *topologyExporter) sendCollection(componentsByApiKey map[string]*internal.ComponentsCollection) error {
+func (t *TopologyExporter) sendCollection(componentsByAPIKey map[string]*internal.ComponentsCollection) error {
 	log := t.logger
 
-	for apiKey, collection := range componentsByApiKey {
+	for apiKey, collection := range componentsByAPIKey {
 		components := collection.GetComponents()
 		relations := collection.GetRelations()
 		request := internal.IntakeTopology{
@@ -181,7 +183,7 @@ func (t *topologyExporter) sendCollection(componentsByApiKey map[string]*interna
 		jsonData, err := json.Marshal(request)
 		if err != nil {
 			log.Error("Can't encode api request to JSON", zap.Error(err))
-			return errInternal //it shouldn't happen, something is wrong with the implementation
+			return errInternal // it shouldn't happen, something is wrong with the implementation
 		}
 
 		req, err := http.NewRequest(http.MethodPost, t.cfg.Endpoint, bytes.NewReader(jsonData))
