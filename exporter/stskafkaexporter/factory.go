@@ -36,6 +36,7 @@ func createDefaultConfig() component.Config {
 		Topic:          "otel-topology-stream",
 		ReadTimeout:    2 * time.Second,
 		ProduceTimeout: 5 * time.Second,
+		RequiredAcks:   "leader",
 	}
 }
 

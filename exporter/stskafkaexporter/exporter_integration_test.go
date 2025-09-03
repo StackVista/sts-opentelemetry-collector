@@ -74,6 +74,7 @@ func setupTest(t *testing.T) *testContext {
 		Topic:          topicName,
 		ProduceTimeout: 10 * time.Second,
 		ReadTimeout:    5 * time.Second,
+		RequiredAcks:   "all",
 	}
 	set := exporter.CreateSettings{
 		TelemetrySettings: componenttest.NewNopTelemetrySettings(),

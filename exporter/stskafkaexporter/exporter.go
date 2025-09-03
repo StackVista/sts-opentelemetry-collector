@@ -39,9 +39,9 @@ func newKafkaExporter(cfg Config, set exporter.CreateSettings) (*kafkaExporter, 
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(cfg.Brokers...),
 		kgo.ClientID(clientID),
-		kgo.RequiredAcks(kgo.AllISRAcks()),
 		kgo.ProducerBatchCompression(kgo.SnappyCompression()),
 	}
+	opts = append(opts, requiredAcksFromConfig(cfg.RequiredAcks)...)
 
 	set.Logger.Info("Creating Kafka exporter", zap.String("clientID", clientID))
 	client, err := kgo.NewClient(opts...)
@@ -55,6 +55,32 @@ func newKafkaExporter(cfg Config, set exporter.CreateSettings) (*kafkaExporter, 
 		client:      client,
 		adminClient: kadm.NewClient(client),
 	}, nil
+}
+
+func requiredAcksFromConfig(val string) []kgo.Opt {
+	switch val {
+	case "none":
+		return []kgo.Opt{
+			kgo.RequiredAcks(kgo.NoAck()),
+			kgo.DisableIdempotentWrite(),
+		}
+	case "leader":
+		return []kgo.Opt{
+			kgo.RequiredAcks(kgo.LeaderAck()),
+			kgo.DisableIdempotentWrite(),
+		}
+	case "all":
+		// Idempotency requires acks=all, so we don’t disable it here
+		return []kgo.Opt{
+			kgo.RequiredAcks(kgo.AllISRAcks()),
+		}
+	default:
+		// Fallback — should not happen due to validation, but safe default
+		return []kgo.Opt{
+			kgo.RequiredAcks(kgo.LeaderAck()),
+			kgo.DisableIdempotentWrite(),
+		}
+	}
 }
 
 func (e *kafkaExporter) start(ctx context.Context, _ component.Host) error {
