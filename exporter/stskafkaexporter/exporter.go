@@ -18,23 +18,23 @@ import (
 
 const kafkaMessageKey = "stskafka.key"
 
-// exporterComponent is the interface that both production and stub exporters implement.
-type exporterComponent interface {
-	exportData(ctx context.Context, ld plog.Logs) error
+// InternalExporterComponent is the interface that both production and stub exporters implement.
+type InternalExporterComponent interface {
+	ExportData(ctx context.Context, ld plog.Logs) error
 	// export functions for other data types go here
 
-	start(ctx context.Context, host component.Host) error
-	shutdown(ctx context.Context) error
+	Start(ctx context.Context, host component.Host) error
+	Shutdown(ctx context.Context) error
 }
 
-type kafkaExporter struct {
+type KafkaExporter struct {
 	cfg         *Config
 	logger      *zap.Logger
 	client      *kgo.Client
 	adminClient *kadm.Client
 }
 
-func newKafkaExporter(cfg Config, set exporter.CreateSettings) (*kafkaExporter, error) {
+func NewKafkaExporter(cfg Config, set exporter.CreateSettings) (*KafkaExporter, error) {
 	clientID := fmt.Sprintf("stskafkaexporter-%s", uuid.New().String())
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(cfg.Brokers...),
@@ -49,7 +49,7 @@ func newKafkaExporter(cfg Config, set exporter.CreateSettings) (*kafkaExporter, 
 		return nil, fmt.Errorf("failed creating franz-go (kafka) client: %w", err)
 	}
 
-	return &kafkaExporter{
+	return &KafkaExporter{
 		cfg:         &cfg,
 		logger:      set.Logger,
 		client:      client,
@@ -83,25 +83,25 @@ func requiredAcksFromConfig(val string) []kgo.Opt {
 	}
 }
 
-func (e *kafkaExporter) start(ctx context.Context, _ component.Host) error {
+func (e *KafkaExporter) Start(ctx context.Context, _ component.Host) error {
 	e.logger.Info("Starting Kafka settings provider",
 		zap.Strings("brokers", e.cfg.Brokers),
 		zap.String("topic", e.cfg.Topic))
 
 	// Fail fast: check if topic exists
 	if err := e.checkTopicExists(ctx); err != nil {
-		return fmt.Errorf("failed to start kafka settings provider: %w", err)
+		return fmt.Errorf("failed to Start kafka settings provider: %w", err)
 	}
 
 	return nil
 }
 
-func (e *kafkaExporter) shutdown(_ context.Context) error {
+func (e *KafkaExporter) Shutdown(_ context.Context) error {
 	e.client.Close() // also closes the underlying client for the adminClient
 	return nil
 }
 
-func (e *kafkaExporter) checkTopicExists(ctx context.Context) error {
+func (e *KafkaExporter) checkTopicExists(ctx context.Context) error {
 	timeoutCtx, cancel := context.WithTimeout(ctx, e.cfg.ReadTimeout)
 	defer cancel()
 
@@ -128,7 +128,7 @@ func (e *kafkaExporter) checkTopicExists(ctx context.Context) error {
 	return nil
 }
 
-func (e *kafkaExporter) exportData(ctx context.Context, ld plog.Logs) error {
+func (e *KafkaExporter) ExportData(ctx context.Context, ld plog.Logs) error {
 	// Doing synchronous sends with a bounded context timeout.
 	// Retry handling is left to exporterhelper - only return on fatal produce errors.
 	deadlineCtx, cancel := context.WithTimeout(ctx, e.cfg.ProduceTimeout)
@@ -205,7 +205,7 @@ func extractKey(attrs pcommon.Map) ([]byte, error) {
 }
 
 // extractValue retrieves the message body from the plog.LogRecord.
-func (e *kafkaExporter) extractValue(lr plog.LogRecord) ([]byte, error) {
+func (e *KafkaExporter) extractValue(lr plog.LogRecord) ([]byte, error) {
 	body := lr.Body()
 	switch body.Type() {
 	case pcommon.ValueTypeBytes:

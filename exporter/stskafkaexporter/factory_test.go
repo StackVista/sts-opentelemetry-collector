@@ -1,4 +1,4 @@
-package stskafkaexporter //nolint:testpackage
+package stskafkaexporter_test
 
 import (
 	"context"
@@ -8,6 +8,8 @@ import (
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exportertest"
+
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"testing"
 	"time"
@@ -19,23 +21,23 @@ type mockKafkaExporter struct {
 	exported int
 }
 
-func (s *mockKafkaExporter) exportData(_ context.Context, _ plog.Logs) error {
+func (s *mockKafkaExporter) ExportData(_ context.Context, _ plog.Logs) error {
 	s.exported++
 	return nil
 }
 
-func (s *mockKafkaExporter) start(_ context.Context, _ component.Host) error {
+func (s *mockKafkaExporter) Start(_ context.Context, _ component.Host) error {
 	s.started = true
 	return nil
 }
 
-func (s *mockKafkaExporter) shutdown(_ context.Context) error {
+func (s *mockKafkaExporter) Shutdown(_ context.Context) error {
 	s.stopped = true
 	return nil
 }
 
 func TestFactory_CreateDefaultConfig(t *testing.T) {
-	cfg := createDefaultConfig()
+	cfg := stskafkaexporter.CreateDefaultConfig()
 	assert.NoError(t, componenttest.CheckConfigStruct(cfg))
 	assert.NotNil(t, cfg)
 }
@@ -43,12 +45,12 @@ func TestFactory_CreateDefaultConfig(t *testing.T) {
 func TestFactory_CreateExporter(t *testing.T) {
 	mockExp := &mockKafkaExporter{}
 	// Stub exporter that does nothing
-	newKafkaExporterFn = func(_ Config, _ exporter.CreateSettings) (exporterComponent, error) {
+	stskafkaexporter.NewKafkaExporterFn = func(_ stskafkaexporter.Config, _ exporter.CreateSettings) (stskafkaexporter.InternalExporterComponent, error) {
 		return mockExp, nil
 	}
-	defer func() { newKafkaExporterFn = kafkaExporterConstructor }()
+	defer func() { stskafkaexporter.NewKafkaExporterFn = stskafkaexporter.KafkaExporterConstructor }()
 
-	f := NewFactory()
+	f := stskafkaexporter.NewFactory()
 	cfg := f.CreateDefaultConfig()
 
 	exp, err := f.CreateLogsExporter(context.Background(), exportertest.NewNopCreateSettings(), cfg)

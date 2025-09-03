@@ -1,6 +1,6 @@
 //go:build integration
 
-package stskafkaexporter
+package stskafkaexporter_test
 
 import (
 	"context"
@@ -13,6 +13,8 @@ import (
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/pdata/plog"
+
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter"
 	"log"
 	"testing"
 	"time"
@@ -24,8 +26,8 @@ const (
 
 type testContext struct {
 	ctx            context.Context
-	cfg            *Config
-	exporter       *kafkaExporter
+	cfg            *stskafkaexporter.Config
+	exporter       *stskafkaexporter.KafkaExporter
 	kafkaContainer *testContainersKafka.KafkaContainer
 	cleanup        func()
 }
@@ -35,7 +37,7 @@ func TestKafkaExporter_Integration(t *testing.T) {
 	defer tc.cleanup()
 
 	// Start exporter
-	require.NoError(t, tc.exporter.start(tc.ctx, componenttest.NewNopHost()), "failed to start exporter")
+	require.NoError(t, tc.exporter.Start(tc.ctx, componenttest.NewNopHost()), "failed to Start exporter")
 
 	// Build logs
 	ld := plog.NewLogs()
@@ -47,7 +49,7 @@ func TestKafkaExporter_Integration(t *testing.T) {
 	lr.Attributes().PutStr("stskafka.key", "mykey")
 
 	// Export
-	require.NoError(t, tc.exporter.exportData(tc.ctx, ld), "failed to export data")
+	require.NoError(t, tc.exporter.ExportData(tc.ctx, ld), "failed to export data")
 
 	// Consume message and assert
 	rec := consumeSingleKafkaRecord(t, tc.cfg.Brokers, tc.cfg.Topic)
@@ -60,7 +62,7 @@ func setupTest(t *testing.T) *testContext {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	kafkaContainer, err := testContainersKafka.Run(ctx, kafkaImageName)
-	require.NoError(t, err, "failed to start container")
+	require.NoError(t, err, "failed to Start container")
 
 	brokers, err := kafkaContainer.Brokers(ctx)
 	require.NoError(t, err)
@@ -69,7 +71,7 @@ func setupTest(t *testing.T) *testContext {
 	createTopic(t, brokers, topicName)
 
 	// Create exporter
-	cfg := Config{
+	cfg := stskafkaexporter.Config{
 		Brokers:        brokers,
 		Topic:          topicName,
 		ProduceTimeout: 10 * time.Second,
@@ -79,11 +81,11 @@ func setupTest(t *testing.T) *testContext {
 	set := exporter.CreateSettings{
 		TelemetrySettings: componenttest.NewNopTelemetrySettings(),
 	}
-	exp, err := newKafkaExporter(cfg, set)
+	exp, err := stskafkaexporter.NewKafkaExporter(cfg, set)
 	require.NoError(t, err)
 
 	cleanup := func() {
-		require.NoError(t, exp.shutdown(ctx), "failed to shutdown exporter")
+		require.NoError(t, exp.Shutdown(ctx), "failed to Shutdown exporter")
 		if err := kafkaContainer.Terminate(ctx); err != nil {
 			log.Printf("failed to terminate container: %s", err)
 		}

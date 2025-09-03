@@ -1,22 +1,23 @@
-package stskafkaexporter //nolint:testpackage
+package stskafkaexporter_test
 
 import (
 	"errors"
 	"testing"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestConfig_Validation(t *testing.T) {
 	tests := []struct {
 		name    string
-		cfg     *Config
+		cfg     *stskafkaexporter.Config
 		wantErr error
 	}{
 		{
 			name: "valid config",
-			cfg: &Config{
+			cfg: &stskafkaexporter.Config{
 				Brokers:        []string{"localhost:9092"},
 				Topic:          "test-topic",
 				ReadTimeout:    2 * time.Second,
@@ -27,7 +28,7 @@ func TestConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "missing brokers",
-			cfg: &Config{
+			cfg: &stskafkaexporter.Config{
 				Topic:          "test-topic",
 				ReadTimeout:    2 * time.Second,
 				ProduceTimeout: 5 * time.Second,
@@ -37,7 +38,7 @@ func TestConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "missing topic",
-			cfg: &Config{
+			cfg: &stskafkaexporter.Config{
 				Brokers:        []string{"localhost:9092"},
 				ReadTimeout:    2 * time.Second,
 				ProduceTimeout: 5 * time.Second,
@@ -47,7 +48,7 @@ func TestConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "missing read timeout",
-			cfg: &Config{
+			cfg: &stskafkaexporter.Config{
 				Brokers:        []string{"localhost:9092"},
 				Topic:          "test-topic",
 				ProduceTimeout: 5 * time.Second,
@@ -57,7 +58,7 @@ func TestConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "missing produce timeout",
-			cfg: &Config{
+			cfg: &stskafkaexporter.Config{
 				Brokers:      []string{"localhost:9092"},
 				Topic:        "test-topic",
 				ReadTimeout:  2 * time.Second,
@@ -67,7 +68,7 @@ func TestConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "missing required acks",
-			cfg: &Config{
+			cfg: &stskafkaexporter.Config{
 				Brokers:        []string{"localhost:9092"},
 				Topic:          "test-topic",
 				ReadTimeout:    2 * time.Second,
@@ -77,7 +78,7 @@ func TestConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "invalid required acks",
-			cfg: &Config{
+			cfg: &stskafkaexporter.Config{
 				Brokers:        []string{"localhost:9092"},
 				Topic:          "test-topic",
 				ReadTimeout:    2 * time.Second,

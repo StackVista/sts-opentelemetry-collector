@@ -18,12 +18,12 @@ var (
 func NewFactory() exporter.Factory {
 	return exporter.NewFactory(
 		Type,
-		createDefaultConfig,
+		CreateDefaultConfig,
 		exporter.WithLogs(createLogsExporter, component.StabilityLevelAlpha),
 	)
 }
 
-func createDefaultConfig() component.Config {
+func CreateDefaultConfig() component.Config {
 	queueSettings := exporterhelper.NewDefaultQueueSettings()
 	queueSettings.NumConsumers = 1
 
@@ -40,11 +40,11 @@ func createDefaultConfig() component.Config {
 	}
 }
 
-func kafkaExporterConstructor(c Config, set exporter.CreateSettings) (exporterComponent, error) {
-	return newKafkaExporter(c, set) // returns *kafkaExporter, which satisfies the interface
+func KafkaExporterConstructor(c Config, set exporter.CreateSettings) (InternalExporterComponent, error) {
+	return NewKafkaExporter(c, set) // returns *KafkaExporter, which satisfies the interface
 }
 
-var newKafkaExporterFn = kafkaExporterConstructor //nolint:gochecknoglobals
+var NewKafkaExporterFn = KafkaExporterConstructor //nolint:gochecknoglobals
 
 // createLogsExporter creates a new Kafka exporter for logs.
 func createLogsExporter(
@@ -57,7 +57,7 @@ func createLogsExporter(
 		return nil, fmt.Errorf("invalid config type: %T", cfg)
 	}
 
-	exp, err := newKafkaExporterFn(*typedCfg, set)
+	exp, err := NewKafkaExporterFn(*typedCfg, set)
 	if err != nil {
 		return nil, fmt.Errorf("cannot configure kafka logs exp: %w", err)
 	}
@@ -67,9 +67,9 @@ func createLogsExporter(
 		ctx,
 		set,
 		cfg,
-		exp.exportData,
-		exporterhelper.WithStart(exp.start),
-		exporterhelper.WithShutdown(exp.shutdown),
+		exp.ExportData,
+		exporterhelper.WithStart(exp.Start),
+		exporterhelper.WithShutdown(exp.Shutdown),
 		exporterhelper.WithTimeout(typedCfg.TimeoutSettings),
 		exporterhelper.WithQueue(typedCfg.QueueSettings),
 		exporterhelper.WithRetry(typedCfg.BackOffConfig),
