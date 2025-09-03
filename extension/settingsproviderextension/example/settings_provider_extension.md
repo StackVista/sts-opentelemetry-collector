@@ -9,7 +9,7 @@ The settings provider can use either a file or Kafka topic as a source for the s
 What the setup achieves is the following:
 - OTel Collector with Extension consuming internal settings messages from Kafka
 
-Follow the [install dependencies](../README.md#install-dependencies) section in the main README.
+Follow the [install dependencies](../../../README.md#install-dependencies) section in the main README.
 
 The commands below are assuming they'll be run from the root dir of the project.
 
@@ -76,13 +76,13 @@ You should see a log line like:
 
 ### Send messages to the settings Kafka topic
 
-There's a Go app in `extension/settingsproviderextension/cmd/publish-settings` with which you can send messages to the 
+There's a Go app in `extension/settingsproviderextension/example/cmd/publish-settings` with which you can send messages to the 
 settings Kafka topic to (manually) test the flow (of setting snapshot consumption in the extension).
 
 The app takes one parameter, i.e. the address of the Kafka broker. 
 
 ```shell
-go run ./extension/settingsproviderextension/cmd/publish-snapshot/main.go localhost:9092
+go run ./extension/settingsproviderextension/example/cmd/publish-snapshot/main.go localhost:9092
 ```
 
 In the terminal tab where the OTel collector container is running, you should see in the logs that the settings messages

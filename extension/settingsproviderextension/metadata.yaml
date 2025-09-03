@@ -6,4 +6,4 @@ status:
     development: [ extension ]
   distributions: [ contrib ]
   codeowners:
-    active: StackState B.V.
+    active: SUSE

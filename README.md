@@ -77,7 +77,7 @@ service:
 docker run --rm -p 4317:4317 -p 4318:4318  -v ./dev-config.yaml:/config.yaml --network="host" sts-opentelemetry-collector:latest  --config /config.yaml
 ```
 
-To run with an extension enabled, see as an example the guide for the [STS Settings Provider](./docs/settings_provider_extension.md) extension.
+To run with an extension enabled, see as an example the guide for the [STS Settings Provider](extension/settingsproviderextension/example/settings_provider_extension.md) extension.
 
 ## Generate traces
 ```shell
