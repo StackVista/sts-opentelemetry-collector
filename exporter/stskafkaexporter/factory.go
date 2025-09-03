@@ -14,13 +14,27 @@ var (
 	Type = component.MustNewType("stskafkaexporter") //nolint:gochecknoglobals
 )
 
-// NewFactory creates a factory for the stskafkaexporter.
-func NewFactory() exporter.Factory {
-	return exporter.NewFactory(
+// Factory wraps the otel exporter.Factory but allows constructor injection for testing.
+type Factory struct {
+	exporter.Factory
+	NewExporterFn func(Config, exporter.CreateSettings) (InternalExporterComponent, error)
+}
+
+// NewFactory creates a new Kafka exporter factory.
+func NewFactory() *Factory {
+	f := &Factory{
+		NewExporterFn: KafkaExporterConstructor, // default production constructor
+	}
+	f.Factory = exporter.NewFactory(
 		Type,
 		CreateDefaultConfig,
-		exporter.WithLogs(createLogsExporter, component.StabilityLevelAlpha),
+		exporter.WithLogs(f.CreateLogsExporter, component.StabilityLevelAlpha),
 	)
+	return f
+}
+
+func KafkaExporterConstructor(c Config, set exporter.CreateSettings) (InternalExporterComponent, error) {
+	return NewKafkaExporter(c, set) // returns KafkaExporter, which satisfies the interface
 }
 
 func CreateDefaultConfig() component.Config {
@@ -40,14 +54,8 @@ func CreateDefaultConfig() component.Config {
 	}
 }
 
-func KafkaExporterConstructor(c Config, set exporter.CreateSettings) (InternalExporterComponent, error) {
-	return NewKafkaExporter(c, set) // returns *KafkaExporter, which satisfies the interface
-}
-
-var NewKafkaExporterFn = KafkaExporterConstructor //nolint:gochecknoglobals
-
-// createLogsExporter creates a new Kafka exporter for logs.
-func createLogsExporter(
+// CreateLogsExporter creates a new Kafka exporter for logs.
+func (f *Factory) CreateLogsExporter(
 	ctx context.Context,
 	set exporter.CreateSettings,
 	cfg component.Config,
@@ -57,12 +65,11 @@ func createLogsExporter(
 		return nil, fmt.Errorf("invalid config type: %T", cfg)
 	}
 
-	exp, err := NewKafkaExporterFn(*typedCfg, set)
+	exp, err := f.NewExporterFn(*typedCfg, set)
 	if err != nil {
 		return nil, fmt.Errorf("cannot configure kafka logs exp: %w", err)
 	}
 
-	// Use exporterhelper to get built-in queue, retry, timeouts (configurable in the collector-config.yaml).
 	return exporterhelper.NewLogsExporter(
 		ctx,
 		set,

@@ -44,13 +44,12 @@ func TestFactory_CreateDefaultConfig(t *testing.T) {
 
 func TestFactory_CreateExporter(t *testing.T) {
 	mockExp := &mockKafkaExporter{}
-	// Stub exporter that does nothing
-	stskafkaexporter.NewKafkaExporterFn = func(_ stskafkaexporter.Config, _ exporter.CreateSettings) (stskafkaexporter.InternalExporterComponent, error) {
+	f := stskafkaexporter.NewFactory()
+
+	f.NewExporterFn = func(_ stskafkaexporter.Config, _ exporter.CreateSettings) (stskafkaexporter.InternalExporterComponent, error) {
 		return mockExp, nil
 	}
-	defer func() { stskafkaexporter.NewKafkaExporterFn = stskafkaexporter.KafkaExporterConstructor }()
 
-	f := stskafkaexporter.NewFactory()
 	cfg := f.CreateDefaultConfig()
 
 	exp, err := f.CreateLogsExporter(context.Background(), exportertest.NewNopCreateSettings(), cfg)
