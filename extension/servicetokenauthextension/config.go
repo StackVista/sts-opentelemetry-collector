@@ -36,8 +36,9 @@ func (cfg *Config) Validate() error {
 		return fmt.Errorf("paramater cache.valid_size must be a postive value")
 	}
 	if cfg.Cache.ValidTtl <= time.Duration(100) {
-		// It must be greater than 100 because the caching library being used, uses this value as the default number of
-		// expiry buckets. This number of expiry buckets is used to calculate the cache entry expiry goroutine (ticker) tick's interval.
+		// It must be greater than 100 because the caching library being used (hashicorp/golang-lru)
+		// uses this value as the default number of expiry buckets. This number of expiry buckets is used to calculate the
+		// cache entry expiry goroutine (ticker) tick's interval.
 		// This means: a value smaller than 100 results in 0 due to integer division (ttl / 100).
 		// Subsequently, it results in time.NewTicker() panicking because the interval is non-positive.
 		return fmt.Errorf("paramater cache.valid_ttl must be a positive value greater than 100")
