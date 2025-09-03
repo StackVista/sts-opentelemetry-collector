@@ -316,7 +316,7 @@ type TopologyStreamSnapshotData struct {
 	RepeatIntervalMs int32 `protobuf:"varint,1,opt,name=repeat_interval_ms,json=repeatIntervalMs,proto3" json:"repeat_interval_ms,omitempty"`
 	// Defines the grace period to keep the data in the case that we datasource:shardId is decommissioned, we don't want
 	// data hanging permanently
-	ExpiryIntervalMs *int32                     `protobuf:"varint,2,opt,name=expiry_interval_ms,json=expiryIntervalMs,proto3,oneof" json:"expiry_interval_ms,omitempty"`
+	ExpiryIntervalMs *int64                     `protobuf:"varint,2,opt,name=expiry_interval_ms,json=expiryIntervalMs,proto3,oneof" json:"expiry_interval_ms,omitempty"`
 	SnapshotStart    *bool                      `protobuf:"varint,3,opt,name=snapshot_start,json=snapshotStart,proto3,oneof" json:"snapshot_start,omitempty"`
 	SnapshotStop     *bool                      `protobuf:"varint,4,opt,name=snapshot_stop,json=snapshotStop,proto3,oneof" json:"snapshot_stop,omitempty"`
 	Components       []*TopologyStreamComponent `protobuf:"bytes,5,rep,name=components,proto3" json:"components,omitempty"`
@@ -365,7 +365,7 @@ func (x *TopologyStreamSnapshotData) GetRepeatIntervalMs() int32 {
 	return 0
 }
 
-func (x *TopologyStreamSnapshotData) GetExpiryIntervalMs() int32 {
+func (x *TopologyStreamSnapshotData) GetExpiryIntervalMs() int64 {
 	if x != nil && x.ExpiryIntervalMs != nil {
 		return *x.ExpiryIntervalMs
 	}
@@ -413,7 +413,7 @@ type TopologyStreamRepeatElementsData struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Defines the grace period to keep the data in the case that we datasource:shardId is decommissioned, we don't want
 	// data hanging permanently
-	ExpiryIntervalMs int32                      `protobuf:"varint,1,opt,name=expiry_interval_ms,json=expiryIntervalMs,proto3" json:"expiry_interval_ms,omitempty"`
+	ExpiryIntervalMs int64                      `protobuf:"varint,1,opt,name=expiry_interval_ms,json=expiryIntervalMs,proto3" json:"expiry_interval_ms,omitempty"`
 	Components       []*TopologyStreamComponent `protobuf:"bytes,2,rep,name=components,proto3" json:"components,omitempty"`
 	Relations        []*TopologyStreamRelation  `protobuf:"bytes,3,rep,name=relations,proto3" json:"relations,omitempty"`
 	// In case the Mapping fails and the Otel collector would like to push some messages that we can display when the user requests the TopologyStream status via the cli
@@ -453,7 +453,7 @@ func (*TopologyStreamRepeatElementsData) Descriptor() ([]byte, []int) {
 	return file_topo_stream_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *TopologyStreamRepeatElementsData) GetExpiryIntervalMs() int32 {
+func (x *TopologyStreamRepeatElementsData) GetExpiryIntervalMs() int64 {
 	if x != nil {
 		return x.ExpiryIntervalMs
 	}
@@ -646,7 +646,7 @@ const file_topo_stream_proto_rawDesc = "" +
 	"\rremoval_cause\x18\x01 \x01(\tR\fremovalCause\"\xb6\x03\n" +
 	"\x1aTopologyStreamSnapshotData\x12,\n" +
 	"\x12repeat_interval_ms\x18\x01 \x01(\x05R\x10repeatIntervalMs\x121\n" +
-	"\x12expiry_interval_ms\x18\x02 \x01(\x05H\x00R\x10expiryIntervalMs\x88\x01\x01\x12*\n" +
+	"\x12expiry_interval_ms\x18\x02 \x01(\x03H\x00R\x10expiryIntervalMs\x88\x01\x01\x12*\n" +
 	"\x0esnapshot_start\x18\x03 \x01(\bH\x01R\rsnapshotStart\x88\x01\x01\x12(\n" +
 	"\rsnapshot_stop\x18\x04 \x01(\bH\x02R\fsnapshotStop\x88\x01\x01\x12G\n" +
 	"\n" +
@@ -658,7 +658,7 @@ const file_topo_stream_proto_rawDesc = "" +
 	"\x0f_snapshot_startB\x10\n" +
 	"\x0e_snapshot_stop\"\xf7\x01\n" +
 	" TopologyStreamRepeatElementsData\x12,\n" +
-	"\x12expiry_interval_ms\x18\x01 \x01(\x05R\x10expiryIntervalMs\x12G\n" +
+	"\x12expiry_interval_ms\x18\x01 \x01(\x03R\x10expiryIntervalMs\x12G\n" +
 	"\n" +
 	"components\x18\x02 \x03(\v2'.topo_stream.v1.TopologyStreamComponentR\n" +
 	"components\x12D\n" +

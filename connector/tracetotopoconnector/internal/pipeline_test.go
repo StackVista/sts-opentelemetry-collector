@@ -29,7 +29,7 @@ func boolExpr(s string) settings.OtelBooleanExpression {
 
 func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 
-	now := time.Now().UnixNano()
+	now := time.Now().UnixMilli()
 	submittedTime := int64(1756851083000)
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()

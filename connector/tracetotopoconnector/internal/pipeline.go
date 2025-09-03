@@ -107,7 +107,7 @@ func errorsToMessageWithKey(errs *[]error, mapping settings.Mapping, span *ptrac
 			SubmittedTimestamp:  int64(span.EndTimestamp()),
 			Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 				TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
-					ExpiryIntervalMs: int32(mapping.GetExpireAfterMs()),
+					ExpiryIntervalMs: mapping.GetExpireAfterMs(),
 					Errors:           errsAsString,
 				},
 			},
@@ -127,7 +127,7 @@ func outputToMessageWithKey(output topo_stream_v1.ComponentOrRelation, mapping s
 			SubmittedTimestamp:  int64(span.EndTimestamp()),
 			Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 				TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
-					ExpiryIntervalMs: int32(mapping.GetExpireAfterMs()),
+					ExpiryIntervalMs: mapping.GetExpireAfterMs(),
 					Components:       toComponents(),
 					Relations:        toRelations(),
 				},
