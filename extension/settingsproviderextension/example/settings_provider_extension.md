@@ -18,12 +18,12 @@ The commands below are assuming they'll be run from the root dir of the project.
 The following Compose app will also take care of creating a Kafka topic called `sts-internal-settings`.
 
 ```shell
-docker-compose -f docker/kafka/docker-compose.yaml up -d
+docker-compose -f ./extension/settingsproviderextension/example/docker-compose.yaml up -d
 ```
 
 To stop the Compose app when you're done:
 ```shell
-docker-compose -f docker/kafka/docker-compose down
+docker-compose -f ./extension/settingsproviderextension/example/docker-compose.yaml down
 ```
 
 ### Run the collector using config with extension enabled

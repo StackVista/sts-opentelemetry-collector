@@ -84,13 +84,13 @@ func requiredAcksFromConfig(val string) []kgo.Opt {
 }
 
 func (e *KafkaExporter) Start(ctx context.Context, _ component.Host) error {
-	e.logger.Info("Starting Kafka settings provider",
+	e.logger.Info("Starting STS Kafka exporter",
 		zap.Strings("brokers", e.cfg.Brokers),
 		zap.String("topic", e.cfg.Topic))
 
 	// Fail fast: check if topic exists
 	if err := e.checkTopicExists(ctx); err != nil {
-		return fmt.Errorf("failed to Start kafka settings provider: %w", err)
+		return fmt.Errorf("failed to Start STS Kafka exporter: %w", err)
 	}
 
 	return nil

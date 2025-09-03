@@ -67,7 +67,7 @@ func setupTest(t *testing.T) *testContext {
 	brokers, err := kafkaContainer.Brokers(ctx)
 	require.NoError(t, err)
 
-	topicName := fmt.Sprintf("sts-internal-settings-%s", uuid.New().String())
+	topicName := fmt.Sprintf("sts-otel-topology-%s", uuid.New().String())
 	createTopic(t, brokers, topicName)
 
 	// Create exporter

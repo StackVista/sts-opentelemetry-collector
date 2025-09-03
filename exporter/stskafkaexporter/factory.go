@@ -47,7 +47,7 @@ func CreateDefaultConfig() component.Config {
 		QueueSettings:   queueSettings,
 
 		Brokers:        []string{"localhost:9092"},
-		Topic:          "otel-topology-stream",
+		Topic:          "sts-otel-topology",
 		ReadTimeout:    2 * time.Second,
 		ProduceTimeout: 5 * time.Second,
 		RequiredAcks:   "leader",
