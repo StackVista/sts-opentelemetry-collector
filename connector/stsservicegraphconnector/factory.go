@@ -3,6 +3,7 @@
 
 //go:generate mdatagen metadata.yaml
 
+//nolint:lll
 package servicegraphconnector // import "github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector"
 
 import (
@@ -39,8 +40,13 @@ func createDefaultConfig() component.Config {
 	}
 }
 
-func createTracesToMetricsConnector(_ context.Context, params connector.CreateSettings, cfg component.Config, nextConsumer consumer.Metrics) (connector.Traces, error) {
-	c := newConnector(params.TelemetrySettings, cfg)
+func createTracesToMetricsConnector(
+	_ context.Context,
+	params connector.CreateSettings,
+	cfg component.Config,
+	nextConsumer consumer.Metrics,
+) (connector.Traces, error) {
+	c := NewConnector(params.TelemetrySettings, cfg)
 	c.metricsConsumer = nextConsumer
 	return c, nil
 }
