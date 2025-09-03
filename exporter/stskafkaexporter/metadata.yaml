@@ -1,0 +1,8 @@
+type: ststopology
+
+status:
+  class: exporter
+  stability:
+    development: [logs]
+  codeowners:
+    active: SUSE
