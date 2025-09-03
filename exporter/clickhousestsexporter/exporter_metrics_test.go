@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package clickhousestsexporter
+package clickhousestsexporter_test
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
@@ -23,7 +24,7 @@ func TestExporter_pushMetricsData(t *testing.T) {
 	t.Parallel()
 	t.Run("push success", func(t *testing.T) {
 		items := &atomic.Int32{}
-		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
+		initClickhouseTestServer(t, func(query string, _ []driver.Value) error {
 			if strings.HasPrefix(query, "INSERT") {
 				items.Add(1)
 			}
@@ -35,14 +36,14 @@ func TestExporter_pushMetricsData(t *testing.T) {
 		require.Equal(t, int32(15), items.Load())
 	})
 	t.Run("push failure", func(t *testing.T) {
-		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
+		initClickhouseTestServer(t, func(query string, _ []driver.Value) error {
 			if strings.HasPrefix(query, "INSERT") {
 				return fmt.Errorf("mock insert error")
 			}
 			return nil
 		})
 		exporter := newTestMetricsExporter(t)
-		err := exporter.pushMetricsData(context.TODO(), simpleMetrics(2))
+		err := exporter.PushMetricsData(context.TODO(), simpleMetrics(2))
 		require.Error(t, err)
 	})
 	t.Run("check Resource metadata and scope metadata (2nd resource contain 2 different scope metrics)", func(t *testing.T) {
@@ -129,7 +130,7 @@ func Benchmark_pushMetricsData(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		err := exporter.pushMetricsData(context.TODO(), pm)
+		err := exporter.PushMetricsData(context.TODO(), pm)
 		require.NoError(b, err)
 	}
 }
@@ -261,6 +262,7 @@ func simpleMetrics(count int) pmetric.Metrics {
 	sm.Scope().SetDroppedAttributesCount(20)
 	sm.Scope().SetName("Scope name 2")
 	sm.Scope().SetVersion("Scope version 2")
+	//nolint:dupl
 	for i := 0; i < count; i++ {
 		// gauge
 		m := sm.Metrics().AppendEmpty()
@@ -368,6 +370,7 @@ func simpleMetrics(count int) pmetric.Metrics {
 	sm.Scope().SetDroppedAttributesCount(20)
 	sm.Scope().SetName("Scope name 3")
 	sm.Scope().SetVersion("Scope version 3")
+	//nolint:dupl
 	for i := 0; i < count; i++ {
 		// gauge
 		m := sm.Metrics().AppendEmpty()
@@ -470,16 +473,16 @@ func simpleMetrics(count int) pmetric.Metrics {
 	return metrics
 }
 
-func mustPushMetricsData(t *testing.T, exporter *metricsExporter, md pmetric.Metrics) {
-	err := exporter.pushMetricsData(context.TODO(), md)
+func mustPushMetricsData(t *testing.T, exporter *clickhousestsexporter.MetricsExporter, md pmetric.Metrics) {
+	err := exporter.PushMetricsData(context.TODO(), md)
 	require.NoError(t, err)
 }
 
-func newTestMetricsExporter(t *testing.T) *metricsExporter {
-	exporter, err := newMetricsExporter(zaptest.NewLogger(t), withTestExporterConfig()(defaultEndpoint))
+func newTestMetricsExporter(t *testing.T) *clickhousestsexporter.MetricsExporter {
+	exporter, err := clickhousestsexporter.NewMetricsExporter(zaptest.NewLogger(t), withTestExporterConfig(t)(defaultEndpoint))
 	require.NoError(t, err)
-	require.NoError(t, exporter.start(context.TODO(), nil))
+	require.NoError(t, exporter.Start(context.TODO(), nil))
 
-	t.Cleanup(func() { _ = exporter.shutdown(context.TODO()) })
+	t.Cleanup(func() { _ = exporter.Shutdown(context.TODO()) })
 	return exporter
 }

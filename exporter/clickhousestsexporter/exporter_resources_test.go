@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package clickhousestsexporter
+package clickhousestsexporter_test
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.uber.org/zap/zaptest"
@@ -49,12 +50,12 @@ func TestExporter_pushResourcesData(t *testing.T) {
 	})
 }
 
-func newTestResourceExporter(t *testing.T, dsn string, fns ...func(*Config)) *resourcesExporter {
-	exporter, err := newResourceExporter(zaptest.NewLogger(t), withTestExporterConfig(fns...)(dsn))
+func newTestResourceExporter(t *testing.T, dsn string, fns ...func(*clickhousestsexporter.Config)) *clickhousestsexporter.ResourcesExporter {
+	exporter, err := clickhousestsexporter.NewResourceExporter(zaptest.NewLogger(t), withTestExporterConfig(t, fns...)(dsn))
 	require.NoError(t, err)
-	require.NoError(t, exporter.start(context.TODO(), nil))
+	require.NoError(t, exporter.Start(context.TODO(), nil))
 
-	t.Cleanup(func() { _ = exporter.shutdown(context.TODO()) })
+	t.Cleanup(func() { _ = exporter.Shutdown(context.TODO()) })
 	return exporter
 }
 
@@ -69,10 +70,10 @@ func testResources(count int) []pcommon.Resource {
 	return resources
 }
 
-func mustWriteResourceData(t *testing.T, exporter *resourcesExporter, resources []pcommon.Resource) {
-	resourceModels := []*resourceModel{}
+func mustWriteResourceData(t *testing.T, exporter *clickhousestsexporter.ResourcesExporter, resources []pcommon.Resource) {
+	resourceModels := []*clickhousestsexporter.ResourceModel{}
 	for _, resource := range resources {
-		model, err := newResourceModel(resource)
+		model, err := clickhousestsexporter.NewResourceModel(resource)
 		require.NoError(t, err)
 		resourceModels = append(resourceModels, model)
 	}

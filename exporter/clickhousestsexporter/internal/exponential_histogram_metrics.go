@@ -179,7 +179,16 @@ func (e *expHistogramMetrics) insert(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-func (e *expHistogramMetrics) Add(resAttr map[string]string, resURL string, scopeInstr pcommon.InstrumentationScope, scopeURL string, metrics any, name string, description string, unit string) error {
+func (e *expHistogramMetrics) Add(
+	resAttr map[string]string,
+	resURL string,
+	scopeInstr pcommon.InstrumentationScope,
+	scopeURL string,
+	metrics any,
+	name string,
+	description string,
+	unit string,
+) error {
 	expHistogram, ok := metrics.(pmetric.ExponentialHistogram)
 	if !ok {
 		return fmt.Errorf("metrics param is not type of ExponentialHistogram")

@@ -1,6 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
+//nolint:lll
 package clickhousestsexporter // import "github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter"
 
 import (
@@ -18,7 +19,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type logsExporter struct {
+type LogsExporter struct {
 	client    *sql.DB
 	insertSQL string
 
@@ -26,13 +27,13 @@ type logsExporter struct {
 	cfg    *Config
 }
 
-func newLogsExporter(logger *zap.Logger, cfg *Config) (*logsExporter, error) {
+func NewLogsExporter(logger *zap.Logger, cfg *Config) (*LogsExporter, error) {
 	client, err := newClickhouseClient(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	return &logsExporter{
+	return &LogsExporter{
 		client:    client,
 		insertSQL: renderInsertLogsSQL(cfg),
 		logger:    logger,
@@ -40,7 +41,7 @@ func newLogsExporter(logger *zap.Logger, cfg *Config) (*logsExporter, error) {
 	}, nil
 }
 
-func (e *logsExporter) start(ctx context.Context, _ component.Host) error {
+func (e *LogsExporter) Start(ctx context.Context, _ component.Host) error {
 	if err := createDatabase(ctx, e.cfg); err != nil {
 		return err
 	}
@@ -49,14 +50,14 @@ func (e *logsExporter) start(ctx context.Context, _ component.Host) error {
 }
 
 // shutdown will shut down the exporter.
-func (e *logsExporter) shutdown(_ context.Context) error {
+func (e *LogsExporter) Shutdown(_ context.Context) error {
 	if e.client != nil {
 		return e.client.Close()
 	}
 	return nil
 }
 
-func (e *logsExporter) pushLogsData(ctx context.Context, ld plog.Logs) error {
+func (e *LogsExporter) PushLogsData(ctx context.Context, ld plog.Logs) error {
 	start := time.Now()
 	err := doWithTx(ctx, e.client, func(tx *sql.Tx) error {
 		statement, err := tx.PrepareContext(ctx, e.insertSQL)
@@ -193,11 +194,9 @@ SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
                                   )`
 )
 
-var driverName = "clickhouse" // for testing
-
 // newClickhouseClient create a clickhouse client.
 func newClickhouseClient(cfg *Config) (*sql.DB, error) {
-	db, err := cfg.buildDB(cfg.Database)
+	db, err := cfg.BuildDB(cfg.Database)
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +209,7 @@ func createDatabase(ctx context.Context, cfg *Config) error {
 		return nil
 	}
 
-	db, err := cfg.buildDB(defaultDatabase)
+	db, err := cfg.BuildDB(defaultDatabase)
 	if err != nil {
 		return err
 	}

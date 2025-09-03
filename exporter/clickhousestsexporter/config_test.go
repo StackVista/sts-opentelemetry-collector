@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package clickhousestsexporter
+package clickhousestsexporter_test
 
 import (
 	"path/filepath"
@@ -18,6 +18,7 @@ import (
 	"go.opentelemetry.io/collector/confmap/confmaptest"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter"
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter/internal/metadata"
 )
 
@@ -29,8 +30,9 @@ func TestLoadConfig(t *testing.T) {
 	cm, err := confmaptest.LoadConf(filepath.Join("testdata", "config.yaml"))
 	require.NoError(t, err)
 
-	defaultCfg := createDefaultConfig()
-	defaultCfg.(*Config).Endpoint = defaultEndpoint
+	defaultCfg := clickhousestsexporter.CreateDefaultConfig()
+	//nolint:forcetypeassert
+	defaultCfg.(*clickhousestsexporter.Config).Endpoint = defaultEndpoint
 
 	storageID := component.MustNewIDWithName("file_storage", "clickhouse")
 
@@ -45,7 +47,7 @@ func TestLoadConfig(t *testing.T) {
 		},
 		{
 			id: component.NewIDWithName(metadata.Type, "full"),
-			expected: &Config{
+			expected: &clickhousestsexporter.Config{
 				Endpoint:           defaultEndpoint,
 				Database:           "otel",
 				Username:           "foo",
@@ -74,14 +76,14 @@ func TestLoadConfig(t *testing.T) {
 					StorageID:    &storageID,
 				},
 				CreateResourcesTable: true,
-				CreateTracesTable: true,
+				CreateTracesTable:    true,
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.id.String(), func(t *testing.T) {
-			factory := NewFactory()
+			factory := clickhousestsexporter.NewFactory()
 			cfg := factory.CreateDefaultConfig()
 
 			sub, err := cm.Sub(tt.id.String())
@@ -94,8 +96,12 @@ func TestLoadConfig(t *testing.T) {
 	}
 }
 
-func withDefaultConfig(fns ...func(*Config)) *Config {
-	cfg := createDefaultConfig().(*Config)
+func withDefaultConfig(fns ...func(*clickhousestsexporter.Config)) *clickhousestsexporter.Config {
+	cfg, ok := clickhousestsexporter.CreateDefaultConfig().(*clickhousestsexporter.Config)
+	if !ok {
+		return &clickhousestsexporter.Config{}
+	}
+
 	for _, fn := range fns {
 		fn(cfg)
 	}
@@ -188,7 +194,7 @@ func TestConfig_buildDSN(t *testing.T) {
 			wantChOptions: ChOptions{
 				Secure: false,
 			},
-			wantErr: errConfigInvalidEndpoint,
+			wantErr: clickhousestsexporter.ErrConfigInvalidEndpoint,
 		},
 		{
 			name: "Auto enable TLS connection based on scheme",
@@ -243,24 +249,24 @@ func TestConfig_buildDSN(t *testing.T) {
 				Endpoint: "tcp://127.0.0.1:9000/otel",
 			},
 			args: args{
-				database: defaultDatabase,
+				database: "default",
 			},
 			want: "tcp://127.0.0.1:9000/default",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := &Config{
+			cfg := &clickhousestsexporter.Config{
 				Endpoint:         tt.fields.Endpoint,
 				Username:         tt.fields.Username,
 				Password:         configopaque.String(tt.fields.Password),
 				Database:         tt.fields.Database,
 				ConnectionParams: tt.fields.ConnectionParams,
 			}
-			got, err := cfg.buildDSN(tt.args.database)
+			got, err := cfg.BuildDSN(tt.args.database)
 
 			if tt.wantErr != nil {
-				assert.ErrorIs(t, err, tt.wantErr, "buildDSN(%v)", tt.args.database)
+				assert.ErrorIs(t, err, tt.wantErr, "BuildDSN(%v)", tt.args.database)
 			} else {
 				// Validate DSN
 				opts, err := clickhouse.ParseDSN(got)
@@ -270,7 +276,7 @@ func TestConfig_buildDSN(t *testing.T) {
 				if tt.wantChOptions.Compress != 0 {
 					assert.Equalf(t, tt.wantChOptions.Compress, opts.Compression.Method, "Compress is not nil")
 				}
-				assert.Equalf(t, tt.want, got, "buildDSN(%v)", tt.args.database)
+				assert.Equalf(t, tt.want, got, "BuildDSN(%v)", tt.args.database)
 			}
 
 		})

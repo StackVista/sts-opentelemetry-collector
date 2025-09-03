@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package clickhousestsexporter
+package clickhousestsexporter_test
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -20,15 +21,15 @@ import (
 )
 
 func TestLogsExporter_New(t *testing.T) {
-	type validate func(*testing.T, *logsExporter, error)
+	type validate func(*testing.T, *clickhousestsexporter.LogsExporter, error)
 
-	_ = func(t *testing.T, exporter *logsExporter, err error) {
+	_ = func(t *testing.T, exporter *clickhousestsexporter.LogsExporter, err error) {
 		require.NoError(t, err)
 		require.NotNil(t, exporter)
 	}
 
 	_ = func(want error) validate {
-		return func(t *testing.T, exporter *logsExporter, err error) {
+		return func(t *testing.T, exporter *clickhousestsexporter.LogsExporter, err error) {
 			require.Nil(t, exporter)
 			require.Error(t, err)
 			if !errors.Is(err, want) {
@@ -38,14 +39,14 @@ func TestLogsExporter_New(t *testing.T) {
 	}
 
 	failWithMsg := func(msg string) validate {
-		return func(t *testing.T, exporter *logsExporter, err error) {
+		return func(t *testing.T, _ *clickhousestsexporter.LogsExporter, err error) {
 			require.Error(t, err)
 			require.Contains(t, err.Error(), msg)
 		}
 	}
 
 	tests := map[string]struct {
-		config *Config
+		config *clickhousestsexporter.Config
 		want   validate
 	}{
 		"no dsn": {
@@ -58,13 +59,13 @@ func TestLogsExporter_New(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 
 			var err error
-			exporter, err := newLogsExporter(zaptest.NewLogger(t), test.config)
+			exporter, err := clickhousestsexporter.NewLogsExporter(zaptest.NewLogger(t), test.config)
 			err = errors.Join(err, err)
 
 			if exporter != nil {
-				err = errors.Join(err, exporter.start(context.TODO(), nil))
+				err = errors.Join(err, exporter.Start(context.TODO(), nil))
 				defer func() {
-					require.NoError(t, exporter.shutdown(context.TODO()))
+					require.NoError(t, exporter.Shutdown(context.TODO()))
 				}()
 			}
 
@@ -120,20 +121,21 @@ func TestExporter_pushLogsData(t *testing.T) {
 	})
 }
 
-func newTestLogsExporter(t *testing.T, dsn string, fns ...func(*Config)) *logsExporter {
-	exporter, err := newLogsExporter(zaptest.NewLogger(t), withTestExporterConfig(fns...)(dsn))
+func newTestLogsExporter(t *testing.T, dsn string, fns ...func(*clickhousestsexporter.Config)) *clickhousestsexporter.LogsExporter {
+	exporter, err := clickhousestsexporter.NewLogsExporter(zaptest.NewLogger(t), withTestExporterConfig(t, fns...)(dsn))
 	require.NoError(t, err)
-	require.NoError(t, exporter.start(context.TODO(), nil))
+	require.NoError(t, exporter.Start(context.TODO(), nil))
 
-	t.Cleanup(func() { _ = exporter.shutdown(context.TODO()) })
+	t.Cleanup(func() { _ = exporter.Shutdown(context.TODO()) })
 	return exporter
 }
 
-func withTestExporterConfig(fns ...func(*Config)) func(string) *Config {
-	return func(endpoint string) *Config {
-		var configMods []func(*Config)
-		configMods = append(configMods, func(cfg *Config) {
+func withTestExporterConfig(t *testing.T, fns ...func(*clickhousestsexporter.Config)) func(string) *clickhousestsexporter.Config {
+	return func(endpoint string) *clickhousestsexporter.Config {
+		var configMods []func(*clickhousestsexporter.Config)
+		configMods = append(configMods, func(cfg *clickhousestsexporter.Config) {
 			cfg.Endpoint = endpoint
+			cfg.SetDriverName(t.Name())
 		})
 		configMods = append(configMods, fns...)
 		return withDefaultConfig(configMods...)
@@ -158,13 +160,12 @@ func simpleLogs(count int) plog.Logs {
 	return logs
 }
 
-func mustPushLogsData(t *testing.T, exporter *logsExporter, ld plog.Logs) {
-	err := exporter.pushLogsData(context.TODO(), ld)
+func mustPushLogsData(t *testing.T, exporter *clickhousestsexporter.LogsExporter, ld plog.Logs) {
+	err := exporter.PushLogsData(context.TODO(), ld)
 	require.NoError(t, err)
 }
 
 func initClickhouseTestServer(t *testing.T, recorder recorder) {
-	driverName = t.Name()
 	sql.Register(t.Name(), &testClickhouseDriver{
 		recorder: recorder,
 	})
@@ -223,6 +224,7 @@ func (t *testClickhouseDriverStmt) Exec(args []driver.Value) (driver.Result, err
 }
 
 func (t *testClickhouseDriverStmt) Query(_ []driver.Value) (driver.Rows, error) {
+	//nolint:nilnil
 	return nil, nil
 }
 

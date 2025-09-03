@@ -156,7 +156,16 @@ func (s *sumMetrics) insert(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-func (s *sumMetrics) Add(resAttr map[string]string, resURL string, scopeInstr pcommon.InstrumentationScope, scopeURL string, metrics any, name string, description string, unit string) error {
+func (s *sumMetrics) Add(
+	resAttr map[string]string,
+	resURL string,
+	scopeInstr pcommon.InstrumentationScope,
+	scopeURL string,
+	metrics any,
+	name string,
+	description string,
+	unit string,
+) error {
 	sum, ok := metrics.(pmetric.Sum)
 	if !ok {
 		return fmt.Errorf("metrics param is not type of Sum")

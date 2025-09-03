@@ -3,10 +3,12 @@
 
 //go:generate mdatagen metadata.yaml
 
+//nolint:lll
 package clickhousestsexporter // import "github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter"
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"go.opentelemetry.io/collector/component"
@@ -21,14 +23,14 @@ import (
 func NewFactory() exporter.Factory {
 	return exporter.NewFactory(
 		metadata.Type,
-		createDefaultConfig,
+		CreateDefaultConfig,
 		exporter.WithLogs(createLogsExporter, metadata.LogsStability),
 		exporter.WithTraces(createTracesExporter, metadata.TracesStability),
 		exporter.WithMetrics(createMetricExporter, metadata.MetricsStability),
 	)
 }
 
-func createDefaultConfig() component.Config {
+func CreateDefaultConfig() component.Config {
 	queueSettings := exporterhelper.NewDefaultQueueSettings()
 	queueSettings.NumConsumers = 1
 
@@ -55,8 +57,12 @@ func createLogsExporter(
 	set exporter.CreateSettings,
 	cfg component.Config,
 ) (exporter.Logs, error) {
-	c := cfg.(*Config)
-	exporter, err := newLogsExporter(set.Logger, c)
+	c, ok := cfg.(*Config)
+	if !ok {
+		return nil, errors.New("unable to cast config")
+	}
+
+	exporter, err := NewLogsExporter(set.Logger, c)
 	if err != nil {
 		return nil, fmt.Errorf("cannot configure clickhouse logs exporter: %w", err)
 	}
@@ -65,9 +71,9 @@ func createLogsExporter(
 		ctx,
 		set,
 		cfg,
-		exporter.pushLogsData,
-		exporterhelper.WithStart(exporter.start),
-		exporterhelper.WithShutdown(exporter.shutdown),
+		exporter.PushLogsData,
+		exporterhelper.WithStart(exporter.Start),
+		exporterhelper.WithShutdown(exporter.Shutdown),
 		exporterhelper.WithTimeout(c.TimeoutSettings),
 		exporterhelper.WithQueue(c.QueueSettings),
 		exporterhelper.WithRetry(c.BackOffConfig),
@@ -81,8 +87,12 @@ func createTracesExporter(
 	set exporter.CreateSettings,
 	cfg component.Config,
 ) (exporter.Traces, error) {
-	c := cfg.(*Config)
-	exporter, err := newTracesExporter(set.Logger, c)
+	c, ok := cfg.(*Config)
+	if !ok {
+		return nil, errors.New("unable to cast config")
+	}
+
+	exporter, err := NewTracesExporter(set.Logger, c)
 	if err != nil {
 		return nil, fmt.Errorf("cannot configure clickhouse traces exporter: %w", err)
 	}
@@ -91,9 +101,9 @@ func createTracesExporter(
 		ctx,
 		set,
 		cfg,
-		exporter.pushTraceData,
-		exporterhelper.WithStart(exporter.start),
-		exporterhelper.WithShutdown(exporter.shutdown),
+		exporter.PushTraceData,
+		exporterhelper.WithStart(exporter.Start),
+		exporterhelper.WithShutdown(exporter.Shutdown),
 		exporterhelper.WithTimeout(c.TimeoutSettings),
 		exporterhelper.WithQueue(c.QueueSettings),
 		exporterhelper.WithRetry(c.BackOffConfig),
@@ -105,8 +115,12 @@ func createMetricExporter(
 	set exporter.CreateSettings,
 	cfg component.Config,
 ) (exporter.Metrics, error) {
-	c := cfg.(*Config)
-	exporter, err := newMetricsExporter(set.Logger, c)
+	c, ok := cfg.(*Config)
+	if !ok {
+		return nil, errors.New("unable to cast config")
+	}
+
+	exporter, err := NewMetricsExporter(set.Logger, c)
 	if err != nil {
 		return nil, fmt.Errorf("cannot configure clickhouse metrics exporter: %w", err)
 	}
@@ -115,9 +129,9 @@ func createMetricExporter(
 		ctx,
 		set,
 		cfg,
-		exporter.pushMetricsData,
-		exporterhelper.WithStart(exporter.start),
-		exporterhelper.WithShutdown(exporter.shutdown),
+		exporter.PushMetricsData,
+		exporterhelper.WithStart(exporter.Start),
+		exporterhelper.WithShutdown(exporter.Shutdown),
 		exporterhelper.WithTimeout(c.TimeoutSettings),
 		exporterhelper.WithQueue(c.QueueSettings),
 		exporterhelper.WithRetry(c.BackOffConfig),

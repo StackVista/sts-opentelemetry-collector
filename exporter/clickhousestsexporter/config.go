@@ -1,6 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
+//nolint:lll
 package clickhousestsexporter // import "github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter"
 
 import (
@@ -49,28 +50,32 @@ type Config struct {
 	CreateTracesTable bool `mapstructure:"create_traces_table"`
 	// Create the resources table on startup
 	CreateResourcesTable bool `mapstructure:"create_resources_table"`
+
+	driverName string
 }
 
 const defaultDatabase = "default"
 
 var (
-	errConfigNoEndpoint      = errors.New("endpoint must be specified")
-	errConfigInvalidEndpoint = errors.New("endpoint must be url format")
-	errConfigTTL             = errors.New("both 'ttl_days' and 'ttl' can not be provided. 'ttl_days' is deprecated, use 'ttl' instead")
+	ErrConfigNoEndpoint      = errors.New("endpoint must be specified")
+	ErrConfigInvalidEndpoint = errors.New("endpoint must be url format")
+	//nolint:lll
+	ErrConfigTTL = errors.New("both 'ttl_days' and 'ttl' can not be provided. 'ttl_days' is deprecated, use 'ttl' instead")
 )
 
 // Validate the clickhouse server configuration.
-func (cfg *Config) Validate() (err error) {
+func (cfg *Config) Validate() error {
+	var err error
 	if cfg.Endpoint == "" {
-		err = errors.Join(err, errConfigNoEndpoint)
+		err = errors.Join(err, ErrConfigNoEndpoint)
 	}
-	dsn, e := cfg.buildDSN(cfg.Database)
+	dsn, e := cfg.BuildDSN(cfg.Database)
 	if e != nil {
 		err = errors.Join(err, e)
 	}
 
 	if cfg.TTL > 0 && cfg.TTLDays > 0 {
-		err = errors.Join(err, errConfigTTL)
+		err = errors.Join(err, ErrConfigTTL)
 	}
 
 	// Validate DSN with clickhouse driver.
@@ -82,10 +87,10 @@ func (cfg *Config) Validate() (err error) {
 	return err
 }
 
-func (cfg *Config) buildDSN(database string) (string, error) {
+func (cfg *Config) BuildDSN(database string) (string, error) {
 	dsnURL, err := url.Parse(cfg.Endpoint)
 	if err != nil {
-		return "", fmt.Errorf("%w: %s", errConfigInvalidEndpoint, err.Error())
+		return "", fmt.Errorf("%w: %s", ErrConfigInvalidEndpoint, err.Error())
 	}
 
 	queryParams := dsnURL.Query()
@@ -125,20 +130,30 @@ func (cfg *Config) buildDSN(database string) (string, error) {
 	return dsnURL.String(), nil
 }
 
-func (cfg *Config) buildDB(database string) (*sql.DB, error) {
-	dsn, err := cfg.buildDSN(database)
+func (cfg *Config) BuildDB(database string) (*sql.DB, error) {
+	dsn, err := cfg.BuildDSN(database)
 	if err != nil {
 		return nil, err
+	}
+
+	// Safeguard against zero-values
+	if cfg.driverName == "" {
+		cfg.driverName = "clickhouse"
 	}
 
 	// ClickHouse sql driver will read clickhouse settings from the DSN string.
 	// It also ensures defaults.
 	// See https://github.com/ClickHouse/clickhouse-go/blob/08b27884b899f587eb5c509769cd2bdf74a9e2a1/clickhouse_std.go#L189
-	conn, err := sql.Open(driverName, dsn)
+	conn, err := sql.Open(cfg.driverName, dsn)
 	if err != nil {
 		return nil, err
 	}
 
 	return conn, nil
 
+}
+
+// utility testing function
+func (cfg *Config) SetDriverName(driverName string) {
+	cfg.driverName = driverName
 }
