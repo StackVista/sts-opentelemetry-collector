@@ -96,7 +96,7 @@ func (e *kafkaExporter) checkTopicExists(ctx context.Context) error {
 
 		e.logger.Info("Topic found",
 			zap.String("topic", topic),
-			zap.Int32("partitions", int32(len(detail.Partitions))))
+			zap.Int("partitions", len(detail.Partitions)))
 	}
 
 	return nil
