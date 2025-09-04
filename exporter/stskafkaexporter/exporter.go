@@ -209,9 +209,7 @@ func (e *KafkaExporter) extractValue(lr plog.LogRecord) ([]byte, error) {
 	body := lr.Body()
 
 	//nolint:exhaustive,gocritic
-	switch body.Type() {
-	case pcommon.ValueTypeBytes:
-		// Clone to avoid aliasing shared memory.
+	if body.Type() == pcommon.ValueTypeBytes {
 		return append([]byte(nil), body.Bytes().AsRaw()...), nil
 	}
 	return nil, errors.New("unsupported log record body type")
