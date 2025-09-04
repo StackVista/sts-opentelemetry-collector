@@ -172,12 +172,13 @@ func TestEvalVariables(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			vars := tt.vars
 			got, errs := EvalVariables(
 				&mockEvalExpressionEvaluator{
 					varExpressionLookup: tt.varExpressionLookup,
 					varErrsLookup:       tt.varErrsLookup,
 				},
-				nil, nil, nil, &tt.vars,
+				nil, nil, nil, &vars,
 			)
 
 			assert.Equal(t, tt.want, got, "resolved variables mismatch")

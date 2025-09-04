@@ -86,11 +86,12 @@ func TestFilter_evalCondition(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			condition := tc.condition
 			resultAction := evalCondition(
 				&mockFilterExpressionEvaluator{
 					conditionExpressionLookup: tc.conditionExpressionLookup,
 				},
-				&evalCtx, &tc.condition,
+				&evalCtx, &condition,
 			)
 			assert.Equal(t, tc.expectedAction, resultAction)
 		})
@@ -194,11 +195,12 @@ func TestFilter_filterByConditions(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			conditions := tc.conditions
 			result := filterByConditions(
 				&mockFilterExpressionEvaluator{
 					conditionExpressionLookup: tc.conditionExpressionLookup,
 				},
-				&evalCtx, &tc.conditions,
+				&evalCtx, &conditions,
 			)
 			assert.Equal(t, tc.expected, result)
 		})

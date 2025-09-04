@@ -339,6 +339,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			eval, _ := NewCELEvaluator()
 			result := ConvertSpanToTopologyStreamMessage(eval, traces, tt.componentMappings, tt.relationMappings, now)
 			unify(&result)
+			//nolint:gosec
 			unify(&tt.expected)
 			assert.Equal(t, tt.expected, result)
 		})

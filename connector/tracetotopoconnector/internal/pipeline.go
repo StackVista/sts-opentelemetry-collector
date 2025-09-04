@@ -25,7 +25,8 @@ func ConvertSpanToTopologyStreamMessage(
 
 	for _, componentMapping := range componentMappings {
 		iterateSpans(trace, func(resourceSpan *ptrace.ResourceSpans, scopeSpan *ptrace.ScopeSpans, span *ptrace.Span) {
-			component, errs := convertToComponent(eval, resourceSpan, scopeSpan, span, &componentMapping)
+			currentComponentMapping := componentMapping
+			component, errs := convertToComponent(eval, resourceSpan, scopeSpan, span, &currentComponentMapping)
 			if component != nil {
 				result = append(result, *outputToMessageWithKey(
 					component,
@@ -45,7 +46,8 @@ func ConvertSpanToTopologyStreamMessage(
 	}
 	for _, relationMapping := range relationMappings {
 		iterateSpans(trace, func(resourceSpan *ptrace.ResourceSpans, scopeSpan *ptrace.ScopeSpans, span *ptrace.Span) {
-			relation, errs := convertToRelation(eval, resourceSpan, scopeSpan, span, &relationMapping)
+			currentRelationMapping := relationMapping
+			relation, errs := convertToRelation(eval, resourceSpan, scopeSpan, span, &currentRelationMapping)
 			if relation != nil {
 				result = append(result, *outputToMessageWithKey(
 					relation,
