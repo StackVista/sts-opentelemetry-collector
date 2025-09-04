@@ -32,5 +32,5 @@ func createTracesToLogsConnector(
 	cfg component.Config,
 	nextConsumer consumer.Logs,
 ) (connector.Traces, error) {
-	return newConnector(params.Logger, cfg, nextConsumer), nil
+	return newConnector(params.Logger, cfg, nextConsumer)
 }

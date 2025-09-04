@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+
 	"github.com/cespare/xxhash/v2"
 	"github.com/google/uuid"
 	"github.com/twmb/franz-go/pkg/kadm"
@@ -16,7 +17,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const kafkaMessageKey = "stskafka.key"
+const KafkaMessageKey = "stskafka.key"
 
 // InternalExporterComponent is the interface that both production and stub exporters implement.
 type InternalExporterComponent interface {
@@ -193,12 +194,12 @@ func iterateLogRecords(ld plog.Logs, fn func(lr plog.LogRecord) error) error {
 // extractKey retrieves the logical Kafka key from attributes and hashes it.
 // This ensures stable partitioning across producers.
 func extractKey(attrs pcommon.Map) ([]byte, error) {
-	key, ok := attrs.Get(kafkaMessageKey)
+	key, ok := attrs.Get(KafkaMessageKey)
 	if !ok {
-		return nil, fmt.Errorf("missing %s attribute", kafkaMessageKey)
+		return nil, fmt.Errorf("missing %s attribute", KafkaMessageKey)
 	}
 
-	h := xxhash.Sum64([]byte(key.Str()))
+	h := xxhash.Sum64(key.Bytes().AsRaw())
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, h)
 	return buf, nil
