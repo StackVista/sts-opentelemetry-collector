@@ -1,3 +1,4 @@
+//nolint:testpackage
 package internal
 
 import (
@@ -12,11 +13,12 @@ type mockFilterExpressionEvaluator struct {
 	conditionExpressionLookup map[string]bool
 }
 
-func (f *mockFilterExpressionEvaluator) EvalStringExpression(expr settings.OtelStringExpression, _ *ExpressionEvalContext) (string, error) {
+func (f *mockFilterExpressionEvaluator) EvalStringExpression(_ settings.OtelStringExpression, _ *ExpressionEvalContext) (string, error) {
 	return "", nil
 }
 
 func (f *mockFilterExpressionEvaluator) EvalOptionalStringExpression(_ *settings.OtelStringExpression, _ *ExpressionEvalContext) (*string, error) {
+	//nolint:nilnil
 	return nil, nil
 }
 
@@ -84,11 +86,12 @@ func TestFilter_evalCondition(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			condition := tc.condition
 			resultAction := evalCondition(
 				&mockFilterExpressionEvaluator{
 					conditionExpressionLookup: tc.conditionExpressionLookup,
 				},
-				&evalCtx, &tc.condition,
+				&evalCtx, &condition,
 			)
 			assert.Equal(t, tc.expectedAction, resultAction)
 		})
@@ -192,11 +195,12 @@ func TestFilter_filterByConditions(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			conditions := tc.conditions
 			result := filterByConditions(
 				&mockFilterExpressionEvaluator{
 					conditionExpressionLookup: tc.conditionExpressionLookup,
 				},
-				&evalCtx, &tc.conditions,
+				&evalCtx, &conditions,
 			)
 			assert.Equal(t, tc.expected, result)
 		})

@@ -1,8 +1,11 @@
 package internal
 
 import (
+	"math"
+
 	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
@@ -11,18 +14,30 @@ type MessageWithKey struct {
 	Message *topo_stream_v1.TopologyStreamMessage
 }
 
-func ConvertSpanToTopologyStreamMessage(eval ExpressionEvaluator, trace ptrace.Traces, componentMappings []settings.OtelComponentMapping, relationMappings []settings.OtelRelationMapping, now int64) []MessageWithKey {
+func ConvertSpanToTopologyStreamMessage(
+	eval ExpressionEvaluator,
+	trace ptrace.Traces,
+	componentMappings []settings.OtelComponentMapping,
+	relationMappings []settings.OtelRelationMapping,
+	now int64,
+) []MessageWithKey {
 	result := make([]MessageWithKey, 0)
 
 	for _, componentMapping := range componentMappings {
 		iterateSpans(trace, func(resourceSpan *ptrace.ResourceSpans, scopeSpan *ptrace.ScopeSpans, span *ptrace.Span) {
-			component, errs := convertToComponent(eval, resourceSpan, scopeSpan, span, &componentMapping)
+			currentComponentMapping := componentMapping
+			component, errs := convertToComponent(eval, resourceSpan, scopeSpan, span, &currentComponentMapping)
 			if component != nil {
-				result = append(result, *outputToMessageWithKey(component, componentMapping, span, now, func() []*topo_stream_v1.TopologyStreamComponent {
-					return []*topo_stream_v1.TopologyStreamComponent{component}
-				}, func() []*topo_stream_v1.TopologyStreamRelation {
-					return nil
-				}))
+				result = append(result, *outputToMessageWithKey(
+					component,
+					componentMapping,
+					span,
+					now,
+					func() []*topo_stream_v1.TopologyStreamComponent {
+						return []*topo_stream_v1.TopologyStreamComponent{component}
+					}, func() []*topo_stream_v1.TopologyStreamRelation {
+						return nil
+					}))
 			}
 			if errs != nil {
 				result = append(result, *errorsToMessageWithKey(&errs, componentMapping, span, now))
@@ -31,13 +46,19 @@ func ConvertSpanToTopologyStreamMessage(eval ExpressionEvaluator, trace ptrace.T
 	}
 	for _, relationMapping := range relationMappings {
 		iterateSpans(trace, func(resourceSpan *ptrace.ResourceSpans, scopeSpan *ptrace.ScopeSpans, span *ptrace.Span) {
-			relation, errs := convertToRelation(eval, resourceSpan, scopeSpan, span, &relationMapping)
+			currentRelationMapping := relationMapping
+			relation, errs := convertToRelation(eval, resourceSpan, scopeSpan, span, &currentRelationMapping)
 			if relation != nil {
-				result = append(result, *outputToMessageWithKey(relation, relationMapping, span, now, func() []*topo_stream_v1.TopologyStreamComponent {
-					return nil
-				}, func() []*topo_stream_v1.TopologyStreamRelation {
-					return []*topo_stream_v1.TopologyStreamRelation{relation}
-				}))
+				result = append(result, *outputToMessageWithKey(
+					relation,
+					relationMapping,
+					span,
+					now,
+					func() []*topo_stream_v1.TopologyStreamComponent {
+						return nil
+					}, func() []*topo_stream_v1.TopologyStreamRelation {
+						return []*topo_stream_v1.TopologyStreamRelation{relation}
+					}))
 			}
 			if errs != nil {
 				result = append(result, *errorsToMessageWithKey(&errs, relationMapping, span, now))
@@ -47,7 +68,13 @@ func ConvertSpanToTopologyStreamMessage(eval ExpressionEvaluator, trace ptrace.T
 	return result
 }
 
-func convertToComponent(expressionEvaluator ExpressionEvaluator, resourceSpan *ptrace.ResourceSpans, scopeSpan *ptrace.ScopeSpans, span *ptrace.Span, mapping *settings.OtelComponentMapping) (*topo_stream_v1.TopologyStreamComponent, []error) {
+func convertToComponent(
+	expressionEvaluator ExpressionEvaluator,
+	resourceSpan *ptrace.ResourceSpans,
+	scopeSpan *ptrace.ScopeSpans,
+	span *ptrace.Span,
+	mapping *settings.OtelComponentMapping,
+) (*topo_stream_v1.TopologyStreamComponent, []error) {
 	evaluatedVars, _ := EvalVariables(expressionEvaluator, span, scopeSpan, resourceSpan, mapping.Vars)
 	expressionEvalCtx := &ExpressionEvalContext{*span, *scopeSpan, *resourceSpan, evaluatedVars}
 
@@ -61,7 +88,13 @@ func convertToComponent(expressionEvaluator ExpressionEvaluator, resourceSpan *p
 	return nil, nil
 }
 
-func convertToRelation(expressionEvaluator ExpressionEvaluator, resourceSpan *ptrace.ResourceSpans, scopeSpan *ptrace.ScopeSpans, span *ptrace.Span, mapping *settings.OtelRelationMapping) (*topo_stream_v1.TopologyStreamRelation, []error) {
+func convertToRelation(
+	expressionEvaluator ExpressionEvaluator,
+	resourceSpan *ptrace.ResourceSpans,
+	scopeSpan *ptrace.ScopeSpans,
+	span *ptrace.Span,
+	mapping *settings.OtelRelationMapping,
+) (*topo_stream_v1.TopologyStreamRelation, []error) {
 	evaluatedVars, _ := EvalVariables(expressionEvaluator, span, scopeSpan, resourceSpan, mapping.Vars)
 	expressionEvalCtx := &ExpressionEvalContext{*span, *scopeSpan, *resourceSpan, evaluatedVars}
 
@@ -75,7 +108,13 @@ func convertToRelation(expressionEvaluator ExpressionEvaluator, resourceSpan *pt
 	return nil, nil
 }
 
-func iterateSpans(trace ptrace.Traces, handler func(resourceSpan *ptrace.ResourceSpans, scopeSpan *ptrace.ScopeSpans, span *ptrace.Span)) {
+func iterateSpans(
+	trace ptrace.Traces,
+	handler func(
+		resourceSpan *ptrace.ResourceSpans,
+		scopeSpan *ptrace.ScopeSpans,
+		span *ptrace.Span,
+	)) {
 	resourceSpans := trace.ResourceSpans()
 	for i := 0; i < resourceSpans.Len(); i++ {
 		rs := resourceSpans.At(i)
@@ -104,7 +143,7 @@ func errorsToMessageWithKey(errs *[]error, mapping settings.Mapping, span *ptrac
 		},
 		Message: &topo_stream_v1.TopologyStreamMessage{
 			CollectionTimestamp: now,
-			SubmittedTimestamp:  int64(span.EndTimestamp()),
+			SubmittedTimestamp:  convertTimestampToInt64(span.EndTimestamp()),
 			Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 				TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
 					ExpiryIntervalMs: mapping.GetExpireAfterMs(),
@@ -115,7 +154,16 @@ func errorsToMessageWithKey(errs *[]error, mapping settings.Mapping, span *ptrac
 	}
 }
 
-func outputToMessageWithKey(output topo_stream_v1.ComponentOrRelation, mapping settings.Mapping, span *ptrace.Span, now int64, toComponents func() []*topo_stream_v1.TopologyStreamComponent, toRelations func() []*topo_stream_v1.TopologyStreamRelation) *MessageWithKey {
+func outputToMessageWithKey(
+	output topo_stream_v1.ComponentOrRelation,
+	mapping settings.Mapping,
+	span *ptrace.Span,
+	now int64,
+	toComponents func() []*topo_stream_v1.TopologyStreamComponent,
+	toRelations func() []*topo_stream_v1.TopologyStreamRelation,
+) *MessageWithKey {
+	submittedTimestamp := convertTimestampToInt64(span.EndTimestamp())
+
 	return &MessageWithKey{
 		Key: &topo_stream_v1.TopologyStreamMessageKey{
 			Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
@@ -124,7 +172,7 @@ func outputToMessageWithKey(output topo_stream_v1.ComponentOrRelation, mapping s
 		},
 		Message: &topo_stream_v1.TopologyStreamMessage{
 			CollectionTimestamp: now,
-			SubmittedTimestamp:  int64(span.EndTimestamp()),
+			SubmittedTimestamp:  submittedTimestamp,
 			Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 				TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
 					ExpiryIntervalMs: mapping.GetExpireAfterMs(),
@@ -134,4 +182,12 @@ func outputToMessageWithKey(output topo_stream_v1.ComponentOrRelation, mapping s
 			},
 		},
 	}
+}
+
+func convertTimestampToInt64(input pcommon.Timestamp) int64 {
+	actualU64 := uint64(input)
+	if actualU64 > math.MaxInt64 {
+		return 0
+	}
+	return int64(actualU64)
 }

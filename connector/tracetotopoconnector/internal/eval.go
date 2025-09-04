@@ -5,9 +5,17 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
-// EvalVariables evaluates a list of OtelVariableMapping objects and resolves variable values based on span data or expressions.
-// It returns a map of variable names and their resolved values and a map of variable names and any encountered errors.
-func EvalVariables(expressionEvaluator ExpressionEvaluator, span *ptrace.Span, scope *ptrace.ScopeSpans, resource *ptrace.ResourceSpans, vars *[]settings.OtelVariableMapping) (map[string]string, map[string]error) {
+// EvalVariables evaluates a list of OtelVariableMapping objects and resolves variable values
+// based on span data or expressions.
+// It returns a map of variable names and their resolved values and a map of variable names and
+// any encountered errors.
+func EvalVariables(
+	expressionEvaluator ExpressionEvaluator,
+	span *ptrace.Span,
+	scope *ptrace.ScopeSpans,
+	resource *ptrace.ResourceSpans,
+	vars *[]settings.OtelVariableMapping,
+) (map[string]string, map[string]error) {
 	result := make(map[string]string)
 	errs := make(map[string]error)
 	if vars == nil {
@@ -35,7 +43,7 @@ func EvalVariables(expressionEvaluator ExpressionEvaluator, span *ptrace.Span, s
 
 	if len(errs) > 0 {
 		return result, errs
-	} else {
-		return result, nil
 	}
+
+	return result, nil
 }

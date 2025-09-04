@@ -45,6 +45,7 @@ linters:
       - third_party$
       - builtin$
       - examples$
+      - connector/tracetotopoconnector/generated/
   settings:
     gomoddirectives:
       replace-local: true
