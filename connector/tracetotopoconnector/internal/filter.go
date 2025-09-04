@@ -10,7 +10,8 @@ func filterByConditions(
 	conditions *[]settings.OtelConditionMapping,
 ) bool {
 	for _, condition := range *conditions {
-		action := evalCondition(expressionEvaluator, expressionEvalCtx, &condition)
+		currentCondition := condition
+		action := evalCondition(expressionEvaluator, expressionEvalCtx, &currentCondition)
 		if action == nil {
 			continue
 		}
