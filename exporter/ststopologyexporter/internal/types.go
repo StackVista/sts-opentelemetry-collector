@@ -20,7 +20,7 @@ type ComponentData struct {
 }
 
 type Component struct {
-	ExternalId string         `json:"externalId"`
+	ExternalID string         `json:"externalId"`
 	Type       ComponentType  `json:"type"`
 	Data       *ComponentData `json:"data"`
 }
@@ -34,9 +34,9 @@ type RelationData struct {
 }
 
 type Relation struct {
-	ExternalId string        `json:"externalId"`
-	SourceId   string        `json:"sourceId"`
-	TargetId   string        `json:"targetId"`
+	ExternalID string        `json:"externalId"`
+	SourceID   string        `json:"sourceId"`
+	TargetID   string        `json:"targetId"`
 	Type       RelationType  `json:"type"`
 	Data       *RelationData `json:"data"`
 }

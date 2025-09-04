@@ -9,9 +9,9 @@ import (
 )
 
 const (
-	CONNECTION_TYPE_DATABASE     = "database"
-	CONNECTION_TYPE_SYNCHRONOUS  = "synchronous"
-	CONNECTION_TYPE_ASYNCHRONOUS = "asynchronous"
+	ConnectionTypeDatabase     = "database"
+	ConnectionTypeSynchronous  = "synchronous"
+	ConnectionTypeASynchronous = "asynchronous"
 )
 
 type ComponentsCollection struct {
@@ -38,15 +38,15 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 	} else {
 		serviceNamespace = serviceNamespaceValue.AsString()
 	}
-	instanceId, ok := attrs.Get("service.instance.id")
-	var serviceInstanceId pcommon.Value
+	instanceID, ok := attrs.Get("service.instance.id")
+	var serviceInstanceID pcommon.Value
 	var serviceInstanceName string
 	if !ok {
-		serviceInstanceId = serviceName
+		serviceInstanceID = serviceName
 		serviceInstanceName = fmt.Sprintf("%s - instance", serviceName.AsString())
 	} else {
-		serviceInstanceId = instanceId
-		serviceInstanceName = fmt.Sprintf("%s - %s", serviceName.AsString(), instanceId.AsString())
+		serviceInstanceID = instanceID
+		serviceInstanceName = fmt.Sprintf("%s - %s", serviceName.AsString(), instanceID.AsString())
 	}
 
 	namespaceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s", serviceNamespace)
@@ -81,7 +81,12 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 			withTag(attrs, "service.version").
 			withTagPrefix(attrs, "telemetry.sdk"),
 	}
-	serviceInstanceIdentifier := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s", serviceNamespace, serviceName.AsString(), serviceInstanceId.AsString())
+	serviceInstanceIdentifier := fmt.Sprintf(
+		"urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s",
+		serviceNamespace,
+		serviceName.AsString(),
+		serviceInstanceID.AsString(),
+	)
 	c.components[serviceInstanceIdentifier] = &Component{
 		serviceInstanceIdentifier,
 		ComponentType{
@@ -103,15 +108,15 @@ func (c *ComponentsCollection) AddResource(attrs *pcommon.Map) bool {
 }
 
 func (c *ComponentsCollection) addHostResource(attrs *pcommon.Map, instance string) {
-	if hostId, ok := attrs.Get("host.id"); ok {
-		hostIdentifier := fmt.Sprintf("urn:opentelemetry:host/%s", hostId.AsString())
-		c.components[hostId.AsString()] = &Component{
+	if hostID, ok := attrs.Get("host.id"); ok {
+		hostIdentifier := fmt.Sprintf("urn:opentelemetry:host/%s", hostID.AsString())
+		c.components[hostID.AsString()] = &Component{
 			hostIdentifier,
 			ComponentType{
 				"host",
 			},
 			newComponentData().
-				withName(hostId.AsString()).
+				withName(hostID.AsString()).
 				withEnvironment(attrs).
 				withLayer("urn:stackpack:common:layer:machines").
 				withTagPrefix(attrs, "os").
@@ -121,15 +126,15 @@ func (c *ComponentsCollection) addHostResource(attrs *pcommon.Map, instance stri
 				withTagPrefix(attrs, "gcp"),
 		}
 		c.addRelation(hostIdentifier, instance, "executes")
-	} else if faasId, ok := attrs.Get("faas.id"); ok {
-		faasIdentifier := fmt.Sprintf("urn:opentelemetry:function/%s", faasId.AsString())
+	} else if faasID, ok := attrs.Get("faas.id"); ok {
+		faasIdentifier := fmt.Sprintf("urn:opentelemetry:function/%s", faasID.AsString())
 		c.components[faasIdentifier] = &Component{
 			faasIdentifier,
 			ComponentType{
 				"function",
 			},
 			newComponentData().
-				withName(faasId.AsString()).
+				withName(faasID.AsString()).
 				withEnvironment(attrs).
 				withLayer("urn:stackpack:common:layer:serverless").
 				withVersion(attrs, "faas.version").
@@ -137,15 +142,15 @@ func (c *ComponentsCollection) addHostResource(attrs *pcommon.Map, instance stri
 				withTagPrefix(attrs, "cloud"),
 		}
 		c.addRelation(faasIdentifier, instance, "executes")
-	} else if taskId, ok := attrs.Get("aws.ecs.task.id"); ok {
-		taskIdentifier := fmt.Sprintf("urn:opentelemetry:task/%s", taskId.AsString())
+	} else if taskID, ok := attrs.Get("aws.ecs.task.id"); ok {
+		taskIdentifier := fmt.Sprintf("urn:opentelemetry:task/%s", taskID.AsString())
 		c.components[taskIdentifier] = &Component{
 			taskIdentifier,
 			ComponentType{
 				"task",
 			},
 			newComponentData().
-				withName(taskId.AsString()).
+				withName(taskID.AsString()).
 				withEnvironment(attrs).
 				withLayer("urn:stackpack:common:layer:serverless").
 				withTagPrefix(attrs, "aws.ecs").
@@ -168,7 +173,12 @@ func (c *ComponentsCollection) addKubernetesRelation(attrs *pcommon.Map, instanc
 		}
 		reqAttrs[key] = value.AsString()
 	}
-	podIdentifier := fmt.Sprintf("urn:opentelemetry:kubernetes:/%s:%s:pod/%s", reqAttrs["k8s.cluster.name"], reqAttrs["k8s.namespace.name"], reqAttrs["k8s.pod.name"])
+	podIdentifier := fmt.Sprintf(
+		"urn:opentelemetry:kubernetes:/%s:%s:pod/%s",
+		reqAttrs["k8s.cluster.name"],
+		reqAttrs["k8s.namespace.name"],
+		reqAttrs["k8s.pod.name"],
+	)
 	c.components[podIdentifier] = &Component{
 		podIdentifier,
 		ComponentType{
@@ -179,7 +189,12 @@ func (c *ComponentsCollection) addKubernetesRelation(attrs *pcommon.Map, instanc
 			withScope(attrs).
 			withTagValue("cluster-name", reqAttrs["k8s.cluster.name"]).
 			withTagValue("namespace", reqAttrs["k8s.namespace.name"]).
-			withIdentifier(fmt.Sprintf("urn:kubernetes:/%s:%s:pod/%s", reqAttrs["k8s.cluster.name"], reqAttrs["k8s.namespace.name"], reqAttrs["k8s.pod.name"])),
+			withIdentifier(fmt.Sprintf(
+				"urn:kubernetes:/%s:%s:pod/%s",
+				reqAttrs["k8s.cluster.name"],
+				reqAttrs["k8s.namespace.name"],
+				reqAttrs["k8s.pod.name"]),
+			),
 	}
 	c.addRelation(podIdentifier, instance, "kubernetes-to-otel")
 }
@@ -200,36 +215,49 @@ func (c *ComponentsCollection) AddConnection(attrs *pcommon.Map) bool {
 	}
 
 	var connectionType string
-	if reqAttrs["connection_type"] == "" {
-		connectionType = CONNECTION_TYPE_SYNCHRONOUS
-	} else if reqAttrs["connection_type"] == "messaging_system" {
-		connectionType = CONNECTION_TYPE_ASYNCHRONOUS
-	} else if reqAttrs["connection_type"] == "database" {
-		connectionType = CONNECTION_TYPE_DATABASE
-	} else {
+	switch reqAttrs["connection_type"] {
+	case "":
+		connectionType = ConnectionTypeSynchronous
+	case "messaging_system":
+		connectionType = ConnectionTypeASynchronous
+	case "database":
+		connectionType = ConnectionTypeDatabase
+	default:
 		return false
 	}
 
-	instanceId, ok := attrs.Get("client_service.instance.id")
-	var clientInstanceId string
+	instanceID, ok := attrs.Get("client_service.instance.id")
+	var clientInstanceID string
 	if !ok {
-		clientInstanceId = reqAttrs["client"]
+		clientInstanceID = reqAttrs["client"]
 	} else {
-		clientInstanceId = instanceId.AsString()
+		clientInstanceID = instanceID.AsString()
 	}
-	sourceId := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s", reqAttrs["client_service.namespace"], reqAttrs["client"], clientInstanceId)
+	sourceID := fmt.Sprintf(
+		"urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s",
+		reqAttrs["client_service.namespace"],
+		reqAttrs["client"],
+		clientInstanceID,
+	)
 
 	peerService, hasPeer := attrs.Get("client_peer.service")
-	var targetId string
-	if connectionType == CONNECTION_TYPE_DATABASE {
+	var targetID string
+
+	switch connectionType {
+	case ConnectionTypeDatabase:
 		if hasPeer {
 			// create separate relations producer -> peer and consumer -> peer
 			namespace := reqAttrs["client_service.namespace"]
-			targetId = fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s", namespace, peerService.AsString())
+			targetID = fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s", namespace, peerService.AsString())
 		} else {
-			targetId = fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:database/%s", reqAttrs["client_service.namespace"], reqAttrs["client"], reqAttrs["server"])
-			c.components[targetId] = &Component{
-				targetId,
+			targetID = fmt.Sprintf(
+				"urn:opentelemetry:namespace/%s:service/%s:database/%s",
+				reqAttrs["client_service.namespace"],
+				reqAttrs["client"],
+				reqAttrs["server"],
+			)
+			c.components[targetID] = &Component{
+				targetID,
 				ComponentType{
 					"database",
 				},
@@ -240,53 +268,65 @@ func (c *ComponentsCollection) AddConnection(attrs *pcommon.Map) bool {
 					withNameFromAttr(attrs, "server"),
 			}
 		}
-	} else if connectionType == CONNECTION_TYPE_ASYNCHRONOUS {
+
+	case ConnectionTypeASynchronous:
 		consumerNamespace, ok := attrs.Get("server_service.namespace")
 		if !ok {
 			return false
 		}
-		instanceId, ok := attrs.Get("server_service.instance.id")
-		var consumerInstanceId string
+		instanceID, ok := attrs.Get("server_service.instance.id")
+		var consumerInstanceID string
 		if !ok {
-			consumerInstanceId = reqAttrs["server"]
+			consumerInstanceID = reqAttrs["server"]
 		} else {
-			consumerInstanceId = instanceId.AsString()
+			consumerInstanceID = instanceID.AsString()
 		}
-		consumerId := fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s", consumerNamespace.AsString(), reqAttrs["server"], consumerInstanceId)
+		consumerID := fmt.Sprintf(
+			"urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s",
+			consumerNamespace.AsString(),
+			reqAttrs["server"],
+			consumerInstanceID,
+		)
 		if hasPeer {
 			// create separate relations producer -> peer and consumer -> peer
 			namespace := reqAttrs["client_service.namespace"]
-			targetId = fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s", namespace, peerService.AsString())
-			c.addRelation(consumerId, targetId, connectionType)
+			targetID = fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s", namespace, peerService.AsString())
+			c.addRelation(consumerID, targetID, connectionType)
 		} else {
-			targetId = consumerId
+			targetID = consumerID
 		}
-	} else { // connectionType == CONNECTION_TYPE_SYNCHRONOUS
+	default:
+
 		serverNamespace, ok := attrs.Get("server_service.namespace")
 		if !ok {
 			return false
 		}
-		instanceId, ok := attrs.Get("server_service.instance.id")
-		var serverInstanceId string
+		instanceID, ok := attrs.Get("server_service.instance.id")
+		var serverInstanceID string
 		if !ok {
-			serverInstanceId = reqAttrs["server"]
+			serverInstanceID = reqAttrs["server"]
 		} else {
-			serverInstanceId = instanceId.AsString()
+			serverInstanceID = instanceID.AsString()
 		}
-		targetId = fmt.Sprintf("urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s", serverNamespace.AsString(), reqAttrs["server"], serverInstanceId)
+		targetID = fmt.Sprintf(
+			"urn:opentelemetry:namespace/%s:service/%s:serviceInstance/%s",
+			serverNamespace.AsString(),
+			reqAttrs["server"],
+			serverInstanceID,
+		)
 	}
 
-	c.addRelation(sourceId, targetId, connectionType)
+	c.addRelation(sourceID, targetID, connectionType)
 
 	return true
 }
 
-func (c *ComponentsCollection) addRelation(sourceId string, targetId string, typeName string) {
-	relationId := fmt.Sprintf("%s-%s", sourceId, targetId)
-	c.relations[relationId] = &Relation{
-		ExternalId: fmt.Sprintf("%s-%s", sourceId, targetId),
-		SourceId:   sourceId,
-		TargetId:   targetId,
+func (c *ComponentsCollection) addRelation(sourceID string, targetID string, typeName string) {
+	relationID := fmt.Sprintf("%s-%s", sourceID, targetID)
+	c.relations[relationID] = &Relation{
+		ExternalID: fmt.Sprintf("%s-%s", sourceID, targetID),
+		SourceID:   sourceID,
+		TargetID:   targetID,
 		Type: RelationType{
 			Name: typeName,
 		},
@@ -300,7 +340,7 @@ func (c *ComponentsCollection) GetComponents() []*Component {
 		components = append(components, component)
 	}
 	slices.SortFunc(components, func(a, b *Component) int {
-		return cmp.Compare(a.ExternalId, b.ExternalId)
+		return cmp.Compare(a.ExternalID, b.ExternalID)
 	})
 	return components
 }
@@ -311,7 +351,7 @@ func (c *ComponentsCollection) GetRelations() []*Relation {
 		relations = append(relations, relation)
 	}
 	slices.SortFunc(relations, func(a, b *Relation) int {
-		return cmp.Compare(a.ExternalId, b.ExternalId)
+		return cmp.Compare(a.ExternalID, b.ExternalID)
 	})
 	return relations
 }
@@ -373,7 +413,7 @@ func (c *ComponentData) withScope(attrs *pcommon.Map) *ComponentData {
 	clusterName, ok := attrs.Get("k8s.cluster.name")
 	if ok {
 		namespaceName, nok := attrs.Get("k8s.namespace.name")
-		if (nok) {
+		if nok {
 			c.Tags["k8s-scope"] = fmt.Sprintf("%s/%s", clusterName.AsString(), namespaceName.AsString())
 		}
 	}

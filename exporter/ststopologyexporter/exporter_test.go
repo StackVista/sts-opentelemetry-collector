@@ -1,4 +1,4 @@
-package ststopologyexporter
+package ststopologyexporter_test
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/ststopologyexporter"
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/ststopologyexporter/internal"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
@@ -16,6 +17,7 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
+//nolint:dupl
 func TestExporter_pushResourcesData(t *testing.T) {
 	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		require.Equal(t, "APIKEY", req.Header[http.CanonicalHeaderKey("sts-api-key")][0])
@@ -51,7 +53,7 @@ func TestExporter_pushResourcesData(t *testing.T) {
 }
 
 func TestExporter_skipVirtualNodes(t *testing.T) {
-	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+	testServer := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		require.Fail(t, "No request should be sent")
 	}))
 	exporter := newTestExporter(t, testServer.URL)
@@ -59,6 +61,7 @@ func TestExporter_skipVirtualNodes(t *testing.T) {
 	require.NoError(t, err)
 }
 
+//nolint:dupl
 func TestExporter_simpleTrace(t *testing.T) {
 	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		require.Equal(t, "APIKEY", req.Header[http.CanonicalHeaderKey("sts-api-key")][0])
@@ -152,8 +155,8 @@ func simpleTrace() ptrace.Traces {
 	return traces
 }
 
-func newTestExporter(t *testing.T, url string) *topologyExporter {
-	exporter, err := newTopologyExporter(zaptest.NewLogger(t), &Config{
+func newTestExporter(t *testing.T, url string) *ststopologyexporter.TopologyExporter {
+	exporter, err := ststopologyexporter.NewTopologyExporter(zaptest.NewLogger(t), &ststopologyexporter.Config{
 		TimeoutSettings: exporterhelper.TimeoutSettings{
 			Timeout: 15 * time.Millisecond,
 		},

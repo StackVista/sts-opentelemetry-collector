@@ -4,6 +4,7 @@ package ststopologyexporter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 )
 
+//nolint:gochecknoglobals
 var processorCapabilities = consumer.Capabilities{MutatesData: true}
 
 func NewFactory() exporter.Factory {
@@ -36,12 +38,19 @@ func createDefaultConfig() component.Config {
 }
 
 var _ exporter.CreateMetricsFunc = createMetricsExporter // compile-time check
-func createMetricsExporter(ctx context.Context, settings exporter.CreateSettings, cfg component.Config) (exporter.Metrics, error) {
-	exp, err := newTopologyExporter(settings.Logger, cfg)
+func createMetricsExporter(
+	ctx context.Context,
+	settings exporter.CreateSettings,
+	cfg component.Config,
+) (exporter.Metrics, error) {
+	exp, err := NewTopologyExporter(settings.Logger, cfg)
 	if err != nil {
 		return nil, err
 	}
-	c := cfg.(*Config)
+	c, ok := cfg.(*Config)
+	if !ok {
+		return nil, errors.New("unable to cast config")
+	}
 
 	return exporterhelper.NewMetricsExporter(
 		ctx,
@@ -61,8 +70,11 @@ func createTracesExporter(
 	set exporter.CreateSettings,
 	cfg component.Config,
 ) (exporter.Traces, error) {
-	c := cfg.(*Config)
-	exporter, err := newTopologyExporter(set.Logger, c)
+	c, ok := cfg.(*Config)
+	if !ok {
+		return nil, errors.New("unable to cast config")
+	}
+	exporter, err := NewTopologyExporter(set.Logger, c)
 	if err != nil {
 		return nil, fmt.Errorf("cannot configure clickhouse traces exporter: %w", err)
 	}
