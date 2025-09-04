@@ -1,3 +1,4 @@
+//nolint:testpackage
 package internal
 
 import (
@@ -46,6 +47,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 	ss.Scope().Attributes().PutStr("otel.scope.name", "io.opentelemetry.instrumentation.http")
 	ss.Scope().Attributes().PutStr("otel.scope.version", "1.17.0")
 	span := ss.Spans().AppendEmpty()
+	//nolint:gosec
 	span.SetEndTimestamp(pcommon.Timestamp(submittedTime))
 	span.Attributes().PutStr("http.method", "GET")
 	span.Attributes().PutStr("http.status_code", "200")
@@ -55,6 +57,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 	span.Attributes().PutStr("user.id", "123")
 	span.Attributes().PutStr("service.name", "web-service")
 
+	//nolint:dupl,govet
 	tests := []struct {
 		name              string
 		componentMappings []settings.OtelComponentMapping
@@ -92,7 +95,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							Tags: &map[string]settings.OtelStringExpression{
 								"instrumentation-lib":      {`scopeAttributes["otel.scope.name"]`},
 								"instrumentation-version":  {`scopeAttributes["otel.scope.version"]`},
-								"instrumentation-provider": {`scopeAttributes["otel.scope.provider"]`}, //this attribute doesn't exist in the span but it is Optional tag so it ignored by mapping
+								"instrumentation-provider": {`scopeAttributes["otel.scope.provider"]`}, // this attribute doesn't exist in the span but it is Optional tag so it ignored by mapping
 							},
 						},
 					},
@@ -267,7 +270,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							Tags: &map[string]settings.OtelStringExpression{
 								"instrumentation-lib":      {`scopeAttributes["otel.scope.name"]`},
 								"instrumentation-version":  {`scopeAttributes["otel.scope.version"]`},
-								"instrumentation-provider": {`scopeAttributes["otel.scope.provider"]`}, //this attribute doesn't exist in the span but it is Optional tag so it ignored by mapping
+								"instrumentation-provider": {`scopeAttributes["otel.scope.provider"]`}, // this attribute doesn't exist in the span but it is Optional tag so it ignored by mapping
 							},
 						},
 					},
@@ -354,6 +357,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 		result := ConvertSpanToTopologyStreamMessage(eval, traces, componentMappings, relationMappings, now)
 		actualKeys := make([]topo_stream_v1.TopologyStreamMessageKey, 0)
 		for _, message := range result {
+			//nolint:govet
 			actualKeys = append(actualKeys, *message.Key)
 		}
 		expectedKeys := []topo_stream_v1.TopologyStreamMessageKey{
@@ -397,11 +401,13 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 		ssWithSpans.Scope().Attributes().PutStr("otel.scope.name", "io.opentelemetry.instrumentation.http")
 		ssWithSpans.Scope().Attributes().PutStr("otel.scope.version", "1.17.0")
 		span1 := ssWithSpans.Spans().AppendEmpty()
+		//nolint:gosec
 		span1.SetEndTimestamp(pcommon.Timestamp(submittedTime))
 		span1.Attributes().PutStr("http.method", "GET")
 		span1.Attributes().PutStr("http.status_code", "200")
 		span1.Attributes().PutStr("service.name", "web-service")
 		span2 := ssWithSpans.Spans().AppendEmpty()
+		//nolint:gosec
 		span2.SetEndTimestamp(pcommon.Timestamp(submittedTime))
 		span2.Attributes().PutStr("http.method", "GET")
 		span2.Attributes().PutStr("http.status_code", "200")
@@ -417,6 +423,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 		result := ConvertSpanToTopologyStreamMessage(eval, traceWithSpans, componentMappings, relationMappings, now)
 		actualKeys := make([]topo_stream_v1.TopologyStreamMessageKey, 0)
 		for _, message := range result {
+			//nolint:govet
 			actualKeys = append(actualKeys, *message.Key)
 		}
 		expectedKeys := []topo_stream_v1.TopologyStreamMessageKey{
@@ -479,6 +486,7 @@ func createSimpleRelationMapping(id string) settings.OtelRelationMapping {
 
 func unify(data *[]MessageWithKey) {
 	for _, message := range *data {
+		//nolint:forcetypeassert
 		for _, component := range message.Message.Payload.(*topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData).TopologyStreamRepeatElementsData.Components {
 			sort.Strings(component.Tags)
 		}

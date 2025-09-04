@@ -1,11 +1,13 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
+	"sync"
+
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/ext"
 	"go.opentelemetry.io/collector/pdata/pcommon"
-	"sync"
 
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"go.opentelemetry.io/collector/pdata/ptrace"
@@ -36,7 +38,7 @@ func NewCELEvaluator() (*CELEvaluator, error) {
 		cel.Variable("resourceAttributes", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("vars", cel.MapType(cel.StringType, cel.DynType)),
 		ext.Strings(), // enables string manipulation functions
-		//ext.Math(ext.MathOption(...)) // TODO: enable math operators
+		// ext.Math(ext.MathOption(...)) // TODO: enable math operators
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CEL environment: %w", err)
@@ -45,7 +47,10 @@ func NewCELEvaluator() (*CELEvaluator, error) {
 	return &CELEvaluator{env: env}, nil
 }
 
-func (e *CELEvaluator) EvalStringExpression(expr settings.OtelStringExpression, evalCtx *ExpressionEvalContext) (string, error) {
+func (e *CELEvaluator) EvalStringExpression(
+	expr settings.OtelStringExpression,
+	evalCtx *ExpressionEvalContext,
+) (string, error) {
 	result, err := e.evalExpression(expr.Expression, evalCtx)
 	if err != nil {
 		return "", err
@@ -63,16 +68,23 @@ func (e *CELEvaluator) EvalStringExpression(expr settings.OtelStringExpression, 
 	}
 }
 
-func (e *CELEvaluator) EvalOptionalStringExpression(expr *settings.OtelStringExpression, evalCtx *ExpressionEvalContext) (*string, error) {
+func (e *CELEvaluator) EvalOptionalStringExpression(
+	expr *settings.OtelStringExpression,
+	evalCtx *ExpressionEvalContext,
+) (*string, error) {
 	if expr == nil {
+		//nolint:nilnil
 		return nil, nil
-	} else {
-		result, err := e.EvalStringExpression(*expr, evalCtx)
-		return &result, err
 	}
+
+	result, err := e.EvalStringExpression(*expr, evalCtx)
+	return &result, err
 }
 
-func (e *CELEvaluator) EvalBooleanExpression(expr settings.OtelBooleanExpression, evalCtx *ExpressionEvalContext) (bool, error) {
+func (e *CELEvaluator) EvalBooleanExpression(
+	expr settings.OtelBooleanExpression,
+	evalCtx *ExpressionEvalContext,
+) (bool, error) {
 	result, err := e.evalExpression(expr.Expression, evalCtx)
 	if err != nil {
 		return false, err
@@ -108,7 +120,12 @@ func (e *CELEvaluator) evalExpression(expression string, ctx *ExpressionEvalCont
 
 func (e *CELEvaluator) getOrCompile(expr string) (cel.Program, error) {
 	if prog, ok := e.cache.Load(expr); ok {
-		return prog.(cel.Program), nil
+		ownedProgram, ok := prog.(cel.Program)
+		if !ok {
+			return nil, errors.New("unable to cast program to owned program")
+		}
+
+		return ownedProgram, nil
 	}
 
 	// Compile (parse and check) the expression
@@ -156,11 +173,23 @@ func flattenAttributes(attrs pcommon.Map) map[string]interface{} {
 					list = append(list, elem.Int())
 				case pcommon.ValueTypeDouble:
 					list = append(list, elem.Double())
+				case pcommon.ValueTypeMap:
+					list = append(list, elem.AsString())
+				case pcommon.ValueTypeSlice:
+					list = append(list, elem.AsString())
+				case pcommon.ValueTypeEmpty:
+					list = append(list, elem.AsString())
+				case pcommon.ValueTypeBytes:
+					list = append(list, elem.AsString())
 				default:
 					list = append(list, elem.AsString()) // fallback
 				}
 			}
 			result[k] = list
+		case pcommon.ValueTypeBytes:
+			result[k] = v.AsString()
+		case pcommon.ValueTypeEmpty:
+			result[k] = v.AsString()
 		default:
 			// fallback: everything has AsString()
 			result[k] = v.AsString()

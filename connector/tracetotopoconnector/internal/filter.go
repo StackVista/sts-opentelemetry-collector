@@ -4,7 +4,11 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 )
 
-func filterByConditions(expressionEvaluator ExpressionEvaluator, expressionEvalCtx *ExpressionEvalContext, conditions *[]settings.OtelConditionMapping) bool {
+func filterByConditions(
+	expressionEvaluator ExpressionEvaluator,
+	expressionEvalCtx *ExpressionEvalContext,
+	conditions *[]settings.OtelConditionMapping,
+) bool {
 	for _, condition := range *conditions {
 		action := evalCondition(expressionEvaluator, expressionEvalCtx, &condition)
 		if action == nil {
@@ -21,7 +25,11 @@ func filterByConditions(expressionEvaluator ExpressionEvaluator, expressionEvalC
 	return false
 }
 
-func evalCondition(expressionEvaluator ExpressionEvaluator, expressionEvalCtx *ExpressionEvalContext, condition *settings.OtelConditionMapping) *settings.OtelConditionMappingAction {
+func evalCondition(
+	expressionEvaluator ExpressionEvaluator,
+	expressionEvalCtx *ExpressionEvalContext,
+	condition *settings.OtelConditionMapping,
+) *settings.OtelConditionMappingAction {
 	expressionResult, err := expressionEvaluator.EvalBooleanExpression(condition.Expression, expressionEvalCtx)
 	if err != nil {
 		return nil

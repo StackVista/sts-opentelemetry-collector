@@ -1,3 +1,4 @@
+//nolint:testpackage
 package internal
 
 import (
@@ -26,6 +27,7 @@ func TestMapping_MapComponent(t *testing.T) {
 	testResource := ptrace.NewResourceSpans()
 	testResource.Resource().Attributes().PutStr("name", "microservice")
 
+	//nolint:govet
 	tests := []struct {
 		name      string
 		mapping   *settings.OtelComponentMapping
@@ -177,6 +179,7 @@ func TestMapping_MapRelation(t *testing.T) {
 	testResource := ptrace.NewResourceSpans()
 	testResource.Resource().Attributes().PutStr("name", "microservice")
 
+	//nolint:govet
 	tests := []struct {
 		name      string
 		mapping   *settings.OtelRelationMapping
