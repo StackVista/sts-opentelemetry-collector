@@ -44,5 +44,5 @@ func createTracesToLogsConnector(
 		return nil, fmt.Errorf("invalid config type: %T", cfg)
 	}
 
-	return newConnector(*typedCfg, params.Logger, nextConsumer), nil
+	return newConnector(*typedCfg, params.Logger, nextConsumer)
 }
