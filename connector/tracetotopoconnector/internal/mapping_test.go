@@ -42,25 +42,25 @@ func TestMapping_MapComponent(t *testing.T) {
 			name: "valid mapping with all required fields",
 			mapping: &settings.OtelComponentMapping{
 				Output: settings.OtelComponentMappingOutput{
-					Identifier:       strExpr(`spanAttributes["service.name"]`),
-					Name:             strExpr(`spanAttributes["service.name"]`),
-					TypeName:         strExpr(`"service"`),
-					TypeIdentifier:   ptr(strExpr(`"service_id"`)),
-					DomainName:       strExpr(`vars.namespace`),
-					DomainIdentifier: ptr(strExpr(`vars["namespace"]`)),
-					LayerName:        strExpr(`"backend"`),
-					LayerIdentifier:  ptr(strExpr(`"backend_id"`)),
+					Identifier:       strExpr(`${spanAttributes["service.name"]}`),
+					Name:             strExpr("${spanAttributes['service.name']}"),
+					TypeName:         strExpr("service"),
+					TypeIdentifier:   ptr(strExpr("service_id")),
+					DomainName:       strExpr(`${vars.namespace}`),
+					DomainIdentifier: ptr(strExpr(`${vars["namespace"]}`)),
+					LayerName:        strExpr(`backend`),
+					LayerIdentifier:  ptr(strExpr("backend_id")),
 					Optional: &settings.OtelComponentMappingFieldMapping{
 						Tags: &map[string]settings.OtelStringExpression{
-							"priority":     {"spanAttributes.priority"},
-							"scopeName":    {"scopeAttributes.name"},
-							"resourceName": {"resourceAttributes.name"},
+							"priority":     {"${spanAttributes.priority}"},
+							"scopeName":    {"${scopeAttributes.name}"},
+							"resourceName": {"${resourceAttributes.name}"},
 						},
 					},
 					Required: &settings.OtelComponentMappingFieldMapping{
 						Tags: &map[string]settings.OtelStringExpression{
-							"kind":   {`spanAttributes["kind"]`},
-							"amount": {`spanAttributes.amount`},
+							"kind":   {`${spanAttributes["kind"]}`},
+							"amount": {`${spanAttributes.amount}`},
 						},
 					},
 				},
@@ -89,11 +89,11 @@ func TestMapping_MapComponent(t *testing.T) {
 			name: "valid mapping with minimal set of properties",
 			mapping: &settings.OtelComponentMapping{
 				Output: settings.OtelComponentMappingOutput{
-					Identifier: strExpr(`spanAttributes["service.name"]`),
-					Name:       strExpr(`spanAttributes["service.name"]`),
-					TypeName:   strExpr(`"service"`),
-					DomainName: strExpr(`"payment"`),
-					LayerName:  strExpr(`"backend"`),
+					Identifier: strExpr(`${spanAttributes["service.name"]}`),
+					Name:       strExpr(`${spanAttributes["service.name"]}`),
+					TypeName:   strExpr("service"),
+					DomainName: strExpr(`payment`),
+					LayerName:  strExpr("backend"),
 				},
 			},
 			span:     &testSpan,
@@ -115,23 +115,23 @@ func TestMapping_MapComponent(t *testing.T) {
 			name: "missing required fields",
 			mapping: &settings.OtelComponentMapping{
 				Output: settings.OtelComponentMappingOutput{
-					Identifier:       strExpr(`spanAttributes["service.name"]`),
-					Name:             strExpr(`spanAttributes["non-existing-attr"]`),
-					TypeName:         strExpr(`"service"`),
-					TypeIdentifier:   ptr(strExpr(`"service_id"`)),
-					DomainName:       strExpr(`vars["non-existing-var"]`),
-					DomainIdentifier: ptr(strExpr("vars.namespace")),
-					LayerName:        strExpr(`"backend"`),
-					LayerIdentifier:  ptr(strExpr(`"backend_id"`)),
+					Identifier:       strExpr(`${spanAttributes["service.name"]}`),
+					Name:             strExpr(`${spanAttributes["non-existing-attr"]}`),
+					TypeName:         strExpr(`service`),
+					TypeIdentifier:   ptr(strExpr("service_id")),
+					DomainName:       strExpr("${vars['non-existing-var']}"),
+					DomainIdentifier: ptr(strExpr("${vars.namespace}")),
+					LayerName:        strExpr(`backend`),
+					LayerIdentifier:  ptr(strExpr("backend_id")),
 					Optional: &settings.OtelComponentMappingFieldMapping{
 						Tags: &map[string]settings.OtelStringExpression{
-							"priority": {"spanAttributes.priority"},
+							"priority": {"${spanAttributes.priority}"},
 						},
 					},
 					Required: &settings.OtelComponentMappingFieldMapping{
 						Tags: &map[string]settings.OtelStringExpression{
-							"kind":   {"spanAttributes.kind"},
-							"amount": {"spanAttributes.amount"},
+							"kind":   {"${spanAttributes.kind}"},
+							"amount": {"${spanAttributes.amount}"},
 						},
 					},
 				},
@@ -194,10 +194,10 @@ func TestMapping_MapRelation(t *testing.T) {
 			name: "valid relation mapping",
 			mapping: &settings.OtelRelationMapping{
 				Output: settings.OtelRelationMappingOutput{
-					SourceId:       strExpr(`spanAttributes["service.name"]`),
-					TargetId:       strExpr(`"database"`),
-					TypeName:       strExpr(`"query"`),
-					TypeIdentifier: ptr(strExpr("spanAttributes.kind")),
+					SourceId:       strExpr(`${spanAttributes["service.name"]}`),
+					TargetId:       strExpr(`database`),
+					TypeName:       strExpr("query"),
+					TypeIdentifier: ptr(strExpr("${spanAttributes.kind}")),
 				},
 			},
 			span:     &testSpan,
@@ -219,9 +219,9 @@ func TestMapping_MapRelation(t *testing.T) {
 			name: "missing mandatory attributes",
 			mapping: &settings.OtelRelationMapping{
 				Output: settings.OtelRelationMappingOutput{
-					SourceId: strExpr(`spanAttributes["non-existing"]`),
-					TargetId: strExpr(`"database"`),
-					TypeName: strExpr(`"query"`),
+					SourceId: strExpr(`${spanAttributes["non-existing"]}`),
+					TargetId: strExpr("database"),
+					TypeName: strExpr(`query`),
 				},
 			},
 			span:      &testSpan,
