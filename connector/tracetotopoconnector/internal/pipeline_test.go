@@ -461,11 +461,11 @@ func createSimpleComponentMapping(id string) settings.OtelComponentMapping {
 			{Action: settings.CREATE, Expression: boolExpr(`spanAttributes["http.method"] == "GET"`)},
 		},
 		Output: settings.OtelComponentMappingOutput{
-			Identifier: strExpr("resourceAttributes[\"service.instance.id\"]"),
-			Name:       strExpr(`resourceAttributes["service.name"]`),
-			TypeName:   strExpr(`"service-instance"`),
-			DomainName: strExpr(`resourceAttributes["service.namespace"]`),
-			LayerName:  strExpr(`"backend"`),
+			Identifier: strExpr("${resourceAttributes[\"service.instance.id\"]}"),
+			Name:       strExpr(`${resourceAttributes["service.name"]}`),
+			TypeName:   strExpr("service-instance"),
+			DomainName: strExpr(`${resourceAttributes["service.namespace"]}`),
+			LayerName:  strExpr("backend"),
 		},
 	}
 }
@@ -478,9 +478,9 @@ func createSimpleRelationMapping(id string) settings.OtelRelationMapping {
 			{Action: settings.CREATE, Expression: boolExpr(`spanAttributes["http.method"] == "GET"`)},
 		},
 		Output: settings.OtelRelationMappingOutput{
-			SourceId: strExpr(`resourceAttributes["service.name"]`),
-			TargetId: strExpr(`spanAttributes["service.name"]`),
-			TypeName: strExpr(`"http-request"`),
+			SourceId: strExpr(`${resourceAttributes["service.name"]}`),
+			TargetId: strExpr(`${spanAttributes["service.name"]}`),
+			TypeName: strExpr(`http-request`),
 		},
 	}
 }
