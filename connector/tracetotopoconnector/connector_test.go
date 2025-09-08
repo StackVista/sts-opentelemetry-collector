@@ -46,8 +46,8 @@ func TestConnectorStart(t *testing.T) {
 		host := &mockHost{ext: extensions}
 		err := connector.Start(context.Background(), host)
 		require.NoError(t, err)
-		assert.Len(t, connector.componentMappings, 1)
-		assert.Len(t, connector.relationMappings, 2)
+		assert.Len(t, *connector.componentMappings, 1)
+		assert.Len(t, *connector.relationMappings, 2)
 
 		provider.componentMappings = []settings.OtelComponentMapping{
 			createSimpleComponentMapping("mapping1"),
@@ -57,12 +57,12 @@ func TestConnectorStart(t *testing.T) {
 		provider.relationMappings = []settings.OtelRelationMapping{
 			createSimpleRelationMapping("mapping4"),
 		}
-		assert.Len(t, connector.componentMappings, 1)
-		assert.Len(t, connector.relationMappings, 2)
+		assert.Len(t, *connector.componentMappings, 1)
+		assert.Len(t, *connector.relationMappings, 2)
 
 		provider.channel <- stsSettingsEvents.UpdateSettingsEvent{}
-		assert.Len(t, connector.componentMappings, 3)
-		assert.Len(t, connector.relationMappings, 1)
+		assert.Len(t, *connector.componentMappings, 3)
+		assert.Len(t, *connector.relationMappings, 1)
 	})
 }
 func TestConnectorConsumeTraces(t *testing.T) {
