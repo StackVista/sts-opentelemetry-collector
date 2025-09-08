@@ -3,6 +3,8 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector"
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/ext"
@@ -10,7 +12,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"go.opentelemetry.io/collector/pdata/ptrace"
@@ -61,10 +62,10 @@ type ExpressionEvalContext struct {
 
 type CelEvaluator struct {
 	env   *cel.Env
-	cache sync.Map // map[string]cel.Program -> could use a LRU cache
+	cache *expirable.LRU[string, cel.Program]
 }
 
-func NewCELEvaluator() (*CelEvaluator, error) {
+func NewCELEvaluator(cacheSettings tracetotopoconnector.ExpressionCacheSettings) (*CelEvaluator, error) {
 	env, err := cel.NewEnv(
 		cel.Variable("spanAttributes", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("scopeAttributes", cel.MapType(cel.StringType, cel.DynType)),
@@ -76,8 +77,8 @@ func NewCELEvaluator() (*CelEvaluator, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CEL environment: %w", err)
 	}
-
-	return &CelEvaluator{env: env}, nil
+	cache := expirable.NewLRU[string, cel.Program](cacheSettings.Size, nil, cacheSettings.TTL)
+	return &CelEvaluator{env, cache}, nil
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -348,7 +349,7 @@ func (e *CelEvaluator) evalOrCached(expression string, expressionKind expression
 // otherwise preprocesses it (based on kind), compiles it, caches it, and returns it.
 func (e *CelEvaluator) getOrCompile(original string, kind expressionKind) (cel.Program, error) {
 	// check cache by original expression
-	if prog, ok := e.cache.Load(original); ok {
+	if prog, ok := e.cache.Get(original); ok {
 		ownedProgram, ok := prog.(cel.Program)
 		if !ok {
 			return nil, errors.New("unable to cast program to owned program")
@@ -372,7 +373,7 @@ func (e *CelEvaluator) getOrCompile(original string, kind expressionKind) (cel.P
 		return nil, err
 	}
 
-	e.cache.Store(original, prog) // store under original
+	e.cache.Add(original, prog) // store under original
 	return prog, nil
 }
 
@@ -512,10 +513,5 @@ func flattenAttributes(attrs pcommon.Map) map[string]interface{} {
 
 // cacheSize is used for testing cache re-use
 func (e *CelEvaluator) cacheSize() int {
-	count := 0
-	e.cache.Range(func(_, _ any) bool {
-		count++
-		return true
-	})
-	return count
+	return e.cache.Len()
 }
