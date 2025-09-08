@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -17,16 +16,18 @@ import (
 )
 
 type connectorImpl struct {
+	cfg              *Config
 	logger           *zap.Logger
 	logsConsumer     consumer.Logs
 	settingsProvider stsSettingsApi.StsSettingsProvider
 	subscriptionCh   <-chan stsSettingsEvents.UpdateSettingsEvent
 }
 
-func newConnector(logger *zap.Logger, _ component.Config, nextConsumer consumer.Logs) *connectorImpl {
+func newConnector(cfg Config, logger *zap.Logger, nextConsumer consumer.Logs) *connectorImpl {
 	logger.Info("Building tracetotopo connector")
 
 	return &connectorImpl{
+		cfg:          &cfg,
 		logger:       logger,
 		logsConsumer: nextConsumer,
 	}

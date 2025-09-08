@@ -2,11 +2,13 @@
 package internal
 
 import (
+	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"strings"
 	"testing"
+	"time"
 )
 
 func makeContext() ExpressionEvalContext {
@@ -43,7 +45,7 @@ func makeContext() ExpressionEvalContext {
 }
 
 func TestEvalStringExpression(t *testing.T) {
-	eval, err := NewCELEvaluator()
+	eval, err := NewCELEvaluator(tracetotopoconnector.ExpressionCacheSettings{Size: 100, TTL: 30 * time.Second})
 	require.NoError(t, err)
 
 	ctx := makeContext()
@@ -146,7 +148,7 @@ func TestEvalStringExpression(t *testing.T) {
 }
 
 func TestEvalBooleanExpression(t *testing.T) {
-	eval, err := NewCELEvaluator()
+	eval, err := NewCELEvaluator(tracetotopoconnector.ExpressionCacheSettings{Size: 100, TTL: 30 * time.Second})
 	require.NoError(t, err)
 
 	ctx := makeContext()
@@ -219,7 +221,7 @@ func TestEvalBooleanExpression(t *testing.T) {
 }
 
 func TestEvalOptionalStringExpression(t *testing.T) {
-	eval, err := NewCELEvaluator()
+	eval, err := NewCELEvaluator(tracetotopoconnector.ExpressionCacheSettings{Size: 100, TTL: 30 * time.Second})
 	require.NoError(t, err)
 
 	ctx := makeContext()
@@ -251,7 +253,7 @@ func TestEvalOptionalStringExpression(t *testing.T) {
 }
 
 func TestBoolEvalTypeMismatch(t *testing.T) {
-	eval, _ := NewCELEvaluator()
+	eval, _ := NewCELEvaluator(tracetotopoconnector.ExpressionCacheSettings{Size: 100, TTL: 30 * time.Second})
 	ctx := makeContext()
 
 	// String expression but evaluated with boolean
@@ -260,7 +262,7 @@ func TestBoolEvalTypeMismatch(t *testing.T) {
 }
 
 func TestStringEvalTypeMismatch(t *testing.T) {
-	eval, _ := NewCELEvaluator()
+	eval, _ := NewCELEvaluator(tracetotopoconnector.ExpressionCacheSettings{Size: 100, TTL: 30 * time.Second})
 	ctx := makeContext()
 
 	// Bool expression but evaluated with string
@@ -269,7 +271,7 @@ func TestStringEvalTypeMismatch(t *testing.T) {
 }
 
 func TestEvalCacheReuse(t *testing.T) {
-	eval, _ := NewCELEvaluator()
+	eval, _ := NewCELEvaluator(tracetotopoconnector.ExpressionCacheSettings{Size: 100, TTL: 30 * time.Second})
 	ctx := makeContext()
 
 	expr := settings.OtelBooleanExpression{Expression: `spanAttributes["retries"] == 2`}
@@ -287,6 +289,44 @@ func TestEvalCacheReuse(t *testing.T) {
 	_, err = eval.EvalBooleanExpression(other, &ctx)
 	require.NoError(t, err)
 	require.Equal(t, 2, eval.cacheSize())
+}
+
+func TestEvalCacheEvictionBySize(t *testing.T) {
+	// very small cache to force eviction
+	eval, _ := NewCELEvaluator(tracetotopoconnector.ExpressionCacheSettings{Size: 2, TTL: 1 * time.Minute})
+	ctx := makeContext()
+
+	exprs := []settings.OtelBooleanExpression{
+		{Expression: `spanAttributes["retries"] == 1`},
+		{Expression: `spanAttributes["retries"] == 2`},
+		{Expression: `spanAttributes["retries"] == 3`}, // this should evict one of the earlier ones
+	}
+
+	for _, e := range exprs {
+		_, err := eval.EvalBooleanExpression(e, &ctx)
+		require.NoError(t, err)
+	}
+
+	require.Equal(t, 2, eval.cacheSize()) // capped by size
+}
+
+func TestEvalCacheExpiryByTTL(t *testing.T) {
+	// short TTL so entries expire quickly
+	eval, _ := NewCELEvaluator(tracetotopoconnector.ExpressionCacheSettings{Size: 10, TTL: 200 * time.Millisecond})
+	ctx := makeContext()
+
+	expr := settings.OtelBooleanExpression{Expression: `spanAttributes["http.method"] == "GET"`}
+
+	_, err := eval.EvalBooleanExpression(expr, &ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, eval.cacheSize()) // compiled once
+
+	// wait until the TTL expires
+	time.Sleep(300 * time.Millisecond)
+
+	_, err = eval.EvalBooleanExpression(expr, &ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, eval.cacheSize()) // still 1, but it was recompiled after expiry
 }
 
 func TestValidateInterpolation(t *testing.T) {

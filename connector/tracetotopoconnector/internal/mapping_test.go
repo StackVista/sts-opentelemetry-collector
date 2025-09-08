@@ -3,9 +3,11 @@ package internal
 
 import (
 	"errors"
+	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"sort"
 	"testing"
+	"time"
 
 	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
 	"github.com/stretchr/testify/assert"
@@ -149,7 +151,7 @@ func TestMapping_MapComponent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			eval, _ := NewCELEvaluator()
+			eval, _ := NewCELEvaluator(tracetotopoconnector.ExpressionCacheSettings{Size: 100, TTL: 30 * time.Second})
 			evalCtx := ExpressionEvalContext{*tt.span, *tt.scope, *tt.resource, *tt.vars}
 			got, err := MapComponent(tt.mapping, eval, &evalCtx)
 			assert.Equal(t, errorStrings(tt.expectErr), errorStrings(err))
@@ -235,7 +237,7 @@ func TestMapping_MapRelation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			eval, _ := NewCELEvaluator()
+			eval, _ := NewCELEvaluator(tracetotopoconnector.ExpressionCacheSettings{Size: 100, TTL: 30 * time.Second})
 			evalCtx := ExpressionEvalContext{*tt.span, *tt.scope, *tt.resource, *tt.vars}
 			got, err := MapRelation(tt.mapping, eval, &evalCtx)
 			assert.Equal(t, errorStrings(tt.expectErr), errorStrings(err))

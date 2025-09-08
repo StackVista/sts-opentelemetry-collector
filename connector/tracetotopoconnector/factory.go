@@ -2,6 +2,8 @@ package tracetotopoconnector
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/connector"
@@ -23,7 +25,12 @@ func NewFactory() connector.Factory {
 }
 
 func createDefaultConfig() component.Config {
-	return &Config{}
+	return &Config{
+		ExpressionCacheSettings: ExpressionCacheSettings{
+			Size: 1000,
+			TTL:  15 * time.Minute,
+		},
+	}
 }
 
 func createTracesToLogsConnector(
@@ -32,5 +39,10 @@ func createTracesToLogsConnector(
 	cfg component.Config,
 	nextConsumer consumer.Logs,
 ) (connector.Traces, error) {
-	return newConnector(params.Logger, cfg, nextConsumer), nil
+	typedCfg, ok := cfg.(*Config)
+	if !ok {
+		return nil, fmt.Errorf("invalid config type: %T", cfg)
+	}
+
+	return newConnector(*typedCfg, params.Logger, nextConsumer), nil
 }
