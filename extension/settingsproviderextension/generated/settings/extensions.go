@@ -12,11 +12,11 @@ func SizeOfRawSetting(s Setting) int64 {
 }
 
 type Mapping interface {
-	GetID() string
+	GetId() string
 	GetExpireAfterMs() int64
 }
 
-func (m OtelComponentMapping) GetID() string {
+func (m OtelComponentMapping) GetId() string {
 	return m.Id
 }
 
@@ -24,7 +24,7 @@ func (m OtelComponentMapping) GetExpireAfterMs() int64 {
 	return m.ExpireAfterMs
 }
 
-func (m OtelRelationMapping) GetID() string {
+func (m OtelRelationMapping) GetId() string {
 	return m.Id
 }
 
