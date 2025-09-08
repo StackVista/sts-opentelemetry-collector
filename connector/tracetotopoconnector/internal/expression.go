@@ -2,15 +2,17 @@ package internal
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/hashicorp/golang-lru/v2/expirable"
-	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector"
+
+	"regexp"
+	"strconv"
+	"strings"
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/ext"
 	"go.opentelemetry.io/collector/pdata/pcommon"
-	"regexp"
-	"strconv"
-	"strings"
 
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"go.opentelemetry.io/collector/pdata/ptrace"
@@ -48,6 +50,11 @@ var (
 	interpolationExprCapturePattern  = regexp.MustCompile(`\$\{([^}]*)\}`) // capture group for rewrite
 )
 
+type CacheSettings struct {
+	Size int
+	TTL  time.Duration
+}
+
 type ExpressionEvaluator interface {
 	EvalStringExpression(expr settings.OtelStringExpression, evalCtx *ExpressionEvalContext) (string, error)
 	EvalOptionalStringExpression(expr *settings.OtelStringExpression, evalCtx *ExpressionEvalContext) (*string, error)
@@ -66,7 +73,7 @@ type CelEvaluator struct {
 	cache *expirable.LRU[string, cel.Program]
 }
 
-func NewCELEvaluator(cacheSettings tracetotopoconnector.ExpressionCacheSettings) (*CelEvaluator, error) {
+func NewCELEvaluator(cacheSettings CacheSettings) (*CelEvaluator, error) {
 	env, err := cel.NewEnv(
 		cel.Variable("spanAttributes", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("scopeAttributes", cel.MapType(cel.StringType, cel.DynType)),

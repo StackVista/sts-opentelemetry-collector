@@ -23,11 +23,11 @@ import (
 var settingsProviderExtensionId = component.MustNewID("sts_settings_provider")
 
 type connectorImpl struct {
-	cfg              *Config
+	cfg               *Config
 	logger            *zap.Logger
 	logsConsumer      consumer.Logs
 	settingsProvider  stsSettingsApi.StsSettingsProvider
-	eval              *internal.CELEvaluator
+	eval              *internal.CelEvaluator
 	componentMappings *[]stsSettingsModel.OtelComponentMapping
 	relationMappings  *[]stsSettingsModel.OtelRelationMapping
 	subscriptionCh    <-chan stsSettingsEvents.UpdateSettingsEvent
@@ -35,13 +35,16 @@ type connectorImpl struct {
 
 func newConnector(cfg Config, logger *zap.Logger, nextConsumer consumer.Logs) (*connectorImpl, error) {
 	logger.Info("Building tracetotopo connector")
-	eval, err := internal.NewCELEvaluator()
+	eval, err := internal.NewCELEvaluator(internal.CacheSettings{
+		Size: cfg.ExpressionCacheSettings.Size,
+		TTL:  cfg.ExpressionCacheSettings.TTL,
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	return &connectorImpl{
-		cfg:          &cfg,
+		cfg:               &cfg,
 		logger:            logger,
 		logsConsumer:      nextConsumer,
 		eval:              eval,

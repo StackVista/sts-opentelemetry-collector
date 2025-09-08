@@ -23,14 +23,14 @@ func TestConnectorStart(t *testing.T) {
 	logConsumer := &consumertest.LogsSink{}
 
 	t.Run("return an error if not found settings provider", func(t *testing.T) {
-		connector, err := newConnector(zap.NewNop(), Config{}, logConsumer)
+		connector, err := newConnector(Config{}, zap.NewNop(), logConsumer)
 		require.NoError(t, err)
 		err = connector.Start(context.Background(), componenttest.NewNopHost())
 		require.ErrorContains(t, err, "sts_settings_provider extension not found")
 	})
 
 	t.Run("start with initial mappings and observe changes", func(t *testing.T) {
-		connector, _ := newConnector(zap.NewNop(), Config{}, logConsumer)
+		connector, _ := newConnector(Config{}, zap.NewNop(), logConsumer)
 		provider := newMockStsSettingsProvider(
 			[]settings.OtelComponentMapping{
 				createSimpleComponentMapping("mapping1"),
@@ -67,7 +67,7 @@ func TestConnectorStart(t *testing.T) {
 }
 func TestConnectorConsumeTraces(t *testing.T) {
 	logConsumer := &consumertest.LogsSink{}
-	connector, _ := newConnector(zap.NewNop(), Config{}, logConsumer)
+	connector, _ := newConnector(Config{}, zap.NewNop(), logConsumer)
 	provider := newMockStsSettingsProvider(
 		[]settings.OtelComponentMapping{
 			createSimpleComponentMapping("mapping1"),
@@ -272,11 +272,11 @@ func createSimpleComponentMapping(id string) settings.OtelComponentMapping {
 			{Action: settings.CREATE, Expression: boolExpr(`spanAttributes["http.method"] == "GET"`)},
 		},
 		Output: settings.OtelComponentMappingOutput{
-			Identifier: strExpr("resourceAttributes[\"service.instance.id\"]"),
-			Name:       strExpr(`resourceAttributes["service.name"]`),
-			TypeName:   strExpr(`"service-instance"`),
-			DomainName: strExpr(`resourceAttributes["service.namespace"]`),
-			LayerName:  strExpr(`"backend"`),
+			Identifier: strExpr("${resourceAttributes[\"service.instance.id\"]}"),
+			Name:       strExpr(`${resourceAttributes["service.name"]}`),
+			TypeName:   strExpr("service-instance"),
+			DomainName: strExpr(`${resourceAttributes["service.namespace"]}`),
+			LayerName:  strExpr("backend"),
 		},
 	}
 }
@@ -289,9 +289,9 @@ func createSimpleRelationMapping(id string) settings.OtelRelationMapping {
 			{Action: settings.CREATE, Expression: boolExpr(`spanAttributes["http.status_code"] == "200"`)},
 		},
 		Output: settings.OtelRelationMappingOutput{
-			SourceId: strExpr(`resourceAttributes["service.name"]`),
-			TargetId: strExpr(`spanAttributes["service.name"]`),
-			TypeName: strExpr(`"http-request"`),
+			SourceId: strExpr(`${resourceAttributes["service.name"]}`),
+			TargetId: strExpr(`${spanAttributes["service.name"]}`),
+			TypeName: strExpr("http-request"),
 		},
 	}
 }
