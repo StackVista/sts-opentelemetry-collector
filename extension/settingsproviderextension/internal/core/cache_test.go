@@ -1,3 +1,4 @@
+//nolint:testpackage
 package core
 
 import (
@@ -29,10 +30,11 @@ type mockSubscriberHub struct {
 func (m *mockSubscriberHub) Notify(settingTypes ...stsSettingsModel.SettingType) {
 	m.notified = append(m.notified, settingTypes...)
 }
-func (m *mockSubscriberHub) Register(types ...stsSettingsModel.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
+func (m *mockSubscriberHub) Register(_ ...stsSettingsModel.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
+	//nolint:nilnil
 	return nil, nil
 }
-func (m *mockSubscriberHub) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
+func (m *mockSubscriberHub) Unregister(_ <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
 	return false
 }
 
@@ -61,7 +63,7 @@ func TestSettingsCache_GetConcreteSettingsByType_DeepCopy(t *testing.T) {
 
 	// Entry with underlying Setting -> converted into a *complexSetting
 	entry := NewSettingEntry(stsSettingsModel.Setting{Type: string(settingType)})
-	registerConverter(settingType, func(s stsSettingsModel.Setting) (any, error) {
+	registerConverter(settingType, func(_ stsSettingsModel.Setting) (any, error) {
 		return &complexSetting{
 			Name:   "original",
 			Labels: map[string]string{"env": "dev"},
@@ -76,7 +78,8 @@ func TestSettingsCache_GetConcreteSettingsByType_DeepCopy(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, vals, 1)
 
-	first := vals[0].(*complexSetting)
+	first, ok := vals[0].(*complexSetting)
+	require.True(t, ok)
 	require.Equal(t, "original", first.Name)
 	require.Equal(t, map[string]string{"env": "dev"}, first.Labels)
 	require.Equal(t, []int{1, 2, 3}, first.Values)
@@ -91,9 +94,10 @@ func TestSettingsCache_GetConcreteSettingsByType_DeepCopy(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, vals2, 1)
 
-	second := vals2[0].(*complexSetting)
+	second, ok := vals2[0].(*complexSetting)
 
 	// Ensure deepcopy worked (no mutations leaked back)
+	require.True(t, ok)
 	require.Equal(t, "original", second.Name)
 	require.Equal(t, map[string]string{"env": "dev"}, second.Labels)
 	require.Equal(t, []int{1, 2, 3}, second.Values)
@@ -106,7 +110,7 @@ func TestSettingsCache_UpdateSettingsForType_InitialUpdateTriggersNotification(t
 	// custom type with converter
 	typeA := stsSettingsModel.SettingType("A")
 	entry := NewSettingEntry(stsSettingsModel.Setting{Type: string(typeA)})
-	registerConverter(typeA, func(s stsSettingsModel.Setting) (any, error) { return "A", nil })
+	registerConverter(typeA, func(_ stsSettingsModel.Setting) (any, error) { return "A", nil })
 
 	cache.UpdateSettingsForType(typeA, []SettingEntry{entry})
 
@@ -122,7 +126,7 @@ func TestSettingsCache_UpdateSettingsForType_WithSameValueDoesNotNotify(t *testi
 	// custom type with converter
 	typeA := stsSettingsModel.SettingType("A")
 	entry := NewSettingEntry(stsSettingsModel.Setting{Type: string(typeA)})
-	registerConverter(typeA, func(s stsSettingsModel.Setting) (any, error) { return "A", nil })
+	registerConverter(typeA, func(_ stsSettingsModel.Setting) (any, error) { return "A", nil })
 
 	// seed cache
 	cache.UpdateSettingsForType(typeA, []SettingEntry{entry})
@@ -143,7 +147,7 @@ func TestSettingsCache_UpdateSettingsForType_WithDifferentValueTriggersNotificat
 	// custom type with converter
 	typeA := stsSettingsModel.SettingType("A")
 	entryA := NewSettingEntry(stsSettingsModel.Setting{Type: string(typeA)})
-	registerConverter(typeA, func(s stsSettingsModel.Setting) (any, error) { return "A", nil })
+	registerConverter(typeA, func(_ stsSettingsModel.Setting) (any, error) { return "A", nil })
 
 	// seed cache
 	cache.UpdateSettingsForType(typeA, []SettingEntry{entryA})
@@ -152,7 +156,7 @@ func TestSettingsCache_UpdateSettingsForType_WithDifferentValueTriggersNotificat
 
 	typeB := stsSettingsModel.SettingType("A")
 	entryB := NewSettingEntry(stsSettingsModel.Setting{Type: string(typeB)})
-	registerConverter(typeB, func(s stsSettingsModel.Setting) (any, error) { return "B", nil })
+	registerConverter(typeB, func(_ stsSettingsModel.Setting) (any, error) { return "B", nil })
 
 	// update using a different value
 	cache.UpdateSettingsForType(typeB, []SettingEntry{entryB})
@@ -170,7 +174,7 @@ func TestSettingsCache_UpdateSettingsForType_ConverterErrorDoesNotTriggerNotific
 	// custom type with converter
 	errorType := stsSettingsModel.SettingType("Error")
 	errorEntry := NewSettingEntry(stsSettingsModel.Setting{Type: string(errorType)})
-	registerConverter(errorType, func(s stsSettingsModel.Setting) (any, error) { return nil, fmt.Errorf("conversion failed") })
+	registerConverter(errorType, func(_ stsSettingsModel.Setting) (any, error) { return nil, fmt.Errorf("conversion failed") })
 
 	cache.UpdateSettingsForType(errorType, []SettingEntry{errorEntry})
 
@@ -186,7 +190,7 @@ func TestSettingsCache_Update_AddNewTypesTriggersNotifications(t *testing.T) {
 	// custom type with converter
 	typeA := stsSettingsModel.SettingType("A")
 	entry := NewSettingEntry(stsSettingsModel.Setting{Type: string(typeA)})
-	registerConverter(typeA, func(s stsSettingsModel.Setting) (any, error) { return "A", nil })
+	registerConverter(typeA, func(_ stsSettingsModel.Setting) (any, error) { return "A", nil })
 
 	cache.Update(SettingsByType{
 		typeA: {entry},
@@ -203,7 +207,7 @@ func TestSettingsCache_Update_UpdateExistingTypeWithChangeTriggersNotification(t
 
 	typeA := stsSettingsModel.SettingType("A")
 	entry := NewSettingEntry(stsSettingsModel.Setting{Type: string(typeA)})
-	registerConverter(typeA, func(s stsSettingsModel.Setting) (any, error) { return "A", nil })
+	registerConverter(typeA, func(_ stsSettingsModel.Setting) (any, error) { return "A", nil })
 
 	cache.Update(SettingsByType{
 		typeA: {entry},
@@ -212,7 +216,7 @@ func TestSettingsCache_Update_UpdateExistingTypeWithChangeTriggersNotification(t
 	subscriptionService.notified = nil
 
 	// before sending the same type, we register a converter that will change the value of the concrete type
-	registerConverter(typeA, func(s stsSettingsModel.Setting) (any, error) { return "A-changed", nil })
+	registerConverter(typeA, func(_ stsSettingsModel.Setting) (any, error) { return "A-changed", nil })
 	cache.Update(SettingsByType{
 		typeA: {NewSettingEntry(stsSettingsModel.Setting{Type: string(typeA)})},
 	})
@@ -228,7 +232,7 @@ func TestSettingsCache_Update_DeletedTypeTriggersNotification(t *testing.T) {
 
 	typeA := stsSettingsModel.SettingType("A")
 	entry := NewSettingEntry(stsSettingsModel.Setting{Type: string(typeA)})
-	registerConverter(typeA, func(s stsSettingsModel.Setting) (any, error) { return "A", nil })
+	registerConverter(typeA, func(_ stsSettingsModel.Setting) (any, error) { return "A", nil })
 
 	cache.Update(SettingsByType{
 		typeA: {entry},
@@ -253,9 +257,9 @@ func TestSettingsCache_Update_MixedAddUpdateDeleteTriggersAllNotifications(t *te
 	typeB := stsSettingsModel.SettingType("B")
 	typeC := stsSettingsModel.SettingType("C")
 
-	registerConverter(typeA, func(s stsSettingsModel.Setting) (any, error) { return "A", nil })
-	registerConverter(typeB, func(s stsSettingsModel.Setting) (any, error) { return "B", nil })
-	registerConverter(typeC, func(s stsSettingsModel.Setting) (any, error) { return "C", nil })
+	registerConverter(typeA, func(_ stsSettingsModel.Setting) (any, error) { return "A", nil })
+	registerConverter(typeB, func(_ stsSettingsModel.Setting) (any, error) { return "B", nil })
+	registerConverter(typeC, func(_ stsSettingsModel.Setting) (any, error) { return "C", nil })
 
 	// Seed cache with typeB and typeC
 	cache.Update(SettingsByType{
@@ -266,7 +270,7 @@ func TestSettingsCache_Update_MixedAddUpdateDeleteTriggersAllNotifications(t *te
 	subscriptionService.notified = nil
 
 	// Now provide a new snapshot: add typeA, update typeB, delete typeC
-	registerConverter(typeB, func(s stsSettingsModel.Setting) (any, error) { return "B-changed", nil })
+	registerConverter(typeB, func(_ stsSettingsModel.Setting) (any, error) { return "B-changed", nil })
 	cache.Update(SettingsByType{
 		typeA: {NewSettingEntry(stsSettingsModel.Setting{Type: string(typeA)})},
 		typeB: {NewSettingEntry(stsSettingsModel.Setting{Type: string(typeB)})},

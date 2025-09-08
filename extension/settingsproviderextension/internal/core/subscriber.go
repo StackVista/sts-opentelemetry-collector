@@ -40,7 +40,9 @@ func NewSubscriberHub(logger *zap.Logger) *SubscriberHub {
 	}
 }
 
-func (h *SubscriberHub) Register(types ...stsSettingsModel.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
+func (h *SubscriberHub) Register(
+	types ...stsSettingsModel.SettingType,
+) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
 	h.subscriptionsLock.Lock()
 	defer h.subscriptionsLock.Unlock()
 

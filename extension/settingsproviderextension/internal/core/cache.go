@@ -34,6 +34,7 @@ func (s *SettingsByType) getTypes() []stsSettingsModel.SettingType {
 	return types
 }
 
+//nolint:unparam
 func (s *SettingsByType) getConcreteSettings(settingType stsSettingsModel.SettingType) ([]any, error) {
 	entries := (*s)[settingType] // returns nil if missing
 	concreteSettings := make([]any, len(entries))
@@ -70,7 +71,9 @@ func NewDefaultSettingsCache(logger *zap.Logger) *DefaultSettingsCache {
 	}
 }
 
-func (s *DefaultSettingsCache) RegisterForUpdates(types ...stsSettingsModel.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
+func (s *DefaultSettingsCache) RegisterForUpdates(
+	types ...stsSettingsModel.SettingType,
+) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
 	return s.subscriptionService.Register(types...)
 }
 
@@ -121,7 +124,10 @@ func (s *DefaultSettingsCache) Update(settingsByType SettingsByType) {
 	s.subscriptionService.Notify(deletedTypes...)
 }
 
-func (s *DefaultSettingsCache) UpdateSettingsForType(settingType stsSettingsModel.SettingType, newEntries []SettingEntry) {
+func (s *DefaultSettingsCache) UpdateSettingsForType(
+	settingType stsSettingsModel.SettingType,
+	newEntries []SettingEntry,
+) {
 	var validEntries []SettingEntry
 
 	// Convert all new entries to concrete type first
@@ -129,7 +135,11 @@ func (s *DefaultSettingsCache) UpdateSettingsForType(settingType stsSettingsMode
 		for _, entry := range newEntries {
 			_, err := s.toConcreteTypeIfNeeded(&entry, converter)
 			if err != nil {
-				s.logger.Warn("skipping setting entry due to conversion failure", zap.Error(err), zap.String("type", string(settingType)))
+				s.logger.Warn(
+					"skipping setting entry due to conversion failure",
+					zap.Error(err),
+					zap.String("type", string(settingType)),
+				)
 				continue
 			}
 			validEntries = append(validEntries, entry)

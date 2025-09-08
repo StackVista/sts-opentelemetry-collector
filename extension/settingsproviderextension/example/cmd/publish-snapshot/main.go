@@ -19,19 +19,20 @@ const (
 
 func main() {
 	if len(os.Args) < 2 {
+		//nolint:forbidigo
 		fmt.Printf("Usage: %s <broker>\n", os.Args[0])
 		os.Exit(1)
 	}
 
 	broker := os.Args[1]
 
-	snapshotId := uuid.New().String()
-	mappingId := uuid.New().String()
+	snapshotID := uuid.New().String()
+	mappingID := uuid.New().String()
 
 	producer := createProducerClient([]string{broker})
 	defer producer.Close()
 
-	messages := newOtelComponentMappingSnapshot(snapshotId, mappingId, "host")
+	messages := newOtelComponentMappingSnapshot(snapshotID, mappingID, "host")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -82,14 +83,14 @@ func produceMessages(ctx context.Context, client *kgo.Client, topic string, mess
 	log.Printf("Successfully produced %d/%d messages", successCount, len(messages))
 }
 
-func newOtelComponentMappingSnapshot(snapshotId, mappingId, mappingName string) []*kgo.Record {
+func newOtelComponentMappingSnapshot(snapshotID, mappingID, mappingName string) []*kgo.Record {
 	// Snapshot Start
 	snapshotStartMessageKey, snapshotStartPayload := newSnapshotStartMessageKeyAndPayload(
-		stsSettingsModel.SettingTypeOtelComponentMapping, snapshotId)
+		stsSettingsModel.SettingTypeOtelComponentMapping, snapshotID)
 
 	// Envelope
 	otelComponentMapping := stsSettingsModel.OtelComponentMapping{
-		Id:               mappingId,
+		Id:               mappingID,
 		Name:             mappingName,
 		CreatedTimeStamp: time.Now().Unix(),
 		Type:             stsSettingsModel.OtelComponentMappingTypeOtelComponentMapping,
@@ -100,11 +101,11 @@ func newOtelComponentMappingSnapshot(snapshotId, mappingId, mappingName string) 
 		log.Fatalf("failed to convert mapping to setting: %v", err)
 	}
 	settingsEnvelopeMessageKey, settingsEnvelopePayload := newSettingsEnvelopeMessageKeyAndPayload(
-		stsSettingsModel.SettingTypeOtelComponentMapping, setting, otelComponentMapping.Id, snapshotId)
+		stsSettingsModel.SettingTypeOtelComponentMapping, setting, otelComponentMapping.Id, snapshotID)
 
 	// Snapshot Stop
 	snapshotStopMessageKey, snapshotStopPayload := newSnapshotStopMessageKeyAndPayload(
-		stsSettingsModel.SettingTypeOtelComponentMapping, snapshotId)
+		stsSettingsModel.SettingTypeOtelComponentMapping, snapshotID)
 
 	return []*kgo.Record{
 		{Key: []byte(snapshotStartMessageKey), Value: snapshotStartPayload},
@@ -117,9 +118,12 @@ func newSnapshotStartMessageKey(settingType stsSettingsModel.SettingType) string
 	return fmt.Sprintf("%s:%s", settingType, stsSettingsModel.SettingsSnapshotStartTypeSettingsSnapshotStart)
 }
 
-func newSnapshotStartMessageKeyAndPayload(settingType stsSettingsModel.SettingType, snapshotId string) (string, []byte) {
+func newSnapshotStartMessageKeyAndPayload(
+	settingType stsSettingsModel.SettingType,
+	snapshotID string,
+) (string, []byte) {
 	settingsSnapshotStart := stsSettingsModel.SettingsSnapshotStart{
-		Id:          snapshotId,
+		Id:          snapshotID,
 		SettingType: settingType,
 	}
 
@@ -141,9 +145,9 @@ func newSnapshotStopMessageKey(settingType stsSettingsModel.SettingType) string 
 	return fmt.Sprintf("%s:%s", settingType, stsSettingsModel.SettingsSnapshotStopTypeSettingsSnapshotStop)
 }
 
-func newSnapshotStopMessageKeyAndPayload(settingType stsSettingsModel.SettingType, snapshotId string) (string, []byte) {
+func newSnapshotStopMessageKeyAndPayload(settingType stsSettingsModel.SettingType, snapshotID string) (string, []byte) {
 	settingsSnapshotStop := stsSettingsModel.SettingsSnapshotStop{
-		Id: snapshotId,
+		Id: snapshotID,
 	}
 
 	settingsProtocol := stsSettingsModel.SettingsProtocol{}
@@ -160,13 +164,21 @@ func newSnapshotStopMessageKeyAndPayload(settingType stsSettingsModel.SettingTyp
 	return newSnapshotStopMessageKey(settingType), snapshotStopPayload
 }
 
-func newSettingsEnvelopeMessageKey(settingType stsSettingsModel.SettingType, settingId stsSettingsModel.SettingId) string {
-	return fmt.Sprintf("%s:setting:%s", settingType, settingId)
+func newSettingsEnvelopeMessageKey(
+	settingType stsSettingsModel.SettingType,
+	settingID stsSettingsModel.SettingId,
+) string {
+	return fmt.Sprintf("%s:setting:%s", settingType, settingID)
 }
 
-func newSettingsEnvelopeMessageKeyAndPayload(settingType stsSettingsModel.SettingType, setting stsSettingsModel.Setting, settingId stsSettingsModel.SettingId, snapshotId string) (string, []byte) {
+func newSettingsEnvelopeMessageKeyAndPayload(
+	settingType stsSettingsModel.SettingType,
+	setting stsSettingsModel.Setting,
+	settingID stsSettingsModel.SettingId,
+	snapshotID string,
+) (string, []byte) {
 	settingsEnvelope := stsSettingsModel.SettingsEnvelope{
-		Id:      snapshotId,
+		Id:      snapshotID,
 		Setting: setting,
 	}
 
@@ -181,5 +193,5 @@ func newSettingsEnvelopeMessageKeyAndPayload(settingType stsSettingsModel.Settin
 		log.Fatalf("failed to marshal protocol: %v", err)
 	}
 
-	return newSettingsEnvelopeMessageKey(settingType, settingId), settingsEnvelopePayload
+	return newSettingsEnvelopeMessageKey(settingType, settingID), settingsEnvelopePayload
 }

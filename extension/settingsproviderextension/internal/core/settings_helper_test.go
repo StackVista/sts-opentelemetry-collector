@@ -1,3 +1,4 @@
+//nolint:testpackage
 package core
 
 import (
@@ -10,38 +11,38 @@ func TestSettingsHelper_GetSettingId(t *testing.T) {
 	tests := []struct {
 		name          string
 		setting       stsSettingsModel.Setting
-		expectedId    stsSettingsModel.SettingId
+		expectedID    stsSettingsModel.SettingId
 		expectedError string
 	}{
 		{
 			name:          "component mapping",
 			setting:       newOtelComponentMappingAsSetting("11111"),
-			expectedId:    "11111",
+			expectedID:    "11111",
 			expectedError: "",
 		},
 		{
 			name:          "relation mapping",
 			setting:       newOtelRelationMappingAsSetting("22222"),
-			expectedId:    "22222",
+			expectedID:    "22222",
 			expectedError: "",
 		},
 		{
 			name:          "invalid setting",
 			setting:       stsSettingsModel.Setting{},
-			expectedId:    "",
+			expectedID:    "",
 			expectedError: "unsupported setting type",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			id, err := GetSettingId(tt.setting)
+			id, err := GetSettingID(tt.setting)
 			if tt.expectedError != "" {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedError)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedId, id)
+				assert.Equal(t, tt.expectedID, id)
 			}
 		})
 	}
@@ -115,7 +116,7 @@ func newOtelComponentMapping(id string) stsSettingsModel.OtelComponentMapping {
 
 func newOtelComponentMappingAsSetting(id string) stsSettingsModel.Setting {
 	setting := stsSettingsModel.Setting{}
-	setting.FromOtelComponentMapping(newOtelComponentMapping(id))
+	_ = setting.FromOtelComponentMapping(newOtelComponentMapping(id))
 	return setting
 }
 
@@ -134,7 +135,7 @@ func newOtelRelationMappingAsSetting(id string) stsSettingsModel.Setting {
 	}
 
 	setting := stsSettingsModel.Setting{}
-	setting.FromOtelRelationMapping(otelRelationMapping)
+	_ = setting.FromOtelRelationMapping(otelRelationMapping)
 	return setting
 }
 
