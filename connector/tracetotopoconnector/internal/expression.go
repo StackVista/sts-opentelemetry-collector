@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"errors"
 	"fmt"
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector"
@@ -350,12 +349,7 @@ func (e *CelEvaluator) evalOrCached(expression string, expressionKind expression
 func (e *CelEvaluator) getOrCompile(original string, kind expressionKind) (cel.Program, error) {
 	// check cache by original expression
 	if prog, ok := e.cache.Get(original); ok {
-		ownedProgram, ok := prog.(cel.Program)
-		if !ok {
-			return nil, errors.New("unable to cast program to owned program")
-		}
-
-		return ownedProgram, nil
+		return prog, nil
 	}
 
 	// preprocess based on kind
