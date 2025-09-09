@@ -13,7 +13,7 @@ import (
 )
 
 type InProgressSnapshot struct {
-	snapshotId  string // Track the current snapshot Id (uuid) for this type
+	snapshotID  string // Track the current snapshot Id (uuid) for this type
 	settingType stsSettingsModel.SettingType
 	settings    []stsSettingsModel.Setting
 }
@@ -23,6 +23,7 @@ type SettingsSnapshotProcessor interface {
 }
 
 type DefaultSettingsSnapshotProcessor struct {
+	//nolint:containedctx
 	ctx               context.Context
 	logger            *zap.Logger
 	telemetrySettings component.TelemetrySettings
@@ -42,7 +43,12 @@ type DefaultSettingsSnapshotProcessor struct {
 	InProgressSnapshots map[stsSettingsModel.SettingType]*InProgressSnapshot
 }
 
-func NewDefaultSettingsSnapshotProcessor(context context.Context, logger *zap.Logger, telemetrySettings component.TelemetrySettings, cache stsSettingsCommon.SettingsCache) (*DefaultSettingsSnapshotProcessor, error) {
+func NewDefaultSettingsSnapshotProcessor(
+	context context.Context,
+	logger *zap.Logger,
+	telemetrySettings component.TelemetrySettings,
+	cache stsSettingsCommon.SettingsCache,
+) (*DefaultSettingsSnapshotProcessor, error) {
 	meter := telemetrySettings.MeterProvider.Meter("settings_snapshot_processor")
 
 	incompleteSnapshotsCounter, err := meter.Int64Counter(
@@ -92,7 +98,9 @@ func NewDefaultSettingsSnapshotProcessor(context context.Context, logger *zap.Lo
 	}, nil
 }
 
-func (d *DefaultSettingsSnapshotProcessor) ProcessSettingsProtocol(settingsProtocol *stsSettingsModel.SettingsProtocol) error {
+func (d *DefaultSettingsSnapshotProcessor) ProcessSettingsProtocol(
+	settingsProtocol *stsSettingsModel.SettingsProtocol,
+) error {
 	actualMessage, err := settingsProtocol.ValueByDiscriminator()
 	if err != nil {
 		return fmt.Errorf("error getting settingsProtocol by discriminator: %w", err)
@@ -118,7 +126,7 @@ func (d *DefaultSettingsSnapshotProcessor) handleSnapshotStart(msg stsSettingsMo
 	if existingSnapshot, exists := d.InProgressSnapshots[msg.SettingType]; exists {
 		d.logger.Warn("Replacing orphaned snapshot with new snapshot.",
 			zap.String("settingType", string(msg.SettingType)),
-			zap.String("oldSnapshotId", existingSnapshot.snapshotId),
+			zap.String("oldSnapshotId", existingSnapshot.snapshotID),
 			zap.String("newSnapshotId", msg.Id),
 			zap.Int("orphanedSettingsCount", len(existingSnapshot.settings)))
 
@@ -130,7 +138,7 @@ func (d *DefaultSettingsSnapshotProcessor) handleSnapshotStart(msg stsSettingsMo
 		zap.String("settingType", string(msg.SettingType)))
 
 	d.InProgressSnapshots[msg.SettingType] = &InProgressSnapshot{
-		snapshotId:  msg.Id,
+		snapshotID:  msg.Id,
 		settingType: msg.SettingType,
 		settings:    make([]stsSettingsModel.Setting, 0),
 	}
@@ -188,9 +196,9 @@ func (d *DefaultSettingsSnapshotProcessor) handleSnapshotStop(msg stsSettingsMod
 	return nil
 }
 
-func (d *DefaultSettingsSnapshotProcessor) findSnapshot(snapshotId string) *InProgressSnapshot {
+func (d *DefaultSettingsSnapshotProcessor) findSnapshot(snapshotID string) *InProgressSnapshot {
 	for _, snapshot := range d.InProgressSnapshots {
-		if snapshot.snapshotId == snapshotId {
+		if snapshot.snapshotID == snapshotID {
 			return snapshot
 		}
 	}
@@ -212,14 +220,20 @@ func (d *DefaultSettingsSnapshotProcessor) incCompleteSnapshotCount(settingType 
 		))
 }
 
-func (d *DefaultSettingsSnapshotProcessor) recordSettingsCount(settingType stsSettingsModel.SettingType, settingsCounts int64) {
+func (d *DefaultSettingsSnapshotProcessor) recordSettingsCount(
+	settingType stsSettingsModel.SettingType,
+	settingsCounts int64,
+) {
 	d.settingsCountHistogram.Record(d.ctx, settingsCounts,
 		metric.WithAttributes(
 			attribute.String("setting_type", string(settingType)),
 		))
 }
 
-func (d *DefaultSettingsSnapshotProcessor) recordSettingsSize(settingType stsSettingsModel.SettingType, settings []stsSettingsModel.Setting) {
+func (d *DefaultSettingsSnapshotProcessor) recordSettingsSize(
+	settingType stsSettingsModel.SettingType,
+	settings []stsSettingsModel.Setting,
+) {
 	var settingsSize int64
 	for _, s := range settings {
 		settingsSize += stsSettingsModel.SizeOfRawSetting(s)

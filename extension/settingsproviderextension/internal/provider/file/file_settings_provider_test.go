@@ -1,3 +1,4 @@
+//nolint:testpackage
 package file
 
 import (
@@ -162,9 +163,9 @@ func TestFileSettingsProvider_ParseSettings(t *testing.T) {
 
 				if tc.expectedMappingCount > 0 {
 					require.Len(t, otelMappings, 1)
-					settingId, err := stsSettingsCommon.GetSettingId(otelMappings[0].Raw)
+					settingID, err := stsSettingsCommon.GetSettingID(otelMappings[0].Raw)
 					require.NoError(t, err)
-					assert.Equal(t, tc.expectedID, settingId)
+					assert.Equal(t, tc.expectedID, settingID)
 				}
 			}
 		})

@@ -1,17 +1,19 @@
-package core
+package core_test
 
 import (
-	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
-	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap/zaptest"
 	"testing"
 	"time"
+
+	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
+	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/core"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 )
 
-func newSubscriberHub(t *testing.T) *SubscriberHub {
+func newSubscriberHub(t *testing.T) *core.SubscriberHub {
 	t.Helper()
-	return NewSubscriberHub(zaptest.NewLogger(t))
+	return core.NewSubscriberHub(zaptest.NewLogger(t))
 }
 
 func TestSubscriberHub_RegisterAddsSubscriber(t *testing.T) {

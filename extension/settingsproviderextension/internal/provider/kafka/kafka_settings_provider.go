@@ -3,6 +3,10 @@ package kafka
 import (
 	"encoding/json"
 	"fmt"
+	"math"
+	"sync"
+	"time"
+
 	"github.com/google/uuid"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
@@ -11,11 +15,10 @@ import (
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
-	"sync"
-	"time"
 
 	"context"
 	"errors"
+
 	"go.opentelemetry.io/collector/component"
 )
 
@@ -30,8 +33,6 @@ type SettingsProvider struct {
 	settingsCache             stsSettingsCore.SettingsCache
 	settingsSnapshotProcessor SettingsSnapshotProcessor
 
-	// Mutex for concurrent access to inProgressSnapshots
-	snapshotsLock sync.RWMutex
 	// A map to store snapshots that are currently in the process of being received.
 	// The key is the snapshot UUID (from the SnapshotStart/SettingsEnvelope/SnapshotStop's 'Id' field).
 	inProgressSnapshots map[string]*InProgressSnapshot
@@ -40,8 +41,18 @@ type SettingsProvider struct {
 	ReaderCancelWg   sync.WaitGroup
 }
 
-func NewKafkaSettingsProvider(ctx context.Context, cfg *stsSettingsConfig.KafkaSettingsProviderConfig, telemetrySettings component.TelemetrySettings, logger *zap.Logger) (*SettingsProvider, error) {
+func NewKafkaSettingsProvider(
+	ctx context.Context,
+	cfg *stsSettingsConfig.KafkaSettingsProviderConfig,
+	telemetrySettings component.TelemetrySettings,
+	logger *zap.Logger,
+) (*SettingsProvider, error) {
 	consumerGroupID := fmt.Sprintf("sts-otel-collector-internal-settings-%s", uuid.New().String())
+
+	var bufferSize int32
+	if cfg.BufferSize > math.MinInt32 && cfg.BufferSize < math.MaxInt32 {
+		bufferSize = int32(cfg.BufferSize)
+	}
 
 	// Create Franz-go client options
 	opts := []kgo.Opt{
@@ -59,7 +70,7 @@ func NewKafkaSettingsProvider(ctx context.Context, cfg *stsSettingsConfig.KafkaS
 		kgo.AutoCommitMarks(),
 
 		// Fetch configuration
-		kgo.FetchMaxBytes(int32(cfg.BufferSize)),
+		kgo.FetchMaxBytes(bufferSize),
 	}
 
 	// Create the client
@@ -87,7 +98,9 @@ func NewKafkaSettingsProvider(ctx context.Context, cfg *stsSettingsConfig.KafkaS
 	}, nil
 }
 
-func (k *SettingsProvider) RegisterForUpdates(types ...stsSettingsModel.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
+func (k *SettingsProvider) RegisterForUpdates(
+	types ...stsSettingsModel.SettingType,
+) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
 	return k.settingsCache.RegisterForUpdates(types...)
 }
 
@@ -96,11 +109,13 @@ func (k *SettingsProvider) Unregister(ch <-chan stsSettingsEvents.UpdateSettings
 }
 
 // UnsafeGetCurrentSettingsByType implements the internal interface (InternalRawSettingsProvider in api.go)
-func (k *SettingsProvider) UnsafeGetCurrentSettingsByType(settingType stsSettingsModel.SettingType) ([]any, error) {
+func (k *SettingsProvider) UnsafeGetCurrentSettingsByType(
+	settingType stsSettingsModel.SettingType,
+) ([]any, error) {
 	return k.settingsCache.GetConcreteSettingsByType(settingType)
 }
 
-func (k *SettingsProvider) Start(ctx context.Context, host component.Host) error {
+func (k *SettingsProvider) Start(ctx context.Context, _ component.Host) error {
 	k.logger.Info("Starting Kafka settings provider",
 		zap.Strings("brokers", k.cfg.Brokers),
 		zap.String("topic", k.cfg.Topic))
@@ -125,7 +140,7 @@ func (k *SettingsProvider) Start(ctx context.Context, host component.Host) error
 	return nil // started successfully
 }
 
-func (k *SettingsProvider) Shutdown(ctx context.Context) error {
+func (k *SettingsProvider) Shutdown(_ context.Context) error {
 	k.logger.Info("Shutting down Kafka settings provider")
 	if k.readerCancelFunc != nil {
 		k.readerCancelFunc()

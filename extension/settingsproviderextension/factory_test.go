@@ -1,26 +1,28 @@
-package settingsproviderextension
+package settingsproviderextension_test
 
 import (
 	"context"
+	"testing"
+	"time"
+
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/extension"
-	"testing"
-	"time"
 )
 
 func TestFactory_CreateDefaultConfig(t *testing.T) {
-	cfg := createDefaultConfig()
+	cfg := settingsproviderextension.CreateDefaultConfig()
 	assert.NoError(t, componenttest.CheckConfigStruct(cfg))
 	assert.NotNil(t, cfg)
 }
 
 func TestFactory_NewFactory(t *testing.T) {
-	f := NewFactory()
+	f := settingsproviderextension.NewFactory()
 	assert.NotNil(t, f)
-	assert.Equal(t, f.Type(), Type)
+	assert.Equal(t, f.Type(), settingsproviderextension.Type)
 }
 
 func TestFactory_CreateExtension(t *testing.T) {
@@ -75,7 +77,7 @@ func TestFactory_CreateExtension(t *testing.T) {
 				TelemetrySettings: componenttest.NewNopTelemetrySettings(),
 			}
 			ctx := context.Background()
-			ext, err := createExtension(ctx, set, tt.cfg)
+			ext, err := settingsproviderextension.CreateExtension(ctx, set, tt.cfg)
 
 			if tt.expectError {
 				require.Error(t, err)

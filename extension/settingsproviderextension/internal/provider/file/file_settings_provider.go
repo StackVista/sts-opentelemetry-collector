@@ -38,7 +38,10 @@ type SettingsProvider struct {
 	providerCancelWg   sync.WaitGroup
 }
 
-func NewFileSettingsProvider(cfg *stsSettingsConfig.FileSettingsProviderConfig, logger *zap.Logger) (*SettingsProvider, error) {
+func NewFileSettingsProvider(
+	cfg *stsSettingsConfig.FileSettingsProviderConfig,
+	logger *zap.Logger,
+) (*SettingsProvider, error) {
 	provider := &SettingsProvider{
 		cfg:           cfg,
 		logger:        logger,
@@ -54,7 +57,7 @@ func NewFileSettingsProvider(cfg *stsSettingsConfig.FileSettingsProviderConfig, 
 }
 
 // Start initiates the file watching goroutine.
-func (f *SettingsProvider) Start(ctx context.Context, host component.Host) error {
+func (f *SettingsProvider) Start(ctx context.Context, _ component.Host) error {
 	f.logger.Info("Starting file-based settings provider.", zap.String("path", f.cfg.Path))
 
 	ctx, f.providerCancelFunc = context.WithCancel(ctx)
@@ -109,7 +112,9 @@ func (f *SettingsProvider) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (f *SettingsProvider) RegisterForUpdates(types ...stsSettingsModel.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
+func (f *SettingsProvider) RegisterForUpdates(
+	types ...stsSettingsModel.SettingType,
+) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
 	return f.settingsCache.RegisterForUpdates(types...)
 }
 

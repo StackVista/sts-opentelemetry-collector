@@ -9,6 +9,8 @@ type ConverterFunc func(stsSettingsModel.Setting) (any, error)
 
 // converters is a private converter map of setting type to concrete setting type converter.
 // Add settings that need to be supported by a settings provider to this map.
+//
+//nolint:gochecknoglobals
 var converters = map[stsSettingsModel.SettingType]func(stsSettingsModel.Setting) (any, error){
 	stsSettingsModel.SettingTypeOtelComponentMapping: func(s stsSettingsModel.Setting) (any, error) {
 		return s.AsOtelComponentMapping()
@@ -53,7 +55,7 @@ func GetSettingType(setting stsSettingsModel.Setting) (stsSettingsModel.SettingT
 }
 
 // GetSettingId returns the Id of a generic setting
-func GetSettingId(setting stsSettingsModel.Setting) (stsSettingsModel.SettingId, error) {
+func GetSettingID(setting stsSettingsModel.Setting) (stsSettingsModel.SettingId, error) {
 	if v, err := processSetting[stsSettingsModel.OtelComponentMapping](setting); err == nil {
 		return v.Id, nil
 	}

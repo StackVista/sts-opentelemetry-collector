@@ -1,3 +1,4 @@
+//nolint:testpackage
 package kafka
 
 import (
@@ -21,18 +22,19 @@ type mockSettingsCache struct {
 func (m *mockSettingsCache) UpdateSettingsForType(t stsSettingsModel.SettingType, entries []stsSettingsCore.SettingEntry) {
 	m.Called(t, entries)
 }
-func (m *mockSettingsCache) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
+func (m *mockSettingsCache) Unregister(_ <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
 	return false
 }
 func (m *mockSettingsCache) GetAvailableSettingTypes() []stsSettingsModel.SettingType { return nil }
-func (m *mockSettingsCache) GetConcreteSettingsByType(settingType stsSettingsModel.SettingType) ([]any, error) {
+func (m *mockSettingsCache) GetConcreteSettingsByType(_ stsSettingsModel.SettingType) ([]any, error) {
 	return nil, nil
 }
-func (m *mockSettingsCache) RegisterForUpdates(types ...stsSettingsModel.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
+func (m *mockSettingsCache) RegisterForUpdates(_ ...stsSettingsModel.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
+	//nolint:nilnil
 	return nil, nil
 }
-func (m *mockSettingsCache) Update(settingsByType stsSettingsCore.SettingsByType) {}
-func (m *mockSettingsCache) Shutdown()                                            {}
+func (m *mockSettingsCache) Update(_ stsSettingsCore.SettingsByType) {}
+func (m *mockSettingsCache) Shutdown()                               {}
 
 func newProcessorWithMockCache(t *testing.T) (*DefaultSettingsSnapshotProcessor, *mockSettingsCache) {
 	cache := &mockSettingsCache{}
@@ -51,13 +53,13 @@ func TestHandleSnapshotStart_AddsNewSnapshot(t *testing.T) {
 		Type:        "SettingsSnapshotStart", // explicitly set the discriminator
 	}
 	settingsProtocol := stsSettingsModel.SettingsProtocol{}
-	err := settingsProtocol.FromSettingsSnapshotStart(start)
-	err = p.ProcessSettingsProtocol(&settingsProtocol)
+	_ = settingsProtocol.FromSettingsSnapshotStart(start)
+	err := p.ProcessSettingsProtocol(&settingsProtocol)
 	assert.NoError(t, err)
 
 	snap, ok := p.InProgressSnapshots["testType"]
 	assert.True(t, ok)
-	assert.Equal(t, "snap-1", snap.snapshotId)
+	assert.Equal(t, "snap-1", snap.snapshotID)
 	assert.Empty(t, snap.settings)
 }
 
@@ -66,7 +68,7 @@ func TestHandleSnapshotStart_ReplacesExistingSnapshot(t *testing.T) {
 
 	// Insert an existing snapshot manually
 	p.InProgressSnapshots["testType"] = &InProgressSnapshot{
-		snapshotId: "old-id",
+		snapshotID: "old-id",
 	}
 
 	start := stsSettingsModel.SettingsSnapshotStart{
@@ -82,7 +84,7 @@ func TestHandleSnapshotStart_ReplacesExistingSnapshot(t *testing.T) {
 	assert.NoError(t, err)
 
 	snap := p.InProgressSnapshots["testType"]
-	assert.Equal(t, "new-id", snap.snapshotId)
+	assert.Equal(t, "new-id", snap.snapshotID)
 }
 
 func TestHandleSettingsEnvelope_AppendsSetting(t *testing.T) {
@@ -90,7 +92,7 @@ func TestHandleSettingsEnvelope_AppendsSetting(t *testing.T) {
 
 	// Seed snapshot
 	p.InProgressSnapshots["foo"] = &InProgressSnapshot{
-		snapshotId: "snap-1",
+		snapshotID: "snap-1",
 		settings:   []stsSettingsModel.Setting{},
 	}
 
@@ -136,7 +138,7 @@ func TestHandleSnapshotStop_UpdatesCache(t *testing.T) {
 
 	// Seed snapshot
 	p.InProgressSnapshots["foo"] = &InProgressSnapshot{
-		snapshotId:  "snap-1",
+		snapshotID:  "snap-1",
 		settingType: "foo",
 		settings: []stsSettingsModel.Setting{
 			{Type: "foo"},
