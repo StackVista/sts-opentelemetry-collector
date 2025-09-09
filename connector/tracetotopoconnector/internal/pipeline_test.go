@@ -2,7 +2,6 @@
 package internal
 
 import (
-	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector"
 	"sort"
 	"testing"
 	"time"
@@ -337,7 +336,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			eval, _ := NewCELEvaluator(tracetotopoconnector.ExpressionCacheSettings{Size: 100, TTL: 30 * time.Second})
+			eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
 			result := ConvertSpanToTopologyStreamMessage(eval, traces, tt.componentMappings, tt.relationMappings, now)
 			unify(&result)
 			//nolint:gosec
@@ -355,7 +354,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			createSimpleRelationMapping("rm1"),
 			createSimpleRelationMapping("rm2"),
 		}
-		eval, _ := NewCELEvaluator(tracetotopoconnector.ExpressionCacheSettings{Size: 100, TTL: 30 * time.Second})
+		eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
 		result := ConvertSpanToTopologyStreamMessage(eval, traces, componentMappings, relationMappings, now)
 		actualKeys := make([]topo_stream_v1.TopologyStreamMessageKey, 0)
 		for _, message := range result {
@@ -421,7 +420,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 		relationMappings := []settings.OtelRelationMapping{
 			createSimpleRelationMapping("rm1"),
 		}
-		eval, _ := NewCELEvaluator(tracetotopoconnector.ExpressionCacheSettings{Size: 100, TTL: 30 * time.Second})
+		eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
 		result := ConvertSpanToTopologyStreamMessage(eval, traceWithSpans, componentMappings, relationMappings, now)
 		actualKeys := make([]topo_stream_v1.TopologyStreamMessageKey, 0)
 		for _, message := range result {
