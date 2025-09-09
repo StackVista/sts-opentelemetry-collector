@@ -26,7 +26,8 @@ import (
 //
 // CEL itself cannot distinguish between a bare string literal and an identifier,
 // so we must classify expressions before evaluation. This allows us to:
-//   - Avoid sending plain literals to CEL (which would error as unknown identifiers). Example error: CEL compilation error: ERROR: <input>:1:1: undeclared reference to 'staticstring' (in container ”)
+//   - Avoid sending plain literals to CEL (which would error as unknown identifiers).
+//     Example error: CEL compilation error: ERROR: <input>:1:1: undeclared reference to 'staticstring' (in container ”)
 //   - Correctly unwrap full CEL expressions before eval
 //   - Rewrite interpolated strings into valid CEL concat expressions ("urn:.." + vars.attribute)
 //
@@ -39,6 +40,7 @@ const (
 	kindStringWithIdentifiers
 	kindStringInterpolation
 	kindBoolean
+	interp = "interp"
 )
 
 var (
@@ -211,10 +213,10 @@ func validateInterpolation(origExpr string) error {
 		// Detect start of interpolation
 		if i+1 < len(expr) && expr[i] == '$' && expr[i+1] == '{' {
 			// If the top frame is an interpolation, this is nested, which is invalid.
-			if len(stack) > 0 && stack[len(stack)-1].kind == "interp" {
+			if len(stack) > 0 && stack[len(stack)-1].kind == interp {
 				return fmt.Errorf("nested interpolation not allowed at pos %d", i)
 			}
-			stack = append(stack, frame{kind: "interp", start: i})
+			stack = append(stack, frame{kind: interp, start: i})
 			i += 2
 			continue
 		}
@@ -247,7 +249,7 @@ func validateInterpolation(origExpr string) error {
 			}
 
 			// Within an interpolation, track inner { } pairs as depth
-			if top.kind == "interp" {
+			if top.kind == interp {
 				if char == '{' {
 					top.innerDepth++
 					i++
@@ -312,7 +314,7 @@ func validateInterpolation(origExpr string) error {
 	// If anything remains on the stack it’s an unclosed frame
 	if len(stack) > 0 {
 		top := stack[len(stack)-1]
-		if top.kind == "interp" {
+		if top.kind == interp {
 			return fmt.Errorf("unterminated interpolation starting at pos %d", top.start)
 		}
 		return fmt.Errorf("unmatched '{' at pos %d", top.start)
@@ -323,7 +325,11 @@ func validateInterpolation(origExpr string) error {
 
 // evalOrCached compiles (or reuses a cached) CEL program for the given expression
 // and evaluates it against the current runtime variables (span, scope, resource, vars).
-func (e *CelEvaluator) evalOrCached(expression string, expressionKind expressionKind, ctx *ExpressionEvalContext) (interface{}, error) {
+func (e *CelEvaluator) evalOrCached(
+	expression string,
+	expressionKind expressionKind,
+	ctx *ExpressionEvalContext,
+) (interface{}, error) {
 	prog, err := e.getOrCompile(expression, expressionKind)
 	if err != nil {
 		return "", err
@@ -379,6 +385,12 @@ func preprocessExpression(expr string, kind expressionKind) (string, error) {
 	case kindStringInterpolation:
 		// rewrite interpolation into valid CEL string concatenation
 		return rewriteInterpolations(expr)
+	case kindInvalid:
+		return expr, nil
+	case kindStringLiteral:
+		return expr, nil
+	case kindBoolean:
+		return expr, nil
 	default:
 		// like boolean expressions
 		return expr, nil
@@ -416,6 +428,7 @@ func rewriteInterpolations(expr string) (string, error) {
 		expr = expr[1 : len(expr)-1]
 	}
 
+	//nolint:prealloc
 	var parts []string
 	lastIndex := 0
 
