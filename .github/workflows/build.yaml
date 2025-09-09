@@ -33,7 +33,7 @@ jobs:
       - name: Install protoc # TODO create a docker image with protoc installed
         run: |
           sudo apt-get install -y protobuf-compiler
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.8
       - name: Generate go model
         env:
           GITLAB_READ_TOKEN: ${{ secrets.GITLAB_READ_TOKEN }}
