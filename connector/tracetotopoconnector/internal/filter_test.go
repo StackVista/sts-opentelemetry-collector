@@ -29,6 +29,11 @@ func (f *mockFilterExpressionEvaluator) EvalBooleanExpression(expr settings.Otel
 	return false, nil
 }
 
+func (f *mockFilterExpressionEvaluator) EvalMapExpression(_ settings.OtelStringExpression, _ *ExpressionEvalContext) (map[string]any, error) {
+	//nolint:nilnil
+	return nil, nil
+}
+
 func createConditionMapping(expr string) settings.OtelConditionMapping {
 	return conditionMapping(expr, settings.CREATE)
 }

@@ -85,18 +85,31 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							AdditionalIdentifiers: &[]settings.OtelStringExpression{
 								{Expression: `${resourceAttributes["k8s.pod.name"]}`},
 							},
-							Tags: &map[string]settings.OtelStringExpression{
-								"host": {"${resourceAttributes['host.name']}"},
+							Tags: &[]settings.OtelTagMapping{
+								{
+									Source: strExpr(`${resourceAttributes["host.name"]}`),
+									Target: "host",
+								},
 							},
 						},
 						Optional: &settings.OtelComponentMappingFieldMapping{
 							AdditionalIdentifiers: &[]settings.OtelStringExpression{
 								{Expression: `${resourceAttributes["service.instance.id"]}`},
 							},
-							Tags: &map[string]settings.OtelStringExpression{
-								"instrumentation-lib":      {`${scopeAttributes["otel.scope.name"]}`},
-								"instrumentation-version":  {`${scopeAttributes["otel.scope.version"]}`},
-								"instrumentation-provider": {`${scopeAttributes["otel.scope.provider"]}`}, // this attribute doesn't exist expr the span but it is Optional tag so it ignored by mapping
+							Tags: &[]settings.OtelTagMapping{
+								{
+									Source: strExpr(`${scopeAttributes["otel.scope.name"]}`),
+									Target: "instrumentation-lib",
+								},
+								{
+									Source: strExpr(`${scopeAttributes["otel.scope.version"]}`),
+									Target: "instrumentation-version",
+								},
+								{
+									// this attribute doesn't exist expr the span but it is Optional tag so it ignored by mapping
+									Source: strExpr(`${scopeAttributes["otel.scope.provider"]}`),
+									Target: "instrumentation-provider",
+								},
 							},
 						},
 					},
@@ -204,18 +217,30 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							AdditionalIdentifiers: &[]settings.OtelStringExpression{
 								{Expression: `${resourceAttributes["k8s.pod.name"]}`},
 							},
-							Tags: &map[string]settings.OtelStringExpression{
-								"host": {`${resourceAttributes["host.name"]}`},
+							Tags: &[]settings.OtelTagMapping{
+								{
+									Source: strExpr(`${resourceAttributes["host.name"]}`),
+									Target: "host",
+								},
 							},
 						},
 						Optional: &settings.OtelComponentMappingFieldMapping{
 							AdditionalIdentifiers: &[]settings.OtelStringExpression{
 								{Expression: `${resourceAttributes["service.instance.id"]}`},
 							},
-							Tags: &map[string]settings.OtelStringExpression{
-								"instrumentation-lib":      {`${scopeAttributes["otel.scope.name"]}`},
-								"instrumentation-version":  {`${scopeAttributes["otel.scope.version"]}`},
-								"instrumentation-provider": {`${scopeAttributes["otel.scope.provider"]}`},
+							Tags: &[]settings.OtelTagMapping{
+								{
+									Source: strExpr(`${scopeAttributes["otel.scope.name"]}`),
+									Target: "instrumentation-lib",
+								},
+								{
+									Source: strExpr(`${scopeAttributes["otel.scope.version"]}`),
+									Target: "instrumentation-version",
+								},
+								{
+									Source: strExpr(`${scopeAttributes["otel.scope.provider"]}`),
+									Target: "instrumentation-provider",
+								},
 							},
 						},
 					},
@@ -260,18 +285,31 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							AdditionalIdentifiers: &[]settings.OtelStringExpression{
 								{Expression: `${resourceAttributes["k8s.pod.name"]}`},
 							},
-							Tags: &map[string]settings.OtelStringExpression{
-								"host": {`${resourceAttributes["host.name"]}`},
+							Tags: &[]settings.OtelTagMapping{
+								{
+									Source: strExpr(`${resourceAttributes["host.name"]}`),
+									Target: "host",
+								},
 							},
 						},
 						Optional: &settings.OtelComponentMappingFieldMapping{
 							AdditionalIdentifiers: &[]settings.OtelStringExpression{
 								{Expression: `${resourceAttributes["service.instance.id"]}`},
 							},
-							Tags: &map[string]settings.OtelStringExpression{
-								"instrumentation-lib":      {`${scopeAttributes["otel.scope.name"]}`},
-								"instrumentation-version":  {`${scopeAttributes["otel.scope.version"]}`},
-								"instrumentation-provider": {`${scopeAttributes["otel.scope.provider"]}`}, // this attribute doesn't exist expr the span but it is Optional tag so it ignored by mapping
+							Tags: &[]settings.OtelTagMapping{
+								{
+									Source: strExpr(`${scopeAttributes["otel.scope.name"]}`),
+									Target: "instrumentation-lib",
+								},
+								{
+									Source: strExpr(`${scopeAttributes["otel.scope.version"]}`),
+									Target: "instrumentation-version",
+								},
+								{
+									// this attribute doesn't exist, but it is an Optional tag, so it is ignored by mapping
+									Source: strExpr(`${scopeAttributes["otel.scope.provider"]}`),
+									Target: "instrumentation-provider",
+								},
 							},
 						},
 					},

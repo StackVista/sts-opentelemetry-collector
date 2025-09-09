@@ -35,6 +35,11 @@ func (f *mockEvalExpressionEvaluator) EvalBooleanExpression(_ settings.OtelBoole
 	return false, nil
 }
 
+func (f *mockEvalExpressionEvaluator) EvalMapExpression(_ settings.OtelStringExpression, _ *ExpressionEvalContext) (map[string]any, error) {
+	//nolint:nilnil
+	return nil, nil
+}
+
 type pair struct {
 	name, expr string
 }
