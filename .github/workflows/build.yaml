@@ -32,6 +32,7 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{github.repository_owner}}/${{ github.repository }}
       - name: Install protoc # TODO create a docker image with protoc installed
         run: |
+          sudo apt-get install -y protobuf-compiler
           go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.8
       - name: Generate go model
         env:
