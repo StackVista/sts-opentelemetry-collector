@@ -133,6 +133,7 @@ func (s *DefaultSettingsCache) UpdateSettingsForType(
 	// Convert all new entries to concrete type first
 	if converter, ok := ConverterFor(settingType); ok {
 		for _, entry := range newEntries {
+			//nolint:gosec
 			_, err := s.toConcreteTypeIfNeeded(&entry, converter)
 			if err != nil {
 				s.logger.Warn(
