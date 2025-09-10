@@ -1092,6 +1092,22 @@ components:
         - layerName
         - domainName
 
+    OtelTagMapping:
+      type: object
+      description: Defines how a tag should be mapped from an input source to an output target, optionally using a regex pattern.
+      properties:
+        source:
+          $ref: "#/components/schemas/OtelStringExpression"
+        target:
+          type: string
+          description: Name of the target tag key to which the value should be mapped.
+        pattern:
+          type: string
+          description: Optional regex pattern applied to the source value. Capturing groups can be referenced in the target (e.g., ${1}).
+      required:
+        - source
+        - target
+
     OtelComponentMappingFieldMapping:
       type: object
       properties:
@@ -1102,8 +1118,9 @@ components:
         version:
           $ref: "#/components/schemas/OtelStringExpression"
         tags:
-          additionalProperties:
-            $ref: "#/components/schemas/OtelStringExpression"
+          type: array
+          items:
+            $ref: "#/components/schemas/OtelTagMapping"
     
     OtelRelationMappingOutput:
       type: object

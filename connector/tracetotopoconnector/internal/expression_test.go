@@ -25,11 +25,6 @@ func makeContext() ExpressionEvalContext {
 	res := ptrace.NewResourceSpans()
 	res.Resource().Attributes().PutStr("service.name", "cart-service")
 	res.Resource().Attributes().PutStr("cloud.provider", "aws")
-	res.Resource().Attributes().PutStr("service.instance.id", "627cc493")
-	res.Resource().Attributes().PutStr("service.version", "1.2.3")
-	res.Resource().Attributes().PutStr("host.name", "ip-10-1-2-3.ec2.internal")
-	res.Resource().Attributes().PutStr("os.type", "linux")
-	res.Resource().Attributes().PutStr("process.pid", "12345")
 	res.Resource().Attributes().PutStr("env", "dev")
 
 	vars := map[string]string{
@@ -252,6 +247,79 @@ func TestEvalOptionalStringExpression(t *testing.T) {
 	}
 }
 
+func TestCelEvaluator_EvalMapExpression(t *testing.T) {
+	ctx := makeContext()
+	eval, _ := NewCELEvaluator(tracetotopoconnector.ExpressionCacheSettings{Size: 100, TTL: 30 * time.Minute})
+
+	tests := []struct {
+		name        string
+		expr        settings.OtelStringExpression
+		want        map[string]any
+		expectError bool
+	}{
+		{
+			name: "pure map reference spanAttributes",
+			expr: settings.OtelStringExpression{Expression: "${spanAttributes}"},
+			want: map[string]any{
+				"http.method":      "GET",
+				"http.status_code": int64(200),
+				"retries":          "5",
+				"user.id":          "123",
+			},
+			expectError: false,
+		},
+		{
+			name: "pure map reference resourceAttributes",
+			expr: settings.OtelStringExpression{Expression: "${resourceAttributes}"},
+			want: map[string]any{
+				"cloud.provider": "aws",
+				"service.name":   "cart-service",
+				"env":            "dev",
+			},
+			expectError: false,
+		},
+		{
+			name: "pure map reference scopeAttributes",
+			expr: settings.OtelStringExpression{Expression: "${scopeAttributes}"},
+			want: map[string]any{
+				"otel.scope.name":    "io.opentelemetry.instrumentation.http",
+				"otel.scope.version": "1.2.3",
+			},
+			expectError: false,
+		},
+		{
+			name:        "invalid: not a pure map reference",
+			expr:        settings.OtelStringExpression{Expression: "foo-${spanAttributes}"},
+			want:        nil,
+			expectError: true,
+		},
+		{
+			name:        "invalid: literal string",
+			expr:        settings.OtelStringExpression{Expression: `"just a string"`},
+			want:        nil,
+			expectError: true,
+		},
+		{
+			name:        "invalid: empty interpolation",
+			expr:        settings.OtelStringExpression{Expression: "${}"},
+			want:        nil,
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := eval.EvalMapExpression(tt.expr, &ctx)
+			if tt.expectError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tt.want, got)
+			}
+		})
+	}
+}
+
 func TestBoolEvalTypeMismatch(t *testing.T) {
 	eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
 	ctx := makeContext()
@@ -398,6 +466,7 @@ func TestClassifyStringExpression(t *testing.T) {
 		{"literal", "foo", kindStringLiteral, ""},
 		{"wrapped literal", `"foo"`, kindStringLiteral, ""},
 		{"wrapped identifier", "${vars[\"env\"]}", kindStringWithIdentifiers, ""},
+		{"wrapped map reference", "${vars}", kindMapReferenceOnly, ""},
 		{"interpolated ok", "foo-${vars[\"env\"]}-bar", kindStringInterpolation, ""},
 		{"unterminated interpolation", `"foo-${vars[\"env\"]"`, kindInvalid, "unterminated"},
 		{"empty interpolation", `foo-${}`, kindInvalid, "empty"},
@@ -407,7 +476,7 @@ func TestClassifyStringExpression(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			kind, err := classifyStringExpression(tt.expr)
+			kind, err := classifyExpression(tt.expr)
 
 			if tt.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.wantError) {

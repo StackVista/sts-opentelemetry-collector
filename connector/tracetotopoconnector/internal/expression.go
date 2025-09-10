@@ -23,7 +23,8 @@ import (
 // Motivation:
 // In our domain model, expressions can be one of:
 //   - A plain string literal (no CEL evaluation): kindStringLiteral
-//   - A full CEL expression returning a String, wrapped expr ${...}: kindStringWithIdentifiers
+//   - A full CEL expression returning a String, or Map, wrapped expr ${...}:
+//     kindStringWithIdentifiers, kindMapReferenceOnly
 //   - A string with embedded interpolations ${...}, requiring rewrite to CEL concat: kindStringInterpolation
 //
 // CEL itself cannot distinguish between a bare string literal and an identifier,
@@ -42,7 +43,7 @@ const (
 	kindStringWithIdentifiers
 	kindStringInterpolation
 	kindBoolean
-	interp = "interp"
+	kindMapReferenceOnly // e.g. "${spanAttributes}" or "${vars}"
 )
 
 var (
@@ -59,6 +60,7 @@ type ExpressionEvaluator interface {
 	EvalStringExpression(expr settings.OtelStringExpression, evalCtx *ExpressionEvalContext) (string, error)
 	EvalOptionalStringExpression(expr *settings.OtelStringExpression, evalCtx *ExpressionEvalContext) (*string, error)
 	EvalBooleanExpression(expr settings.OtelBooleanExpression, evalCtx *ExpressionEvalContext) (bool, error)
+	EvalMapExpression(expr settings.OtelStringExpression, evalCtx *ExpressionEvalContext) (map[string]any, error)
 }
 
 type ExpressionEvalContext struct {
@@ -220,10 +222,10 @@ func validateInterpolation(origExpr string) error {
 		// Detect start of interpolation
 		if i+1 < len(expr) && expr[i] == '$' && expr[i+1] == '{' {
 			// If the top frame is an interpolation, this is nested, which is invalid.
-			if len(stack) > 0 && stack[len(stack)-1].kind == interp {
+			if len(stack) > 0 && stack[len(stack)-1].kind == "interp" {
 				return fmt.Errorf("nested interpolation not allowed at pos %d", i)
 			}
-			stack = append(stack, frame{kind: interp, start: i})
+			stack = append(stack, frame{kind: "interp", start: i})
 			i += 2
 			continue
 		}
@@ -256,7 +258,7 @@ func validateInterpolation(origExpr string) error {
 			}
 
 			// Within an interpolation, track inner { } pairs as depth
-			if top.kind == interp {
+			if top.kind == "interp" {
 				if char == '{' {
 					top.innerDepth++
 					i++
@@ -321,7 +323,7 @@ func validateInterpolation(origExpr string) error {
 	// If anything remains on the stack it’s an unclosed frame
 	if len(stack) > 0 {
 		top := stack[len(stack)-1]
-		if top.kind == interp {
+		if top.kind == "interp" {
 			return fmt.Errorf("unterminated interpolation starting at pos %d", top.start)
 		}
 		return fmt.Errorf("unmatched '{' at pos %d", top.start)
@@ -386,7 +388,7 @@ func (e *CelEvaluator) getOrCompile(original string, kind expressionKind) (cel.P
 
 func preprocessExpression(expr string, kind expressionKind) (string, error) {
 	switch kind {
-	case kindStringWithIdentifiers:
+	case kindStringWithIdentifiers, kindMapReferenceOnly:
 		// unwrap `${...}` - extract the inner CEL expression
 		return expr[2 : len(expr)-1], nil
 	case kindStringInterpolation:
