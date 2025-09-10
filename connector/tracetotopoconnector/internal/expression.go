@@ -47,8 +47,7 @@ const (
 )
 
 var (
-	wrappedExprClassificationPattern = regexp.MustCompile(`^\$\{[^}]+\}$`) // classification
-	interpolationExprCapturePattern  = regexp.MustCompile(`\$\{([^}]*)\}`) // capture group for rewrite
+	interpolationExprCapturePattern = regexp.MustCompile(`\$\{([^}]*)\}`) // capture group for rewrite
 )
 
 type CacheSettings struct {
@@ -158,7 +157,7 @@ func (e *CelEvaluator) EvalBooleanExpression(
 // classified as kindInvalid with an error.
 func classifyStringExpression(expr string) (expressionKind, error) {
 	switch {
-	case wrappedExprClassificationPattern.MatchString(expr):
+	case strings.HasPrefix(expr, "${") && strings.HasSuffix(expr, "}"):
 		if err := validateInterpolation(expr); err != nil {
 			return kindInvalid, err
 		}
