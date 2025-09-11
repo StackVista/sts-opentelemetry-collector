@@ -46,7 +46,7 @@ func TestKafkaExporter_Integration(t *testing.T) {
 
 	lr := sl.LogRecords().AppendEmpty()
 	lr.Body().SetEmptyBytes().FromRaw([]byte("hello world"))
-	lr.Attributes().PutStr("stskafka.key", "mykey")
+	lr.Attributes().PutEmptyBytes(stskafkaexporter.KafkaMessageKey).FromRaw([]byte("mykey"))
 
 	// Export
 	require.NoError(t, tc.exporter.ExportData(tc.ctx, ld), "failed to export data")
