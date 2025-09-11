@@ -163,6 +163,11 @@ func ResolveTagMappings(
 				targetKey = strings.ReplaceAll(targetKey, placeholder, match)
 			}
 
+			// Preserve existing (explicit) keys
+			if _, exists := tags[targetKey]; exists {
+				continue
+			}
+
 			tags[targetKey] = strVal
 		}
 	}

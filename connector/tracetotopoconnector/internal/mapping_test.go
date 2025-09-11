@@ -305,6 +305,94 @@ func TestResolveTagMappings(t *testing.T) {
 			want:          map[string]string{},
 			errorContains: "expression did not evaluate to string",
 		},
+		// cases for group merge mapping and explicit mapping trying to populate the same key
+		{
+			name: "explicit mapping overrides merged group key",
+			mappings: []settings.OtelTagMapping{
+				{
+					// Group mapping injects all scope attributes with pattern
+					Source:  strExpr("${scopeAttributes}"),
+					Pattern: ptr("telemetry.sdk.(.*)"),
+					Target:  "otel.${1}",
+				},
+				{
+					// Explicit mapping for one key that would otherwise be produced by the group
+					Source: strExpr("overridden-value"),
+					Target: "otel.lang",
+				},
+			},
+			want: map[string]string{
+				"otel.lang":    "overridden-value", // explicit wins
+				"otel.version": "1.0",
+				"otel.intAttr": "5",
+			},
+		},
+		{
+			name: "merged group mapping does not override explicit key",
+			mappings: []settings.OtelTagMapping{
+				{
+					Source: strExpr("explicit-value"),
+					Target: "otel.lang",
+				},
+				{
+					Source:  strExpr("${scopeAttributes}"),
+					Pattern: ptr("telemetry.sdk.(.*)"),
+					Target:  "otel.${1}",
+				},
+			},
+			want: map[string]string{
+				"otel.lang":    "explicit-value", // explicit preserved
+				"otel.version": "1.0",
+				"otel.intAttr": "5",
+			},
+		},
+		{
+			name: "explicit mapping overrides merged resource attribute",
+			mappings: []settings.OtelTagMapping{
+				{
+					Source:  strExpr("${resourceAttributes}"),
+					Pattern: ptr("(.*)"),
+					Target:  "res.${1}",
+				},
+				{
+					Source: strExpr("special"),
+					Target: "res.name",
+				},
+			},
+			want: map[string]string{
+				"res.name": "special", // explicit wins over merged
+			},
+		},
+		{
+			name: "merge full attribute map without overrides",
+			mappings: []settings.OtelTagMapping{
+				{
+					Source:  strExpr("${scopeAttributes}"),
+					Pattern: ptr("(.*)"),
+					Target:  "all.${1}",
+				},
+			},
+			want: map[string]string{
+				"all.telemetry.sdk.lang":    "java",
+				"all.telemetry.sdk.version": "1.0",
+				"all.telemetry.sdk.intAttr": "5",
+			},
+		},
+		{
+			name: "merge filtered attribute map by prefix",
+			mappings: []settings.OtelTagMapping{
+				{
+					Source:  strExpr("${scopeAttributes}"),
+					Pattern: ptr("telemetry.sdk.(.*)"),
+					Target:  "filtered.${1}",
+				},
+			},
+			want: map[string]string{
+				"filtered.lang":    "java",
+				"filtered.version": "1.0",
+				"filtered.intAttr": "5",
+			},
+		},
 	}
 
 	for _, tt := range tests {
