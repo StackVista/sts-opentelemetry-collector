@@ -20,7 +20,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-var settingsProviderExtensionId = component.MustNewID("sts_settings_provider")
+const SettingsProviderExtensionID = "sts_settings_provider"
 
 type connectorImpl struct {
 	cfg               *Config
@@ -54,7 +54,7 @@ func newConnector(cfg Config, logger *zap.Logger, nextConsumer consumer.Logs) (*
 }
 
 func (p *connectorImpl) Start(ctx context.Context, host component.Host) error {
-	ext, ok := host.GetExtensions()[settingsProviderExtensionId]
+	ext, ok := host.GetExtensions()[component.MustNewID(SettingsProviderExtensionID)]
 	if !ok {
 		return fmt.Errorf("sts_settings_provider extension not found")
 	}
@@ -106,28 +106,34 @@ func (p *connectorImpl) ConsumeTraces(ctx context.Context, td ptrace.Traces) err
 	log := plog.NewLogs()
 	scopeLog := log.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
 
-	messagesWithKeys := internal.ConvertSpanToTopologyStreamMessage(p.eval, td, *p.componentMappings, *p.relationMappings, time.Now().UnixMilli())
+	messagesWithKeys := internal.ConvertSpanToTopologyStreamMessage(p.eval, td, *p.componentMappings,
+		*p.relationMappings, time.Now().UnixMilli())
 	for _, mwk := range messagesWithKeys {
-		if err := addEvent(&scopeLog, &mwk); err != nil {
+		if err := addEvent(&scopeLog, mwk); err != nil {
 			p.logger.Error("failed to add event to scope log", zap.Error(err))
 		} else {
 			p.logger.Debug("added event to scope log", zap.Any("key", mwk.Key))
 		}
 	}
 	if log.LogRecordCount() > 0 {
-		p.logsConsumer.ConsumeLogs(ctx, log)
+		err := p.logsConsumer.ConsumeLogs(ctx, log)
+		if err != nil {
+			p.logger.Error("Error sending logs to the next component", zap.Error(err))
+		}
 	}
 	return nil
 }
 
 // updateMappings updates the mappings from the settings provider
 func (p *connectorImpl) updateMappings() {
-	if componentMappings, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelComponentMapping](p.settingsProvider, stsSettingsModel.SettingTypeOtelComponentMapping); err != nil {
+	if componentMappings, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelComponentMapping](p.settingsProvider,
+		stsSettingsModel.SettingTypeOtelComponentMapping); err != nil {
 		p.logger.Error("failed to get component mappings", zap.Error(err))
 	} else {
 		atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&p.componentMappings)), unsafe.Pointer(&componentMappings))
 	}
-	if relationMappings, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelRelationMapping](p.settingsProvider, stsSettingsModel.SettingTypeOtelRelationMapping); err != nil {
+	if relationMappings, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelRelationMapping](p.settingsProvider,
+		stsSettingsModel.SettingTypeOtelRelationMapping); err != nil {
 		p.logger.Error("failed to get relation mappings", zap.Error(err))
 	} else {
 		atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&p.relationMappings)), unsafe.Pointer(&relationMappings))
@@ -136,19 +142,19 @@ func (p *connectorImpl) updateMappings() {
 
 // addEvent adds a new event to the scope log. The event contains the body with serialized TopologyStreamMessage and
 // attribute with serialized TopologyStreamMessageKey.
-func addEvent(scopeLog *plog.ScopeLogs, mwk *internal.MessageWithKey) error {
+func addEvent(scopeLog *plog.ScopeLogs, mwk internal.MessageWithKey) error {
+	msgAsBytes, err := proto.Marshal(mwk.Message)
+	if err != nil {
+		return err
+	}
+
+	keyAsBytes, err := proto.Marshal(mwk.Key)
+	if err != nil {
+		return err
+	}
+
 	logRecord := scopeLog.LogRecords().AppendEmpty()
-
-	if msgAsBytes, err := proto.Marshal(mwk.Message); err != nil {
-		return err
-	} else {
-		logRecord.Body().SetEmptyBytes().FromRaw(msgAsBytes)
-	}
-
-	if keyAsBytes, err := proto.Marshal(mwk.Key); err != nil {
-		return err
-	} else {
-		logRecord.Attributes().PutEmptyBytes(stskafkaexporter.KafkaMessageKey).FromRaw(keyAsBytes)
-	}
+	logRecord.Body().SetEmptyBytes().FromRaw(msgAsBytes)
+	logRecord.Attributes().PutEmptyBytes(stskafkaexporter.KafkaMessageKey).FromRaw(keyAsBytes)
 	return nil
 }

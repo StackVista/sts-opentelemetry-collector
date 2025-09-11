@@ -1,7 +1,9 @@
+//nolint:testpackage
 package tracetotopoconnector
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
@@ -41,7 +43,7 @@ func TestConnectorStart(t *testing.T) {
 			},
 		)
 		var extensions = map[component.ID]component.Component{
-			settingsProviderExtensionId: provider,
+			component.MustNewID(SettingsProviderExtensionID): provider,
 		}
 		host := &mockHost{ext: extensions}
 		err := connector.Start(context.Background(), host)
@@ -77,7 +79,7 @@ func TestConnectorConsumeTraces(t *testing.T) {
 		},
 	)
 	var extensions = map[component.ID]component.Component{
-		settingsProviderExtensionId: provider,
+		component.MustNewID(SettingsProviderExtensionID): provider,
 	}
 	host := &mockHost{ext: extensions}
 	err := connector.Start(context.Background(), host)
@@ -85,7 +87,7 @@ func TestConnectorConsumeTraces(t *testing.T) {
 
 	t.Run("skip spans which don't match to conditions", func(t *testing.T) {
 		logConsumer.Reset()
-		submittedTime := int64(1756851083000)
+		submittedTime := uint64(1756851083000)
 		traces := ptrace.NewTraces()
 		rs := traces.ResourceSpans().AppendEmpty()
 		rs.Resource().Attributes().PutStr("service.name", "checkout-service")
@@ -110,18 +112,18 @@ func TestConnectorConsumeTraces(t *testing.T) {
 		span.Attributes().PutStr("user.id", "123")
 		span.Attributes().PutStr("service.name", "web-service")
 
-		assert.Equal(t, logConsumer.LogRecordCount(), 0)
+		assert.Equal(t, 0, logConsumer.LogRecordCount())
 
 		err := connector.ConsumeTraces(context.Background(), traces)
 		require.NoError(t, err)
 
-		assert.Equal(t, logConsumer.LogRecordCount(), 0) // all conditions doesn't match so it is empty
+		assert.Equal(t, 0, logConsumer.LogRecordCount()) // all conditions doesn't match so it is empty
 		assert.Empty(t, logConsumer.AllLogs())
 	})
 
 	t.Run("start with initial mappings and observe changes", func(t *testing.T) {
 		logConsumer.Reset()
-		submittedTime := int64(1756851083000)
+		submittedTime := uint64(1756851083000)
 		traces := ptrace.NewTraces()
 		rs := traces.ResourceSpans().AppendEmpty()
 		rs.Resource().Attributes().PutStr("service.name", "checkout-service")
@@ -146,51 +148,55 @@ func TestConnectorConsumeTraces(t *testing.T) {
 		span.Attributes().PutStr("user.id", "123")
 		span.Attributes().PutStr("service.name", "web-service")
 
-		assert.Equal(t, logConsumer.LogRecordCount(), 0)
+		assert.Equal(t, 0, logConsumer.LogRecordCount())
 
 		err := connector.ConsumeTraces(context.Background(), traces)
 		require.NoError(t, err)
 
-		assert.Equal(t, logConsumer.LogRecordCount(), 2) // one for component and one for relation
+		assert.Equal(t, 2, logConsumer.LogRecordCount()) // one for component and one for relation
 		actual := logConsumer.AllLogs()
 		assert.Len(t, actual, 1)
-		assert.Equal(t, actual[0].ResourceLogs().Len(), 1)
-		assert.Equal(t, actual[0].ResourceLogs().At(0).ScopeLogs().Len(), 1)
-		assert.Equal(t, actual[0].ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().Len(), 2)
+		assert.Equal(t, 1, actual[0].ResourceLogs().Len())
+		assert.Equal(t, 1, actual[0].ResourceLogs().At(0).ScopeLogs().Len())
+		assert.Equal(t, 2, actual[0].ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().Len())
 
 		componentLogRecord := actual[0].ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0)
 		componentKeyRaw, _ := componentLogRecord.Attributes().Get(stskafkaexporter.KafkaMessageKey)
 		componentKey := topo_stream_v1.TopologyStreamMessageKey{}
-		proto.Unmarshal(componentKeyRaw.Bytes().AsRaw(), &componentKey)
-		assert.Equal(t, componentKey.Owner, topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL)
-		assert.Equal(t, componentKey.DataSource, "mapping1")
-		assert.Equal(t, componentKey.ShardId, "627cc493")
+		err = proto.Unmarshal(componentKeyRaw.Bytes().AsRaw(), &componentKey)
+		require.NoError(t, err)
+		assert.Equal(t, topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL, componentKey.Owner)
+		assert.Equal(t, "mapping1", componentKey.DataSource)
+		assert.Equal(t, "627cc493", componentKey.ShardId)
 		componentMassage := topo_stream_v1.TopologyStreamMessage{}
-		proto.Unmarshal(componentLogRecord.Body().Bytes().AsRaw(), &componentMassage)
-		componentPayload := componentMassage.Payload.(*topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData)
-		assert.Equal(t, componentPayload.TopologyStreamRepeatElementsData.ExpiryIntervalMs, int64(60000))
-		assert.Equal(t, len(componentPayload.TopologyStreamRepeatElementsData.Components), 1)
-		assert.Equal(t, componentPayload.TopologyStreamRepeatElementsData.Components[0].ExternalId, "627cc493")
-		assert.Equal(t, componentPayload.TopologyStreamRepeatElementsData.Components[0].Name, "checkout-service")
-		assert.Equal(t, componentPayload.TopologyStreamRepeatElementsData.Components[0].TypeName, "service-instance")
-		assert.Equal(t, componentPayload.TopologyStreamRepeatElementsData.Components[0].DomainName, "shop")
-		assert.Equal(t, componentPayload.TopologyStreamRepeatElementsData.Components[0].LayerName, "backend")
+		err = proto.Unmarshal(componentLogRecord.Body().Bytes().AsRaw(), &componentMassage)
+		require.NoError(t, err)
+		componentPayload, _ := componentMassage.Payload.(*topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData)
+		assert.Equal(t, int64(60000), componentPayload.TopologyStreamRepeatElementsData.ExpiryIntervalMs)
+		assert.Equal(t, 1, len(componentPayload.TopologyStreamRepeatElementsData.Components))
+		assert.Equal(t, "627cc493", componentPayload.TopologyStreamRepeatElementsData.Components[0].ExternalId)
+		assert.Equal(t, "checkout-service", componentPayload.TopologyStreamRepeatElementsData.Components[0].Name)
+		assert.Equal(t, "service-instance", componentPayload.TopologyStreamRepeatElementsData.Components[0].TypeName)
+		assert.Equal(t, "shop", componentPayload.TopologyStreamRepeatElementsData.Components[0].DomainName)
+		assert.Equal(t, "backend", componentPayload.TopologyStreamRepeatElementsData.Components[0].LayerName)
 
 		relationLogRecord := actual[0].ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(1)
 		relationKeyRaw, _ := relationLogRecord.Attributes().Get(stskafkaexporter.KafkaMessageKey)
 		relationKey := topo_stream_v1.TopologyStreamMessageKey{}
-		proto.Unmarshal(relationKeyRaw.Bytes().AsRaw(), &relationKey)
-		assert.Equal(t, relationKey.Owner, topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL)
-		assert.Equal(t, relationKey.DataSource, "mapping2")
-		assert.Equal(t, relationKey.ShardId, "checkout-service-web-service")
+		err = proto.Unmarshal(relationKeyRaw.Bytes().AsRaw(), &relationKey)
+		require.NoError(t, err)
+		assert.Equal(t, topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL, relationKey.Owner)
+		assert.Equal(t, "mapping2", relationKey.DataSource)
+		assert.Equal(t, "checkout-service-web-service", relationKey.ShardId)
 		relationMessage := topo_stream_v1.TopologyStreamMessage{}
-		proto.Unmarshal(relationLogRecord.Body().Bytes().AsRaw(), &relationMessage)
-		relationPayload := relationMessage.Payload.(*topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData)
-		assert.Equal(t, relationPayload.TopologyStreamRepeatElementsData.ExpiryIntervalMs, int64(300000))
-		assert.Equal(t, len(relationPayload.TopologyStreamRepeatElementsData.Relations), 1)
-		assert.Equal(t, relationPayload.TopologyStreamRepeatElementsData.Relations[0].SourceIdentifier, "checkout-service")
-		assert.Equal(t, relationPayload.TopologyStreamRepeatElementsData.Relations[0].TargetIdentifier, "web-service")
-		assert.Equal(t, relationPayload.TopologyStreamRepeatElementsData.Relations[0].TypeName, "http-request")
+		err = proto.Unmarshal(relationLogRecord.Body().Bytes().AsRaw(), &relationMessage)
+		require.NoError(t, err)
+		relationPayload, _ := relationMessage.Payload.(*topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData)
+		assert.Equal(t, int64(300000), relationPayload.TopologyStreamRepeatElementsData.ExpiryIntervalMs)
+		assert.Equal(t, 1, len(relationPayload.TopologyStreamRepeatElementsData.Relations))
+		assert.Equal(t, "checkout-service", relationPayload.TopologyStreamRepeatElementsData.Relations[0].SourceIdentifier)
+		assert.Equal(t, "web-service", relationPayload.TopologyStreamRepeatElementsData.Relations[0].TargetIdentifier)
+		assert.Equal(t, "http-request", relationPayload.TopologyStreamRepeatElementsData.Relations[0].TypeName)
 
 	})
 }
@@ -218,19 +224,19 @@ func newMockStsSettingsProvider(componentMappings []settings.OtelComponentMappin
 	}
 }
 
-func (m *mockStsSettingsProvider) Start(ctx context.Context, host component.Host) error {
+func (m *mockStsSettingsProvider) Start(_ context.Context, _ component.Host) error {
 	return nil
 }
 
-func (m *mockStsSettingsProvider) Shutdown(ctx context.Context) error {
+func (m *mockStsSettingsProvider) Shutdown(_ context.Context) error {
 	return nil
 }
 
-func (m *mockStsSettingsProvider) RegisterForUpdates(types ...settings.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
+func (m *mockStsSettingsProvider) RegisterForUpdates(_ ...settings.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
 	return m.channel, nil
 }
 
-func (m *mockStsSettingsProvider) Unregister(ch <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
+func (m *mockStsSettingsProvider) Unregister(_ <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
 	return true
 }
 
@@ -248,8 +254,9 @@ func (m *mockStsSettingsProvider) UnsafeGetCurrentSettingsByType(typ settings.Se
 		return toAnySlice(m.componentMappings), nil
 	case settings.SettingTypeOtelRelationMapping:
 		return toAnySlice(m.relationMappings), nil
+	default:
+		return nil, errors.New("Not supported type of settings")
 	}
-	return nil, nil
 }
 
 func strExpr(s string) settings.OtelStringExpression {

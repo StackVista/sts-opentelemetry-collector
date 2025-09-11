@@ -51,6 +51,11 @@ linters:
     gomoddirectives:
       replace-local: true
       retract-allow-no-explanation: true
+    exhaustive:
+      # Presence of "default" case in switch statements satisfies exhaustiveness,
+      # even if all enum members are not listed.
+      # Default: false
+      default-signifies-exhaustive: true
 formatters:
   enable:
     - gofmt
@@ -60,4 +65,3 @@ formatters:
       - third_party$
       - builtin$
       - examples$
-
