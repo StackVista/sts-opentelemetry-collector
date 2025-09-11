@@ -3,7 +3,6 @@ package internal
 
 import (
 	"errors"
-	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"github.com/stretchr/testify/require"
 	"sort"
@@ -208,7 +207,7 @@ func TestResolveTagMappings(t *testing.T) {
 		Scope:    testScope,
 		Resource: testResource,
 	}
-	eval, _ := NewCELEvaluator(tracetotopoconnector.ExpressionCacheSettings{Size: 100, TTL: 30 * time.Minute})
+	eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Minute})
 
 	tests := []struct {
 		name          string

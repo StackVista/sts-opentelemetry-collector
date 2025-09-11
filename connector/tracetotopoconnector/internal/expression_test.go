@@ -249,7 +249,7 @@ func TestEvalOptionalStringExpression(t *testing.T) {
 
 func TestCelEvaluator_EvalMapExpression(t *testing.T) {
 	ctx := makeContext()
-	eval, _ := NewCELEvaluator(tracetotopoconnector.ExpressionCacheSettings{Size: 100, TTL: 30 * time.Minute})
+	eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Minute})
 
 	tests := []struct {
 		name        string

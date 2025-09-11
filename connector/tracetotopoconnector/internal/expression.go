@@ -98,7 +98,7 @@ func (e *CelEvaluator) EvalStringExpression(
 	expr settings.OtelStringExpression,
 	evalCtx *ExpressionEvalContext,
 ) (string, error) {
-	kind, err := classifyStringExpression(expr.Expression)
+	kind, err := classifyExpression(expr.Expression)
 	if err != nil {
 		return "", err
 	}
@@ -143,23 +143,51 @@ func (e *CelEvaluator) EvalBooleanExpression(
 	return false, fmt.Errorf("condition did not evaluate to boolean, got: %T", result)
 }
 
+func (e *CelEvaluator) EvalMapExpression(
+	expr settings.OtelStringExpression,
+	evalCtx *ExpressionEvalContext,
+) (map[string]any, error) {
+	kind, err := classifyExpression(expr.Expression)
+	if err != nil {
+		return nil, err
+	}
+	if kind != kindMapReferenceOnly {
+		return nil, fmt.Errorf("expression %q is not a pure map reference", expr.Expression)
+	}
+
+	val, err := e.evalOrCached(expr.Expression, kind, evalCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	m, ok := val.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("expected map[string]any, got %T", val)
+	}
+	return m, nil
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------------------------------------------------
 
-// classifyStringExpression determines the kind of expression so the evaluator
+// classifyExpression determines the kind of expression so the evaluator
 // can choose the right handling path. It distinguishes between:
-//   - ${expr} - a wrapped CEL expression (kindStringWithIdentifiers)
+//   - ${expr} - a wrapped CEL expression (kindStringWithIdentifiers, kindMapReferenceOnly)
 //   - "...${...}..." - a string with interpolations (kindStringInterpolation)
 //   - plain strings without ${} - treated as literals (kindStringLiteral)
 //
 // Validation is always applied if "${" is detected, and invalid cases are
 // classified as kindInvalid with an error.
-func classifyStringExpression(expr string) (expressionKind, error) {
+func classifyExpression(expr string) (expressionKind, error) {
 	switch {
 	case strings.HasPrefix(expr, "${") && strings.HasSuffix(expr, "}"):
 		if err := validateInterpolation(expr); err != nil {
 			return kindInvalid, err
+		}
+
+		if isPureMapReference(expr) {
+			return kindMapReferenceOnly, nil
 		}
 		return kindStringWithIdentifiers, nil
 
@@ -180,6 +208,16 @@ func classifyStringExpression(expr string) (expressionKind, error) {
 		}
 
 		return kindStringLiteral, nil
+	}
+}
+
+func isPureMapReference(expr string) bool {
+	inner := strings.TrimSpace(expr[2 : len(expr)-1]) // strip ${...}
+	switch inner {
+	case "spanAttributes", "scopeAttributes", "resourceAttributes", "vars":
+		return true
+	default:
+		return false
 	}
 }
 
