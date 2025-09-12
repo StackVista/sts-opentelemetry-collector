@@ -23,7 +23,8 @@ import (
 // Motivation:
 // In our domain model, expressions can be one of:
 //   - A plain string literal (no CEL evaluation): kindStringLiteral
-//   - A full CEL expression returning a String, wrapped expr ${...}: kindStringWithIdentifiers
+//   - A full CEL expression returning a String, or Map, wrapped expr ${...}:
+//     kindStringWithIdentifiers, kindMapReferenceOnly
 //   - A string with embedded interpolations ${...}, requiring rewrite to CEL concat: kindStringInterpolation
 //
 // CEL itself cannot distinguish between a bare string literal and an identifier,
@@ -42,12 +43,15 @@ const (
 	kindStringWithIdentifiers
 	kindStringInterpolation
 	kindBoolean
-	interp = "interp"
+	kindMapReferenceOnly // e.g. "${spanAttributes}" or "${vars}"
+
+	// literals used for validating interpolation syntax and balanced expressions
+	interpolationFrame = "interpolation"
+	braceFrame         = "brace"
 )
 
 var (
-	wrappedExprClassificationPattern = regexp.MustCompile(`^\$\{[^}]+\}$`) // classification
-	interpolationExprCapturePattern  = regexp.MustCompile(`\$\{([^}]*)\}`) // capture group for rewrite
+	interpolationExprCapturePattern = regexp.MustCompile(`\$\{([^}]*)\}`) // capture group for rewrite
 )
 
 type CacheSettings struct {
@@ -59,6 +63,7 @@ type ExpressionEvaluator interface {
 	EvalStringExpression(expr settings.OtelStringExpression, evalCtx *ExpressionEvalContext) (string, error)
 	EvalOptionalStringExpression(expr *settings.OtelStringExpression, evalCtx *ExpressionEvalContext) (*string, error)
 	EvalBooleanExpression(expr settings.OtelBooleanExpression, evalCtx *ExpressionEvalContext) (bool, error)
+	EvalMapExpression(expr settings.OtelStringExpression, evalCtx *ExpressionEvalContext) (map[string]any, error)
 }
 
 type ExpressionEvalContext struct {
@@ -97,7 +102,7 @@ func (e *CelEvaluator) EvalStringExpression(
 	expr settings.OtelStringExpression,
 	evalCtx *ExpressionEvalContext,
 ) (string, error) {
-	kind, err := classifyStringExpression(expr.Expression)
+	kind, err := classifyExpression(expr.Expression)
 	if err != nil {
 		return "", err
 	}
@@ -142,23 +147,51 @@ func (e *CelEvaluator) EvalBooleanExpression(
 	return false, fmt.Errorf("condition did not evaluate to boolean, got: %T", result)
 }
 
+func (e *CelEvaluator) EvalMapExpression(
+	expr settings.OtelStringExpression,
+	evalCtx *ExpressionEvalContext,
+) (map[string]any, error) {
+	kind, err := classifyExpression(expr.Expression)
+	if err != nil {
+		return nil, err
+	}
+	if kind != kindMapReferenceOnly {
+		return nil, fmt.Errorf("expression %q is not a pure map reference", expr.Expression)
+	}
+
+	val, err := e.evalOrCached(expr.Expression, kind, evalCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	m, ok := val.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("expected map[string]any, got %T", val)
+	}
+	return m, nil
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------------------------------------------------
 
-// classifyStringExpression determines the kind of expression so the evaluator
+// classifyExpression determines the kind of expression so the evaluator
 // can choose the right handling path. It distinguishes between:
-//   - ${expr} - a wrapped CEL expression (kindStringWithIdentifiers)
+//   - ${expr} - a wrapped CEL expression (kindStringWithIdentifiers, kindMapReferenceOnly)
 //   - "...${...}..." - a string with interpolations (kindStringInterpolation)
 //   - plain strings without ${} - treated as literals (kindStringLiteral)
 //
 // Validation is always applied if "${" is detected, and invalid cases are
 // classified as kindInvalid with an error.
-func classifyStringExpression(expr string) (expressionKind, error) {
+func classifyExpression(expr string) (expressionKind, error) {
 	switch {
-	case wrappedExprClassificationPattern.MatchString(expr):
+	case strings.HasPrefix(expr, "${") && strings.HasSuffix(expr, "}"):
 		if err := validateInterpolation(expr); err != nil {
 			return kindInvalid, err
+		}
+
+		if isPureMapReference(expr) {
+			return kindMapReferenceOnly, nil
 		}
 		return kindStringWithIdentifiers, nil
 
@@ -179,6 +212,16 @@ func classifyStringExpression(expr string) (expressionKind, error) {
 		}
 
 		return kindStringLiteral, nil
+	}
+}
+
+func isPureMapReference(expr string) bool {
+	inner := strings.TrimSpace(expr[2 : len(expr)-1]) // strip ${...}
+	switch inner {
+	case "spanAttributes", "scopeAttributes", "resourceAttributes", "vars":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -208,7 +251,7 @@ func validateInterpolation(origExpr string) error {
 	}
 
 	type frame struct {
-		kind       string // "interp" ${...} or "brace" {...}
+		kind       string // interpolationFrame ${...} or braceFrame {...}
 		start      int    // index where the frame started
 		quote      byte   // current quote char inside this frame, 0 if none
 		innerDepth int    // counts nested { } within an interpolation
@@ -220,10 +263,10 @@ func validateInterpolation(origExpr string) error {
 		// Detect start of interpolation
 		if i+1 < len(expr) && expr[i] == '$' && expr[i+1] == '{' {
 			// If the top frame is an interpolation, this is nested, which is invalid.
-			if len(stack) > 0 && stack[len(stack)-1].kind == interp {
+			if len(stack) > 0 && stack[len(stack)-1].kind == interpolationFrame {
 				return fmt.Errorf("nested interpolation not allowed at pos %d", i)
 			}
-			stack = append(stack, frame{kind: interp, start: i})
+			stack = append(stack, frame{kind: interpolationFrame, start: i})
 			i += 2
 			continue
 		}
@@ -256,7 +299,7 @@ func validateInterpolation(origExpr string) error {
 			}
 
 			// Within an interpolation, track inner { } pairs as depth
-			if top.kind == interp {
+			if top.kind == interpolationFrame {
 				if char == '{' {
 					top.innerDepth++
 					i++
@@ -284,10 +327,10 @@ func validateInterpolation(origExpr string) error {
 			}
 
 			// If top frame is a plain brace frame:
-			if top.kind == "brace" {
+			if top.kind == braceFrame {
 				if char == '{' {
 					// nested plain brace
-					stack = append(stack, frame{kind: "brace", start: i})
+					stack = append(stack, frame{kind: braceFrame, start: i})
 					i++
 					continue
 				}
@@ -306,7 +349,7 @@ func validateInterpolation(origExpr string) error {
 		// - plain '{' opens a brace frame
 		// - an unmatched '}' is an error
 		if char == '{' {
-			stack = append(stack, frame{kind: "brace", start: i})
+			stack = append(stack, frame{kind: braceFrame, start: i})
 			i++
 			continue
 		}
@@ -321,7 +364,7 @@ func validateInterpolation(origExpr string) error {
 	// If anything remains on the stack it’s an unclosed frame
 	if len(stack) > 0 {
 		top := stack[len(stack)-1]
-		if top.kind == interp {
+		if top.kind == interpolationFrame {
 			return fmt.Errorf("unterminated interpolation starting at pos %d", top.start)
 		}
 		return fmt.Errorf("unmatched '{' at pos %d", top.start)
@@ -386,7 +429,7 @@ func (e *CelEvaluator) getOrCompile(original string, kind expressionKind) (cel.P
 
 func preprocessExpression(expr string, kind expressionKind) (string, error) {
 	switch kind {
-	case kindStringWithIdentifiers:
+	case kindStringWithIdentifiers, kindMapReferenceOnly:
 		// unwrap `${...}` - extract the inner CEL expression
 		return expr[2 : len(expr)-1], nil
 	case kindStringInterpolation:

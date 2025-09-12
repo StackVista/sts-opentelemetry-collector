@@ -712,8 +712,8 @@ type OtelComponentMappingType string
 
 // OtelComponentMappingFieldMapping defines model for OtelComponentMappingFieldMapping.
 type OtelComponentMappingFieldMapping struct {
-	AdditionalIdentifiers *[]OtelStringExpression          `json:"additionalIdentifiers,omitempty"`
-	Tags                  *map[string]OtelStringExpression `json:"tags,omitempty"`
+	AdditionalIdentifiers *[]OtelStringExpression `json:"additionalIdentifiers,omitempty"`
+	Tags                  *[]OtelTagMapping       `json:"tags,omitempty"`
 
 	// Version An expression that must produce a string. It must be one of these formats:
 	//   - A plain string, for example `"this is a plain string"`
@@ -847,6 +847,21 @@ type OtelRelationMappingOutput struct {
 // A string with only a cell expression is also valid as long as it is within a `${}` section, for example `"${input.tags.namespace}"`.
 type OtelStringExpression struct {
 	Expression string `json:"expression"`
+}
+
+// OtelTagMapping Defines how a tag should be mapped from an input source to an output target, optionally using a regex pattern.
+type OtelTagMapping struct {
+	// Pattern Optional regex pattern applied to the source value. Capturing groups can be referenced in the target (e.g., ${1}).
+	Pattern *string `json:"pattern,omitempty"`
+
+	// Source An expression that must produce a string. It must be one of these formats:
+	//   - A plain string, for example `"this is a plain string"`
+	//   - A string containing a CEL expression within curly braces `${}`, for example "a string with a cell expression: `${input.tags.namespace}"`
+	// A string with only a cell expression is also valid as long as it is within a `${}` section, for example `"${input.tags.namespace}"`.
+	Source OtelStringExpression `json:"source"`
+
+	// Target Name of the target tag key to which the value should be mapped.
+	Target string `json:"target"`
 }
 
 // OtelVariableMapping defines model for OtelVariableMapping.
