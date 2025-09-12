@@ -1,5 +1,10 @@
 package settings
 
+import (
+	"fmt"
+	"reflect"
+)
+
 // NOTE: these extensions/helpers are not auto-generated
 
 // SizeOfRawSetting returns the size of the underlying raw encoded JSON value.
@@ -30,4 +35,18 @@ func (m OtelRelationMapping) GetId() string {
 
 func (m OtelRelationMapping) GetExpireAfterMs() int64 {
 	return m.ExpireAfterMs
+}
+
+func GetSettingType[T any]() (SettingType, error) {
+	var zero T
+	t := reflect.TypeOf(zero)
+
+	switch t {
+	case reflect.TypeOf(OtelComponentMapping{}):
+		return SettingTypeOtelComponentMapping, nil
+	case reflect.TypeOf(OtelRelationMapping{}):
+		return SettingTypeOtelRelationMapping, nil
+	default:
+		return "", fmt.Errorf("unsupported type: %s", t.Name())
+	}
 }

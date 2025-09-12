@@ -126,14 +126,14 @@ func (p *connectorImpl) ConsumeTraces(ctx context.Context, td ptrace.Traces) err
 
 // updateMappings updates the mappings from the settings provider
 func (p *connectorImpl) updateMappings() {
-	if componentMappings, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelComponentMapping](p.settingsProvider,
-		stsSettingsModel.SettingTypeOtelComponentMapping); err != nil {
+	componentMappings, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelComponentMapping](p.settingsProvider)
+	if err != nil {
 		p.logger.Error("failed to get component mappings", zap.Error(err))
 	} else {
 		atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&p.componentMappings)), unsafe.Pointer(&componentMappings))
 	}
-	if relationMappings, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelRelationMapping](p.settingsProvider,
-		stsSettingsModel.SettingTypeOtelRelationMapping); err != nil {
+	relationMappings, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelRelationMapping](p.settingsProvider)
+	if err != nil {
 		p.logger.Error("failed to get relation mappings", zap.Error(err))
 	} else {
 		atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&p.relationMappings)), unsafe.Pointer(&relationMappings))

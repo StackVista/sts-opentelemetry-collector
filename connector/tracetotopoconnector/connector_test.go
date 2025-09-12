@@ -256,7 +256,7 @@ func (m *mockStsSettingsProvider) UnsafeGetCurrentSettingsByType(typ settings.Se
 	case settings.SettingTypeOtelRelationMapping:
 		return toAnySlice(m.relationMappings), nil
 	default:
-		return nil, errors.New("Not supported type of settings")
+		return nil, errors.New("not supported type of settings")
 	}
 }
 

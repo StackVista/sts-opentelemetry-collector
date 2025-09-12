@@ -2,6 +2,7 @@ package settingsproviderextension
 
 import (
 	"errors"
+	"fmt"
 
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
@@ -63,17 +64,24 @@ type InternalRawSettingsProvider interface {
 //
 // Example usage:
 //
-//	settings, err := GetSettingsAs[OtelComponentMapping](provider, SettingTypeOtelComponentMapping)
+//	settings, err := GetSettingsAs[OtelComponentMapping](provider)
 //
 // Returns an error if the setting type is unknown, retrieval fails, or type casting fails.
-func GetSettingsAs[T any](p StsSettingsProvider, typ stsSettingsModel.SettingType) ([]T, error) {
+func GetSettingsAs[T any](p StsSettingsProvider) ([]T, error) {
+	settingType, err := stsSettingsModel.GetSettingType[T]()
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine setting type: %w", err)
+	}
+
 	raw, ok := p.(InternalRawSettingsProvider) // all implementations must also satisfy this
 	if !ok {
 		return nil, errors.New("unable to cast to InternalRawSettingsProvider")
 	}
-	vals, err := raw.UnsafeGetCurrentSettingsByType(typ)
+
+	vals, err := raw.UnsafeGetCurrentSettingsByType(settingType)
 	if err != nil {
 		return nil, err
 	}
+
 	return stsSettingsCore.CastSlice[T](vals)
 }
