@@ -249,6 +249,7 @@ func toAnySlice[T any](slice []T) []any {
 }
 
 func (m *mockStsSettingsProvider) UnsafeGetCurrentSettingsByType(typ settings.SettingType) ([]any, error) {
+	//nolint:exhaustive
 	switch typ {
 	case settings.SettingTypeOtelComponentMapping:
 		return toAnySlice(m.componentMappings), nil

@@ -44,6 +44,10 @@ const (
 	kindStringInterpolation
 	kindBoolean
 	kindMapReferenceOnly // e.g. "${spanAttributes}" or "${vars}"
+
+	// literals used for validating interpolation syntax and balanced expressions
+	interpolationFrame = "interpolation"
+	braceFrame         = "brace"
 )
 
 var (
@@ -247,7 +251,7 @@ func validateInterpolation(origExpr string) error {
 	}
 
 	type frame struct {
-		kind       string // "interp" ${...} or "brace" {...}
+		kind       string // interpolationFrame ${...} or braceFrame {...}
 		start      int    // index where the frame started
 		quote      byte   // current quote char inside this frame, 0 if none
 		innerDepth int    // counts nested { } within an interpolation
@@ -259,10 +263,10 @@ func validateInterpolation(origExpr string) error {
 		// Detect start of interpolation
 		if i+1 < len(expr) && expr[i] == '$' && expr[i+1] == '{' {
 			// If the top frame is an interpolation, this is nested, which is invalid.
-			if len(stack) > 0 && stack[len(stack)-1].kind == "interp" {
+			if len(stack) > 0 && stack[len(stack)-1].kind == interpolationFrame {
 				return fmt.Errorf("nested interpolation not allowed at pos %d", i)
 			}
-			stack = append(stack, frame{kind: "interp", start: i})
+			stack = append(stack, frame{kind: interpolationFrame, start: i})
 			i += 2
 			continue
 		}
@@ -295,7 +299,7 @@ func validateInterpolation(origExpr string) error {
 			}
 
 			// Within an interpolation, track inner { } pairs as depth
-			if top.kind == "interp" {
+			if top.kind == interpolationFrame {
 				if char == '{' {
 					top.innerDepth++
 					i++
@@ -323,10 +327,10 @@ func validateInterpolation(origExpr string) error {
 			}
 
 			// If top frame is a plain brace frame:
-			if top.kind == "brace" {
+			if top.kind == braceFrame {
 				if char == '{' {
 					// nested plain brace
-					stack = append(stack, frame{kind: "brace", start: i})
+					stack = append(stack, frame{kind: braceFrame, start: i})
 					i++
 					continue
 				}
@@ -345,7 +349,7 @@ func validateInterpolation(origExpr string) error {
 		// - plain '{' opens a brace frame
 		// - an unmatched '}' is an error
 		if char == '{' {
-			stack = append(stack, frame{kind: "brace", start: i})
+			stack = append(stack, frame{kind: braceFrame, start: i})
 			i++
 			continue
 		}
@@ -360,7 +364,7 @@ func validateInterpolation(origExpr string) error {
 	// If anything remains on the stack it’s an unclosed frame
 	if len(stack) > 0 {
 		top := stack[len(stack)-1]
-		if top.kind == "interp" {
+		if top.kind == interpolationFrame {
 			return fmt.Errorf("unterminated interpolation starting at pos %d", top.start)
 		}
 		return fmt.Errorf("unmatched '{' at pos %d", top.start)
