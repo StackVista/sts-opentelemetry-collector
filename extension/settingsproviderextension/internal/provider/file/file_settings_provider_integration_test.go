@@ -25,7 +25,7 @@ func TestFileSettingsProvider_LoadsInitialSettings(t *testing.T) {
 	_, cancel, provider, _ := setupFileProvider(t, 100*time.Millisecond)
 	defer cancel()
 
-	currentSettings, err := stsSettings.GetSettingsAs[stsSettingsModel.OtelComponentMapping](provider, stsSettingsModel.SettingTypeOtelComponentMapping)
+	currentSettings, err := stsSettings.GetSettingsAs[stsSettingsModel.OtelComponentMapping](provider)
 	require.NoError(t, err)
 	assert.Len(t, currentSettings, 1, "should have one OtelComponentMapping")
 }
@@ -49,8 +49,7 @@ func TestFileSettingsProvider_DetectsFileChanges(t *testing.T) {
 	// Even though we write the file atomically, the provider may not see the update immediately.
 	// require.Eventually waits until the provider reads the updated file and updates its cache.
 	require.Eventually(t, func() bool {
-		current, err := stsSettings.GetSettingsAs[stsSettingsModel.OtelComponentMapping](
-			provider, stsSettingsModel.SettingTypeOtelComponentMapping)
+		current, err := stsSettings.GetSettingsAs[stsSettingsModel.OtelComponentMapping](provider)
 		if err != nil {
 			return false
 		}

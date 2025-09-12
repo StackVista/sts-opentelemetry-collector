@@ -46,9 +46,9 @@ func TestKafkaSettingsProvider_InitialState(t *testing.T) {
 	relationMapping := publishRelationMapping(t, tc, "22222", "Runs on host")
 	waitForSettingsUpdate[stsSettingsModel.OtelRelationMapping](t, tc, stsSettingsModel.SettingTypeOtelRelationMapping)
 
-	otelComponentMappings, err := stsSettings.GetSettingsAs[stsSettingsModel.OtelComponentMapping](tc.provider, stsSettingsModel.SettingTypeOtelComponentMapping)
+	otelComponentMappings, err := stsSettings.GetSettingsAs[stsSettingsModel.OtelComponentMapping](tc.provider)
 	require.NoError(t, err)
-	otelRelationMappings, err := stsSettings.GetSettingsAs[stsSettingsModel.OtelRelationMapping](tc.provider, stsSettingsModel.SettingTypeOtelRelationMapping)
+	otelRelationMappings, err := stsSettings.GetSettingsAs[stsSettingsModel.OtelRelationMapping](tc.provider)
 	require.NoError(t, err)
 	assert.Equal(t, 2, len(otelComponentMappings)+len(otelRelationMappings), "Unexpected number of settings")
 	assertComponentMapping(t, otelComponentMappings, componentMapping.id, componentMapping.name)
@@ -75,7 +75,7 @@ func TestKafkaSettingsProvider_Compaction(t *testing.T) {
 	assertComponentMapping(t, otelComponentMappings, updatedMapping.id, updatedMapping.name)
 
 	// Get otel relation mappings again to check that they're the same
-	otelRelationMappings, err := stsSettings.GetSettingsAs[stsSettingsModel.OtelRelationMapping](tc.provider, stsSettingsModel.SettingTypeOtelRelationMapping)
+	otelRelationMappings, err := stsSettings.GetSettingsAs[stsSettingsModel.OtelRelationMapping](tc.provider)
 	require.NoError(t, err)
 	assertRelationMapping(t, otelRelationMappings, relationMapping.id, relationMapping.name)
 }
@@ -156,7 +156,7 @@ func waitForSettingsUpdate[T any](t *testing.T, tc *testContext, settingType sts
 
 	select {
 	case <-ch:
-		as, err := stsSettings.GetSettingsAs[T](tc.provider, settingType)
+		as, err := stsSettings.GetSettingsAs[T](tc.provider)
 		require.NoError(t, err)
 		return as
 	case <-time.After(updateTimeout):
