@@ -498,7 +498,7 @@ func rewriteInterpolations(expr string) (string, error) {
 		if inner == "" {
 			return "", fmt.Errorf("empty interpolation found")
 		}
-		parts = append(parts, inner)
+		parts = append(parts, "("+inner+")")
 
 		lastIndex = end
 	}
