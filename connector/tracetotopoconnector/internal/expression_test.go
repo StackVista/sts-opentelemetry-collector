@@ -53,8 +53,23 @@ func TestEvalStringExpression(t *testing.T) {
 	}{
 		{
 			name:     "simple string",
-			expr:     "static-string",
-			expected: "static-string",
+			expr:     "static string",
+			expected: "static string",
+		},
+		{
+			name:     "simple string with quotes",
+			expr:     "'static string'",
+			expected: "'static string'",
+		},
+		{
+			name:     "simple string with double quotes",
+			expr:     `"static string"`,
+			expected: `"static string"`,
+		},
+		{
+			name:     "empty string",
+			expr:     "",
+			expected: "",
 		},
 		{
 			name:     "support resource attributes",
@@ -110,6 +125,16 @@ func TestEvalStringExpression(t *testing.T) {
 			name:     "support string interpolation with resource attributes",
 			expr:     `ns-${resourceAttributes["service.name"]}`,
 			expected: "ns-cart-service",
+		},
+		{
+			name:     "multiple interpolations at once",
+			expr:     `ns-${resourceAttributes["service.name"]}-${vars.namespace}-${resourceAttributes["service.name"].matches(R'cart-.*') ? 'cart' : 'not-cart'}-end`,
+			expected: "ns-cart-service-test-cart-end",
+		},
+		{
+			name:     "another complex expression",
+			expr:     `${resourceAttributes["service.name"].matches(R'cart-.*') ? ( spanAttributes["http.status_code"] < 400 ? 'good-cart' : 'bad-cart' ) : 'not-cart'}`,
+			expected: "good-cart",
 		},
 		{
 			name:        "fail on unterminated interpolation",
@@ -518,17 +543,17 @@ func TestRewriteInterpolations(t *testing.T) {
 		{
 			name:   "quoted with interpolation",
 			expr:   `"service-${resourceAttributes["env"]}"`,
-			result: `"service-" + resourceAttributes["env"]`,
+			result: `"service-" + (resourceAttributes["env"])`,
 		},
 		{
 			name:   "unquoted with interpolation",
 			expr:   `ns-${vars.ns}:svc-${resourceAttributes["service.name"]}`,
-			result: `"ns-" + vars.ns + ":svc-" + resourceAttributes["service.name"]`,
+			result: `"ns-" + (vars.ns) + ":svc-" + (resourceAttributes["service.name"])`,
 		},
 		{
 			name:   "adjacent interpolations",
 			expr:   `x-${a}${b}-y`,
-			result: `"x-" + a + b + "-y"`,
+			result: `"x-" + (a) + (b) + "-y"`,
 		},
 		{
 			name:      "empty interpolation",
