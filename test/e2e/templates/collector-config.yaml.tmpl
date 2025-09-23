@@ -1,0 +1,32 @@
+extensions:
+  sts_settings_provider:
+    kafka:
+      brokers: ["{{ .KafkaBroker }}"]
+      topic: "{{ .SettingsTopic }}"
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "{{ .OtlpGRPCEndpoint }}"
+
+connectors:
+  tracetotopo:
+
+exporters:
+  stskafkaexporter:
+    brokers: ["{{ .KafkaBroker }}"]
+    topic: "{{ .TopologyTopic }}"
+
+service:
+  telemetry:
+    logs:
+      level: debug
+  extensions: [sts_settings_provider]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [tracetotopo]
+    logs:
+      receivers: [tracetotopo]
+      exporters: [stskafkaexporter]

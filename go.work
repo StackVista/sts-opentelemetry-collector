@@ -10,4 +10,5 @@ use (
 	./extension/servicetokenauthextension
 	./extension/settingsproviderextension
 	./processor/stsusageprocessor
+	./test/e2e
 )
