@@ -95,7 +95,7 @@ func UniqueTopic(topicName string) string {
 }
 
 // PublishSettings writes settings protocol messages to Kafka.
-func PublishSettings(t *testing.T, brokers string, settingsTopic string) {
+func PublishSettings(t *testing.T, logger *zap.Logger, brokers string, settingsTopic string, snapshots ...TestSnapshot) {
 	cl, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers),
 		kgo.AllowAutoTopicCreation(),
@@ -103,23 +103,41 @@ func PublishSettings(t *testing.T, brokers string, settingsTopic string) {
 	require.NoError(t, err)
 	defer cl.Close()
 
-	rec := &kgo.Record{
-		Topic: settingsTopic,
-		Value: []byte(`{"mapping": "serviceA->componentX"}`),
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	err = cl.ProduceSync(ctx, rec).FirstErr()
-	require.NoError(t, err)
+
+	for _, s := range snapshots {
+		records, err := s.Records(settingsTopic)
+		require.NoError(t, err)
+
+		for _, rec := range records {
+			require.NoError(t, cl.ProduceSync(ctx, rec).FirstErr())
+		}
+	}
+
+	logger.Info(
+		"Published settings to Kafka",
+		zap.String("topic", settingsTopic),
+		zap.Int("# records", len(snapshots)),
+	)
 }
 
 // ConsumeTopology reads N records of TopologyStreamMessage from the topology topic.
-func ConsumeTopology(ctx context.Context, t *testing.T, brokers string, topologyTopic string, minRecords int) []*kgo.Record {
+func ConsumeTopology(
+	ctx context.Context,
+	logger *zap.Logger,
+	brokers string,
+	topologyTopic string,
+	minRecords int,
+) []*kgo.Record {
 	cl, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers),
+		kgo.ConsumerGroup("test-consumer-"+uuid.New().String()),
 		kgo.ConsumeTopics(topologyTopic),
 	)
-	require.NoError(t, err)
+	if err != nil {
+		logger.Fatal("Failed to create Kafka client", zap.Error(err))
+	}
 	defer cl.Close()
 
 	var recs []*kgo.Record
@@ -129,12 +147,14 @@ func ConsumeTopology(ctx context.Context, t *testing.T, brokers string, topology
 		fetches := cl.PollFetches(ctx)
 		if errs := fetches.Errors(); len(errs) > 0 {
 			for _, e := range errs {
-				t.Logf("Kafka fetch error: %v", e)
+				logger.Fatal("Kafka fetch error", zap.Any("fetchError", e))
 			}
 		}
 		fetches.EachRecord(func(r *kgo.Record) {
 			recs = append(recs, r)
 		})
 	}
+
+	logger.Info("Consumed records from Kafka", zap.String("topic", topologyTopic), zap.Int("# records", len(recs)))
 	return recs
 }

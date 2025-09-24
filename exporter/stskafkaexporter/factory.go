@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	Type = component.MustNewType("stskafkaexporter") //nolint:gochecknoglobals
+	Type = component.MustNewType("sts_kafka_exporter") //nolint:gochecknoglobals
 )
 
 // Factory wraps the otel exporter.Factory but allows constructor injection for testing.

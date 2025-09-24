@@ -239,7 +239,11 @@ func (d *DefaultSettingsSnapshotProcessor) recordSettingsSize(
 		settingsSize += stsSettingsModel.SizeOfRawSetting(s)
 	}
 
-	d.logger.Debug("Recording settings size", zap.Int64("settings_size", settingsSize))
+	d.logger.Debug(
+		"Recording settings size",
+		zap.Int64("settings_size_bytes", settingsSize),
+		zap.String("settings_size_kb", fmt.Sprintf("%.2f KB", float64(settingsSize)/1024)),
+	)
 
 	d.settingsCountHistogram.Record(d.ctx, settingsSize,
 		metric.WithAttributes(

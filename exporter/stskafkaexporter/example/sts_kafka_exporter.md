@@ -3,7 +3,7 @@
 Example configuration:
 ```yaml
 exporters:
-  stskafkaexporter:
+  sts_kafka_exporter:
     brokers: [ "localhost:9092" ]
     topic: "sts-otel-topology" 
     read_timeout: 2s
@@ -33,5 +33,5 @@ service:
     logs:
       receivers: [ otlp ]
       processors: [ batch ]
-      exporters: [ stskafkaexporter ]
+      exporters: [ sts_kafka_exporter ]
 ```

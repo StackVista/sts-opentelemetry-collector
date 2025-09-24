@@ -172,7 +172,7 @@ func StartCollector(ctx context.Context, t *testing.T, configFile string, networ
 
 	t.Cleanup(func() {
 		_ = container.Terminate(ctx)
-		logger.Info("Kafka broker (testcontainer) terminated", zap.String("containerName", containerName))
+		logger.Info("Otel collector (testcontainer) terminated", zap.String("containerName", containerName))
 	})
 
 	// Discover the mapped host port for OTLP

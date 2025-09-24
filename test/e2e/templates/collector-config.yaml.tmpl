@@ -14,7 +14,7 @@ connectors:
   tracetotopo:
 
 exporters:
-  stskafkaexporter:
+  sts_kafka_exporter:
     brokers: ["{{ .KafkaBroker }}"]
     topic: "{{ .TopologyTopic }}"
 
@@ -29,4 +29,4 @@ service:
       exporters: [tracetotopo]
     logs:
       receivers: [tracetotopo]
-      exporters: [stskafkaexporter]
+      exporters: [sts_kafka_exporter]
