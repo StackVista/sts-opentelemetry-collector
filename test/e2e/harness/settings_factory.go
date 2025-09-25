@@ -156,7 +156,6 @@ func (s OtelComponentMappingSnapshot) Records(topic string) ([]*kgo.Record, erro
 type OtelRelationMappingSnapshot struct {
 	SnapshotID string
 	MappingID  string
-	Name       string
 
 	Conditions []stsSettingsModel.OtelConditionMapping
 	Output     stsSettingsModel.OtelRelationMappingOutput
@@ -175,7 +174,6 @@ func (s OtelRelationMappingSnapshot) Records(topic string) ([]*kgo.Record, error
 			CreatedTimeStamp: time.Now().Unix(),
 			ExpireAfterMs:    s.ExpireAfterMs,
 			Id:               s.MappingID,
-			Name:             s.Name,
 			Conditions:       s.Conditions,
 			Output:           s.Output,
 			Shard:            0,

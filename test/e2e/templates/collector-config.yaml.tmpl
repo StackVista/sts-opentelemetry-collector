@@ -18,6 +18,9 @@ exporters:
     brokers: ["{{ .KafkaBroker }}"]
     topic: "{{ .TopologyTopic }}"
 
+  # Logging exporter for debugging
+  debug: {}
+
 service:
   telemetry:
     logs:
@@ -26,7 +29,7 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      exporters: [tracetotopo]
+      exporters: [tracetotopo, debug] # so we can see spans exported
     logs:
       receivers: [tracetotopo]
       exporters: [sts_kafka_exporter]

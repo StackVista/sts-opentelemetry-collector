@@ -6,10 +6,11 @@ import (
 	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"github.com/stretchr/testify/require"
+	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 	"google.golang.org/protobuf/proto"
-	"log"
+	"slices"
 	"testing"
 	"time"
 )
@@ -63,7 +64,6 @@ func SetupTopologyTest(t *testing.T, numCollectors int) *TopologyTestEnv {
 	}
 
 	logger := zaptest.NewLogger(t)
-
 	logger.Info("Test setup complete")
 
 	return &TopologyTestEnv{
@@ -81,45 +81,148 @@ func SetupTopologyTest(t *testing.T, numCollectors int) *TopologyTestEnv {
 	}
 }
 
-func TestTraceToOtelTopology_CreateMapping(t *testing.T) {
+func TestTraceToOtelTopology_CreateComponentAndRelationMappings(t *testing.T) {
 	env := SetupTopologyTest(t, 1)
 	defer env.Cleanup()
 
-	// Publish settings
+	publishSettingSnapshots(t, env)
+	sendTraces(t, env)
+
+	recs := consumeTopologyRecords(t, env, 2)
+	components, relations := extractComponentsAndRelations(t, recs)
+
+	assertComponents(t, components)
+	assertRelations(t, relations)
+}
+
+func TestTraceToOtelTopology_ComponentMappingUpdate(t *testing.T) {
+	env := SetupTopologyTest(t, 1)
+	defer env.Cleanup()
+
+	// Publish initial settings
+	publishSettingSnapshots(t, env)
+	sendTraces(t, env)
+	recs := consumeTopologyRecords(t, env, 2)
+	components, relations := extractComponentsAndRelations(t, recs)
+	assertComponents(t, components)
+	assertRelations(t, relations)
+
+	// Publish updated settings
+	newVersion := "1.2.4"
+	publishUpdatedSettingSnapshots(t, env, newVersion)
+
+	sendTraces(t, env)
+	recs = consumeTopologyRecords(t, env, 2)
+	components, relations = extractComponentsAndRelations(t, recs)
+
+	// Assert that the updated component exists
+	require.Len(t, components, 1)
+	found := false
+	for _, c := range components {
+		if c.Name == "checkout-service-updated" && c.ExternalId == "627cc493" && slices.Contains(c.Tags, "version:1.2.4") {
+			found = true
+		}
+	}
+	require.True(t, found, "expected updated component mapping not found")
+
+	// Relations can be checked again if they should be updated
+	assertRelations(t, relations)
+}
+
+func publishSettingSnapshots(t *testing.T, env *TopologyTestEnv) {
 	component := otelComponentMappingSnapshot()
 	relation := otelRelationMappingSnapshot()
 	harness.PublishSettings(t, env.Logger, env.Kafka.Instance.HostAddr, env.Kafka.SettingsTopic, component, relation)
+	// A bit of settle time to ensure setting snapshots are processed in the collector before sending traces
+	time.Sleep(1 * time.Second)
+}
 
-	// Send traces to the collector
+func publishUpdatedSettingSnapshots(t *testing.T, env *TopologyTestEnv, newVersion string) {
+	component := otelComponentMappingSnapshot()
+
+	// Update 1: name change
+	component.Output.Name = strExpr("checkout-service-updated")
+
+	if component.Output.Required.Tags == nil {
+		component.Output.Required.Tags = &[]settings.OtelTagMapping{}
+	}
+
+	// Update 2: additional required tag
+	*component.Output.Required.Tags = append(*component.Output.Required.Tags, settings.OtelTagMapping{
+		Source: strExpr(newVersion),
+		Target: "version",
+	})
+
+	// Only need to publish the setting type that changed
+	harness.PublishSettings(t, env.Logger, env.Kafka.Instance.HostAddr, env.Kafka.SettingsTopic, component)
+	time.Sleep(1 * time.Second) // allow connector to process the update
+}
+
+func sendTraces(t *testing.T, env *TopologyTestEnv) {
 	endpoint := env.Collector.Instances[0].HostAddr
 	err := harness.BuildAndSendTrace(env.Ctx, env.Logger, endpoint, *traceSpec())
 	require.NoError(t, err)
+}
 
-	// Verify topology records in Instance
-	recs := harness.ConsumeTopology(env.Ctx, env.Logger, env.Kafka.Instance.HostAddr, env.Kafka.TopologyTopic, 2)
+func consumeTopologyRecords(t *testing.T, env *TopologyTestEnv, minRecords int) []*kgo.Record {
+	recs := harness.ConsumeTopology(env.Ctx, env.Logger, env.Kafka.Instance.HostAddr, env.Kafka.TopologyTopic, minRecords)
+	require.NotEmpty(t, recs)
+	return recs
+}
+
+func extractComponentsAndRelations(
+	t *testing.T,
+	recs []*kgo.Record,
+) (map[string]*topo_stream_v1.TopologyStreamComponent, map[string]*topo_stream_v1.TopologyStreamRelation) {
+	components := make(map[string]*topo_stream_v1.TopologyStreamComponent)
+	relations := make(map[string]*topo_stream_v1.TopologyStreamRelation)
 
 	for _, rec := range recs {
 		var topoMsg topo_stream_v1.TopologyStreamMessage
-		if err := proto.Unmarshal(rec.Value, &topoMsg); err != nil {
-			env.Logger.Fatal("failed to unmarshal record", zap.Error(err))
-		}
-
-		// Optionally, assert on fields
+		require.NoError(t, proto.Unmarshal(rec.Value, &topoMsg))
 		require.NotNil(t, topoMsg.Payload)
-		for _, c := range topoMsg.GetTopologyStreamRepeatElementsData().Components {
-			env.Logger.Info("Component", zap.String("name", c.Name), zap.String("externalId", c.ExternalId))
+
+		data := topoMsg.GetTopologyStreamRepeatElementsData()
+		for _, c := range data.Components {
+			components[c.ExternalId] = c
 		}
-		for _, r := range topoMsg.GetTopologyStreamRepeatElementsData().Relations {
-			env.Logger.Info("Relation", zap.String("source", r.SourceIdentifier), zap.String("target", r.TargetIdentifier))
-			log.Printf("Relation: %s -> %s", r.SourceIdentifier, r.TargetIdentifier)
+		for _, r := range data.Relations {
+			relations[r.ExternalId] = r
 		}
 	}
-	require.NotEmpty(t, recs)
+
+	return components, relations
+}
+
+func assertComponents(t *testing.T, components map[string]*topo_stream_v1.TopologyStreamComponent) {
+	require.Len(t, components, 1)
+	for _, c := range components {
+		require.Equal(t, "checkout-service", c.Name)
+		require.Equal(t, "627cc493", c.ExternalId)
+	}
+}
+
+func assertRelations(t *testing.T, relations map[string]*topo_stream_v1.TopologyStreamRelation) {
+	require.Len(t, relations, 2)
+
+	expectedRelations := []struct{ Source, Target string }{
+		{"checkout-service", "payment-service"},
+		{"checkout-service", "shipment-service"},
+	}
+
+	for _, r := range relations {
+		found := false
+		for _, expected := range expectedRelations {
+			if r.SourceIdentifier == expected.Source && r.TargetIdentifier == expected.Target {
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "unexpected relation: %s -> %s", r.SourceIdentifier, r.TargetIdentifier)
+	}
 }
 
 func traceSpec() *harness.TraceSpec {
-	now := time.Now().UnixMilli()
-
 	return &harness.TraceSpec{
 		ResourceAttributes: map[string]string{
 			"service.name":        "checkout-service",
@@ -133,45 +236,41 @@ func traceSpec() *harness.TraceSpec {
 			"k8s.pod.name":        "checkout-service-8675309",
 		},
 		ScopeAttributes: map[string]string{
-			"otel.scope.name":        "io.opentelemetry.instrumentation.http",
-			"otel.scope.version":     "1.17.0",
-			"otel.scope.description": "HTTP Client Instrumentation",
+			"otel.scope.name":    "io.opentelemetry.instrumentation.http",
+			"otel.scope.version": "1.17.0",
 		},
 		Spans: []harness.SpanSpec{
 			{
 				Name: "GET /checkout",
 				Attributes: map[string]interface{}{
-					"http.method":         "GET",
-					"http.status":         200,
-					"user.id":             "123",
-					"db.system":           "postgresql",
-					"db.statement":        "SELECT * FROM orders WHERE user_id=123",
-					"net.peer.name":       "orders-db",
-					"submitted.timestamp": now,
+					"http.method":  "GET",
+					"http.status":  200,
+					"user.id":      "123",
+					"db.system":    "postgresql",
+					"db.statement": "SELECT * FROM orders WHERE user_id=123",
+					"service.name": "checkout-service",
 				},
 			},
 			{
 				Name: "POST /payment",
 				Attributes: map[string]interface{}{
-					"http.method":         "POST",
-					"http.status":         201,
-					"user.id":             "123",
-					"db.system":           "postgresql",
-					"db.statement":        "INSERT INTO payments ...",
-					"net.peer.name":       "payments-db",
-					"submitted.timestamp": now,
+					"http.method":  "POST",
+					"http.status":  201,
+					"user.id":      "123",
+					"db.system":    "postgresql",
+					"db.statement": "INSERT INTO payments ...",
+					"service.name": "payment-service",
 				},
 			},
 			{
 				Name: "POST /shipment",
 				Attributes: map[string]interface{}{
-					"http.method":         "POST",
-					"http.status":         202,
-					"user.id":             "123",
-					"db.system":           "postgresql",
-					"db.statement":        "INSERT INTO shipments ...",
-					"net.peer.name":       "shipments-db",
-					"submitted.timestamp": now,
+					"http.method":  "POST",
+					"http.status":  202,
+					"user.id":      "123",
+					"db.system":    "postgresql",
+					"db.statement": "INSERT INTO shipments ...",
+					"service.name": "shipment-service",
 				},
 			},
 		},
@@ -180,12 +279,12 @@ func traceSpec() *harness.TraceSpec {
 
 func otelComponentMappingSnapshot() *harness.OtelComponentMappingSnapshot {
 	return &harness.OtelComponentMappingSnapshot{
-		SnapshotID:    "snap-comp-1",
-		MappingID:     "mapping1a",
+		SnapshotID:    "component-mapping-1",
+		MappingID:     "comp-mapping-1",
 		Name:          "checkout-service mapping",
 		ExpireAfterMs: 60000,
 		Conditions: []settings.OtelConditionMapping{
-			{Action: settings.CREATE, Expression: boolExpr(`vars.instanceId == "627cc493"`)},
+			{Action: settings.CREATE, Expression: boolExpr(`resourceAttributes["service.name"] == "checkout-service"`)},
 		},
 		Output: settings.OtelComponentMappingOutput{
 			Identifier: strExpr("${vars.instanceId}"),
@@ -204,21 +303,6 @@ func otelComponentMappingSnapshot() *harness.OtelComponentMappingSnapshot {
 					},
 				},
 			},
-			Optional: &settings.OtelComponentMappingFieldMapping{
-				AdditionalIdentifiers: &[]settings.OtelStringExpression{
-					{Expression: `${resourceAttributes["service.instance.id"]}`},
-				},
-				Tags: &[]settings.OtelTagMapping{
-					{
-						Source: strExpr(`${scopeAttributes["otel.scope.name"]}`),
-						Target: "instrumentation-lib",
-					},
-					{
-						Source: strExpr(`${scopeAttributes["otel.scope.version"]}`),
-						Target: "instrumentation-version",
-					},
-				},
-			},
 		},
 		Vars: []settings.OtelVariableMapping{
 			{Name: "instanceId", Value: strExpr(`${resourceAttributes["service.instance.id"]}`)},
@@ -228,12 +312,11 @@ func otelComponentMappingSnapshot() *harness.OtelComponentMappingSnapshot {
 
 func otelRelationMappingSnapshot() *harness.OtelRelationMappingSnapshot {
 	return &harness.OtelRelationMappingSnapshot{
-		SnapshotID:    "snap-rel-1",
-		MappingID:     "mapping1b",
-		Name:          "checkout->web",
+		SnapshotID:    "relation-mapping-1",
+		MappingID:     "rel-mapping-1",
 		ExpireAfterMs: 300000,
 		Conditions: []settings.OtelConditionMapping{
-			{Action: settings.CREATE, Expression: boolExpr(`spanAttributes["http.method"] == "GET"`)},
+			{Action: settings.CREATE, Expression: boolExpr(`resourceAttributes["service.name"] != spanAttributes["service.name"] && spanAttributes["http.method"] != ""`)},
 		},
 		Output: settings.OtelRelationMappingOutput{
 			SourceId: strExpr(`${resourceAttributes["service.name"]}`),

@@ -9,17 +9,9 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.uber.org/zap"
-	"math/rand"
 	"strings"
 	"time"
 )
-
-var r *rand.Rand
-
-func init() {
-	// obtain a local random generator
-	r = rand.New(rand.NewSource(time.Now().UnixNano()))
-}
 
 type SpanSpec struct {
 	Name       string
@@ -34,6 +26,11 @@ type TraceSpec struct {
 
 // BuildAndSendTrace constructs a trace with the given resource + spans and sends it to the endpoint
 func BuildAndSendTrace(ctx context.Context, logger *zap.Logger, endpoint string, spec TraceSpec) error {
+	// TODO: when we do get to a place where we spin up multiple collector instances, we can update this function to:
+	// - accept a slice of endpoints (collector grpc OTLP endpoints)
+	// - with some load balancing strategy (e.g. round-robin), send spans to the endpionts
+	// - cache a trace exporter/provider per endpoint
+
 	exp, err := otlptracegrpc.New(ctx,
 		otlptracegrpc.WithEndpoint(strings.TrimPrefix(endpoint, "http://")),
 		otlptracegrpc.WithInsecure(),
@@ -41,16 +38,11 @@ func BuildAndSendTrace(ctx context.Context, logger *zap.Logger, endpoint string,
 	if err != nil {
 		return fmt.Errorf("failed to create OTLP exporter: %w", err)
 	}
-	defer func() {
-		// The cancel timeout needs to be greater than the batch processor's max export delay
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-		defer cancel()
-		_ = exp.Shutdown(shutdownCtx)
-	}()
 
 	tp := trace.NewTracerProvider(
 		// The default export delay (5s) is too large for our test
-		trace.WithBatcher(exp, trace.WithBatchTimeout(200*time.Millisecond)),
+		//trace.WithBatcher(exp, trace.WithBatchTimeout(250*time.Millisecond)),
+		trace.WithSyncer(exp),
 		trace.WithResource(resource.NewWithAttributes(
 			"test",
 			convertToAttributes(spec.ResourceAttributes)...,
@@ -58,11 +50,10 @@ func BuildAndSendTrace(ctx context.Context, logger *zap.Logger, endpoint string,
 	)
 	defer func() {
 		// The cancel timeout needs to be greater than the batch processor's max export delay
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		_ = tp.Shutdown(shutdownCtx)
 	}()
-	//defer func() { _ = tp.Shutdown(ctx) }()
 
 	otel.SetTracerProvider(tp)
 	tracer := tp.Tracer("e2e-test")
@@ -90,13 +81,18 @@ func BuildAndSendTrace(ctx context.Context, logger *zap.Logger, endpoint string,
 			span.SetAttributes(attribute.String(k, v))
 		}
 
-		// simulate random execution time
-		sleepMs := r.Intn(100) + 1 // rand.Intn(100) returns 0..99, +1 gives 1..100
-		time.Sleep(time.Duration(sleepMs) * time.Millisecond)
+		// simulate some execution time
+		time.Sleep(2 * time.Millisecond)
 		span.End()
 	}
 
-	logger.Info("Spans exported")
+	flushCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := tp.ForceFlush(flushCtx); err != nil {
+		return fmt.Errorf("failed to flush traces: %w", err)
+	}
+
+	logger.Info("Trace exported")
 	return nil
 }
 

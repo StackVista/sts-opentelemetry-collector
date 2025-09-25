@@ -116,7 +116,7 @@ func PublishSettings(t *testing.T, logger *zap.Logger, brokers string, settingsT
 	}
 
 	logger.Info(
-		"Published settings to Kafka",
+		"Published setting snapshots to Kafka",
 		zap.String("topic", settingsTopic),
 		zap.Int("# records", len(snapshots)),
 	)
