@@ -19,7 +19,7 @@ import (
 	"text/template"
 )
 
-const collectorImage = "sts-opentelemetry-collector:latest"
+const defaultCollectorImage = "sts-opentelemetry-collector:latest" // local default
 
 var defaultCollectorTemplate string
 
@@ -46,6 +46,13 @@ type CollectorConfig struct {
 	OtlpGRPCEndpoint  string
 }
 
+func collectorImage() string {
+	if img := os.Getenv("OTEL_COLLECTOR_IMAGE"); img != "" {
+		return img
+	}
+	return defaultCollectorImage
+}
+
 // BuildCollectorImage supports rebuilding the image after source code (collector) changes. Individual tests don't need
 // to invoke this function - it's supposed to be called once, like in main_test.go.
 // Example: REBUILD_COLLECTOR_IMAGE=1 go test -v ./test/e2e/...
@@ -57,7 +64,7 @@ func BuildCollectorImage() error {
 	_, filename, _, _ := runtime.Caller(0)
 	baseDir := filepath.Join(filepath.Dir(filename), "../../..")
 
-	cmd := exec.Command("docker", "build", "-t", collectorImage, baseDir)
+	cmd := exec.Command("docker", "build", "-t", defaultCollectorImage, baseDir)
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
 
@@ -115,7 +122,7 @@ func StartCollector(ctx context.Context, t *testing.T, configFile string, networ
 	logger := zaptest.NewLogger(t)
 
 	req := testcontainers.ContainerRequest{
-		Image:        collectorImage,
+		Image:        collectorImage(),
 		ExposedPorts: []string{"4317/tcp"}, // container-side OTLP gRPC
 		Files: []testcontainers.ContainerFile{
 			{

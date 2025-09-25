@@ -115,7 +115,7 @@ func TestTraceToOtelTopology_ComponentMappingUpdate(t *testing.T) {
 	recs = consumeTopologyRecords(t, env, 2)
 	components, relations = extractComponentsAndRelations(t, recs)
 
-	// Assert that the updated component exists
+	// Assert that the updated component and relations
 	require.Len(t, components, 1)
 	found := false
 	for _, c := range components {
@@ -125,8 +125,10 @@ func TestTraceToOtelTopology_ComponentMappingUpdate(t *testing.T) {
 	}
 	require.True(t, found, "expected updated component mapping not found")
 
-	// Relations can be checked again if they should be updated
 	assertRelations(t, relations)
+	for _, r := range relations {
+		require.Equal(t, "http-request-updated", r.TypeName, "expected updated relation mapping not found")
+	}
 }
 
 func publishSettingSnapshots(t *testing.T, env *TopologyTestEnv) {
@@ -153,8 +155,9 @@ func publishUpdatedSettingSnapshots(t *testing.T, env *TopologyTestEnv, newVersi
 		Target: "version",
 	})
 
-	// Only need to publish the setting type that changed
-	harness.PublishSettings(t, env.Logger, env.Kafka.Instance.HostAddr, env.Kafka.SettingsTopic, component)
+	relation := otelRelationMappingSnapshot()
+	relation.Output.TypeName = strExpr("http-request-updated")
+	harness.PublishSettings(t, env.Logger, env.Kafka.Instance.HostAddr, env.Kafka.SettingsTopic, component, relation)
 	time.Sleep(1 * time.Second) // allow connector to process the update
 }
 
