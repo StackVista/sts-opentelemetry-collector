@@ -1,8 +1,12 @@
-package e2e
+package e2e_test
 
 import (
 	"context"
 	"e2e/harness"
+	"slices"
+	"testing"
+	"time"
+
 	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"github.com/stretchr/testify/require"
@@ -10,9 +14,6 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 	"google.golang.org/protobuf/proto"
-	"slices"
-	"testing"
-	"time"
 )
 
 const testLevelTimeout = 2 * time.Minute
@@ -28,6 +29,7 @@ type TopologyCollectorTestEnv struct {
 }
 
 type TopologyTestEnv struct {
+	//nolint:containedctx
 	Ctx       context.Context
 	Logger    *zap.Logger
 	Kafka     TopologyKafkaTestEnv

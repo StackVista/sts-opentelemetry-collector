@@ -22,10 +22,11 @@ import (
 
 const defaultCollectorImage = "sts-opentelemetry-collector:latest" // local default
 
+//nolint:gochecknoglobals
 var defaultCollectorTemplate string
 
 func init() {
-	// resolve relative to this source file
+	//nolint:dogsled
 	_, filename, _, _ := runtime.Caller(0)
 	baseDir := filepath.Dir(filename)
 	defaultCollectorTemplate = filepath.Join(baseDir, "../templates/collector-config.yaml.tmpl")
@@ -33,7 +34,7 @@ func init() {
 
 type CollectorInstance struct {
 	Container  testcontainers.Container
-	InstanceId int
+	InstanceID int
 	HostAddr   string // discovered mapped port
 }
 
@@ -62,6 +63,7 @@ func BuildCollectorImage() error {
 		return nil
 	}
 
+	//nolint:dogsled
 	_, filename, _, _ := runtime.Caller(0)
 	baseDir := filepath.Join(filepath.Dir(filename), "../../..")
 
@@ -91,7 +93,7 @@ func streamLines(r io.Reader, logf func(string)) {
 	}
 }
 
-func WriteCollectorConfig(cfg CollectorConfig, instanceId int) (string, error) {
+func WriteCollectorConfig(cfg CollectorConfig, instanceID int) (string, error) {
 	templatePath := cfg.TemplatePath
 	if templatePath == "" {
 		templatePath = defaultCollectorTemplate
@@ -102,7 +104,7 @@ func WriteCollectorConfig(cfg CollectorConfig, instanceId int) (string, error) {
 		return "", err
 	}
 
-	outPath := filepath.Join(os.TempDir(), fmt.Sprintf("collector-instance-%d.yaml", instanceId))
+	outPath := filepath.Join(os.TempDir(), fmt.Sprintf("collector-instance-%d.yaml", instanceID))
 	f, err := os.Create(outPath)
 	if err != nil {
 		return "", err
@@ -117,7 +119,13 @@ func WriteCollectorConfig(cfg CollectorConfig, instanceId int) (string, error) {
 
 // StartCollector starts an otel collector instance.
 // The container is automatically terminated when the test finishes.
-func StartCollector(ctx context.Context, t *testing.T, configFile string, networkName string, instanceId int) *CollectorInstance {
+func StartCollector(
+	ctx context.Context,
+	t *testing.T,
+	configFile string,
+	networkName string,
+	instanceID int,
+) *CollectorInstance {
 	t.Helper()
 
 	logger := zaptest.NewLogger(t)
@@ -171,7 +179,7 @@ func StartCollector(ctx context.Context, t *testing.T, configFile string, networ
 
 	return &CollectorInstance{
 		Container:  container,
-		InstanceId: instanceId,
+		InstanceID: instanceID,
 		HostAddr:   fmt.Sprintf("%s:%s", host, mappedPort.Port()),
 	}
 }

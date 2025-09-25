@@ -3,14 +3,15 @@ package harness
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
+
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.uber.org/zap"
-	"strings"
-	"time"
 )
 
 type SpanSpec struct {
@@ -40,8 +41,6 @@ func BuildAndSendTrace(ctx context.Context, logger *zap.Logger, endpoint string,
 	}
 
 	tp := trace.NewTracerProvider(
-		// The default export delay (5s) is too large for our test
-		//trace.WithBatcher(exp, trace.WithBatchTimeout(250*time.Millisecond)),
 		trace.WithSyncer(exp),
 		trace.WithResource(resource.NewWithAttributes(
 			"test",

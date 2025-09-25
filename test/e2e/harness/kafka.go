@@ -3,14 +3,15 @@ package harness
 import (
 	"context"
 	"fmt"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/testcontainers/testcontainers-go/modules/kafka"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
-	"strings"
-	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -95,7 +96,13 @@ func UniqueTopic(topicName string) string {
 }
 
 // PublishSettings writes settings protocol messages to Kafka.
-func PublishSettings(t *testing.T, logger *zap.Logger, brokers string, settingsTopic string, snapshots ...TestSnapshot) {
+func PublishSettings(
+	t *testing.T,
+	logger *zap.Logger,
+	brokers string,
+	settingsTopic string,
+	snapshots ...TestSnapshot,
+) {
 	cl, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers),
 		kgo.AllowAutoTopicCreation(),
