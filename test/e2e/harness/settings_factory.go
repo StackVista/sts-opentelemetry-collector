@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// TestSnapshot is a collection of Kafka records that represent a protocol snapshot.
+// TestSnapshot is a collection of Kafka records that represent a settings protocol snapshot.
 type TestSnapshot interface {
 	Records(topic string) ([]*kgo.Record, error)
 	Type() stsSettingsModel.SettingType

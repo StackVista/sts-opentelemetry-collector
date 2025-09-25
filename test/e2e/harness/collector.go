@@ -46,37 +46,6 @@ type CollectorConfig struct {
 	OtlpGRPCEndpoint  string
 }
 
-// BuildCollectorImage supports rebuilding the image after source code (collector) changes.
-// Example: REBUILD_COLLECTOR_IMAGE=1 go test ./test/e2e/...
-//func BuildCollectorImage(t *testing.T) error {
-//	logger := zaptest.NewLogger(t).Sugar()
-//
-//	_, filename, _, _ := runtime.Caller(0)
-//	baseDir := filepath.Join(filepath.Dir(filename), "../../..")
-//
-//	cmd := exec.Command("docker", "build", "-t", collectorImage, baseDir)
-//
-//	stdout, _ := cmd.StdoutPipe()
-//	stderr, _ := cmd.StderrPipe()
-//
-//	log.Info("Building collector image", zap.String("image", collectorImage))
-//	if err := cmd.Start(); err != nil {
-//		return err
-//	}
-//
-//	go pipeToZapLog(logger, stdout, "stdout")
-//	go pipeToZapLog(logger, stderr, "stderr")
-//
-//	return cmd.Wait()
-//}
-//
-//func pipeToZapLog(logger *zap.SugaredLogger, r io.Reader, stream string) {
-//	scanner := bufio.NewScanner(r)
-//	for scanner.Scan() {
-//		logger.Infow("docker build output", "stream", stream, "line", scanner.Text())
-//	}
-//}
-
 // BuildCollectorImage supports rebuilding the image after source code (collector) changes. Individual tests don't need
 // to invoke this function - it's supposed to be called once, like in main_test.go.
 // Example: REBUILD_COLLECTOR_IMAGE=1 go test -v ./test/e2e/...
