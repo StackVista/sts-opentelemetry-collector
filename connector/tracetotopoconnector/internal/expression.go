@@ -51,8 +51,9 @@ const (
 )
 
 var (
-	interpolationExprCapturePattern = regexp.MustCompile(`(\$+)\{([^}]*)\}`) // capture group 1: one or more $, group 2: inner expression
-	escapeDollarDollarCurlyPattern  = regexp.MustCompile(`\$\$`)             // to replace all $$ to $
+	// capture group 1: one or more $, group 2: inner expression
+	interpolationExprCapturePattern = regexp.MustCompile(`(\$+)\{([^}]*)\}`)
+	escapeDollarDollarCurlyPattern  = regexp.MustCompile(`\$\$`) // to replace all $$ to $
 )
 
 type CacheSettings struct {
