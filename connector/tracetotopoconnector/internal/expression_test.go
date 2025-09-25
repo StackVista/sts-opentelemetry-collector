@@ -454,18 +454,25 @@ func TestValidateInterpolation(t *testing.T) {
 		// Invalid: unterminated
 		{"unterminated-simple", `foo-${bar`, "unterminated"},
 		{"unterminated-quoted", `"foo-${vars["env"]"`, "unterminated"},
+		{"unterminated-double", `foo-${{vars["env"]}`, "unterminated"},
+
+		// Valid: random braces in literal part
+		{"literal-brace-before", `foo-{bar-${x}`, ""},
+		{"literal-brace-after", `foo-${x}-bar}`, ""},
+		{"literal-braces-around", `{foo-${x}-bar}`, ""},
 
 		// Invalid: nested
 		{"nested-simple", `foo-${${bar}}`, "nested"},
-		{"nested-deeper", `${x + ${y}}`, "nested"},
+		{"nested-deeper", `${x+${y}}`, "nested"},
 
-		// Invalid: unmatched closing brace
-		{"unmatched-closing", `foo-}`, "unmatched"},
-		{"unmatched-closing-after", `pre-${bar}}-post`, "unmatched"},
+		// Valid: unmatched closing brace, simply part of literal
+		{"unmatched-closing", `foo-}`, ""},
+		{"unmatched-closing-after", `pre-${bar}}-post`, ""},
 
 		// Valid: dollar not followed by '{' is just literal
 		{"dollar-space", `$ {foo}`, ""},
-		{"double-dollar-then-interp", `$${foo}`, ""}, // literal '$' + ${foo}
+		{"double-dollar-then-interp", `$${foo}`, ""},  // escaped interpolation: literal ${foo}
+		{"double-dollar-then-interp", `$$${foo}`, ""}, // interpolation prefixed with literal $: $ + value-of(foo)
 	}
 
 	for _, tt := range tests {
@@ -543,17 +550,22 @@ func TestRewriteInterpolations(t *testing.T) {
 		{
 			name:   "quoted with interpolation",
 			expr:   `"service-${resourceAttributes["env"]}"`,
-			result: `"service-" + (resourceAttributes["env"])`,
+			result: `"service-"+(resourceAttributes["env"])`,
 		},
 		{
 			name:   "unquoted with interpolation",
 			expr:   `ns-${vars.ns}:svc-${resourceAttributes["service.name"]}`,
-			result: `"ns-" + (vars.ns) + ":svc-" + (resourceAttributes["service.name"])`,
+			result: `"ns-"+(vars.ns)+":svc-"+(resourceAttributes["service.name"])`,
 		},
 		{
 			name:   "adjacent interpolations",
 			expr:   `x-${a}${b}-y`,
-			result: `"x-" + (a) + (b) + "-y"`,
+			result: `"x-"+(a)+(b)+"-y"`,
+		},
+		{
+			name:   "Curly brace after interpolation",
+			expr:   `hello ${resourceAttributes["service.name"]}}`,
+			result: `"hello "+(resourceAttributes["service.name"])+"}"`,
 		},
 		{
 			name:      "empty interpolation",
@@ -571,9 +583,29 @@ func TestRewriteInterpolations(t *testing.T) {
 			errSubstr: "unterminated interpolation",
 		},
 		{
+			name:      "unterminated",
+			expr:      "foo-${ {bar}",
+			errSubstr: "unterminated interpolation",
+		},
+		{
 			name:      "nested interpolation not allowed",
 			expr:      `foo-${${bar}}`,
 			errSubstr: "nested interpolation",
+		},
+		{
+			name:   "support escaping ${ with $${ in literal part",
+			expr:   `$${a}-${b}`,
+			result: `"${a}-"+(b)`,
+		},
+		{
+			name:   "support escaping $$$${ with $${ in literal part",
+			expr:   `$$$${a}-${b}`,
+			result: `"$${a}-"+(b)`,
+		},
+		{
+			name:   "support escaping $${ with $$${",
+			expr:   `$$${a}-${b}`,
+			result: `"$"+(a)+"-"+(b)`,
 		},
 	}
 
