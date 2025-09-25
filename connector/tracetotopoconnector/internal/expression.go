@@ -51,7 +51,9 @@ const (
 )
 
 var (
-	interpolationExprCapturePattern = regexp.MustCompile(`\$\{([^}]*)\}`) // capture group for rewrite
+	// capture group 1: one or more $, group 2: inner expression
+	interpolationExprCapturePattern = regexp.MustCompile(`(\$+)\{([^}]*)\}`)
+	escapeDollarDollarCurlyPattern  = regexp.MustCompile(`\$\$`) // to replace all $$ to $
 )
 
 type CacheSettings struct {
@@ -260,6 +262,11 @@ func validateInterpolation(origExpr string) error {
 	var stack []frame
 	i := 0
 	for i < len(expr) {
+		// escaped interpolation
+		if i+2 < len(expr) && expr[i] == '$' && expr[i+1] == '$' && expr[i+2] == '{' {
+			i += 3
+			continue
+		}
 		// Detect start of interpolation
 		if i+1 < len(expr) && expr[i] == '$' && expr[i+1] == '{' {
 			// If the top frame is an interpolation, this is nested, which is invalid.
@@ -343,18 +350,6 @@ func validateInterpolation(origExpr string) error {
 				i++
 				continue
 			}
-		}
-
-		// Not inside any frame:
-		// - plain '{' opens a brace frame
-		// - an unmatched '}' is an error
-		if char == '{' {
-			stack = append(stack, frame{kind: braceFrame, start: i})
-			i++
-			continue
-		}
-		if char == '}' {
-			return fmt.Errorf("unmatched '}' at pos %d", i)
 		}
 
 		// otherwise just advance
@@ -481,35 +476,50 @@ func rewriteInterpolations(expr string) (string, error) {
 	//nolint:prealloc
 	var parts []string
 	lastIndex := 0
+	matches := interpolationExprCapturePattern.FindAllStringSubmatchIndex(expr, -1)
 
-	for _, match := range interpolationExprCapturePattern.FindAllStringSubmatchIndex(expr, -1) {
-		start, end := match[0], match[1]
-		innerStart, innerEnd := match[2], match[3]
+	for _, match := range matches {
+		fullMatchStart, fullMatchEnd := match[0], match[1]
+		dollarGroupStart, dollarGroupEnd := match[2], match[3]
+		innerExprStart, innerExprEnd := match[4], match[5]
+
+		dollarSigns := expr[dollarGroupStart:dollarGroupEnd]
+		numDollars := len(dollarSigns)
+
+		// Even number of '$' means all are escaped pairs, so this is not a real interpolation.
+		// e.g., $${...} or $$$${...}
+		if numDollars%2 == 0 {
+			continue
+		}
+
+		// An odd number of '$' means there's one real interpolation preceded by escaped pairs.
+		// e.g., ${...} (1), $$${...} (3), etc.
+		interpolationStart := fullMatchStart + numDollars - 1
 
 		// literal before the interpolation
-		if start > lastIndex {
-			lit := expr[lastIndex:start]
-			if lit != "" {
-				parts = append(parts, strconv.Quote(lit))
-			}
+		if interpolationStart > lastIndex {
+			lit := expr[lastIndex:interpolationStart]
+			parts = append(parts, strconv.Quote(unescapeDollars(lit)))
 		}
 
-		inner := strings.TrimSpace(expr[innerStart:innerEnd])
-		if inner == "" {
-			return "", fmt.Errorf("empty interpolation found")
-		}
+		// The interpolation part
+		inner := strings.TrimSpace(expr[innerExprStart:innerExprEnd])
 		parts = append(parts, "("+inner+")")
 
-		lastIndex = end
+		lastIndex = fullMatchEnd
 	}
 
 	// trailing literal
 	if lastIndex < len(expr) {
 		lit := expr[lastIndex:]
-		parts = append(parts, strconv.Quote(lit))
+		parts = append(parts, strconv.Quote(unescapeDollars(lit)))
 	}
 
-	return strings.Join(parts, " + "), nil
+	return strings.Join(parts, "+"), nil
+}
+
+func unescapeDollars(literal string) string {
+	return escapeDollarDollarCurlyPattern.ReplaceAllLiteralString(literal, "$")
 }
 
 // flattenAttributes recursively converts pcommon.Map attributes into a plain Go map,
