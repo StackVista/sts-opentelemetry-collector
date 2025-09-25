@@ -4,11 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zaptest"
 	"io"
 	"os"
 	"os/exec"
@@ -17,6 +12,12 @@ import (
 	"strings"
 	"testing"
 	"text/template"
+
+	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest"
 )
 
 const defaultCollectorImage = "sts-opentelemetry-collector:latest" // local default
@@ -120,9 +121,11 @@ func StartCollector(ctx context.Context, t *testing.T, configFile string, networ
 	t.Helper()
 
 	logger := zaptest.NewLogger(t)
+	collectorImg := collectorImage()
+	logger.Info("Using OpenTelemetry Collector image", zap.String("image", collectorImg))
 
 	req := testcontainers.ContainerRequest{
-		Image:        collectorImage(),
+		Image:        collectorImg,
 		ExposedPorts: []string{"4317/tcp"}, // container-side OTLP gRPC
 		Files: []testcontainers.ContainerFile{
 			{
@@ -133,7 +136,7 @@ func StartCollector(ctx context.Context, t *testing.T, configFile string, networ
 		},
 		Cmd:        []string{"--config", "/etc/otelcol/config.yaml"},
 		Networks:   []string{networkName},
-		WaitingFor: wait.ForLog("Everything is ready"), //TODO: adjust the log message accordingly
+		WaitingFor: wait.ForLog("Everything is ready"),
 	}
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
