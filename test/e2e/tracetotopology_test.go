@@ -145,7 +145,7 @@ func TestTraceToOtelTopology_ErrorReturnedOnIncorrectMappingConfig(t *testing.T)
 	component.Output.Name = strExpr("${resourceAttributes}") // a map reference where a string expression is required
 	harness.PublishSettings(t, env.Logger, env.Kafka.Instance.HostAddr, env.Kafka.SettingsTopic, component)
 	numSpans := sendTraces(t, env)
-	recs := consumeTopologyRecords(t, env, 2)
+	recs := consumeTopologyRecords(t, env, 1)
 
 	components, relations, errs := extractComponentsAndRelations(t, recs)
 	require.Len(t, components, 0)
