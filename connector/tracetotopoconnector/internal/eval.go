@@ -1,6 +1,8 @@
 package internal
 
 import (
+	"fmt"
+
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
@@ -15,7 +17,7 @@ func EvalVariables(
 	scope *ptrace.ScopeSpans,
 	resource *ptrace.ResourceSpans,
 	vars *[]settings.OtelVariableMapping,
-) (map[string]string, map[string]error) {
+) (map[string]string, []error) {
 	result := make(map[string]string)
 	errs := make(map[string]error)
 	if vars == nil {
@@ -42,7 +44,11 @@ func EvalVariables(
 	}
 
 	if len(errs) > 0 {
-		return result, errs
+		errSlice := make([]error, 0, len(errs))
+		for varName, err := range errs {
+			errSlice = append(errSlice, fmt.Errorf("variable %q evaluation failed: %w", varName, err))
+		}
+		return nil, errSlice
 	}
 
 	return result, nil

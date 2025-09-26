@@ -137,6 +137,11 @@ func TestEvalStringExpression(t *testing.T) {
 			expected: "good-cart",
 		},
 		{
+			name:     "support key existence checks",
+			expr:     `${'service.name' in resourceAttributes ? 'yes' : 'no'}`,
+			expected: "yes",
+		},
+		{
 			name:        "fail on unterminated interpolation",
 			expr:        `"foo-${vars["env"]"`, // missing closing }
 			errContains: "unterminated interpolation",
@@ -145,6 +150,11 @@ func TestEvalStringExpression(t *testing.T) {
 			name:        "fail on empty interpolation",
 			expr:        `foo-${}`,
 			errContains: "empty interpolation",
+		},
+		{
+			name:        "fail with expression marker in wrapped expression",
+			expr:        `${ ${spanAttributes["http.status_code"]} }`,
+			errContains: "invalid nested interpolation at position",
 		},
 	}
 

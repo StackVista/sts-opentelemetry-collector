@@ -176,7 +176,6 @@ func (e *CelEvaluator) EvalMapExpression(
 // ---------------------------------------------------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------------------------------------------------
-
 // classifyExpression determines the kind of expression so the evaluator
 // can choose the right handling path. It distinguishes between:
 //   - ${expr} - a wrapped CEL expression (kindStringWithIdentifiers, kindMapReferenceOnly)
@@ -188,7 +187,7 @@ func (e *CelEvaluator) EvalMapExpression(
 func classifyExpression(expr string) (expressionKind, error) {
 	switch {
 	case strings.HasPrefix(expr, "${") && strings.HasSuffix(expr, "}"):
-		if err := validateInterpolation(expr); err != nil {
+		if err := detectNestedInterpolation(expr); err != nil {
 			return kindInvalid, err
 		}
 
@@ -215,6 +214,26 @@ func classifyExpression(expr string) (expressionKind, error) {
 
 		return kindStringLiteral, nil
 	}
+}
+
+// detectNestedInterpolation scans inside a wrapped CEL expression (`${...}`)
+// for any additional `${` markers.
+func detectNestedInterpolation(expr string) error {
+	if len(expr) <= 2 {
+		return nil
+	}
+
+	if i := strings.Index(expr[2:], "${"); i != -1 {
+		pos := i + 2 // account for skipped prefix
+		caretLine := strings.Repeat(".", pos) + "^"
+
+		return fmt.Errorf(
+			"invalid nested interpolation at position %d:\n%s\n%s",
+			pos, expr, caretLine,
+		)
+	}
+
+	return nil
 }
 
 func isPureMapReference(expr string) bool {
@@ -448,7 +467,7 @@ func stringify(result interface{}) (string, error) {
 		return v, nil
 	case fmt.Stringer:
 		return v.String(), nil
-	case int, int32, int64, float32, float64:
+	case int, int32, uint64, int64, float32, float64:
 		return fmt.Sprint(v), nil
 	default:
 		return "", fmt.Errorf("expression did not evaluate to string, got: %T", result)
