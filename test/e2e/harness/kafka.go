@@ -127,6 +127,9 @@ func PublishSettings(
 		zap.String("topic", settingsTopic),
 		zap.Int("# records", len(snapshots)),
 	)
+
+	// A bit of settle time to ensure setting snapshots are processed in the collector and subscribers notified
+	time.Sleep(1 * time.Second)
 }
 
 // ConsumeTopology reads N records of TopologyStreamMessage from the topology topic.

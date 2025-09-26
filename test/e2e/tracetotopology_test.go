@@ -91,13 +91,14 @@ func TestTraceToOtelTopology_CreateComponentAndRelationMappings(t *testing.T) {
 	sendTraces(t, env)
 
 	recs := consumeTopologyRecords(t, env, 2)
-	components, relations := extractComponentsAndRelations(t, recs)
+	components, relations, errs := extractComponentsAndRelations(t, recs)
+	require.Len(t, errs, 0)
 
 	assertComponents(t, components)
 	assertRelations(t, relations)
 }
 
-func TestTraceToOtelTopology_ComponentMappingUpdate(t *testing.T) {
+func TestTraceToOtelTopology_UpdateComponentAndRelationMappings(t *testing.T) {
 	env := SetupTopologyTest(t, 1)
 	defer env.Cleanup()
 
@@ -105,7 +106,8 @@ func TestTraceToOtelTopology_ComponentMappingUpdate(t *testing.T) {
 	publishSettingSnapshots(t, env)
 	sendTraces(t, env)
 	recs := consumeTopologyRecords(t, env, 2)
-	components, relations := extractComponentsAndRelations(t, recs)
+	components, relations, errs := extractComponentsAndRelations(t, recs)
+	require.Len(t, errs, 0)
 	assertComponents(t, components)
 	assertRelations(t, relations)
 
@@ -115,7 +117,8 @@ func TestTraceToOtelTopology_ComponentMappingUpdate(t *testing.T) {
 
 	sendTraces(t, env)
 	recs = consumeTopologyRecords(t, env, 2)
-	components, relations = extractComponentsAndRelations(t, recs)
+	components, relations, errs = extractComponentsAndRelations(t, recs)
+	require.Len(t, errs, 0)
 
 	// Assert that the updated component and relations
 	require.Len(t, components, 1)
@@ -133,18 +136,40 @@ func TestTraceToOtelTopology_ComponentMappingUpdate(t *testing.T) {
 	}
 }
 
+func TestTraceToOtelTopology_ErrorReturnedOnIncorrectMappingConfig(t *testing.T) {
+	env := SetupTopologyTest(t, 1)
+	defer env.Cleanup()
+
+	component := otelComponentMappingSnapshot()
+	// modify base component mapping to have an invalid expression
+	component.Output.Name = strExpr("${resourceAttributes}") // a map reference where a string expression is required
+	harness.PublishSettings(t, env.Logger, env.Kafka.Instance.HostAddr, env.Kafka.SettingsTopic, component)
+	numSpans := sendTraces(t, env)
+	recs := consumeTopologyRecords(t, env, 2)
+
+	components, relations, errs := extractComponentsAndRelations(t, recs)
+	require.Len(t, components, 0)
+	require.Len(t, relations, 0)
+	// errs should equal numSpans because each span goes through mapping eval
+	require.Len(t, errs, numSpans, "expected errors not returned")
+	require.Contains(
+		t,
+		errs[0], // all the errors should be the same
+		"expression did not evaluate to string",
+		"expected error on incorrect mapping config",
+	)
+}
+
 func publishSettingSnapshots(t *testing.T, env *TopologyTestEnv) {
 	component := otelComponentMappingSnapshot()
 	relation := otelRelationMappingSnapshot()
 	harness.PublishSettings(t, env.Logger, env.Kafka.Instance.HostAddr, env.Kafka.SettingsTopic, component, relation)
-	// A bit of settle time to ensure setting snapshots are processed in the collector before sending traces
-	time.Sleep(1 * time.Second)
 }
 
 func publishUpdatedSettingSnapshots(t *testing.T, env *TopologyTestEnv, newVersion string) {
 	component := otelComponentMappingSnapshot()
 
-	// Update 1: name change
+	// Update 1: component name change
 	component.Output.Name = strExpr("checkout-service-updated")
 
 	if component.Output.Required.Tags == nil {
@@ -157,16 +182,20 @@ func publishUpdatedSettingSnapshots(t *testing.T, env *TopologyTestEnv, newVersi
 		Target: "version",
 	})
 
+	// Update 3: relation name change
 	relation := otelRelationMappingSnapshot()
 	relation.Output.TypeName = strExpr("http-request-updated")
+
 	harness.PublishSettings(t, env.Logger, env.Kafka.Instance.HostAddr, env.Kafka.SettingsTopic, component, relation)
-	time.Sleep(1 * time.Second) // allow connector to process the update
 }
 
-func sendTraces(t *testing.T, env *TopologyTestEnv) {
+// sendTraces builds trace and span data and calls harness.BuildAndSendTrace. It returns the number of spans sent.
+func sendTraces(t *testing.T, env *TopologyTestEnv) int {
 	endpoint := env.Collector.Instances[0].HostAddr
-	err := harness.BuildAndSendTrace(env.Ctx, env.Logger, endpoint, *traceSpec())
+	traceData := *traceSpec()
+	err := harness.BuildAndSendTrace(env.Ctx, env.Logger, endpoint, traceData)
 	require.NoError(t, err)
+	return len(traceData.Spans)
 }
 
 func consumeTopologyRecords(t *testing.T, env *TopologyTestEnv, minRecords int) []*kgo.Record {
@@ -178,9 +207,10 @@ func consumeTopologyRecords(t *testing.T, env *TopologyTestEnv, minRecords int) 
 func extractComponentsAndRelations(
 	t *testing.T,
 	recs []*kgo.Record,
-) (map[string]*topo_stream_v1.TopologyStreamComponent, map[string]*topo_stream_v1.TopologyStreamRelation) {
+) (map[string]*topo_stream_v1.TopologyStreamComponent, map[string]*topo_stream_v1.TopologyStreamRelation, []string) {
 	components := make(map[string]*topo_stream_v1.TopologyStreamComponent)
 	relations := make(map[string]*topo_stream_v1.TopologyStreamRelation)
+	errs := make([]string, 0)
 
 	for _, rec := range recs {
 		var topoMsg topo_stream_v1.TopologyStreamMessage
@@ -188,15 +218,17 @@ func extractComponentsAndRelations(
 		require.NotNil(t, topoMsg.Payload)
 
 		data := topoMsg.GetTopologyStreamRepeatElementsData()
+		require.NotNil(t, data)
 		for _, c := range data.Components {
 			components[c.ExternalId] = c
 		}
 		for _, r := range data.Relations {
 			relations[r.ExternalId] = r
 		}
+		errs = append(errs, data.Errors...)
 	}
 
-	return components, relations
+	return components, relations, errs
 }
 
 func assertComponents(t *testing.T, components map[string]*topo_stream_v1.TopologyStreamComponent) {
