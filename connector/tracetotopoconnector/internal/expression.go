@@ -187,7 +187,7 @@ func (e *CelEvaluator) EvalMapExpression(
 func classifyExpression(expr string) (expressionKind, error) {
 	switch {
 	case strings.HasPrefix(expr, "${") && strings.HasSuffix(expr, "}"):
-		if err := detectNestedInterpolation(expr); err != nil {
+		if err := validateInterpolation(expr); err != nil {
 			return kindInvalid, err
 		}
 
@@ -214,26 +214,6 @@ func classifyExpression(expr string) (expressionKind, error) {
 
 		return kindStringLiteral, nil
 	}
-}
-
-// detectNestedInterpolation scans inside a wrapped CEL expression (`${...}`)
-// for any additional `${` markers.
-func detectNestedInterpolation(expr string) error {
-	if len(expr) <= 2 {
-		return nil
-	}
-
-	if i := strings.Index(expr[2:], "${"); i != -1 {
-		pos := i + 2 // account for skipped prefix
-		caretLine := strings.Repeat(".", pos) + "^"
-
-		return fmt.Errorf(
-			"invalid nested interpolation at position %d:\n%s\n%s",
-			pos, expr, caretLine,
-		)
-	}
-
-	return nil
 }
 
 func isPureMapReference(expr string) bool {

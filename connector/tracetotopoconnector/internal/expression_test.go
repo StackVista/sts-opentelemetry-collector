@@ -154,7 +154,7 @@ func TestEvalStringExpression(t *testing.T) {
 		{
 			name:        "fail with expression marker in wrapped expression",
 			expr:        `${ ${spanAttributes["http.status_code"]} }`,
-			errContains: "invalid nested interpolation at position",
+			errContains: "nested interpolation not allowed at pos",
 		},
 	}
 
