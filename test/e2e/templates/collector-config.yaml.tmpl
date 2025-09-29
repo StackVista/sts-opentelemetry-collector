@@ -1,0 +1,35 @@
+extensions:
+  sts_settings_provider:
+    kafka:
+      brokers: ["{{ .KafkaBroker }}"]
+      topic: "{{ .SettingsTopic }}"
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "{{ .OtlpGRPCEndpoint }}"
+
+connectors:
+  tracetotopo:
+
+exporters:
+  sts_kafka_exporter:
+    brokers: ["{{ .KafkaBroker }}"]
+    topic: "{{ .TopologyTopic }}"
+
+  # Logging exporter for debugging
+  debug: {}
+
+service:
+  telemetry:
+    logs:
+      level: debug
+  extensions: [sts_settings_provider]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [tracetotopo, debug] # so we can see spans exported
+    logs:
+      receivers: [tracetotopo]
+      exporters: [sts_kafka_exporter]
