@@ -133,8 +133,7 @@ func iterateSpans(
 	resourceSpan *ptrace.ResourceSpans,
 	scopeSpan *ptrace.ScopeSpans,
 	span *ptrace.Span,
-),
-) {
+)) {
 	resourceSpans := trace.ResourceSpans()
 	for i := 0; i < resourceSpans.Len(); i++ {
 		rs := resourceSpans.At(i)
