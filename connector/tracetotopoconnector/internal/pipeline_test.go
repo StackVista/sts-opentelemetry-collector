@@ -8,6 +8,7 @@ import (
 
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.uber.org/zap/zaptest"
 
 	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
 	"github.com/stretchr/testify/assert"
@@ -346,7 +347,9 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 						Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 							TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
 								ExpiryIntervalMs: 0,
-								Errors:           []string{"CEL evaluation error: no such key: not-existing-attr"},
+								Errors: []*topo_stream_v1.TopoStreamError{
+									{Message: "CEL evaluation error: no such key: not-existing-attr"},
+								},
 							},
 						},
 					},
@@ -363,7 +366,9 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 						Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 							TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
 								ExpiryIntervalMs: 0,
-								Errors:           []string{"CEL evaluation error: no such key: not-existing-attr"},
+								Errors: []*topo_stream_v1.TopoStreamError{
+									{Message: "CEL evaluation error: no such key: not-existing-attr"},
+								},
 							},
 						},
 					},
@@ -375,7 +380,14 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
-			result := ConvertSpanToTopologyStreamMessage(eval, traces, tt.componentMappings, tt.relationMappings, now)
+			result := ConvertSpanToTopologyStreamMessage(
+				zaptest.NewLogger(t),
+				eval,
+				traces,
+				tt.componentMappings,
+				tt.relationMappings,
+				now,
+			)
 			unify(&result)
 			//nolint:gosec
 			unify(&tt.expected)
@@ -393,7 +405,14 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			createSimpleRelationMapping("rm2"),
 		}
 		eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
-		result := ConvertSpanToTopologyStreamMessage(eval, traces, componentMappings, relationMappings, now)
+		result := ConvertSpanToTopologyStreamMessage(
+			zaptest.NewLogger(t),
+			eval,
+			traces,
+			componentMappings,
+			relationMappings,
+			now,
+		)
 		actualKeys := make([]topo_stream_v1.TopologyStreamMessageKey, 0)
 		for _, message := range result {
 			//nolint:govet
@@ -459,7 +478,14 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			createSimpleRelationMapping("rm1"),
 		}
 		eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
-		result := ConvertSpanToTopologyStreamMessage(eval, traceWithSpans, componentMappings, relationMappings, now)
+		result := ConvertSpanToTopologyStreamMessage(
+			zaptest.NewLogger(t),
+			eval,
+			traceWithSpans,
+			componentMappings,
+			relationMappings,
+			now,
+		)
 		actualKeys := make([]topo_stream_v1.TopologyStreamMessageKey, 0)
 		for _, message := range result {
 			//nolint:govet

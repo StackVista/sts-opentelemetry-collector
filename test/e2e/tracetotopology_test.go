@@ -154,7 +154,7 @@ func TestTraceToOtelTopology_ErrorReturnedOnIncorrectMappingConfig(t *testing.T)
 	require.Len(t, errs, numSpans, "expected errors not returned")
 	require.Contains(
 		t,
-		errs[0], // all the errors should be the same
+		errs[0].Message, // all the errors should be the same
 		"expression did not evaluate to string",
 		"expected error on incorrect mapping config",
 	)
@@ -207,10 +207,10 @@ func consumeTopologyRecords(t *testing.T, env *TopologyTestEnv, minRecords int) 
 func extractComponentsAndRelations(
 	t *testing.T,
 	recs []*kgo.Record,
-) (map[string]*topo_stream_v1.TopologyStreamComponent, map[string]*topo_stream_v1.TopologyStreamRelation, []string) {
+) (map[string]*topo_stream_v1.TopologyStreamComponent, map[string]*topo_stream_v1.TopologyStreamRelation, []*topo_stream_v1.TopoStreamError) {
 	components := make(map[string]*topo_stream_v1.TopologyStreamComponent)
 	relations := make(map[string]*topo_stream_v1.TopologyStreamRelation)
-	errs := make([]string, 0)
+	errs := make([]*topo_stream_v1.TopoStreamError, 0)
 
 	for _, rec := range recs {
 		var topoMsg topo_stream_v1.TopologyStreamMessage
