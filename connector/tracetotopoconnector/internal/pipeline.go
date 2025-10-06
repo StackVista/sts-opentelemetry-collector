@@ -94,7 +94,10 @@ func convertToComponent(
 	span *ptrace.Span,
 	mapping *settings.OtelComponentMapping,
 ) (*topo_stream_v1.TopologyStreamComponent, []error) {
-	evaluatedVars, _ := EvalVariables(expressionEvaluator, span, scopeSpan, resourceSpan, mapping.Vars)
+	evaluatedVars, errs := EvalVariables(expressionEvaluator, span, scopeSpan, resourceSpan, mapping.Vars)
+	if errs != nil {
+		return nil, errs
+	}
 	expressionEvalCtx := &ExpressionEvalContext{*span, *scopeSpan, *resourceSpan, evaluatedVars}
 
 	if filterByConditions(expressionEvaluator, expressionEvalCtx, &mapping.Conditions) {
@@ -114,7 +117,10 @@ func convertToRelation(
 	span *ptrace.Span,
 	mapping *settings.OtelRelationMapping,
 ) (*topo_stream_v1.TopologyStreamRelation, []error) {
-	evaluatedVars, _ := EvalVariables(expressionEvaluator, span, scopeSpan, resourceSpan, mapping.Vars)
+	evaluatedVars, errs := EvalVariables(expressionEvaluator, span, scopeSpan, resourceSpan, mapping.Vars)
+	if errs != nil {
+		return nil, errs
+	}
 	expressionEvalCtx := &ExpressionEvalContext{*span, *scopeSpan, *resourceSpan, evaluatedVars}
 
 	if filterByConditions(expressionEvaluator, expressionEvalCtx, &mapping.Conditions) {
@@ -127,15 +133,13 @@ func convertToRelation(
 	return nil, nil
 }
 
-//nolint:gofmt
-func iterateSpans(
-	trace ptrace.Traces,
-	handler func(
+type mappingHandler func(
 	resourceSpan *ptrace.ResourceSpans,
 	scopeSpan *ptrace.ScopeSpans,
 	span *ptrace.Span,
-),
-) {
+)
+
+func iterateSpans(trace ptrace.Traces, handler mappingHandler) {
 	resourceSpans := trace.ResourceSpans()
 	for i := 0; i < resourceSpans.Len(); i++ {
 		rs := resourceSpans.At(i)

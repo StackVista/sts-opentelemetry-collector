@@ -176,7 +176,6 @@ func (e *CelEvaluator) EvalMapExpression(
 // ---------------------------------------------------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------------------------------------------------
-
 // classifyExpression determines the kind of expression so the evaluator
 // can choose the right handling path. It distinguishes between:
 //   - ${expr} - a wrapped CEL expression (kindStringWithIdentifiers, kindMapReferenceOnly)
@@ -448,7 +447,7 @@ func stringify(result interface{}) (string, error) {
 		return v, nil
 	case fmt.Stringer:
 		return v.String(), nil
-	case int, int32, int64, float32, float64:
+	case int, int32, uint64, int64, float32, float64:
 		return fmt.Sprint(v), nil
 	default:
 		return "", fmt.Errorf("expression did not evaluate to string, got: %T", result)

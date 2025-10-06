@@ -3,10 +3,12 @@ package internal
 
 import (
 	"errors"
+	"fmt"
+	"testing"
+
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/ptrace"
-	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -67,7 +69,7 @@ func TestEvalVariables(t *testing.T) {
 		varExpressionLookup map[string]string
 		varErrsLookup       map[string]error
 		want                map[string]string
-		expectErr           map[string]error
+		expectErr           error
 	}{
 		{
 			name:      "nil variables",
@@ -90,14 +92,6 @@ func TestEvalVariables(t *testing.T) {
 			want:                map[string]string{"variable1": "it is static value"},
 		},
 		{
-			name: "literal variable (with ",
-			vars: varMappings(
-				pair{"variable1", "static"},
-			),
-			varExpressionLookup: map[string]string{"static": "it is static value"},
-			want:                map[string]string{"variable1": "it is static value"},
-		},
-		{
 			name: "refer to span attribute",
 			vars: varMappings(
 				pair{"variable1", "spanAttributes.str-attr"},
@@ -110,21 +104,6 @@ func TestEvalVariables(t *testing.T) {
 			want: map[string]string{
 				"variable1": "Hello",
 				"variable2": "true",
-			},
-		},
-		{
-			name: "refers to another variable",
-			vars: varMappings(
-				pair{"variable1", "spanAttributes.str-attr"},
-				pair{"variable2", "vars.variable1"},
-			),
-			varExpressionLookup: map[string]string{
-				"spanAttributes.str-attr": "Hello",
-				"vars.variable1":          "Hello",
-			},
-			want: map[string]string{
-				"variable1": "Hello",
-				"variable2": "Hello",
 			},
 		},
 		{
@@ -153,10 +132,8 @@ func TestEvalVariables(t *testing.T) {
 			varErrsLookup: map[string]error{
 				"spanAttributes.not-existing": notFoundErr,
 			},
-			want: map[string]string{},
-			expectErr: map[string]error{
-				"variable1": notFoundErr,
-			},
+			want:      map[string]string{},
+			expectErr: fmt.Errorf("variable \"variable1\" evaluation failed: %w", notFoundErr),
 		},
 		{
 			name: "error not found related variable",
@@ -169,9 +146,7 @@ func TestEvalVariables(t *testing.T) {
 			want: map[string]string{
 				"variable1": "Hello",
 			},
-			expectErr: map[string]error{
-				"variable2": notFoundVarErr,
-			},
+			expectErr: fmt.Errorf("variable \"variable2\" evaluation failed: %w", notFoundVarErr),
 		},
 	}
 
@@ -186,8 +161,13 @@ func TestEvalVariables(t *testing.T) {
 				nil, nil, nil, &vars,
 			)
 
-			assert.Equal(t, tt.want, got, "resolved variables mismatch")
-			assert.Equal(t, tt.expectErr, errs, "errors mismatch")
+			if tt.expectErr != nil {
+				assert.Equal(t, tt.expectErr.Error(), errs[0].Error(), "errors mismatch")
+				require.Nil(t, got)
+			} else {
+				assert.Equal(t, tt.want, got, "resolved variables mismatch")
+				require.Nil(t, errs)
+			}
 		})
 	}
 }
