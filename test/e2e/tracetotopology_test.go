@@ -154,7 +154,7 @@ func TestTraceToOtelTopology_ErrorReturnedOnIncorrectMappingConfig(t *testing.T)
 	require.Len(t, errs, numSpans, "expected errors not returned")
 	require.Contains(
 		t,
-		errs[0], // all the errors should be the same
+		errs[0].Message, // all the errors should be the same
 		"expression did not evaluate to string",
 		"expected error on incorrect mapping config",
 	)
