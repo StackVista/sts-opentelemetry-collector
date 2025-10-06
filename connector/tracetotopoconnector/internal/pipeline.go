@@ -7,6 +7,7 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	"go.uber.org/zap"
 )
 
 type MessageWithKey struct {
@@ -15,6 +16,7 @@ type MessageWithKey struct {
 }
 
 func ConvertSpanToTopologyStreamMessage(
+	logger *zap.Logger,
 	eval ExpressionEvaluator,
 	trace ptrace.Traces,
 	componentMappings []settings.OtelComponentMapping,
@@ -22,6 +24,7 @@ func ConvertSpanToTopologyStreamMessage(
 	now int64,
 ) []MessageWithKey {
 	result := make([]MessageWithKey, 0)
+	var components, relations, errors int
 
 	for _, componentMapping := range componentMappings {
 		iterateSpans(trace, func(resourceSpan *ptrace.ResourceSpans, scopeSpan *ptrace.ScopeSpans, span *ptrace.Span) {
@@ -35,12 +38,16 @@ func ConvertSpanToTopologyStreamMessage(
 					now,
 					func() []*topo_stream_v1.TopologyStreamComponent {
 						return []*topo_stream_v1.TopologyStreamComponent{component}
-					}, func() []*topo_stream_v1.TopologyStreamRelation {
+					},
+					func() []*topo_stream_v1.TopologyStreamRelation {
 						return nil
-					}))
+					}),
+				)
+				components++
 			}
 			if errs != nil {
 				result = append(result, *errorsToMessageWithKey(&errs, componentMapping, span, now))
+				errors++
 			}
 		})
 	}
@@ -56,15 +63,27 @@ func ConvertSpanToTopologyStreamMessage(
 					now,
 					func() []*topo_stream_v1.TopologyStreamComponent {
 						return nil
-					}, func() []*topo_stream_v1.TopologyStreamRelation {
+					},
+					func() []*topo_stream_v1.TopologyStreamRelation {
 						return []*topo_stream_v1.TopologyStreamRelation{relation}
-					}))
+					}),
+				)
+				relations++
 			}
 			if errs != nil {
 				result = append(result, *errorsToMessageWithKey(&errs, relationMapping, span, now))
+				errors++
 			}
 		})
 	}
+
+	logger.Debug(
+		"Converted spans to topology stream messages",
+		zap.Int("components", components),
+		zap.Int("relations", relations),
+		zap.Int("errors", errors),
+	)
+
 	return result
 }
 
@@ -111,10 +130,11 @@ func convertToRelation(
 func iterateSpans(
 	trace ptrace.Traces,
 	handler func(
-		resourceSpan *ptrace.ResourceSpans,
-		scopeSpan *ptrace.ScopeSpans,
-		span *ptrace.Span,
-	)) {
+	resourceSpan *ptrace.ResourceSpans,
+	scopeSpan *ptrace.ScopeSpans,
+	span *ptrace.Span,
+),
+) {
 	resourceSpans := trace.ResourceSpans()
 	for i := 0; i < resourceSpans.Len(); i++ {
 		rs := resourceSpans.At(i)
@@ -131,9 +151,11 @@ func iterateSpans(
 }
 
 func errorsToMessageWithKey(errs *[]error, mapping settings.Mapping, span *ptrace.Span, now int64) *MessageWithKey {
-	errsAsString := make([]string, len(*errs))
+	streamErrors := make([]*topo_stream_v1.TopoStreamError, len(*errs))
 	for i, err := range *errs {
-		errsAsString[i] = err.Error()
+		streamErrors[i] = &topo_stream_v1.TopoStreamError{
+			Message: err.Error(),
+		}
 	}
 	return &MessageWithKey{
 		Key: &topo_stream_v1.TopologyStreamMessageKey{
@@ -147,7 +169,7 @@ func errorsToMessageWithKey(errs *[]error, mapping settings.Mapping, span *ptrac
 			Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 				TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
 					ExpiryIntervalMs: mapping.GetExpireAfterMs(),
-					Errors:           errsAsString,
+					Errors:           streamErrors,
 				},
 			},
 		},

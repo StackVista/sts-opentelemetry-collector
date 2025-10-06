@@ -106,7 +106,7 @@ func (p *connectorImpl) ConsumeTraces(ctx context.Context, td ptrace.Traces) err
 	log := plog.NewLogs()
 	scopeLog := log.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
 
-	messagesWithKeys := internal.ConvertSpanToTopologyStreamMessage(p.eval, td, *p.componentMappings,
+	messagesWithKeys := internal.ConvertSpanToTopologyStreamMessage(p.logger, p.eval, td, *p.componentMappings,
 		*p.relationMappings, time.Now().UnixMilli())
 	for _, mwk := range messagesWithKeys {
 		if err := addEvent(&scopeLog, mwk); err != nil {

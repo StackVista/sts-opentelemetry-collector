@@ -85,6 +85,15 @@ message TopologyStreamRemove {
 }
 
 /**
+Allow us to potentially send resolutions for issueIds in the future. Makes the presentation and handling them in the Be easier.
+ */
+message TopoStreamError {
+  string category = 1;
+  string issue_id = 2;
+  string message = 3;
+}
+
+/**
 Messages for REPEAT_SNAPSHOTS consistency model
 */
 message TopologyStreamSnapshotData {
@@ -103,8 +112,7 @@ message TopologyStreamSnapshotData {
 
 
   // In case the Mapping fails and the Otel collector would like to push some messages that we can display when the user requests the TopologyStream status via the cli
-  // TODO Do we need a data structure that can carry something like a level (INFO, WARN, ERROR), perhaps a category/type besides the message itself
-  repeated string errors = 7;
+  repeated TopoStreamError errors = 7;
 }
 
 
@@ -121,8 +129,7 @@ message TopologyStreamRepeatElementsData {
 
 
   // In case the Mapping fails and the Otel collector would like to push some messages that we can display when the user requests the TopologyStream status via the cli
-  // TODO Do we need a data structure that can carry something like a level (INFO, WARN, ERROR), perhaps a category/type besides the message itself
-  repeated string errors = 4;
+  repeated TopoStreamError errors = 4;
 }
 
 

@@ -91,7 +91,9 @@ func (e *KafkaExporter) Start(ctx context.Context, _ component.Host) error {
 
 	// Fail fast: check if topic exists
 	if err := e.checkTopicExists(ctx); err != nil {
-		return fmt.Errorf("failed to Start STS Kafka exporter: %w", err)
+		// [debug] returning an error doesn't seem to surface as a log message
+		e.logger.Debug("failed to start STS Kafka exporter", zap.Error(err))
+		return fmt.Errorf("failed to start STS Kafka exporter: %w", err)
 	}
 
 	return nil

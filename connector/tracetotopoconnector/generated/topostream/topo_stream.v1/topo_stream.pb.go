@@ -309,6 +309,68 @@ func (x *TopologyStreamRemove) GetRemovalCause() string {
 }
 
 // *
+// Allow us to potentially send resolutions for issueIds in the future. Makes the presentation and handling them in the Be easier.
+type TopoStreamError struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Category      string                 `protobuf:"bytes,1,opt,name=category,proto3" json:"category,omitempty"`
+	IssueId       string                 `protobuf:"bytes,2,opt,name=issue_id,json=issueId,proto3" json:"issue_id,omitempty"`
+	Message       string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TopoStreamError) Reset() {
+	*x = TopoStreamError{}
+	mi := &file_topo_stream_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TopoStreamError) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TopoStreamError) ProtoMessage() {}
+
+func (x *TopoStreamError) ProtoReflect() protoreflect.Message {
+	mi := &file_topo_stream_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TopoStreamError.ProtoReflect.Descriptor instead.
+func (*TopoStreamError) Descriptor() ([]byte, []int) {
+	return file_topo_stream_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *TopoStreamError) GetCategory() string {
+	if x != nil {
+		return x.Category
+	}
+	return ""
+}
+
+func (x *TopoStreamError) GetIssueId() string {
+	if x != nil {
+		return x.IssueId
+	}
+	return ""
+}
+
+func (x *TopoStreamError) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+// *
 // Messages for REPEAT_SNAPSHOTS consistency model
 type TopologyStreamSnapshotData struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -322,15 +384,14 @@ type TopologyStreamSnapshotData struct {
 	Components       []*TopologyStreamComponent `protobuf:"bytes,5,rep,name=components,proto3" json:"components,omitempty"`
 	Relations        []*TopologyStreamRelation  `protobuf:"bytes,6,rep,name=relations,proto3" json:"relations,omitempty"`
 	// In case the Mapping fails and the Otel collector would like to push some messages that we can display when the user requests the TopologyStream status via the cli
-	// TODO Do we need a data structure that can carry something like a level (INFO, WARN, ERROR), perhaps a category/type besides the message itself
-	Errors        []string `protobuf:"bytes,7,rep,name=errors,proto3" json:"errors,omitempty"`
+	Errors        []*TopoStreamError `protobuf:"bytes,7,rep,name=errors,proto3" json:"errors,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TopologyStreamSnapshotData) Reset() {
 	*x = TopologyStreamSnapshotData{}
-	mi := &file_topo_stream_proto_msgTypes[3]
+	mi := &file_topo_stream_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -342,7 +403,7 @@ func (x *TopologyStreamSnapshotData) String() string {
 func (*TopologyStreamSnapshotData) ProtoMessage() {}
 
 func (x *TopologyStreamSnapshotData) ProtoReflect() protoreflect.Message {
-	mi := &file_topo_stream_proto_msgTypes[3]
+	mi := &file_topo_stream_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -355,7 +416,7 @@ func (x *TopologyStreamSnapshotData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TopologyStreamSnapshotData.ProtoReflect.Descriptor instead.
 func (*TopologyStreamSnapshotData) Descriptor() ([]byte, []int) {
-	return file_topo_stream_proto_rawDescGZIP(), []int{3}
+	return file_topo_stream_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *TopologyStreamSnapshotData) GetRepeatIntervalMs() int32 {
@@ -400,7 +461,7 @@ func (x *TopologyStreamSnapshotData) GetRelations() []*TopologyStreamRelation {
 	return nil
 }
 
-func (x *TopologyStreamSnapshotData) GetErrors() []string {
+func (x *TopologyStreamSnapshotData) GetErrors() []*TopoStreamError {
 	if x != nil {
 		return x.Errors
 	}
@@ -417,15 +478,14 @@ type TopologyStreamRepeatElementsData struct {
 	Components       []*TopologyStreamComponent `protobuf:"bytes,2,rep,name=components,proto3" json:"components,omitempty"`
 	Relations        []*TopologyStreamRelation  `protobuf:"bytes,3,rep,name=relations,proto3" json:"relations,omitempty"`
 	// In case the Mapping fails and the Otel collector would like to push some messages that we can display when the user requests the TopologyStream status via the cli
-	// TODO Do we need a data structure that can carry something like a level (INFO, WARN, ERROR), perhaps a category/type besides the message itself
-	Errors        []string `protobuf:"bytes,4,rep,name=errors,proto3" json:"errors,omitempty"`
+	Errors        []*TopoStreamError `protobuf:"bytes,4,rep,name=errors,proto3" json:"errors,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TopologyStreamRepeatElementsData) Reset() {
 	*x = TopologyStreamRepeatElementsData{}
-	mi := &file_topo_stream_proto_msgTypes[4]
+	mi := &file_topo_stream_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -437,7 +497,7 @@ func (x *TopologyStreamRepeatElementsData) String() string {
 func (*TopologyStreamRepeatElementsData) ProtoMessage() {}
 
 func (x *TopologyStreamRepeatElementsData) ProtoReflect() protoreflect.Message {
-	mi := &file_topo_stream_proto_msgTypes[4]
+	mi := &file_topo_stream_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -450,7 +510,7 @@ func (x *TopologyStreamRepeatElementsData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TopologyStreamRepeatElementsData.ProtoReflect.Descriptor instead.
 func (*TopologyStreamRepeatElementsData) Descriptor() ([]byte, []int) {
-	return file_topo_stream_proto_rawDescGZIP(), []int{4}
+	return file_topo_stream_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *TopologyStreamRepeatElementsData) GetExpiryIntervalMs() int64 {
@@ -474,7 +534,7 @@ func (x *TopologyStreamRepeatElementsData) GetRelations() []*TopologyStreamRelat
 	return nil
 }
 
-func (x *TopologyStreamRepeatElementsData) GetErrors() []string {
+func (x *TopologyStreamRepeatElementsData) GetErrors() []*TopoStreamError {
 	if x != nil {
 		return x.Errors
 	}
@@ -508,7 +568,7 @@ type TopologyStreamMessage struct {
 
 func (x *TopologyStreamMessage) Reset() {
 	*x = TopologyStreamMessage{}
-	mi := &file_topo_stream_proto_msgTypes[5]
+	mi := &file_topo_stream_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -520,7 +580,7 @@ func (x *TopologyStreamMessage) String() string {
 func (*TopologyStreamMessage) ProtoMessage() {}
 
 func (x *TopologyStreamMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_topo_stream_proto_msgTypes[5]
+	mi := &file_topo_stream_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -533,7 +593,7 @@ func (x *TopologyStreamMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TopologyStreamMessage.ProtoReflect.Descriptor instead.
 func (*TopologyStreamMessage) Descriptor() ([]byte, []int) {
-	return file_topo_stream_proto_rawDescGZIP(), []int{5}
+	return file_topo_stream_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *TopologyStreamMessage) GetCollectionTimestamp() int64 {
@@ -643,7 +703,11 @@ const file_topo_stream_proto_rawDesc = "" +
 	"\x04tags\x18\a \x03(\tR\x04tagsB\x12\n" +
 	"\x10_type_identifier\";\n" +
 	"\x14TopologyStreamRemove\x12#\n" +
-	"\rremoval_cause\x18\x01 \x01(\tR\fremovalCause\"\xb6\x03\n" +
+	"\rremoval_cause\x18\x01 \x01(\tR\fremovalCause\"b\n" +
+	"\x0fTopoStreamError\x12\x1a\n" +
+	"\bcategory\x18\x01 \x01(\tR\bcategory\x12\x19\n" +
+	"\bissue_id\x18\x02 \x01(\tR\aissueId\x12\x18\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\"\xd7\x03\n" +
 	"\x1aTopologyStreamSnapshotData\x12,\n" +
 	"\x12repeat_interval_ms\x18\x01 \x01(\x05R\x10repeatIntervalMs\x121\n" +
 	"\x12expiry_interval_ms\x18\x02 \x01(\x03H\x00R\x10expiryIntervalMs\x88\x01\x01\x12*\n" +
@@ -652,18 +716,18 @@ const file_topo_stream_proto_rawDesc = "" +
 	"\n" +
 	"components\x18\x05 \x03(\v2'.topo_stream.v1.TopologyStreamComponentR\n" +
 	"components\x12D\n" +
-	"\trelations\x18\x06 \x03(\v2&.topo_stream.v1.TopologyStreamRelationR\trelations\x12\x16\n" +
-	"\x06errors\x18\a \x03(\tR\x06errorsB\x15\n" +
+	"\trelations\x18\x06 \x03(\v2&.topo_stream.v1.TopologyStreamRelationR\trelations\x127\n" +
+	"\x06errors\x18\a \x03(\v2\x1f.topo_stream.v1.TopoStreamErrorR\x06errorsB\x15\n" +
 	"\x13_expiry_interval_msB\x11\n" +
 	"\x0f_snapshot_startB\x10\n" +
-	"\x0e_snapshot_stop\"\xf7\x01\n" +
+	"\x0e_snapshot_stop\"\x98\x02\n" +
 	" TopologyStreamRepeatElementsData\x12,\n" +
 	"\x12expiry_interval_ms\x18\x01 \x01(\x03R\x10expiryIntervalMs\x12G\n" +
 	"\n" +
 	"components\x18\x02 \x03(\v2'.topo_stream.v1.TopologyStreamComponentR\n" +
 	"components\x12D\n" +
-	"\trelations\x18\x03 \x03(\v2&.topo_stream.v1.TopologyStreamRelationR\trelations\x12\x16\n" +
-	"\x06errors\x18\x04 \x03(\tR\x06errors\"\xda\x03\n" +
+	"\trelations\x18\x03 \x03(\v2&.topo_stream.v1.TopologyStreamRelationR\trelations\x127\n" +
+	"\x06errors\x18\x04 \x03(\v2\x1f.topo_stream.v1.TopoStreamErrorR\x06errors\"\xda\x03\n" +
 	"\x15TopologyStreamMessage\x121\n" +
 	"\x14collection_timestamp\x18\x01 \x01(\x03R\x13collectionTimestamp\x12/\n" +
 	"\x13submitted_timestamp\x18\x02 \x01(\x03R\x12submittedTimestamp\x12o\n" +
@@ -685,31 +749,34 @@ func file_topo_stream_proto_rawDescGZIP() []byte {
 	return file_topo_stream_proto_rawDescData
 }
 
-var file_topo_stream_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_topo_stream_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_topo_stream_proto_goTypes = []any{
 	(*TopologyStreamComponent)(nil),          // 0: topo_stream.v1.TopologyStreamComponent
 	(*TopologyStreamRelation)(nil),           // 1: topo_stream.v1.TopologyStreamRelation
 	(*TopologyStreamRemove)(nil),             // 2: topo_stream.v1.TopologyStreamRemove
-	(*TopologyStreamSnapshotData)(nil),       // 3: topo_stream.v1.TopologyStreamSnapshotData
-	(*TopologyStreamRepeatElementsData)(nil), // 4: topo_stream.v1.TopologyStreamRepeatElementsData
-	(*TopologyStreamMessage)(nil),            // 5: topo_stream.v1.TopologyStreamMessage
-	(*structpb.Struct)(nil),                  // 6: google.protobuf.Struct
+	(*TopoStreamError)(nil),                  // 3: topo_stream.v1.TopoStreamError
+	(*TopologyStreamSnapshotData)(nil),       // 4: topo_stream.v1.TopologyStreamSnapshotData
+	(*TopologyStreamRepeatElementsData)(nil), // 5: topo_stream.v1.TopologyStreamRepeatElementsData
+	(*TopologyStreamMessage)(nil),            // 6: topo_stream.v1.TopologyStreamMessage
+	(*structpb.Struct)(nil),                  // 7: google.protobuf.Struct
 }
 var file_topo_stream_proto_depIdxs = []int32{
-	6, // 0: topo_stream.v1.TopologyStreamComponent.resource_definition:type_name -> google.protobuf.Struct
-	6, // 1: topo_stream.v1.TopologyStreamComponent.status_data:type_name -> google.protobuf.Struct
-	0, // 2: topo_stream.v1.TopologyStreamSnapshotData.components:type_name -> topo_stream.v1.TopologyStreamComponent
-	1, // 3: topo_stream.v1.TopologyStreamSnapshotData.relations:type_name -> topo_stream.v1.TopologyStreamRelation
-	0, // 4: topo_stream.v1.TopologyStreamRepeatElementsData.components:type_name -> topo_stream.v1.TopologyStreamComponent
-	1, // 5: topo_stream.v1.TopologyStreamRepeatElementsData.relations:type_name -> topo_stream.v1.TopologyStreamRelation
-	3, // 6: topo_stream.v1.TopologyStreamMessage.topology_stream_snapshot_data:type_name -> topo_stream.v1.TopologyStreamSnapshotData
-	4, // 7: topo_stream.v1.TopologyStreamMessage.topology_stream_repeat_elements_data:type_name -> topo_stream.v1.TopologyStreamRepeatElementsData
-	2, // 8: topo_stream.v1.TopologyStreamMessage.topology_stream_remove:type_name -> topo_stream.v1.TopologyStreamRemove
-	9, // [9:9] is the sub-list for method output_type
-	9, // [9:9] is the sub-list for method input_type
-	9, // [9:9] is the sub-list for extension type_name
-	9, // [9:9] is the sub-list for extension extendee
-	0, // [0:9] is the sub-list for field type_name
+	7,  // 0: topo_stream.v1.TopologyStreamComponent.resource_definition:type_name -> google.protobuf.Struct
+	7,  // 1: topo_stream.v1.TopologyStreamComponent.status_data:type_name -> google.protobuf.Struct
+	0,  // 2: topo_stream.v1.TopologyStreamSnapshotData.components:type_name -> topo_stream.v1.TopologyStreamComponent
+	1,  // 3: topo_stream.v1.TopologyStreamSnapshotData.relations:type_name -> topo_stream.v1.TopologyStreamRelation
+	3,  // 4: topo_stream.v1.TopologyStreamSnapshotData.errors:type_name -> topo_stream.v1.TopoStreamError
+	0,  // 5: topo_stream.v1.TopologyStreamRepeatElementsData.components:type_name -> topo_stream.v1.TopologyStreamComponent
+	1,  // 6: topo_stream.v1.TopologyStreamRepeatElementsData.relations:type_name -> topo_stream.v1.TopologyStreamRelation
+	3,  // 7: topo_stream.v1.TopologyStreamRepeatElementsData.errors:type_name -> topo_stream.v1.TopoStreamError
+	4,  // 8: topo_stream.v1.TopologyStreamMessage.topology_stream_snapshot_data:type_name -> topo_stream.v1.TopologyStreamSnapshotData
+	5,  // 9: topo_stream.v1.TopologyStreamMessage.topology_stream_repeat_elements_data:type_name -> topo_stream.v1.TopologyStreamRepeatElementsData
+	2,  // 10: topo_stream.v1.TopologyStreamMessage.topology_stream_remove:type_name -> topo_stream.v1.TopologyStreamRemove
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_topo_stream_proto_init() }
@@ -719,8 +786,8 @@ func file_topo_stream_proto_init() {
 	}
 	file_topo_stream_proto_msgTypes[0].OneofWrappers = []any{}
 	file_topo_stream_proto_msgTypes[1].OneofWrappers = []any{}
-	file_topo_stream_proto_msgTypes[3].OneofWrappers = []any{}
-	file_topo_stream_proto_msgTypes[5].OneofWrappers = []any{
+	file_topo_stream_proto_msgTypes[4].OneofWrappers = []any{}
+	file_topo_stream_proto_msgTypes[6].OneofWrappers = []any{
 		(*TopologyStreamMessage_TopologyStreamSnapshotData)(nil),
 		(*TopologyStreamMessage_TopologyStreamRepeatElementsData)(nil),
 		(*TopologyStreamMessage_TopologyStreamRemove)(nil),
@@ -731,7 +798,7 @@ func file_topo_stream_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_topo_stream_proto_rawDesc), len(file_topo_stream_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

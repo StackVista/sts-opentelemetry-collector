@@ -207,10 +207,10 @@ func consumeTopologyRecords(t *testing.T, env *TopologyTestEnv, minRecords int) 
 func extractComponentsAndRelations(
 	t *testing.T,
 	recs []*kgo.Record,
-) (map[string]*topo_stream_v1.TopologyStreamComponent, map[string]*topo_stream_v1.TopologyStreamRelation, []string) {
+) (map[string]*topo_stream_v1.TopologyStreamComponent, map[string]*topo_stream_v1.TopologyStreamRelation, []*topo_stream_v1.TopoStreamError) {
 	components := make(map[string]*topo_stream_v1.TopologyStreamComponent)
 	relations := make(map[string]*topo_stream_v1.TopologyStreamRelation)
-	errs := make([]string, 0)
+	errs := make([]*topo_stream_v1.TopoStreamError, 0)
 
 	for _, rec := range recs {
 		var topoMsg topo_stream_v1.TopologyStreamMessage

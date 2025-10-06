@@ -122,7 +122,9 @@ func (k *SettingsProvider) Start(ctx context.Context, _ component.Host) error {
 
 	// Fail fast: check if topic exists
 	if err := k.checkTopicExists(ctx); err != nil {
-		return fmt.Errorf("failed to start kafka settings provider: %w", err)
+		// [debug] returning an error doesn't seem to surface as a log message
+		k.logger.Debug("failed to start STS Kafka settings provider", zap.Error(err))
+		return fmt.Errorf("failed to start STS Kafka settings provider: %w", err)
 	}
 
 	// Setup cancellation
