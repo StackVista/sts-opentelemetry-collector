@@ -1,13 +1,15 @@
 package internal
 
 import (
+	"encoding/json"
 	"fmt"
-	"github.com/hashicorp/golang-lru/v2/expirable"
-	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/hashicorp/golang-lru/v2/expirable"
+	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 )
 
 // TODO: turn mapping into a type so we don't have this global variable
@@ -146,7 +148,10 @@ func ResolveTagMappings(
 			if stringifyErr != nil {
 				errs = append(
 					errs,
-					fmt.Errorf("value for key %q in OtelTagMapping source %q is not a string", key, m.Source.Expression),
+					fmt.Errorf(
+						"value for key %q in OtelTagMapping source %q is not a string: %w",
+						key, m.Source.Expression, stringifyErr,
+					),
 				)
 				continue
 			}
@@ -181,8 +186,20 @@ func stringifyTagValue(value interface{}) (string, error) {
 		return v, nil
 	case fmt.Stringer:
 		return v.String(), nil
-	case int, int32, int64, float32, float64, bool:
+	case int, int32, uint64, int64, float32, float64, bool:
 		return fmt.Sprint(v), nil
+	case []interface{}:
+		parts := make([]string, 0, len(v))
+		for _, elem := range v {
+			parts = append(parts, fmt.Sprint(elem))
+		}
+		return strings.Join(parts, " "), nil
+	case map[string]interface{}:
+		bytes, err := json.Marshal(v)
+		if err != nil {
+			return "", fmt.Errorf("failed to stringify map: %w", err)
+		}
+		return string(bytes), nil
 	default:
 		return "", fmt.Errorf("value did not evaluate to string, got: %T", value)
 	}
