@@ -5,6 +5,7 @@ package stskafkaexporter_test
 import (
 	"context"
 	"fmt"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	testContainersKafka "github.com/testcontainers/testcontainers-go/modules/kafka"
@@ -14,10 +15,11 @@ import (
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/pdata/plog"
 
-	"github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter"
 	"log"
 	"testing"
 	"time"
+
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter"
 )
 
 const (
@@ -53,8 +55,8 @@ func TestKafkaExporter_Integration(t *testing.T) {
 
 	// Consume message and assert
 	rec := consumeSingleKafkaRecord(t, tc.cfg.Brokers, tc.cfg.Topic)
+	require.Equal(t, []byte("mykey"), rec.Key)
 	require.Equal(t, []byte("hello world"), rec.Value)
-	require.Len(t, rec.Key, 8) // hashed key
 }
 
 func setupTest(t *testing.T) *testContext {
