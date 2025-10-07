@@ -2,11 +2,9 @@ package stskafkaexporter
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 
-	"github.com/cespare/xxhash/v2"
 	"github.com/google/uuid"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -138,7 +136,7 @@ func (e *KafkaExporter) ExportData(ctx context.Context, ld plog.Logs) error {
 	defer cancel()
 
 	return iterateLogRecords(ld, func(lr plog.LogRecord) error {
-		// Extract Kafka message key (hashed into []byte for stable partitioning).
+		// Extract Kafka message key
 		key, err := extractKey(lr.Attributes())
 		if err != nil {
 			e.logger.Warn("failed to build Kafka message key; dropping", zap.Error(err))
@@ -193,18 +191,14 @@ func iterateLogRecords(ld plog.Logs, fn func(lr plog.LogRecord) error) error {
 	return firstErr
 }
 
-// extractKey retrieves the logical Kafka key from attributes and hashes it.
-// This ensures stable partitioning across producers.
+// extractKey retrieves the logical Kafka key from attributes
 func extractKey(attrs pcommon.Map) ([]byte, error) {
 	key, ok := attrs.Get(KafkaMessageKey)
 	if !ok {
 		return nil, fmt.Errorf("missing %s attribute", KafkaMessageKey)
 	}
 
-	h := xxhash.Sum64(key.Bytes().AsRaw())
-	buf := make([]byte, 8)
-	binary.BigEndian.PutUint64(buf, h)
-	return buf, nil
+	return append([]byte(nil), key.Bytes().AsRaw()...), nil
 }
 
 // extractValue retrieves the message body from the plog.LogRecord.
