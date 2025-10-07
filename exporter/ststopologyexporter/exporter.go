@@ -63,101 +63,103 @@ func (t *TopologyExporter) logAttrs(msg string, attrs *pcommon.Map) {
 }
 
 func (t *TopologyExporter) ConsumeMetrics(_ context.Context, md pmetric.Metrics) error {
-	componentsByAPIKey := make(map[string]*internal.ComponentsCollection, 0)
-	rms := md.ResourceMetrics()
-	for i := 0; i < rms.Len(); i++ {
-		rs := rms.At(i)
-		resource := rs.Resource()
-		attrs := resource.Attributes()
-		stsAPIKeyValue, keyExists := attrs.Get("sts_api_key")
-		if keyExists {
-			stsAPIKey := stsAPIKeyValue.AsString()
-			attrs.Remove("sts_api_key")
-			collection := getOrDefault(componentsByAPIKey, stsAPIKey)
-			if !collection.AddResource(&attrs) {
-				t.logAttrs("Skipping resource without necessary attributes", &attrs)
-			}
-		} else {
-			// look for servicegraph metrics for relations
-			ilms := rs.ScopeMetrics()
-			for j := 0; j < ilms.Len(); j++ {
-				ilm := ilms.At(j)
-				scope := ilm.Scope()
-				if scope.Name() != "traces_service_graph" {
-					continue
-				}
-
-				metrics := ilm.Metrics()
-				for k := 0; k < metrics.Len(); k++ {
-					m := metrics.At(k)
-					if m.Name() != "traces_service_graph_request_total" {
-						continue
-					}
-					connAttrs := m.Sum().DataPoints().At(0).Attributes()
-					connectionType, ok := connAttrs.Get("connection_type")
-					if !ok || connectionType.AsString() == "virtual_node" {
-						continue
-					}
-
-					clientAPIKeyValue, clientKeyExists := connAttrs.Get("client_sts_api_key")
-					var clientAPIKey string
-					if clientKeyExists {
-						clientAPIKey = clientAPIKeyValue.AsString()
-					}
-					serverAPIKeyValue, serverKeyExists := connAttrs.Get("server_sts_api_key")
-					var serverAPIKey string
-					if serverKeyExists {
-						serverAPIKey = serverAPIKeyValue.AsString()
-					}
-					if !clientKeyExists && !serverKeyExists {
-						t.logAttrs("No sts_api_key attributes, found: ", &connAttrs)
-						continue
-					}
-					connAttrs.Remove("client_sts_api_key")
-					connAttrs.Remove("server_sts_api_key")
-					if clientKeyExists {
-						collection := getOrDefault(componentsByAPIKey, clientAPIKey)
-						if !collection.AddConnection(&connAttrs) {
-							t.logAttrs("Unable to add connection from servicegraphconnector to client", &connAttrs)
-						}
-					}
-					if serverKeyExists {
-						collection := getOrDefault(componentsByAPIKey, serverAPIKey)
-						if !collection.AddConnection(&connAttrs) {
-							t.logAttrs("Unable to add connection from servicegraphconnector to server", &connAttrs)
-						}
-					}
-				}
-				break
-			}
-
-		}
-	}
-
-	_ = t.sendCollection(componentsByAPIKey)
+	//componentsByAPIKey := make(map[string]*internal.ComponentsCollection, 0)
+	//rms := md.ResourceMetrics()
+	//for i := 0; i < rms.Len(); i++ {
+	//	rs := rms.At(i)
+	//	resource := rs.Resource()
+	//	attrs := resource.Attributes()
+	//	stsAPIKeyValue, keyExists := attrs.Get("sts_api_key")
+	//	if keyExists {
+	//		stsAPIKey := stsAPIKeyValue.AsString()
+	//		attrs.Remove("sts_api_key")
+	//		collection := getOrDefault(componentsByAPIKey, stsAPIKey)
+	//		if !collection.AddResource(&attrs) {
+	//			t.logAttrs("Skipping resource without necessary attributes", &attrs)
+	//		}
+	//	} else {
+	//		// look for servicegraph metrics for relations
+	//		ilms := rs.ScopeMetrics()
+	//		for j := 0; j < ilms.Len(); j++ {
+	//			ilm := ilms.At(j)
+	//			scope := ilm.Scope()
+	//			if scope.Name() != "traces_service_graph" {
+	//				continue
+	//			}
+	//
+	//			metrics := ilm.Metrics()
+	//			for k := 0; k < metrics.Len(); k++ {
+	//				m := metrics.At(k)
+	//				if m.Name() != "traces_service_graph_request_total" {
+	//					continue
+	//				}
+	//				connAttrs := m.Sum().DataPoints().At(0).Attributes()
+	//				connectionType, ok := connAttrs.Get("connection_type")
+	//				if !ok || connectionType.AsString() == "virtual_node" {
+	//					continue
+	//				}
+	//
+	//				clientAPIKeyValue, clientKeyExists := connAttrs.Get("client_sts_api_key")
+	//				var clientAPIKey string
+	//				if clientKeyExists {
+	//					clientAPIKey = clientAPIKeyValue.AsString()
+	//				}
+	//				serverAPIKeyValue, serverKeyExists := connAttrs.Get("server_sts_api_key")
+	//				var serverAPIKey string
+	//				if serverKeyExists {
+	//					serverAPIKey = serverAPIKeyValue.AsString()
+	//				}
+	//				if !clientKeyExists && !serverKeyExists {
+	//					t.logAttrs("No sts_api_key attributes, found: ", &connAttrs)
+	//					continue
+	//				}
+	//				connAttrs.Remove("client_sts_api_key")
+	//				connAttrs.Remove("server_sts_api_key")
+	//				if clientKeyExists {
+	//					collection := getOrDefault(componentsByAPIKey, clientAPIKey)
+	//					if !collection.AddConnection(&connAttrs) {
+	//						t.logAttrs("Unable to add connection from servicegraphconnector to client", &connAttrs)
+	//					}
+	//				}
+	//				if serverKeyExists {
+	//					collection := getOrDefault(componentsByAPIKey, serverAPIKey)
+	//					if !collection.AddConnection(&connAttrs) {
+	//						t.logAttrs("Unable to add connection from servicegraphconnector to server", &connAttrs)
+	//					}
+	//				}
+	//			}
+	//			break
+	//		}
+	//
+	//	}
+	//}
+	//
+	//_ = t.sendCollection(componentsByAPIKey)
+	t.logger.Warn("ststopology is skipping metrics")
 
 	return nil
 }
 
 func (t *TopologyExporter) ConsumeTraces(_ context.Context, td ptrace.Traces) error {
-	componentsByAPIKey := make(map[string]*internal.ComponentsCollection, 0)
-	rms := td.ResourceSpans()
-	for i := 0; i < rms.Len(); i++ {
-		rs := rms.At(i)
-		resource := rs.Resource()
-		attrs := resource.Attributes()
-		stsAPIKeyValue, keyExists := attrs.Get("sts_api_key")
-		if keyExists {
-			stsAPIKey := stsAPIKeyValue.AsString()
-			attrs.Remove("sts_api_key")
-			collection := getOrDefault(componentsByAPIKey, stsAPIKey)
-			if !collection.AddResource(&attrs) {
-				t.logAttrs("Skipping resource without necessary attributes", &attrs)
-			}
-		}
-	}
-
-	_ = t.sendCollection(componentsByAPIKey)
+	//componentsByAPIKey := make(map[string]*internal.ComponentsCollection, 0)
+	//rms := td.ResourceSpans()
+	//for i := 0; i < rms.Len(); i++ {
+	//	rs := rms.At(i)
+	//	resource := rs.Resource()
+	//	attrs := resource.Attributes()
+	//	stsAPIKeyValue, keyExists := attrs.Get("sts_api_key")
+	//	if keyExists {
+	//		stsAPIKey := stsAPIKeyValue.AsString()
+	//		attrs.Remove("sts_api_key")
+	//		collection := getOrDefault(componentsByAPIKey, stsAPIKey)
+	//		if !collection.AddResource(&attrs) {
+	//			t.logAttrs("Skipping resource without necessary attributes", &attrs)
+	//		}
+	//	}
+	//}
+	//
+	//_ = t.sendCollection(componentsByAPIKey)
+	t.logger.Warn("ststopology is skipping traces")
 
 	return nil
 }
