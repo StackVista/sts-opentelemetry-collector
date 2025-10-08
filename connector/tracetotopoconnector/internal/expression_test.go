@@ -27,6 +27,17 @@ func makeContext() ExpressionEvalContext {
 	res.Resource().Attributes().PutStr("cloud.provider", "aws")
 	res.Resource().Attributes().PutStr("env", "dev")
 
+	// slice attribute type
+	args := res.Resource().Attributes().PutEmptySlice("process.command_args")
+	args.AppendEmpty().SetStr("java")
+	args.AppendEmpty().SetStr("-jar")
+	args.AppendEmpty().SetStr("app.jar")
+
+	// map attribute type
+	depMap := res.Resource().Attributes().PutEmptyMap("deployment")
+	depMap.PutStr("region", "eu-west-1")
+	depMap.PutStr("env", "prod")
+
 	vars := map[string]string{
 		"namespace": "test",
 	}
@@ -310,6 +321,11 @@ func TestCelEvaluator_EvalMapExpression(t *testing.T) {
 				"cloud.provider": "aws",
 				"service.name":   "cart-service",
 				"env":            "dev",
+				"deployment": map[string]any{
+					"env":    "prod",
+					"region": "eu-west-1",
+				},
+				"process.command_args": []interface{}{"java", "-jar", "app.jar"},
 			},
 			expectError: false,
 		},

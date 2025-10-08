@@ -3,11 +3,12 @@ package internal
 
 import (
 	"errors"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
-	"github.com/stretchr/testify/require"
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stretchr/testify/require"
 
 	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
 	"github.com/stretchr/testify/assert"
@@ -202,6 +203,17 @@ func TestResolveTagMappings(t *testing.T) {
 	testResource := ptrace.NewResourceSpans()
 	testResource.Resource().Attributes().PutStr("name", "microservice")
 
+	// slice attribute type
+	args := testResource.Resource().Attributes().PutEmptySlice("process.command_args")
+	args.AppendEmpty().SetStr("java")
+	args.AppendEmpty().SetStr("-jar")
+	args.AppendEmpty().SetStr("app.jar")
+
+	// map attribute type
+	depMap := testResource.Resource().Attributes().PutEmptyMap("deployment")
+	depMap.PutStr("region", "eu-west-1")
+	depMap.PutStr("env", "prod")
+
 	ctx := ExpressionEvalContext{
 		Span:     testSpan,
 		Scope:    testScope,
@@ -359,7 +371,9 @@ func TestResolveTagMappings(t *testing.T) {
 				},
 			},
 			want: map[string]string{
-				"res.name": "special", // explicit wins over merged
+				"res.name":                 "special", // explicit wins over merged
+				"res.deployment":           `{"env":"prod","region":"eu-west-1"}`,
+				"res.process.command_args": "java -jar app.jar",
 			},
 		},
 		{
