@@ -167,7 +167,7 @@ func TestConnectorConsumeTraces(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL, componentKey.Owner)
 		assert.Equal(t, "mapping1", componentKey.DataSource)
-		assert.Equal(t, "627cc493", componentKey.ShardId)
+		assert.Equal(t, "0", componentKey.ShardId)
 		componentMassage := topo_stream_v1.TopologyStreamMessage{}
 		err = proto.Unmarshal(componentLogRecord.Body().Bytes().AsRaw(), &componentMassage)
 		require.NoError(t, err)
@@ -187,7 +187,7 @@ func TestConnectorConsumeTraces(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL, relationKey.Owner)
 		assert.Equal(t, "mapping2", relationKey.DataSource)
-		assert.Equal(t, "checkout-service-web-service", relationKey.ShardId)
+		assert.Equal(t, "2", relationKey.ShardId)
 		relationMessage := topo_stream_v1.TopologyStreamMessage{}
 		err = proto.Unmarshal(relationLogRecord.Body().Bytes().AsRaw(), &relationMessage)
 		require.NoError(t, err)
