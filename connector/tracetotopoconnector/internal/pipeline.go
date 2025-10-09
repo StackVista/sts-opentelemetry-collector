@@ -1,6 +1,8 @@
 package internal
 
 import (
+	"fmt"
+	"hash/fnv"
 	"math"
 
 	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
@@ -195,7 +197,7 @@ func outputToMessageWithKey(
 		Key: &topo_stream_v1.TopologyStreamMessageKey{
 			Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 			DataSource: mapping.GetId(),
-			ShardId:    output.GetExternalId(),
+			ShardId:    stableShardID(output.GetExternalId(), 3),
 		},
 		Message: &topo_stream_v1.TopologyStreamMessage{
 			CollectionTimestamp: now,
@@ -209,6 +211,12 @@ func outputToMessageWithKey(
 			},
 		},
 	}
+}
+
+func stableShardID(externalId string, shardCount uint32) string {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(externalId))
+	return fmt.Sprintf("%d", h.Sum32()%shardCount)
 }
 
 func convertTimestampToInt64(input pcommon.Timestamp) int64 {
