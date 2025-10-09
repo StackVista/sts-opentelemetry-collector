@@ -140,7 +140,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 					Key: &topo_stream_v1.TopologyStreamMessageKey{
 						Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 						DataSource: "mapping1a",
-						ShardId:    "627cc493",
+						ShardId:    "0",
 					},
 					Message: &topo_stream_v1.TopologyStreamMessage{
 						CollectionTimestamp: now,
@@ -173,7 +173,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 					Key: &topo_stream_v1.TopologyStreamMessageKey{
 						Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 						DataSource: "mapping1b",
-						ShardId:    "checkout-service-web-service",
+						ShardId:    "2",
 					},
 					Message: &topo_stream_v1.TopologyStreamMessage{
 						CollectionTimestamp: now,
@@ -422,22 +422,22 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			{
 				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 				DataSource: "cm1",
-				ShardId:    "627cc493",
+				ShardId:    "0",
 			},
 			{
 				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 				DataSource: "cm2",
-				ShardId:    "627cc493",
+				ShardId:    "0",
 			},
 			{
 				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 				DataSource: "rm1",
-				ShardId:    "checkout-service-web-service",
+				ShardId:    "2",
 			},
 			{
 				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 				DataSource: "rm2",
-				ShardId:    "checkout-service-web-service",
+				ShardId:    "2",
 			},
 		}
 		assert.Equal(t, expectedKeys, actualKeys)
@@ -495,22 +495,22 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			{
 				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 				DataSource: "cm1",
-				ShardId:    "627cc493",
+				ShardId:    "0",
 			},
 			{
 				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 				DataSource: "cm1",
-				ShardId:    "627cc493",
+				ShardId:    "0",
 			},
 			{
 				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 				DataSource: "rm1",
-				ShardId:    "checkout-service-web-service",
+				ShardId:    "2",
 			},
 			{
 				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 				DataSource: "rm1",
-				ShardId:    "checkout-service-payment-service",
+				ShardId:    "2",
 			},
 		}
 		assert.Equal(t, expectedKeys, actualKeys)
