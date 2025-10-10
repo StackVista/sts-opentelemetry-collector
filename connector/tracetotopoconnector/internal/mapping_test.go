@@ -91,7 +91,7 @@ func TestMapping_MapComponent(t *testing.T) {
 			},
 			want: &topo_stream_v1.TopologyStreamComponent{
 				ExternalId:       "billing",
-				Identifiers:      []string{},
+				Identifiers:      []string{"billing"},
 				Name:             "billing",
 				TypeName:         "service",
 				TypeIdentifier:   ptr("service_id"),
@@ -120,7 +120,7 @@ func TestMapping_MapComponent(t *testing.T) {
 			vars:     &map[string]string{},
 			want: &topo_stream_v1.TopologyStreamComponent{
 				ExternalId:  "billing",
-				Identifiers: []string{},
+				Identifiers: []string{"billing"},
 				Name:        "billing",
 				TypeName:    "service",
 				DomainName:  "payment",
