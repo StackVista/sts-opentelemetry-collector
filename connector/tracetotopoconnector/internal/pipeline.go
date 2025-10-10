@@ -170,7 +170,7 @@ func errorsToMessageWithKey(errs *[]error, mapping settings.Mapping, span *ptrac
 	return &MessageWithKey{
 		Key: &topo_stream_v1.TopologyStreamMessageKey{
 			Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
-			DataSource: mapping.GetId(),
+			DataSource: mapping.GetIdentifier(),
 			ShardId:    "unknown",
 		},
 		Message: &topo_stream_v1.TopologyStreamMessage{
@@ -195,11 +195,10 @@ func outputToMessageWithKey(
 	toRelations func() []*topo_stream_v1.TopologyStreamRelation,
 ) *MessageWithKey {
 	submittedTimestamp := convertTimestampToInt64(span.EndTimestamp())
-
 	return &MessageWithKey{
 		Key: &topo_stream_v1.TopologyStreamMessageKey{
 			Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
-			DataSource: mapping.GetId(),
+			DataSource: mapping.GetIdentifier(),
 			ShardId:    stableShardID(output.GetExternalId(), ShardCount),
 		},
 		Message: &topo_stream_v1.TopologyStreamMessage{
