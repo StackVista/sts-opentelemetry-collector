@@ -21,7 +21,7 @@ components:
   schemas:
     SettingsProtocol:
       properties:
-        type: 
+        type:
           type: string
       oneOf:
         - $ref: "#/components/schemas/SettingsSnapshotStart"
@@ -36,7 +36,7 @@ components:
     SettingsSnapshotStart:
       type: object
       properties:
-        type: 
+        type:
           type: string
           enum: [SettingsSnapshotStart]
         id:
@@ -52,7 +52,7 @@ components:
     SettingsSnapshotStop:
       type: object
       properties:
-        type: 
+        type:
           type: string
           enum: [SettingsSnapshotStop]
         id:
@@ -65,7 +65,7 @@ components:
     SettingsEnvelope:
       type: object
       properties:
-        type: 
+        type:
           type: string
           enum: [SettingsEnvelope]
         id:
@@ -77,7 +77,7 @@ components:
         - type
         - id
         - setting
-  
+
     # Base types
 
     SettingType:
@@ -215,7 +215,7 @@ components:
       properties:
         id:
           type: string
-        type: 
+        type:
           type: string
           enum: [SlackNotificationChannelId]
       required:
@@ -227,7 +227,7 @@ components:
       properties:
         id:
           type: string
-        type: 
+        type:
           type: string
           enum: [WebhookNotificationChannelId]
       required:
@@ -239,7 +239,7 @@ components:
       properties:
         id:
           type: string
-        type: 
+        type:
           type: string
           enum: [OpsgenieNotificationChannelId]
       required:
@@ -251,7 +251,7 @@ components:
       properties:
         id:
           type: string
-        type: 
+        type:
           type: string
           enum: [TeamsNotificationChannelId]
       required:
@@ -263,13 +263,13 @@ components:
       properties:
         id:
           type: string
-        type: 
+        type:
           type: string
           enum: [EmailNotificationChannelId]
       required:
         - id
         - type
-  
+
     NotificationChannelType:
       type: string
       enum:
@@ -704,7 +704,7 @@ components:
         - $ref: "#/components/schemas/MonitorFunctionCall"
       discriminator:
         propertyName: type
-  
+
     MonitorFunctionCall:
       type: object
       properties:
@@ -714,7 +714,7 @@ components:
           type: object
           additionalProperties:
             $ref: "#/components/schemas/MonitorArgument"
-        type: 
+        type:
           type: string
           enum: [MonitorFunctionCall]
       required:
@@ -756,7 +756,7 @@ components:
         argumentType:
           type: string
       oneOf:
-        - $ref: "#/components/schemas/MonitorArgument"   
+        - $ref: "#/components/schemas/MonitorArgument"
       discriminator:
         propertyName: argumentType
       required:
@@ -1007,17 +1007,21 @@ components:
               type: string
               enum: [OtelComponentMapping]
               description: The combination of type+id is a unique identification for a setting
+            identifier:
+              type: string
             name:
               type: string
+            inputSignals:
+              $ref: '#/components/schemas/OtelInputSignalList'
             output:
               $ref: "#/components/schemas/OtelComponentMappingOutput"
             vars:
               type: array
-              items: 
+              items:
                 $ref: "#/components/schemas/OtelVariableMapping"
             conditions:
               type: array
-              items: 
+              items:
                 $ref: "#/components/schemas/OtelConditionMapping"
               minItems: 1
             expireAfterMs:
@@ -1026,6 +1030,7 @@ components:
           required:
             - type
             - name
+            - inputSignals
             - output
             - conditions
             - expireAfterMs
@@ -1039,17 +1044,21 @@ components:
               type: string
               enum: [OtelRelationMapping]
               description: The combination of type+id is a unique identification for a setting
+            identifier:
+              type: string
             name:
               type: string
+            inputSignals:
+              $ref: '#/components/schemas/OtelInputSignalList'
             output:
               $ref: "#/components/schemas/OtelRelationMappingOutput"
             vars:
               type: array
-              items: 
+              items:
                 $ref: "#/components/schemas/OtelVariableMapping"
             conditions:
               type: array
-              items: 
+              items:
                 $ref: "#/components/schemas/OtelConditionMapping"
               minItems: 1
             expireAfterMs:
@@ -1058,6 +1067,7 @@ components:
           required:
             - type
             - name
+            - inputSignals
             - output
             - conditions
             - expireAfterMs
@@ -1144,7 +1154,7 @@ components:
         name:
           type: string
         value:
-          $ref: "#/components/schemas/OtelStringExpression"        
+          $ref: "#/components/schemas/OtelStringExpression"
       required:
         - name
         - value
@@ -1153,7 +1163,7 @@ components:
       type: object
       properties:
         expression:
-          $ref: "#/components/schemas/OtelBooleanExpression"        
+          $ref: "#/components/schemas/OtelBooleanExpression"
         action:
           $ref: "#/components/schemas/OtelConditionMappingAction"
       required:
@@ -1166,9 +1176,31 @@ components:
         - CREATE
         - REJECT
 
+    OtelInputSignal:
+      type: string
+      description: |-
+        Signals exported by OpenTelemetry, which can be used as an input for an OTel topology mapping.
+        The value of each enum specifies which attributes are in scope for expressions in an OTel topology mapping.
+        Signals and their attribute map names:
+          - `TRACES` - `resourceAttributes`, `spanAttributes`, `scopeAttributes`
+          - `METRICS` - `metricAttributes`
+          - `LOGS` - not yet supported
+        For example, if the value is `METRICS`, then the `matricAttributes` map will be in scope for expressions - any other 
+        references to other input signals' attribute maps will result in an error.
+      enum:
+        - TRACES
+        - METRICS
+        - LOGS
+
+    OtelInputSignalList:
+      type: array
+      items:
+        $ref: '#/components/schemas/OtelInputSignal'
+      minItems: 1
+
     OtelStringExpression:
       type: object
-      description: |- 
+      description: |-
         An expression that must produce a string. It must be one of these formats:
           - A plain string, for example `"this is a plain string"`
           - A string containing a CEL expression within curly braces `${}`, for example "a string with a cell expression: `${input.tags.namespace}"`
@@ -1176,7 +1208,7 @@ components:
       properties:
         expression:
           type: string
-      required: 
+      required:
         - expression
 
     OtelBooleanExpression:
@@ -1185,5 +1217,5 @@ components:
       properties:
         expression:
           type: string
-      required: 
+      required:
         - expression

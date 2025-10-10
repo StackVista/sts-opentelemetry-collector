@@ -2,6 +2,7 @@
 package internal
 
 import (
+	"fmt"
 	"sort"
 	"testing"
 	"time"
@@ -74,6 +75,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 					Conditions: []settings.OtelConditionMapping{
 						{Action: settings.CREATE, Expression: boolExpr(`vars.instanceId == "627cc493"`)},
 					},
+					Identifier: ptr("urn:otel-component-mapping:service"),
 					Output: settings.OtelComponentMappingOutput{
 						Identifier:     strExpr("${vars.instanceId}"),
 						Name:           strExpr(`${resourceAttributes["service.name"]}`),
@@ -124,6 +126,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			relationMappings: []settings.OtelRelationMapping{
 				{
 					Id:            "mapping1b",
+					Identifier:    ptr("urn:otel-relation-mapping:synchronous"),
 					ExpireAfterMs: 300000,
 					Conditions: []settings.OtelConditionMapping{
 						{Action: settings.CREATE, Expression: boolExpr(`spanAttributes["http.method"] == "GET"`)},
@@ -139,7 +142,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 				{
 					Key: &topo_stream_v1.TopologyStreamMessageKey{
 						Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
-						DataSource: "mapping1a",
+						DataSource: "urn:otel-component-mapping:service",
 						ShardId:    "0",
 					},
 					Message: &topo_stream_v1.TopologyStreamMessage{
@@ -172,7 +175,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 				{
 					Key: &topo_stream_v1.TopologyStreamMessageKey{
 						Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
-						DataSource: "mapping1b",
+						DataSource: "urn:otel-relation-mapping:synchronous",
 						ShardId:    "2",
 					},
 					Message: &topo_stream_v1.TopologyStreamMessage{
@@ -270,7 +273,8 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			name: "Returns error when an attribute is missing",
 			componentMappings: []settings.OtelComponentMapping{
 				{
-					Id: "mapping3a",
+					Id:         "mapping3a",
+					Identifier: ptr("urn:otel-component-mapping:service"),
 					Conditions: []settings.OtelConditionMapping{
 						{Action: settings.CREATE, Expression: boolExpr(`vars.instanceId == "627cc493"`)},
 					},
@@ -323,7 +327,8 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			},
 			relationMappings: []settings.OtelRelationMapping{
 				{
-					Id: "mapping3b",
+					Id:         "mapping3b",
+					Identifier: ptr("urn:otel-relation-mapping:synchronous"),
 					Conditions: []settings.OtelConditionMapping{
 						{Action: settings.CREATE, Expression: boolExpr(`spanAttributes["http.method"] == "GET"`)},
 					},
@@ -338,7 +343,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 				{
 					Key: &topo_stream_v1.TopologyStreamMessageKey{
 						Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
-						DataSource: "mapping3a",
+						DataSource: "urn:otel-component-mapping:service",
 						ShardId:    "unknown",
 					},
 					Message: &topo_stream_v1.TopologyStreamMessage{
@@ -357,7 +362,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 				{
 					Key: &topo_stream_v1.TopologyStreamMessageKey{
 						Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
-						DataSource: "mapping3b",
+						DataSource: "urn:otel-relation-mapping:synchronous",
 						ShardId:    "unknown",
 					},
 					Message: &topo_stream_v1.TopologyStreamMessage{
@@ -421,22 +426,22 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 		expectedKeys := []topo_stream_v1.TopologyStreamMessageKey{
 			{
 				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
-				DataSource: "cm1",
+				DataSource: "urn:otel-component-mapping:cm1",
 				ShardId:    "0",
 			},
 			{
 				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
-				DataSource: "cm2",
+				DataSource: "urn:otel-component-mapping:cm2",
 				ShardId:    "0",
 			},
 			{
 				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
-				DataSource: "rm1",
+				DataSource: "urn:otel-relation-mapping:rm1",
 				ShardId:    "2",
 			},
 			{
 				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
-				DataSource: "rm2",
+				DataSource: "urn:otel-relation-mapping:rm2",
 				ShardId:    "2",
 			},
 		}
@@ -494,22 +499,22 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 		expectedKeys := []topo_stream_v1.TopologyStreamMessageKey{
 			{
 				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
-				DataSource: "cm1",
+				DataSource: "urn:otel-component-mapping:cm1",
 				ShardId:    "0",
 			},
 			{
 				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
-				DataSource: "cm1",
+				DataSource: "urn:otel-component-mapping:cm1",
 				ShardId:    "0",
 			},
 			{
 				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
-				DataSource: "rm1",
+				DataSource: "urn:otel-relation-mapping:rm1",
 				ShardId:    "2",
 			},
 			{
 				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
-				DataSource: "rm1",
+				DataSource: "urn:otel-relation-mapping:rm1",
 				ShardId:    "2",
 			},
 		}
@@ -520,6 +525,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 func createSimpleComponentMapping(id string) settings.OtelComponentMapping {
 	return settings.OtelComponentMapping{
 		Id:            id,
+		Identifier:    ptr(fmt.Sprintf("urn:otel-component-mapping:%s", id)),
 		ExpireAfterMs: 60000,
 		Conditions: []settings.OtelConditionMapping{
 			{Action: settings.CREATE, Expression: boolExpr(`spanAttributes["http.method"] == "GET"`)},
@@ -537,6 +543,7 @@ func createSimpleComponentMapping(id string) settings.OtelComponentMapping {
 func createSimpleRelationMapping(id string) settings.OtelRelationMapping {
 	return settings.OtelRelationMapping{
 		Id:            id,
+		Identifier:    ptr(fmt.Sprintf("urn:otel-relation-mapping:%s", id)),
 		ExpireAfterMs: 300000,
 		Conditions: []settings.OtelConditionMapping{
 			{Action: settings.CREATE, Expression: boolExpr(`spanAttributes["http.method"] == "GET"`)},

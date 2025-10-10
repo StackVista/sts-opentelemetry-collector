@@ -210,6 +210,13 @@ const (
 	REJECT OtelConditionMappingAction = "REJECT"
 )
 
+// Defines values for OtelInputSignal.
+const (
+	LOGS    OtelInputSignal = "LOGS"
+	METRICS OtelInputSignal = "METRICS"
+	TRACES  OtelInputSignal = "TRACES"
+)
+
 // Defines values for OtelRelationMappingType.
 const (
 	OtelRelationMappingTypeOtelRelationMapping OtelRelationMappingType = "OtelRelationMapping"
@@ -697,10 +704,12 @@ type OtelComponentMapping struct {
 	ExpireAfterMs    int64 `json:"expireAfterMs"`
 
 	// Id A Setting is uniquely identified by the combination of type+id
-	Id     SettingId                  `json:"id"`
-	Name   string                     `json:"name"`
-	Output OtelComponentMappingOutput `json:"output"`
-	Shard  Shard                      `json:"shard"`
+	Id           SettingId                  `json:"id"`
+	Identifier   *string                    `json:"identifier,omitempty"`
+	InputSignals OtelInputSignalList        `json:"inputSignals"`
+	Name         string                     `json:"name"`
+	Output       OtelComponentMappingOutput `json:"output"`
+	Shard        Shard                      `json:"shard"`
 
 	// Type The combination of type+id is a unique identification for a setting
 	Type OtelComponentMappingType `json:"type"`
@@ -786,6 +795,20 @@ type OtelConditionMapping struct {
 // OtelConditionMappingAction defines model for OtelConditionMappingAction.
 type OtelConditionMappingAction string
 
+// OtelInputSignal Signals exported by OpenTelemetry, which can be used as an input for an OTel topology mapping.
+// The value of each enum specifies which attributes are in scope for expressions in an OTel topology mapping.
+// Signals and their attribute map names:
+//   - `TRACES` - `resourceAttributes`, `spanAttributes`, `scopeAttributes`
+//   - `METRICS` - `metricAttributes`
+//   - `LOGS` - not yet supported
+//
+// For example, if the value is `METRICS`, then the `matricAttributes` map will be in scope for expressions - any other
+// references to other input signals' attribute maps will result in an error.
+type OtelInputSignal string
+
+// OtelInputSignalList defines model for OtelInputSignalList.
+type OtelInputSignalList = []OtelInputSignal
+
 // OtelMapping defines model for OtelMapping.
 type OtelMapping struct {
 	union json.RawMessage
@@ -800,10 +823,12 @@ type OtelRelationMapping struct {
 	ExpireAfterMs    int64 `json:"expireAfterMs"`
 
 	// Id A Setting is uniquely identified by the combination of type+id
-	Id     SettingId                 `json:"id"`
-	Name   string                    `json:"name"`
-	Output OtelRelationMappingOutput `json:"output"`
-	Shard  Shard                     `json:"shard"`
+	Id           SettingId                 `json:"id"`
+	Identifier   *string                   `json:"identifier,omitempty"`
+	InputSignals OtelInputSignalList       `json:"inputSignals"`
+	Name         string                    `json:"name"`
+	Output       OtelRelationMappingOutput `json:"output"`
+	Shard        Shard                     `json:"shard"`
 
 	// Type The combination of type+id is a unique identification for a setting
 	Type OtelRelationMappingType `json:"type"`
