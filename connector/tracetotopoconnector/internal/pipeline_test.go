@@ -94,7 +94,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 						},
 						Optional: &settings.OtelComponentMappingFieldMapping{
 							AdditionalIdentifiers: &[]settings.OtelStringExpression{
-								{Expression: `${resourceAttributes["service.instance.id"]}`},
+								{Expression: `urn:process:${resourceAttributes["process.pid"]}`},
 							},
 							Tags: &[]settings.OtelTagMapping{
 								{
@@ -151,7 +151,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 								Components: []*topo_stream_v1.TopologyStreamComponent{
 									{
 										ExternalId:       "627cc493",
-										Identifiers:      []string{"627cc493", "checkout-service-8675309"},
+										Identifiers:      []string{"627cc493", "urn:process:12345", "checkout-service-8675309"},
 										Name:             "checkout-service",
 										TypeName:         "service-instance",
 										TypeIdentifier:   ptr("service_instance_id"),

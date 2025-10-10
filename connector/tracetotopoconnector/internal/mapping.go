@@ -45,17 +45,18 @@ func MapComponent(
 		return val
 	}
 
-	additionalIdentifiers := make([]string, 0)
+	allIdentifiers := make([]string, 0)
+	allIdentifiers = append(allIdentifiers, evalStr(mapping.Output.Identifier))
 	if mapping.Output.Optional != nil && mapping.Output.Optional.AdditionalIdentifiers != nil {
 		for _, expr := range *mapping.Output.Optional.AdditionalIdentifiers {
 			if id, err := expressionEvaluator.EvalStringExpression(expr, expressionEvalCtx); err == nil {
-				additionalIdentifiers = append(additionalIdentifiers, id)
+				allIdentifiers = append(allIdentifiers, id)
 			}
 		}
 	}
 	if mapping.Output.Required != nil && mapping.Output.Required.AdditionalIdentifiers != nil {
 		for _, expr := range *mapping.Output.Required.AdditionalIdentifiers {
-			additionalIdentifiers = append(additionalIdentifiers, evalStr(expr))
+			allIdentifiers = append(allIdentifiers, evalStr(expr))
 		}
 	}
 
@@ -88,7 +89,7 @@ func MapComponent(
 
 	result := topo_stream_v1.TopologyStreamComponent{
 		ExternalId:         evalStr(mapping.Output.Identifier),
-		Identifiers:        additionalIdentifiers,
+		Identifiers:        allIdentifiers,
 		Name:               evalStr(mapping.Output.Name),
 		TypeName:           evalStr(mapping.Output.TypeName),
 		TypeIdentifier:     evalOptStr(mapping.Output.TypeIdentifier),
