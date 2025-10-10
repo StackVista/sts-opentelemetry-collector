@@ -705,7 +705,7 @@ type OtelComponentMapping struct {
 
 	// Id A Setting is uniquely identified by the combination of type+id
 	Id           SettingId                  `json:"id"`
-	Identifier   *string                    `json:"identifier,omitempty"`
+	Identifier   string                     `json:"identifier"`
 	InputSignals OtelInputSignalList        `json:"inputSignals"`
 	Name         string                     `json:"name"`
 	Output       OtelComponentMappingOutput `json:"output"`
@@ -798,12 +798,11 @@ type OtelConditionMappingAction string
 // OtelInputSignal Signals exported by OpenTelemetry, which can be used as an input for an OTel topology mapping.
 // The value of each enum specifies which attributes are in scope for expressions in an OTel topology mapping.
 // Signals and their attribute map names:
-//   - `TRACES` - `resourceAttributes`, `spanAttributes`, `scopeAttributes`
-//   - `METRICS` - `metricAttributes`
+//   - `TRACES` - `resourceAttributes`, `scopeAttributes`, `spanAttributes`,
+//   - `METRICS` - `resourceAttributes`, `scopeAttributes`, `metricAttributes`
 //   - `LOGS` - not yet supported
 //
-// For example, if the value is `METRICS`, then the `matricAttributes` map will be in scope for expressions - any other
-// references to other input signals' attribute maps will result in an error.
+// For example, if the value is `METRICS`, then the maps above (for metrics) will be in scope for expressions.
 type OtelInputSignal string
 
 // OtelInputSignalList defines model for OtelInputSignalList.
@@ -824,7 +823,7 @@ type OtelRelationMapping struct {
 
 	// Id A Setting is uniquely identified by the combination of type+id
 	Id           SettingId                 `json:"id"`
-	Identifier   *string                   `json:"identifier,omitempty"`
+	Identifier   string                    `json:"identifier"`
 	InputSignals OtelInputSignalList       `json:"inputSignals"`
 	Name         string                    `json:"name"`
 	Output       OtelRelationMappingOutput `json:"output"`

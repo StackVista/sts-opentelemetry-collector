@@ -27,10 +27,7 @@ func (m OtelComponentMapping) GetId() string {
 }
 
 func (m OtelComponentMapping) GetIdentifier() string {
-	if m.Identifier == nil || *m.Identifier == "" {
-		panic(fmt.Sprintf("mapping ID '%s' missing identifier", m.Id))
-	}
-	return *m.Identifier
+	return m.Identifier
 }
 
 func (m OtelComponentMapping) GetExpireAfterMs() int64 {
@@ -42,10 +39,7 @@ func (m OtelRelationMapping) GetId() string {
 }
 
 func (m OtelRelationMapping) GetIdentifier() string {
-	if m.Identifier == nil || *m.Identifier == "" {
-		panic(fmt.Sprintf("mapping ID '%s' missing identifier", m.Id))
-	}
-	return *m.Identifier
+	return m.Identifier
 }
 
 func (m OtelRelationMapping) GetExpireAfterMs() int64 {
