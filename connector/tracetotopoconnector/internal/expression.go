@@ -12,7 +12,6 @@ import (
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/ext"
-	"go.opentelemetry.io/collector/pdata/pcommon"
 
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"go.opentelemetry.io/collector/pdata/ptrace"
@@ -77,7 +76,12 @@ type ExpressionEvalContext struct {
 
 type CelEvaluator struct {
 	env   *cel.Env
-	cache *expirable.LRU[string, cel.Program]
+	cache *expirable.LRU[string, CacheEntry]
+}
+
+type CacheEntry struct {
+	Program *cel.Program
+	Error   *error
 }
 
 func NewCELEvaluator(cacheSettings CacheSettings) (*CelEvaluator, error) {
@@ -92,7 +96,7 @@ func NewCELEvaluator(cacheSettings CacheSettings) (*CelEvaluator, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CEL environment: %w", err)
 	}
-	cache := expirable.NewLRU[string, cel.Program](cacheSettings.Size, nil, cacheSettings.TTL)
+	cache := expirable.NewLRU[string, CacheEntry](cacheSettings.Size, nil, cacheSettings.TTL)
 	return &CelEvaluator{env, cache}, nil
 }
 
@@ -380,9 +384,9 @@ func (e *CelEvaluator) evalOrCached(
 	}
 
 	runtimeVars := map[string]interface{}{
-		"spanAttributes":     flattenAttributes(ctx.Span.Attributes()),
-		"scopeAttributes":    flattenAttributes(ctx.Scope.Scope().Attributes()),
-		"resourceAttributes": flattenAttributes(ctx.Resource.Resource().Attributes()),
+		"spanAttributes":     ctx.Span.Attributes().AsRaw(),
+		"scopeAttributes":    ctx.Scope.Scope().Attributes().AsRaw(),
+		"resourceAttributes": ctx.Resource.Resource().Attributes().AsRaw(),
 		"vars":               ctx.Vars,
 	}
 
@@ -398,8 +402,11 @@ func (e *CelEvaluator) evalOrCached(
 // otherwise preprocesses it (based on kind), compiles it, caches it, and returns it.
 func (e *CelEvaluator) getOrCompile(original string, kind expressionKind) (cel.Program, error) {
 	// check cache by original expression
-	if prog, ok := e.cache.Get(original); ok {
-		return prog, nil
+	if entry, ok := e.cache.Get(original); ok {
+		if entry.Error != nil {
+			return nil, *entry.Error
+		}
+		return *entry.Program, nil
 	}
 
 	// preprocess based on kind
@@ -414,10 +421,11 @@ func (e *CelEvaluator) getOrCompile(original string, kind expressionKind) (cel.P
 	}
 	prog, err := e.env.Program(ast)
 	if err != nil {
+		e.cache.Add(original, CacheEntry{Program: &prog, Error: nil})
 		return nil, err
 	}
 
-	e.cache.Add(original, prog) // store under original
+	e.cache.Add(original, CacheEntry{Program: &prog, Error: nil})
 	return prog, nil
 }
 
@@ -519,62 +527,6 @@ func rewriteInterpolations(expr string) (string, error) {
 
 func unescapeDollars(literal string) string {
 	return escapeDollarDollarCurlyPattern.ReplaceAllLiteralString(literal, "$")
-}
-
-// flattenAttributes recursively converts pcommon.Map attributes into a plain Go map,
-// handling scalars, maps, and slices with native Go types.
-func flattenAttributes(attrs pcommon.Map) map[string]interface{} {
-	result := make(map[string]interface{})
-	attrs.Range(func(k string, v pcommon.Value) bool {
-		switch v.Type() {
-		case pcommon.ValueTypeStr:
-			result[k] = v.Str()
-		case pcommon.ValueTypeBool:
-			result[k] = v.Bool()
-		case pcommon.ValueTypeInt:
-			result[k] = v.Int()
-		case pcommon.ValueTypeDouble:
-			result[k] = v.Double()
-		case pcommon.ValueTypeMap:
-			result[k] = flattenAttributes(v.Map())
-		case pcommon.ValueTypeSlice:
-			sliceVals := v.Slice()
-			list := make([]interface{}, 0, sliceVals.Len())
-			for i := 0; i < sliceVals.Len(); i++ {
-				elem := sliceVals.At(i)
-				switch elem.Type() {
-				case pcommon.ValueTypeStr:
-					list = append(list, elem.Str())
-				case pcommon.ValueTypeBool:
-					list = append(list, elem.Bool())
-				case pcommon.ValueTypeInt:
-					list = append(list, elem.Int())
-				case pcommon.ValueTypeDouble:
-					list = append(list, elem.Double())
-				case pcommon.ValueTypeMap:
-					list = append(list, elem.AsString())
-				case pcommon.ValueTypeSlice:
-					list = append(list, elem.AsString())
-				case pcommon.ValueTypeEmpty:
-					list = append(list, elem.AsString())
-				case pcommon.ValueTypeBytes:
-					list = append(list, elem.AsString())
-				default:
-					list = append(list, elem.AsString()) // fallback
-				}
-			}
-			result[k] = list
-		case pcommon.ValueTypeBytes:
-			result[k] = v.AsString()
-		case pcommon.ValueTypeEmpty:
-			result[k] = v.AsString()
-		default:
-			// fallback: everything has AsString()
-			result[k] = v.AsString()
-		}
-		return true
-	})
-	return result
 }
 
 // cacheSize is used for testing cache re-use

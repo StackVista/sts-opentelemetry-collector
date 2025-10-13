@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	defaultCacheSize = 1000
-	maxCacheSize     = 20000
+	defaultCacheSize = 5000
+	maxCacheSize     = 100000
 	defaultCacheTTL  = 30 * time.Minute
 )
 
