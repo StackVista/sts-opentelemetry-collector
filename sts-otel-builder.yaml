@@ -33,6 +33,7 @@ extensions:
     path: ./extension/servicetokenauthextension
   - gomod: github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension v0.0.0
     path: ./extension/settingsproviderextension
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/pprofextension v0.100.0
 
 processors:
   - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.100.0
