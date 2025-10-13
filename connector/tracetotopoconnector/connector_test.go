@@ -274,12 +274,10 @@ func boolExpr(s string) settings.OtelBooleanExpression {
 	}
 }
 
-func ptr[T any](v T) *T { return &v }
-
 func createSimpleComponentMapping(id string) settings.OtelComponentMapping {
 	return settings.OtelComponentMapping{
 		Id:            id,
-		Identifier:    ptr(fmt.Sprintf("urn:otel-component-mapping:%s", id)),
+		Identifier:    fmt.Sprintf("urn:otel-component-mapping:%s", id),
 		ExpireAfterMs: 60000,
 		Conditions: []settings.OtelConditionMapping{
 			{Action: settings.CREATE, Expression: boolExpr(`spanAttributes["http.method"] == "GET"`)},
@@ -297,7 +295,7 @@ func createSimpleComponentMapping(id string) settings.OtelComponentMapping {
 func createSimpleRelationMapping(id string) settings.OtelRelationMapping {
 	return settings.OtelRelationMapping{
 		Id:            id,
-		Identifier:    ptr(fmt.Sprintf("urn:otel-relation-mapping:%s", id)),
+		Identifier:    fmt.Sprintf("urn:otel-relation-mapping:%s", id),
 		ExpireAfterMs: 300000,
 		Conditions: []settings.OtelConditionMapping{
 			{Action: settings.CREATE, Expression: boolExpr(`spanAttributes["http.status_code"] == "200"`)},
