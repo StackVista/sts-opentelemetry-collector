@@ -4,6 +4,7 @@ package tracetotopoconnector
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
@@ -67,6 +68,7 @@ func TestConnectorStart(t *testing.T) {
 		assert.Len(t, *connector.relationMappings, 1)
 	})
 }
+
 func TestConnectorConsumeTraces(t *testing.T) {
 	logConsumer := &consumertest.LogsSink{}
 	connector, _ := newConnector(Config{}, zap.NewNop(), logConsumer)
@@ -166,7 +168,7 @@ func TestConnectorConsumeTraces(t *testing.T) {
 		err = proto.Unmarshal(componentKeyRaw.Bytes().AsRaw(), &componentKey)
 		require.NoError(t, err)
 		assert.Equal(t, topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL, componentKey.Owner)
-		assert.Equal(t, "mapping1", componentKey.DataSource)
+		assert.Equal(t, "urn:otel-component-mapping:mapping1", componentKey.DataSource)
 		assert.Equal(t, "0", componentKey.ShardId)
 		componentMassage := topo_stream_v1.TopologyStreamMessage{}
 		err = proto.Unmarshal(componentLogRecord.Body().Bytes().AsRaw(), &componentMassage)
@@ -186,7 +188,7 @@ func TestConnectorConsumeTraces(t *testing.T) {
 		err = proto.Unmarshal(relationKeyRaw.Bytes().AsRaw(), &relationKey)
 		require.NoError(t, err)
 		assert.Equal(t, topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL, relationKey.Owner)
-		assert.Equal(t, "mapping2", relationKey.DataSource)
+		assert.Equal(t, "urn:otel-relation-mapping:mapping2", relationKey.DataSource)
 		assert.Equal(t, "2", relationKey.ShardId)
 		relationMessage := topo_stream_v1.TopologyStreamMessage{}
 		err = proto.Unmarshal(relationLogRecord.Body().Bytes().AsRaw(), &relationMessage)
@@ -275,6 +277,7 @@ func boolExpr(s string) settings.OtelBooleanExpression {
 func createSimpleComponentMapping(id string) settings.OtelComponentMapping {
 	return settings.OtelComponentMapping{
 		Id:            id,
+		Identifier:    fmt.Sprintf("urn:otel-component-mapping:%s", id),
 		ExpireAfterMs: 60000,
 		Conditions: []settings.OtelConditionMapping{
 			{Action: settings.CREATE, Expression: boolExpr(`spanAttributes["http.method"] == "GET"`)},
@@ -292,6 +295,7 @@ func createSimpleComponentMapping(id string) settings.OtelComponentMapping {
 func createSimpleRelationMapping(id string) settings.OtelRelationMapping {
 	return settings.OtelRelationMapping{
 		Id:            id,
+		Identifier:    fmt.Sprintf("urn:otel-relation-mapping:%s", id),
 		ExpireAfterMs: 300000,
 		Conditions: []settings.OtelConditionMapping{
 			{Action: settings.CREATE, Expression: boolExpr(`spanAttributes["http.status_code"] == "200"`)},
