@@ -125,7 +125,7 @@ func TestEvalStringExpression(t *testing.T) {
 		{
 			name:        "unsupported type returns error",
 			expr:        `${spanAttributes}`, // whole map, not string
-			errContains: "expression did not evaluate to string, got: map",
+			errContains: "expected string type, got: map(string, dyn), for expression '${spanAttributes}'",
 		},
 		{
 			name:     "support string interpolation with vars",
@@ -293,7 +293,7 @@ func TestEvalOptionalStringExpression(t *testing.T) {
 	}
 }
 
-func TestCelEvaluator_EvalMapExpression(t *testing.T) {
+func TestEvalMapExpression(t *testing.T) {
 	ctx := makeContext()
 	eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Minute})
 
@@ -335,6 +335,14 @@ func TestCelEvaluator_EvalMapExpression(t *testing.T) {
 			want: map[string]any{
 				"otel.scope.name":    "io.opentelemetry.instrumentation.http",
 				"otel.scope.version": "1.2.3",
+			},
+			expectError: false,
+		},
+		{
+			name: "Map literal",
+			expr: settings.OtelStringExpression{Expression: "${{'key': 'value'}}"},
+			want: map[string]any{
+				"key": "value",
 			},
 			expectError: false,
 		},
@@ -518,13 +526,13 @@ func TestClassifyStringExpression(t *testing.T) {
 	tests := []struct {
 		name      string
 		expr      string
-		wantKind  expressionKind
+		wantKind  classification
 		wantError string
 	}{
 		{"literal", "foo", kindStringLiteral, ""},
 		{"wrapped literal", `"foo"`, kindStringLiteral, ""},
 		{"wrapped identifier", "${vars[\"env\"]}", kindStringWithIdentifiers, ""},
-		{"wrapped map reference", "${vars}", kindMapReferenceOnly, ""},
+		{"wrapped map reference", "${vars}", kindStringWithIdentifiers, ""},
 		{"interpolated ok", "foo-${vars[\"env\"]}-bar", kindStringInterpolation, ""},
 		{"unterminated interpolation", `"foo-${vars[\"env\"]"`, kindInvalid, "unterminated"},
 		{"empty interpolation", `foo-${}`, kindInvalid, "empty"},

@@ -11,13 +11,23 @@ import (
 	"strings"
 
 	"github.com/google/cel-go/cel"
+	"github.com/google/cel-go/common/types/ref"
 	"github.com/google/cel-go/ext"
 
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
-// expressionKind classifies how an expression should be interpreted.
+// expressionType specifies the expected result type of a CEL expression.
+type expressionType int
+
+const (
+	StringType expressionType = iota
+	BooleanType
+	MapType
+)
+
+// classification determines how an expression should be interpreted.
 //
 // Motivation:
 // In our domain model, expressions can be one of:
@@ -34,15 +44,13 @@ import (
 //   - Rewrite interpolated strings into valid CEL concat expressions ("urn:.." + vars.attribute)
 //
 // This mirrors the backend conventions and keeps frontend (Go collector) behavior aligned.
-type expressionKind int
+type classification int
 
 const (
-	kindInvalid expressionKind = iota
-	kindStringLiteral
-	kindStringWithIdentifiers
-	kindStringInterpolation
-	kindBoolean
-	kindMapReferenceOnly // e.g. "${spanAttributes}" or "${vars}"
+	kindInvalid               classification = iota
+	kindStringLiteral                        // the entire expr is a literal string, no CEL evaluation needed
+	kindStringWithIdentifiers                // the entire expr is a single CEL expression wrapped in ${...}
+	kindStringInterpolation                  // the expr is a string with one or more ${...} interpolations
 
 	// literals used for validating interpolation syntax and balanced expressions
 	interpolationFrame = "interpolation"
@@ -81,7 +89,7 @@ type CelEvaluator struct {
 
 type CacheKey struct {
 	Expression string
-	Kind       expressionKind
+	Type       expressionType
 }
 
 type CacheEntry struct {
@@ -113,17 +121,36 @@ func (e *CelEvaluator) EvalStringExpression(
 	expr settings.OtelStringExpression,
 	evalCtx *ExpressionEvalContext,
 ) (string, error) {
-	// Pre-classify to handle literals without hitting the cache
-	kind, err := classifyExpression(expr.Expression)
-	if err != nil {
-		return "", err // Initial validation failed
-	}
-	if kind == kindStringLiteral {
+	// String literals are returned as-is without CEL evaluation and caching
+	if withoutInterpolation(expr.Expression) {
 		return expr.Expression, nil
 	}
 
 	// For non-literals, use the cached evaluation path
-	val, err := e.evalOrCached(expr.Expression, kind, evalCtx)
+	val, err := e.evalOrCached(expr.Expression, StringType, func(expression string) (string, error) {
+		actualKind, err := classifyExpression(expression)
+		if err != nil {
+			return "", err
+		}
+
+		switch actualKind {
+		case kindStringWithIdentifiers:
+			return unwrapExpression(expression), nil
+		case kindStringInterpolation:
+			// rewrite interpolation into valid CEL string concatenation
+			toCompile, err := rewriteInterpolations(expression)
+			if err != nil {
+				return "", err
+			}
+			return toCompile, nil
+		case kindStringLiteral:
+			// String literals are handled directly, if we detect a string literal here there is an error in the code path.
+			return "", fmt.Errorf("expression %q is a literal string, expected CEL expression", expression)
+		default:
+			return "", fmt.Errorf("expression %q is not a valid string expression", expression)
+		}
+	}, evalCtx)
+
 	if err != nil {
 		return "", err
 	}
@@ -148,7 +175,9 @@ func (e *CelEvaluator) EvalBooleanExpression(
 	expr settings.OtelBooleanExpression,
 	evalCtx *ExpressionEvalContext,
 ) (bool, error) {
-	result, err := e.evalOrCached(expr.Expression, kindBoolean, evalCtx)
+	result, err := e.evalOrCached(expr.Expression, BooleanType, func(expression string) (string, error) {
+		return expression, nil
+	}, evalCtx)
 	if err != nil {
 		return false, err
 	}
@@ -164,14 +193,25 @@ func (e *CelEvaluator) EvalMapExpression(
 	expr settings.OtelStringExpression,
 	evalCtx *ExpressionEvalContext,
 ) (map[string]any, error) {
-	val, err := e.evalOrCached(expr.Expression, kindMapReferenceOnly, evalCtx)
+	val, err := e.evalOrCached(expr.Expression, MapType, func(expression string) (string, error) {
+		actualKind, err := classifyExpression(expression)
+		if err != nil {
+			return "", err
+		}
+
+		if actualKind == kindStringWithIdentifiers {
+			return unwrapExpression(expression), nil
+		} else {
+			return "", fmt.Errorf("expression %q is not a valid map expression", expression)
+		}
+	}, evalCtx)
 	if err != nil {
 		return nil, err
 	}
 
-	m, ok := val.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("expected map[string]any, got %T", val)
+	m, toMapErr := mapify(val)
+	if toMapErr != nil {
+		return nil, toMapErr
 	}
 	return m, nil
 }
@@ -187,15 +227,13 @@ func (e *CelEvaluator) EvalMapExpression(
 //
 // Validation is always applied if "${" is detected, and invalid cases are
 // classified as kindInvalid with an error.
-func classifyExpression(expr string) (expressionKind, error) {
+func classifyExpression(expr string) (classification, error) {
 	switch {
+	case withoutInterpolation(expr):
+		return kindStringLiteral, nil
 	case strings.HasPrefix(expr, "${") && strings.HasSuffix(expr, "}"):
 		if err := validateInterpolation(expr); err != nil {
 			return kindInvalid, err
-		}
-
-		if isPureMapReference(expr) {
-			return kindMapReferenceOnly, nil
 		}
 		return kindStringWithIdentifiers, nil
 
@@ -206,27 +244,16 @@ func classifyExpression(expr string) (expressionKind, error) {
 		return kindStringInterpolation, nil
 
 	default:
-		// Fallback: contains "${" but didn’t match strict patterns
-		if strings.Contains(expr, "${") {
-			if err := validateInterpolation(expr); err != nil {
-				return kindInvalid, err
-			}
-			// if validation somehow passes (shouldn’t), treat as interpolation
-			return kindStringInterpolation, nil
+		if err := validateInterpolation(expr); err != nil {
+			return kindInvalid, err
 		}
-
-		return kindStringLiteral, nil
+		// if validation somehow passes (shouldn’t), treat as interpolation
+		return kindStringInterpolation, nil
 	}
 }
 
-func isPureMapReference(expr string) bool {
-	inner := strings.TrimSpace(expr[2 : len(expr)-1]) // strip ${...}
-	switch inner {
-	case "spanAttributes", "scopeAttributes", "resourceAttributes", "vars":
-		return true
-	default:
-		return false
-	}
+func withoutInterpolation(expr string) bool {
+	return !strings.Contains(expr, "${")
 }
 
 // validateInterpolation ensures that every ${...} block is well-formed:
@@ -372,16 +399,17 @@ func validateInterpolation(origExpr string) error {
 
 // evalOrCached validates, compiles, and evaluates an expression, using a cache
 // to store the result of validation and compilation. The cache key is a composite
-// of the expression string and the expected expression kind, ensuring that an
+// of the expression string and the expected expression type, ensuring that an
 // expression is uniquely cached for each evaluation context (e.g., string vs. map).
 func (e *CelEvaluator) evalOrCached(
 	expression string,
-	expectedKind expressionKind,
+	expectedType expressionType,
+	rewriteExpression func(expression string) (string, error),
 	ctx *ExpressionEvalContext,
 ) (interface{}, error) {
-	// The cache key includes the expected kind to differentiate, for example,
+	// The cache key includes the expected type to differentiate, for example,
 	// a string evaluation from a map evaluation for the same expression text.
-	key := CacheKey{Expression: expression, Kind: expectedKind}
+	key := CacheKey{Expression: expression, Type: expectedType}
 
 	// 1. Check cache for pre-validated and pre-compiled program
 	if entry, ok := e.cache.Get(key); ok {
@@ -392,7 +420,7 @@ func (e *CelEvaluator) evalOrCached(
 	}
 
 	// 2. Cache miss: validate, compile, and cache the result.
-	entry := e.validateAndCompile(expression, expectedKind)
+	entry := e.validateAndCompile(expression, expectedType, rewriteExpression)
 	e.cache.Add(key, entry)
 	if entry.Error != nil {
 		return nil, entry.Error
@@ -404,49 +432,62 @@ func (e *CelEvaluator) evalOrCached(
 
 // validateAndCompile is a helper that encapsulates the validation and compilation logic.
 // It's called on a cache miss.
-func (e *CelEvaluator) validateAndCompile(expression string, expectedKind expressionKind) *CacheEntry {
-	// Step 1: Classify the expression to determine its actual kind.
-	actualKind, err := classifyExpression(expression)
+func (e *CelEvaluator) validateAndCompile(expression string, expectedType expressionType,
+	rewriteExpression func(expression string) (string, error)) *CacheEntry {
+	// Step 1: Preprocess the expression (unwrap or rewrite interpolations)
+	toCompile, err := rewriteExpression(expression)
+
 	if err != nil {
 		return &CacheEntry{Error: err}
 	}
 
-	// Step 2: Validate that the actual kind is compatible with the expected kind.
-	// This prevents, for example, a map expression from being used where a string is expected.
-	switch expectedKind {
-	case kindStringWithIdentifiers, kindStringInterpolation:
-		if actualKind != kindStringWithIdentifiers && actualKind != kindStringInterpolation {
-			return &CacheEntry{Error: fmt.Errorf("expression %q is not a valid string expression", expression)}
-		}
-	case kindMapReferenceOnly:
-		if actualKind != kindMapReferenceOnly {
-			return &CacheEntry{Error: fmt.Errorf("expression %q is not a pure map reference", expression)}
-		}
-	case kindBoolean:
-		// Boolean expressions are not classified in the same way; they are assumed to be valid CEL.
-	default:
-		if actualKind != expectedKind {
-			return &CacheEntry{Error: fmt.Errorf("unexpected expression kind: got %v, want %v", actualKind, expectedKind)}
-		}
-	}
-
-	// Step 3: Preprocess the expression based on its actual kind.
-	toCompile, err := preprocessExpression(expression, actualKind)
-	if err != nil {
-		return &CacheEntry{Error: err}
-	}
-
-	// Step 4: Compile the preprocessed expression into a CEL program.
+	// Step 2: Compile the preprocessed expression into a CEL program.
 	ast, iss := e.env.Compile(toCompile)
 	if iss.Err() != nil {
 		return &CacheEntry{Error: iss.Err()}
 	}
+
+	// Step 3: Validate that the result type is compatible with the expected type (as far as possible)
+	typeErr := validateExpectedType(ast, expectedType, expression)
+	if typeErr != nil {
+		return &CacheEntry{Error: typeErr}
+	}
+
 	prog, err := e.env.Program(ast)
 	if err != nil {
 		return &CacheEntry{Error: err}
 	}
 
 	return &CacheEntry{Program: prog}
+}
+
+func validateExpectedType(ast *cel.Ast, expectedType expressionType, expression string) error {
+	outputKind := ast.OutputType().Kind()
+	switch expectedType {
+	case StringType:
+		switch outputKind {
+		case cel.DynKind, cel.StringKind, cel.IntKind, cel.UintKind, cel.DoubleKind, cel.BoolKind:
+			// acceptable types that can be stringified
+		default:
+			if outputKind != cel.StringKind {
+				return fmt.Errorf("expected string type, got: %v, for expression '%v'", ast.OutputType(), expression)
+			}
+		}
+	case MapType:
+		if outputKind != cel.MapKind && outputKind != cel.DynKind {
+			return fmt.Errorf("expected map type, got: %v, for expression '%v'", ast.OutputType(), expression)
+		}
+	case BooleanType:
+		if outputKind != cel.BoolKind && outputKind != cel.DynKind {
+			return fmt.Errorf("expected boolean type, got: %v, for expression '%v'", ast.OutputType(), expression)
+		}
+	}
+	return nil
+}
+
+// unwrap `${...}` - extract the inner CEL expression
+func unwrapExpression(expression string) string {
+	return expression[2 : len(expression)-1]
 }
 
 // evaluateProgram executes a compiled CEL program with the given context.
@@ -466,26 +507,6 @@ func (e *CelEvaluator) evaluateProgram(prog cel.Program, ctx *ExpressionEvalCont
 	return result.Value(), nil
 }
 
-func preprocessExpression(expr string, kind expressionKind) (string, error) {
-	switch kind {
-	case kindStringWithIdentifiers, kindMapReferenceOnly:
-		// unwrap `${...}` - extract the inner CEL expression
-		return expr[2 : len(expr)-1], nil
-	case kindStringInterpolation:
-		// rewrite interpolation into valid CEL string concatenation
-		return rewriteInterpolations(expr)
-	case kindInvalid:
-		return expr, nil
-	case kindStringLiteral:
-		return expr, nil
-	case kindBoolean:
-		return expr, nil
-	default:
-		// like boolean expressions
-		return expr, nil
-	}
-}
-
 func stringify(result interface{}) (string, error) {
 	switch v := result.(type) {
 	case string:
@@ -496,6 +517,25 @@ func stringify(result interface{}) (string, error) {
 		return fmt.Sprint(v), nil
 	default:
 		return "", fmt.Errorf("expression did not evaluate to string, got: %T", result)
+	}
+}
+
+func mapify(result interface{}) (map[string]any, error) {
+	switch v := result.(type) {
+	case map[string]any:
+		return v, nil
+	case map[ref.Val]ref.Val:
+		m := make(map[string]any, len(v))
+		for key, val := range v {
+			keyStr, keyErr := stringify(key.Value())
+			if keyErr != nil {
+				return nil, fmt.Errorf("could not convert map key to a string: %w, got: %T", keyErr, key.Value())
+			}
+			m[keyStr] = val.Value()
+		}
+		return m, nil
+	default:
+		return nil, fmt.Errorf("expression did not evaluate to map[string]any, got: %T", result)
 	}
 }
 
