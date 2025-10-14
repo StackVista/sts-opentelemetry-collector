@@ -31,10 +31,10 @@ func ConvertSpanToTopologyStreamMessage(
 	result := make([]MessageWithKey, 0)
 	var components, relations, errors int
 
-	for _, componentMapping := range componentMappings {
-		iterateSpans(trace, func(resourceSpan *ptrace.ResourceSpans, scopeSpan *ptrace.ScopeSpans, span *ptrace.Span) {
+	iterateSpans(trace, func(expressionEvalContext *ExpressionEvalContext, span *ptrace.Span) {
+		for _, componentMapping := range componentMappings {
 			currentComponentMapping := componentMapping
-			component, errs := convertToComponent(eval, resourceSpan, scopeSpan, span, &currentComponentMapping)
+			component, errs := convertToComponent(eval, expressionEvalContext, &currentComponentMapping)
 			if component != nil {
 				result = append(result, *outputToMessageWithKey(
 					component,
@@ -54,12 +54,10 @@ func ConvertSpanToTopologyStreamMessage(
 				result = append(result, *errorsToMessageWithKey(&errs, componentMapping, span, now))
 				errors++
 			}
-		})
-	}
-	for _, relationMapping := range relationMappings {
-		iterateSpans(trace, func(resourceSpan *ptrace.ResourceSpans, scopeSpan *ptrace.ScopeSpans, span *ptrace.Span) {
+		}
+		for _, relationMapping := range relationMappings {
 			currentRelationMapping := relationMapping
-			relation, errs := convertToRelation(eval, resourceSpan, scopeSpan, span, &currentRelationMapping)
+			relation, errs := convertToRelation(eval, expressionEvalContext, &currentRelationMapping)
 			if relation != nil {
 				result = append(result, *outputToMessageWithKey(
 					relation,
@@ -79,8 +77,8 @@ func ConvertSpanToTopologyStreamMessage(
 				result = append(result, *errorsToMessageWithKey(&errs, relationMapping, span, now))
 				errors++
 			}
-		})
-	}
+		}
+	})
 
 	logger.Debug(
 		"Converted spans to topology stream messages",
@@ -94,19 +92,18 @@ func ConvertSpanToTopologyStreamMessage(
 
 func convertToComponent(
 	expressionEvaluator ExpressionEvaluator,
-	resourceSpan *ptrace.ResourceSpans,
-	scopeSpan *ptrace.ScopeSpans,
-	span *ptrace.Span,
+	evalContext *ExpressionEvalContext,
 	mapping *settings.OtelComponentMapping,
 ) (*topo_stream_v1.TopologyStreamComponent, []error) {
-	evaluatedVars, errs := EvalVariables(expressionEvaluator, span, scopeSpan, resourceSpan, mapping.Vars)
+	evaluatedVars, errs := EvalVariables(expressionEvaluator, evalContext, mapping.Vars)
 	if errs != nil {
 		return nil, errs
 	}
-	expressionEvalCtx := &ExpressionEvalContext{*span, *scopeSpan, *resourceSpan, evaluatedVars}
 
-	if filterByConditions(expressionEvaluator, expressionEvalCtx, &mapping.Conditions) {
-		component, err := MapComponent(mapping, expressionEvaluator, expressionEvalCtx)
+	evalContextWithVars := evalContext.CloneWithVariables(evaluatedVars)
+
+	if filterByConditions(expressionEvaluator, evalContextWithVars, &mapping.Conditions) {
+		component, err := MapComponent(mapping, expressionEvaluator, evalContextWithVars)
 		if len(err) > 0 {
 			return nil, err
 		}
@@ -117,19 +114,17 @@ func convertToComponent(
 
 func convertToRelation(
 	expressionEvaluator ExpressionEvaluator,
-	resourceSpan *ptrace.ResourceSpans,
-	scopeSpan *ptrace.ScopeSpans,
-	span *ptrace.Span,
+	evalContext *ExpressionEvalContext,
 	mapping *settings.OtelRelationMapping,
 ) (*topo_stream_v1.TopologyStreamRelation, []error) {
-	evaluatedVars, errs := EvalVariables(expressionEvaluator, span, scopeSpan, resourceSpan, mapping.Vars)
+	evaluatedVars, errs := EvalVariables(expressionEvaluator, evalContext, mapping.Vars)
 	if errs != nil {
 		return nil, errs
 	}
-	expressionEvalCtx := &ExpressionEvalContext{*span, *scopeSpan, *resourceSpan, evaluatedVars}
+	evalContextWithVars := evalContext.CloneWithVariables(evaluatedVars)
 
-	if filterByConditions(expressionEvaluator, expressionEvalCtx, &mapping.Conditions) {
-		relation, err := MapRelation(mapping, expressionEvaluator, expressionEvalCtx)
+	if filterByConditions(expressionEvaluator, evalContextWithVars, &mapping.Conditions) {
+		relation, err := MapRelation(mapping, expressionEvaluator, evalContextWithVars)
 		if len(err) > 0 {
 			return nil, err
 		}
@@ -138,23 +133,22 @@ func convertToRelation(
 	return nil, nil
 }
 
-type mappingHandler func(
-	resourceSpan *ptrace.ResourceSpans,
-	scopeSpan *ptrace.ScopeSpans,
-	span *ptrace.Span,
-)
+type mappingHandler func(expressionEvalContext *ExpressionEvalContext, span *ptrace.Span)
 
 func iterateSpans(trace ptrace.Traces, handler mappingHandler) {
 	resourceSpans := trace.ResourceSpans()
 	for i := 0; i < resourceSpans.Len(); i++ {
 		rs := resourceSpans.At(i)
+		resourceAttributes := rs.Resource().Attributes().AsRaw()
 		scopeSpans := rs.ScopeSpans()
 		for j := 0; j < scopeSpans.Len(); j++ {
 			ss := scopeSpans.At(j)
+			scopeAttributes := ss.Scope().Attributes().AsRaw()
 			spans := ss.Spans()
 			for k := 0; k < spans.Len(); k++ {
 				span := spans.At(k)
-				handler(&rs, &ss, &span)
+				spanAttributes := span.Attributes().AsRaw()
+				handler(NewEvalContext(spanAttributes, scopeAttributes, resourceAttributes), &span)
 			}
 		}
 	}

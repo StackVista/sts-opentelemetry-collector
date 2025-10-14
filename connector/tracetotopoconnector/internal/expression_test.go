@@ -38,16 +38,11 @@ func makeContext() ExpressionEvalContext {
 	depMap.PutStr("region", "eu-west-1")
 	depMap.PutStr("env", "prod")
 
-	vars := map[string]string{
+	vars := map[string]any{
 		"namespace": "test",
 	}
 
-	return ExpressionEvalContext{
-		Span:     span,
-		Scope:    scope,
-		Resource: res,
-		Vars:     vars,
-	}
+	return *NewEvalContext(span.Attributes().AsRaw(), scope.Scope().Attributes().AsRaw(), res.Resource().Attributes().AsRaw()).CloneWithVariables(vars)
 }
 
 func TestEvalStringExpression(t *testing.T) {
@@ -566,10 +561,9 @@ func TestClassifyStringExpression(t *testing.T) {
 
 func TestRewriteInterpolations(t *testing.T) {
 	cases := []struct {
-		name      string
-		expr      string
-		result    string
-		errSubstr string
+		name   string
+		expr   string
+		result string
 	}{
 		{
 			name:   "no interpolation (literal remains unchanged)",
@@ -620,13 +614,7 @@ func TestRewriteInterpolations(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := rewriteInterpolations(tc.expr)
-			if tc.errSubstr != "" {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tc.errSubstr)
-				return
-			}
-			require.NoError(t, err)
+			got := rewriteInterpolations(tc.expr)
 			require.Equal(t, tc.result, got)
 		})
 	}

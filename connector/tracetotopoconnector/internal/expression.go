@@ -15,7 +15,6 @@ import (
 	"github.com/google/cel-go/ext"
 
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
-	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
 // expressionType specifies the expected result type of a CEL expression.
@@ -76,10 +75,10 @@ type ExpressionEvaluator interface {
 }
 
 type ExpressionEvalContext struct {
-	Span     ptrace.Span
-	Scope    ptrace.ScopeSpans
-	Resource ptrace.ResourceSpans
-	Vars     map[string]string
+	SpanAttributes     map[string]any
+	ScopeAttributes    map[string]any
+	ResourceAttributes map[string]any
+	Vars               map[string]any
 }
 
 type CelEvaluator struct {
@@ -95,6 +94,25 @@ type CacheKey struct {
 type CacheEntry struct {
 	Program cel.Program
 	Error   error
+}
+
+func NewEvalContext(spanAttributes map[string]any, scopeAttributes map[string]any,
+	resourceAttributes map[string]any) *ExpressionEvalContext {
+	return &ExpressionEvalContext{
+		SpanAttributes:     spanAttributes,
+		ScopeAttributes:    scopeAttributes,
+		ResourceAttributes: resourceAttributes,
+		Vars:               nil,
+	}
+}
+
+func (ec *ExpressionEvalContext) CloneWithVariables(vars map[string]any) *ExpressionEvalContext {
+	return &ExpressionEvalContext{
+		SpanAttributes:     ec.SpanAttributes,
+		ScopeAttributes:    ec.ScopeAttributes,
+		ResourceAttributes: ec.ResourceAttributes,
+		Vars:               vars,
+	}
 }
 
 func NewCELEvaluator(cacheSettings CacheSettings) (*CelEvaluator, error) {
@@ -138,10 +156,7 @@ func (e *CelEvaluator) EvalStringExpression(
 			return unwrapExpression(expression), nil
 		case kindStringInterpolation:
 			// rewrite interpolation into valid CEL string concatenation
-			toCompile, err := rewriteInterpolations(expression)
-			if err != nil {
-				return "", err
-			}
+			toCompile := rewriteInterpolations(expression)
 			return toCompile, nil
 		case kindStringLiteral:
 			// String literals are handled directly, if we detect a string literal here there is an error in the code path.
@@ -201,9 +216,8 @@ func (e *CelEvaluator) EvalMapExpression(
 
 		if actualKind == kindStringWithIdentifiers {
 			return unwrapExpression(expression), nil
-		} else {
-			return "", fmt.Errorf("expression %q is not a valid map expression", expression)
 		}
+		return "", fmt.Errorf("expression %q is not a valid map expression", expression)
 	}, evalCtx)
 	if err != nil {
 		return nil, err
@@ -493,9 +507,9 @@ func unwrapExpression(expression string) string {
 // evaluateProgram executes a compiled CEL program with the given context.
 func (e *CelEvaluator) evaluateProgram(prog cel.Program, ctx *ExpressionEvalContext) (interface{}, error) {
 	runtimeVars := map[string]interface{}{
-		"spanAttributes":     ctx.Span.Attributes().AsRaw(),
-		"scopeAttributes":    ctx.Scope.Scope().Attributes().AsRaw(),
-		"resourceAttributes": ctx.Resource.Resource().Attributes().AsRaw(),
+		"spanAttributes":     ctx.SpanAttributes,
+		"scopeAttributes":    ctx.ScopeAttributes,
+		"resourceAttributes": ctx.ResourceAttributes,
 		"vars":               ctx.Vars,
 	}
 
@@ -541,12 +555,12 @@ func mapify(result interface{}) (map[string]any, error) {
 
 // rewriteInterpolations converts a string with ${...} interpolations into a CEL-compatible
 // concatenation expression, while validating and preserving literal segments.
-func rewriteInterpolations(expr string) (string, error) {
+func rewriteInterpolations(expr string) string {
 	// Validation of the interpolation syntax is expected to have been done
 	// already before calling this function.
 	// Fast path: no interpolation at all
 	if !strings.Contains(expr, "${") {
-		return expr, nil
+		return expr
 	}
 
 	// Strip outer quotes if present
@@ -597,7 +611,7 @@ func rewriteInterpolations(expr string) (string, error) {
 		parts = append(parts, strconv.Quote(unescapeDollars(lit)))
 	}
 
-	return strings.Join(parts, "+"), nil
+	return strings.Join(parts, "+")
 }
 
 func unescapeDollars(literal string) string {

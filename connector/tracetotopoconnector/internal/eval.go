@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
-	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
 // EvalVariables evaluates a list of OtelVariableMapping objects and resolves variable values
@@ -13,29 +12,17 @@ import (
 // any encountered errors.
 func EvalVariables(
 	expressionEvaluator ExpressionEvaluator,
-	span *ptrace.Span,
-	scope *ptrace.ScopeSpans,
-	resource *ptrace.ResourceSpans,
+	evalContext *ExpressionEvalContext,
 	vars *[]settings.OtelVariableMapping,
-) (map[string]string, []error) {
-	result := make(map[string]string)
+) (map[string]any, []error) {
+	result := make(map[string]any)
 	errs := make(map[string]error)
 	if vars == nil {
 		return result, nil
 	}
 
-	evalContext := &ExpressionEvalContext{}
-	if span != nil {
-		evalContext.Span = *span
-	}
-	if scope != nil {
-		evalContext.Scope = *scope
-	}
-	if resource != nil {
-		evalContext.Resource = *resource
-	}
-
 	for _, variable := range *vars {
+		//TODO: Add EvalAnyExpression so variables can also be of other types and don't get stringified
 		if value, err := expressionEvaluator.EvalStringExpression(variable.Value, evalContext); err == nil {
 			result[variable.Name] = value
 		} else {

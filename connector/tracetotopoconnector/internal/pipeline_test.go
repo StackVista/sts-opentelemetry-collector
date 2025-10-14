@@ -504,13 +504,13 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			},
 			{
 				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
-				DataSource: "urn:otel-component-mapping:cm1",
-				ShardId:    "0",
+				DataSource: "urn:otel-relation-mapping:rm1",
+				ShardId:    "2",
 			},
 			{
 				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
-				DataSource: "urn:otel-relation-mapping:rm1",
-				ShardId:    "2",
+				DataSource: "urn:otel-component-mapping:cm1",
+				ShardId:    "0",
 			},
 			{
 				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,

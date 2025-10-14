@@ -2,11 +2,11 @@
 package internal
 
 import (
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"testing"
 
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+
 	"github.com/stretchr/testify/assert"
-	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
 type mockFilterExpressionEvaluator struct {
@@ -52,7 +52,7 @@ func conditionMapping(expr string, action settings.OtelConditionMappingAction) s
 func TestFilter_evalCondition(t *testing.T) {
 	t.Parallel()
 
-	evalCtx := ExpressionEvalContext{ptrace.NewSpan(), ptrace.NewScopeSpans(), ptrace.NewResourceSpans(), map[string]string{}}
+	evalCtx := NewEvalContext(map[string]any{}, map[string]any{}, map[string]any{}).CloneWithVariables(map[string]any{})
 
 	matchingExpr := "spanAttributes.test-attr"
 	nonMatchingExpr := "spanAttributes.non-existing-attr"
@@ -96,7 +96,7 @@ func TestFilter_evalCondition(t *testing.T) {
 				&mockFilterExpressionEvaluator{
 					conditionExpressionLookup: tc.conditionExpressionLookup,
 				},
-				&evalCtx, &condition,
+				evalCtx, &condition,
 			)
 			assert.Equal(t, tc.expectedAction, resultAction)
 		})
@@ -106,7 +106,7 @@ func TestFilter_evalCondition(t *testing.T) {
 func TestFilter_filterByConditions(t *testing.T) {
 	t.Parallel()
 
-	evalCtx := ExpressionEvalContext{ptrace.NewSpan(), ptrace.NewScopeSpans(), ptrace.NewResourceSpans(), map[string]string{}}
+	evalCtx := NewEvalContext(map[string]any{}, map[string]any{}, map[string]any{}).CloneWithVariables(map[string]any{})
 
 	matchingExpr := "spanAttributes.test-attr"
 	nonMatchingExpr := "spanAttributes.non-existing-attr"
@@ -205,7 +205,7 @@ func TestFilter_filterByConditions(t *testing.T) {
 				&mockFilterExpressionEvaluator{
 					conditionExpressionLookup: tc.conditionExpressionLookup,
 				},
-				&evalCtx, &conditions,
+				evalCtx, &conditions,
 			)
 			assert.Equal(t, tc.expected, result)
 		})
