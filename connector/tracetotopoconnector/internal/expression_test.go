@@ -594,31 +594,6 @@ func TestRewriteInterpolations(t *testing.T) {
 			result: `"hello "+(resourceAttributes["service.name"])+"}"`,
 		},
 		{
-			name:      "empty interpolation",
-			expr:      `foo-${}`,
-			errSubstr: "empty interpolation",
-		},
-		{
-			name:      "whitespace-only interpolation",
-			expr:      `foo-${   }`,
-			errSubstr: "empty interpolation",
-		},
-		{
-			name:      "unterminated",
-			expr:      `foo-${bar`,
-			errSubstr: "unterminated interpolation",
-		},
-		{
-			name:      "unterminated",
-			expr:      "foo-${ {bar}",
-			errSubstr: "unterminated interpolation",
-		},
-		{
-			name:      "nested interpolation not allowed",
-			expr:      `foo-${${bar}}`,
-			errSubstr: "nested interpolation",
-		},
-		{
 			name:   "support escaping ${ with $${ in literal part",
 			expr:   `$${a}-${b}`,
 			result: `"${a}-"+(b)`,
