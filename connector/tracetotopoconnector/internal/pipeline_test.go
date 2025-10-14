@@ -467,12 +467,14 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 		},
 	}
 
+	mapper := NewMapper()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
 			result := ConvertSpanToTopologyStreamMessage(
 				zaptest.NewLogger(t),
 				eval,
+				mapper,
 				traces,
 				tt.componentMappings,
 				tt.relationMappings,
@@ -495,9 +497,11 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			createSimpleRelationMapping("rm2"),
 		}
 		eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
+		mapper := NewMapper()
 		result := ConvertSpanToTopologyStreamMessage(
 			zaptest.NewLogger(t),
 			eval,
+			mapper,
 			traces,
 			componentMappings,
 			relationMappings,
@@ -568,9 +572,11 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			createSimpleRelationMapping("rm1"),
 		}
 		eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
+		mapper := NewMapper()
 		result := ConvertSpanToTopologyStreamMessage(
 			zaptest.NewLogger(t),
 			eval,
+			mapper,
 			traceWithSpans,
 			componentMappings,
 			relationMappings,

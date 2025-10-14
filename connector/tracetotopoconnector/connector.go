@@ -28,6 +28,7 @@ type connectorImpl struct {
 	logsConsumer      consumer.Logs
 	settingsProvider  stsSettingsApi.StsSettingsProvider
 	eval              *internal.CelEvaluator
+	mapper            *internal.Mapper
 	componentMappings *[]stsSettingsModel.OtelComponentMapping
 	relationMappings  *[]stsSettingsModel.OtelRelationMapping
 	subscriptionCh    <-chan stsSettingsEvents.UpdateSettingsEvent
@@ -48,6 +49,7 @@ func newConnector(cfg Config, logger *zap.Logger, nextConsumer consumer.Logs) (*
 		logger:            logger,
 		logsConsumer:      nextConsumer,
 		eval:              eval,
+		mapper:            internal.NewMapper(),
 		componentMappings: &[]stsSettingsModel.OtelComponentMapping{},
 		relationMappings:  &[]stsSettingsModel.OtelRelationMapping{},
 	}, nil
@@ -106,7 +108,7 @@ func (p *connectorImpl) ConsumeTraces(ctx context.Context, td ptrace.Traces) err
 	log := plog.NewLogs()
 	scopeLog := log.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
 
-	messagesWithKeys := internal.ConvertSpanToTopologyStreamMessage(p.logger, p.eval, td, *p.componentMappings,
+	messagesWithKeys := internal.ConvertSpanToTopologyStreamMessage(p.logger, p.eval, p.mapper, td, *p.componentMappings,
 		*p.relationMappings, time.Now().UnixMilli())
 	for _, mwk := range messagesWithKeys {
 		if err := addEvent(&scopeLog, mwk); err != nil {

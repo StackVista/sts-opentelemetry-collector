@@ -12,23 +12,28 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 )
 
-// TODO: turn mapping into a type so we don't have this global variable
-//
-//nolint:gochecknoglobals
 var (
-	regexCache       *expirable.LRU[string, *regexp.Regexp]
-	templateCache    *expirable.LRU[string, string]
 	placeholderRegex = regexp.MustCompile(`\$\{(\d+)\}`)
 )
 
 func init() {
-	regexCache = expirable.NewLRU[string, *regexp.Regexp](1000, nil, 12*time.Hour)
-	templateCache = expirable.NewLRU[string, string](1000, nil, 12*time.Hour)
+}
+
+type Mapper struct {
+	regexCache    *expirable.LRU[string, *regexp.Regexp]
+	templateCache *expirable.LRU[string, string]
+}
+
+func NewMapper() *Mapper {
+	return &Mapper{
+		regexCache:    expirable.NewLRU[string, *regexp.Regexp](1000, nil, 12*time.Hour),
+		templateCache: expirable.NewLRU[string, string](1000, nil, 12*time.Hour),
+	}
 }
 
 // MapComponent maps an OTEL span and variables to a TopologyStreamComponent based on the given mapping configuration.
 // It evaluates expressions, constructs a component, and returns it along with any encountered conditionErrsLookup.
-func MapComponent(
+func (me *Mapper) MapComponent(
 	mapping *settings.OtelComponentMapping,
 	expressionEvaluator ExpressionEvaluator,
 	expressionEvalCtx *ExpressionEvalContext,
@@ -70,7 +75,7 @@ func MapComponent(
 		if tagMappings == nil {
 			return
 		}
-		resolved, errs := ResolveTagMappings(*tagMappings, expressionEvaluator, expressionEvalCtx)
+		resolved, errs := me.ResolveTagMappings(*tagMappings, expressionEvaluator, expressionEvalCtx)
 		for k, v := range resolved {
 			tags[k] = v
 		}
@@ -112,7 +117,7 @@ func MapComponent(
 	return &result, nil
 }
 
-func ResolveTagMappings(
+func (me *Mapper) ResolveTagMappings(
 	mappings []settings.OtelTagMapping,
 	evaluator ExpressionEvaluator,
 	evalCtx *ExpressionEvalContext,
@@ -139,26 +144,26 @@ func ResolveTagMappings(
 			continue
 		}
 
-		re, ok := regexCache.Get(*m.Pattern)
+		re, ok := me.regexCache.Get(*m.Pattern)
 		if !ok {
 			re, err = regexp.Compile(*m.Pattern)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("invalid OtelTagMapping regex pattern %q: %w", *m.Pattern, err))
 				continue
 			}
-			regexCache.Add(*m.Pattern, re)
+			me.regexCache.Add(*m.Pattern, re)
 		}
 
 		// Convert the target template to the format expected by ExpandString ("$1")
 		// and cache it for reuse.
-		expandTemplate, ok := templateCache.Get(m.Target)
+		expandTemplate, ok := me.templateCache.Get(m.Target)
 		if !ok {
 			expandTemplate = placeholderRegex.ReplaceAllStringFunc(m.Target, func(s string) string {
 				// s is the matched string, e.g., "${1}"
 				// we need to extract the "1" and return "$1"
 				return "$" + s[2:len(s)-1]
 			})
-			templateCache.Add(m.Target, expandTemplate)
+			me.templateCache.Add(m.Target, expandTemplate)
 		}
 
 		for key, value := range resolvedMap {
@@ -196,34 +201,9 @@ func ResolveTagMappings(
 	return tags, errs
 }
 
-func stringifyTagValue(value interface{}) (string, error) {
-	switch v := value.(type) {
-	case string:
-		return v, nil
-	case fmt.Stringer:
-		return v.String(), nil
-	case int, int32, uint64, int64, float32, float64, bool:
-		return fmt.Sprint(v), nil
-	case []interface{}:
-		parts := make([]string, 0, len(v))
-		for _, elem := range v {
-			parts = append(parts, fmt.Sprint(elem))
-		}
-		return strings.Join(parts, " "), nil
-	case map[string]interface{}:
-		bytes, err := json.Marshal(v)
-		if err != nil {
-			return "", fmt.Errorf("failed to stringify map: %w", err)
-		}
-		return string(bytes), nil
-	default:
-		return "", fmt.Errorf("value did not evaluate to string, got: %T", value)
-	}
-}
-
 // MapRelation creates and returns a TopologyStreamRelation based on the provided
 // OtelRelationMapping, span, and variables.
-func MapRelation(
+func (me *Mapper) MapRelation(
 	mapping *settings.OtelRelationMapping,
 	expressionEvaluator ExpressionEvaluator,
 	expressionEvalCtx *ExpressionEvalContext,
@@ -260,4 +240,29 @@ func MapRelation(
 		return nil, errors
 	}
 	return &result, nil
+}
+
+func stringifyTagValue(value interface{}) (string, error) {
+	switch v := value.(type) {
+	case string:
+		return v, nil
+	case fmt.Stringer:
+		return v.String(), nil
+	case int, int32, uint64, int64, float32, float64, bool:
+		return fmt.Sprint(v), nil
+	case []interface{}:
+		parts := make([]string, 0, len(v))
+		for _, elem := range v {
+			parts = append(parts, fmt.Sprint(elem))
+		}
+		return strings.Join(parts, " "), nil
+	case map[string]interface{}:
+		bytes, err := json.Marshal(v)
+		if err != nil {
+			return "", fmt.Errorf("failed to stringify map: %w", err)
+		}
+		return string(bytes), nil
+	default:
+		return "", fmt.Errorf("value did not evaluate to string, got: %T", value)
+	}
 }

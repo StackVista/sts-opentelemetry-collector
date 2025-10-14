@@ -23,6 +23,7 @@ type MessageWithKey struct {
 func ConvertSpanToTopologyStreamMessage(
 	logger *zap.Logger,
 	eval ExpressionEvaluator,
+	mapper *Mapper,
 	trace ptrace.Traces,
 	componentMappings []settings.OtelComponentMapping,
 	relationMappings []settings.OtelRelationMapping,
@@ -34,7 +35,7 @@ func ConvertSpanToTopologyStreamMessage(
 	iterateSpans(trace, func(expressionEvalContext *ExpressionEvalContext, span *ptrace.Span) {
 		for _, componentMapping := range componentMappings {
 			currentComponentMapping := componentMapping
-			component, errs := convertToComponent(eval, expressionEvalContext, &currentComponentMapping)
+			component, errs := convertToComponent(eval, mapper, expressionEvalContext, &currentComponentMapping)
 			if component != nil {
 				result = append(result, *outputToMessageWithKey(
 					component,
@@ -57,7 +58,7 @@ func ConvertSpanToTopologyStreamMessage(
 		}
 		for _, relationMapping := range relationMappings {
 			currentRelationMapping := relationMapping
-			relation, errs := convertToRelation(eval, expressionEvalContext, &currentRelationMapping)
+			relation, errs := convertToRelation(eval, mapper, expressionEvalContext, &currentRelationMapping)
 			if relation != nil {
 				result = append(result, *outputToMessageWithKey(
 					relation,
@@ -92,6 +93,7 @@ func ConvertSpanToTopologyStreamMessage(
 
 func convertToComponent(
 	expressionEvaluator ExpressionEvaluator,
+	mapper *Mapper,
 	evalContext *ExpressionEvalContext,
 	mapping *settings.OtelComponentMapping,
 ) (*topo_stream_v1.TopologyStreamComponent, []error) {
@@ -103,7 +105,7 @@ func convertToComponent(
 	evalContextWithVars := evalContext.CloneWithVariables(evaluatedVars)
 
 	if filterByConditions(expressionEvaluator, evalContextWithVars, &mapping.Conditions) {
-		component, err := MapComponent(mapping, expressionEvaluator, evalContextWithVars)
+		component, err := mapper.MapComponent(mapping, expressionEvaluator, evalContextWithVars)
 		if len(err) > 0 {
 			return nil, err
 		}
@@ -114,6 +116,7 @@ func convertToComponent(
 
 func convertToRelation(
 	expressionEvaluator ExpressionEvaluator,
+	mapper *Mapper,
 	evalContext *ExpressionEvalContext,
 	mapping *settings.OtelRelationMapping,
 ) (*topo_stream_v1.TopologyStreamRelation, []error) {
@@ -124,7 +127,7 @@ func convertToRelation(
 	evalContextWithVars := evalContext.CloneWithVariables(evaluatedVars)
 
 	if filterByConditions(expressionEvaluator, evalContextWithVars, &mapping.Conditions) {
-		relation, err := MapRelation(mapping, expressionEvaluator, evalContextWithVars)
+		relation, err := mapper.MapRelation(mapping, expressionEvaluator, evalContextWithVars)
 		if len(err) > 0 {
 			return nil, err
 		}
