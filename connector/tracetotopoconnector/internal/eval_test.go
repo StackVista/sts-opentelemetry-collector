@@ -18,7 +18,7 @@ type mockEvalExpressionEvaluator struct {
 	varErrsLookup       map[string]error
 }
 
-func (f *mockEvalExpressionEvaluator) EvalStringExpression(expr settings.OtelStringExpression, _ *ExpressionEvalContext) (string, error) {
+func (f *mockEvalExpressionEvaluator) EvalStringExpression(_ settings.OtelStringExpression, _ *ExpressionEvalContext) (string, error) {
 	return "", nil
 }
 

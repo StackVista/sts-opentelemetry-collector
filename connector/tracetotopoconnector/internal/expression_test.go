@@ -29,7 +29,8 @@ func makeContext() ExpressionEvalContext {
 	res.Resource().Attributes().PutStr("env", "dev")
 
 	// slice attribute type
-	res.Resource().Attributes().PutEmptySlice("process.command_args").FromRaw([]any{"java", "-jar", "app.jar"})
+	//nolint:unchecked
+	_ = res.Resource().Attributes().PutEmptySlice("process.command_args").FromRaw([]any{"java", "-jar", "app.jar"})
 
 	// map attribute type
 	depMap := res.Resource().Attributes().PutEmptyMap("deployment")

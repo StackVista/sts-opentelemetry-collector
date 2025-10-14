@@ -43,7 +43,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 	rs.Resource().Attributes().PutStr("host.name", "ip-10-1-2-3.ec2.internal")
 	rs.Resource().Attributes().PutStr("os.type", "linux")
 	rs.Resource().Attributes().PutStr("process.pid", "12345")
-	rs.Resource().Attributes().PutEmptySlice("process.command_args").FromRaw([]any{"ls", "-la", "/home"})
+	_ = rs.Resource().Attributes().PutEmptySlice("process.command_args").FromRaw([]any{"ls", "-la", "/home"})
 	rs.Resource().Attributes().PutStr("cloud.provider", "aws")
 	rs.Resource().Attributes().PutStr("k8s.pod.name", "checkout-service-8675309")
 	ss := rs.ScopeSpans().AppendEmpty()
