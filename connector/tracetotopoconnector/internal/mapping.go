@@ -15,10 +15,15 @@ import (
 // TODO: turn mapping into a type so we don't have this global variable
 //
 //nolint:gochecknoglobals
-var regexCache *expirable.LRU[string, *regexp.Regexp]
+var (
+	regexCache       *expirable.LRU[string, *regexp.Regexp]
+	templateCache    *expirable.LRU[string, string]
+	placeholderRegex = regexp.MustCompile(`\$\{(\d+)\}`)
+)
 
 func init() {
 	regexCache = expirable.NewLRU[string, *regexp.Regexp](1000, nil, 12*time.Hour)
+	templateCache = expirable.NewLRU[string, string](1000, nil, 12*time.Hour)
 }
 
 // MapComponent maps an OTEL span and variables to a TopologyStreamComponent based on the given mapping configuration.
@@ -144,6 +149,18 @@ func ResolveTagMappings(
 			regexCache.Add(*m.Pattern, re)
 		}
 
+		// Convert the target template to the format expected by ExpandString ("$1")
+		// and cache it for reuse.
+		expandTemplate, ok := templateCache.Get(m.Target)
+		if !ok {
+			expandTemplate = placeholderRegex.ReplaceAllStringFunc(m.Target, func(s string) string {
+				// s is the matched string, e.g., "${1}"
+				// we need to extract the "1" and return "$1"
+				return "$" + s[2:len(s)-1]
+			})
+			templateCache.Add(m.Target, expandTemplate)
+		}
+
 		for key, value := range resolvedMap {
 			strVal, stringifyErr := stringifyTagValue(value)
 			if stringifyErr != nil {
@@ -157,17 +174,15 @@ func ResolveTagMappings(
 				continue
 			}
 
-			matches := re.FindStringSubmatch(key)
-			if len(matches) == 0 {
+			// Use FindStringSubmatchIndex to avoid allocating strings for matches.
+			matchIndexes := re.FindStringSubmatchIndex(key)
+			if len(matchIndexes) == 0 {
 				continue
 			}
 
-			targetKey := m.Target
-			// substitute capture groups, skip matches[0] - the entire matched string
-			for i, match := range matches[1:] {
-				placeholder := fmt.Sprintf("${%d}", i+1) // capture groups start at 1
-				targetKey = strings.ReplaceAll(targetKey, placeholder, match)
-			}
+			// Use ExpandString for an efficient, allocation-optimized substitution.
+			targetKeyBytes := re.ExpandString(nil, expandTemplate, key, matchIndexes)
+			targetKey := string(targetKeyBytes)
 
 			// Preserve existing (explicit) keys
 			if _, exists := tags[targetKey]; exists {
