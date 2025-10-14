@@ -3,13 +3,14 @@ package kafka
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
-	stsSettingsCommon "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/core"
+	stsSettingsCore "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/core"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
-	"sync"
 )
 
 type InProgressSnapshot struct {
@@ -34,7 +35,7 @@ type DefaultSettingsSnapshotProcessor struct {
 	settingsCountHistogram     metric.Int64Histogram
 	settingsSizeHistogram      metric.Int64Histogram
 
-	settingsCache stsSettingsCommon.SettingsCache
+	settingsCache stsSettingsCore.SettingsCache
 
 	// Mutex for concurrent access to InProgressSnapshots
 	snapshotsLock sync.RWMutex
@@ -47,43 +48,28 @@ func NewDefaultSettingsSnapshotProcessor(
 	context context.Context,
 	logger *zap.Logger,
 	telemetrySettings component.TelemetrySettings,
-	cache stsSettingsCommon.SettingsCache,
-) (*DefaultSettingsSnapshotProcessor, error) {
+	cache stsSettingsCore.SettingsCache,
+) *DefaultSettingsSnapshotProcessor {
 	meter := telemetrySettings.MeterProvider.Meter("settings_snapshot_processor")
 
-	incompleteSnapshotsCounter, err := meter.Int64Counter(
-		"settings_snapshot_incomplete_total",
+	incompleteSnapshotsCounter, _ := meter.Int64Counter(
+		metricName("settings_snapshot_incomplete_total"),
 		metric.WithDescription("Total number of incomplete snapshots (replaced by new starts)"),
 	)
-	if err != nil {
-		return nil, err
-	}
-
-	successfulEndsCounter, err := meter.Int64Counter(
-		"settings_snapshot_ends_total",
+	successfulEndsCounter, _ := meter.Int64Counter(
+		metricName("settings_snapshot_ends_total"),
 		metric.WithDescription("Total number of successful snapshot ends processed"),
 	)
-	if err != nil {
-		return nil, err
-	}
-
-	settingsCountHistogram, err := meter.Int64Histogram(
-		"settings_count_by_type",
+	settingsCountHistogram, _ := meter.Int64Histogram(
+		metricName("settings_count_by_type"),
 		metric.WithDescription("Distribution of setting count by type in completed snapshots"),
 		metric.WithUnit("settings"),
 	)
-	if err != nil {
-		return nil, err
-	}
-
-	settingsSizeHistogram, err := meter.Int64Histogram(
-		"settings_count_by_type",
-		metric.WithDescription("Distribution of setting count by type in completed snapshots"),
-		metric.WithUnit("settings"),
+	settingsSizeHistogram, _ := meter.Int64Histogram(
+		metricName("settings_size_bytes"),
+		metric.WithDescription("Distribution of settings size in bytes in completed snapshots"),
+		metric.WithUnit("By"),
 	)
-	if err != nil {
-		return nil, err
-	}
 
 	return &DefaultSettingsSnapshotProcessor{
 		ctx:                        context,
@@ -95,7 +81,11 @@ func NewDefaultSettingsSnapshotProcessor(
 		settingsSizeHistogram:      settingsSizeHistogram,
 		settingsCache:              cache,
 		InProgressSnapshots:        make(map[stsSettingsModel.SettingType]*InProgressSnapshot),
-	}, nil
+	}
+}
+
+func metricName(name string) string {
+	return fmt.Sprintf("extension.sts_settings_provider.%s", name)
 }
 
 func (d *DefaultSettingsSnapshotProcessor) ProcessSettingsProtocol(
@@ -181,9 +171,9 @@ func (d *DefaultSettingsSnapshotProcessor) handleSnapshotStop(msg stsSettingsMod
 		zap.String("settingType", string(targetSnapshot.settingType)),
 		zap.Int("settingCount", len(targetSnapshot.settings)))
 
-	settingEntries := make([]stsSettingsCommon.SettingEntry, len(targetSnapshot.settings))
+	settingEntries := make([]stsSettingsCore.SettingEntry, len(targetSnapshot.settings))
 	for i, s := range targetSnapshot.settings {
-		settingEntries[i] = stsSettingsCommon.NewSettingEntry(s)
+		settingEntries[i] = stsSettingsCore.NewSettingEntry(s)
 	}
 
 	d.settingsCache.UpdateSettingsForType(targetSnapshot.settingType, settingEntries)

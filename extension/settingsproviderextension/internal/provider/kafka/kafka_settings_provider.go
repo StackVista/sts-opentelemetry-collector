@@ -80,11 +80,7 @@ func NewKafkaSettingsProvider(
 	}
 
 	settingsCache := stsSettingsCore.NewDefaultSettingsCache(logger)
-
-	processor, err := NewDefaultSettingsSnapshotProcessor(ctx, logger, telemetrySettings, settingsCache)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create settings snapshot processor: %w", err)
-	}
+	processor := NewDefaultSettingsSnapshotProcessor(ctx, logger, telemetrySettings, settingsCache)
 
 	return &SettingsProvider{
 		cfg:                       cfg,
