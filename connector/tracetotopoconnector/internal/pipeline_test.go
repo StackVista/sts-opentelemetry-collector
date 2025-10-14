@@ -43,6 +43,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 	rs.Resource().Attributes().PutStr("host.name", "ip-10-1-2-3.ec2.internal")
 	rs.Resource().Attributes().PutStr("os.type", "linux")
 	rs.Resource().Attributes().PutStr("process.pid", "12345")
+	rs.Resource().Attributes().PutEmptySlice("process.command_args").FromRaw([]any{"ls", "-la", "/home"})
 	rs.Resource().Attributes().PutStr("cloud.provider", "aws")
 	rs.Resource().Attributes().PutStr("k8s.pod.name", "checkout-service-8675309")
 	ss := rs.ScopeSpans().AppendEmpty()
@@ -373,6 +374,90 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 								ExpiryIntervalMs: 0,
 								Errors: []*topo_stream_v1.TopoStreamError{
 									{Message: "CEL evaluation error: no such key: not-existing-attr"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Convert traces to Component with complex variables usage",
+			componentMappings: []settings.OtelComponentMapping{
+				{
+					Id:            "mapping1a",
+					ExpireAfterMs: 60000,
+					Conditions: []settings.OtelConditionMapping{
+						{Action: settings.CREATE, Expression: boolExpr(`vars.isInstanceId`)},
+					},
+					Identifier: "urn:otel-component-mapping:service",
+					Output: settings.OtelComponentMappingOutput{
+						Identifier:     strExpr("${vars.instanceId}"),
+						Name:           strExpr(`${resourceAttributes["service.name"]}`),
+						TypeName:       strExpr(`service-instance`),
+						TypeIdentifier: ptr(strExpr(`service_instance_id`)),
+						DomainName:     strExpr(`${resourceAttributes["service.namespace"]}`),
+						LayerName:      strExpr("backend"),
+						Required: &settings.OtelComponentMappingFieldMapping{
+							AdditionalIdentifiers: &[]settings.OtelStringExpression{
+								{Expression: `${resourceAttributes["k8s.pod.name"]}`},
+							},
+							Tags: &[]settings.OtelTagMapping{
+								{
+									Source: strExpr(`${resourceAttributes["host.name"]}`),
+									Target: "host",
+								},
+								{
+									Source: strExpr(`${vars.arguments[0]}`),
+									Target: "main_command",
+								},
+							},
+						},
+					},
+					Vars: &[]settings.OtelVariableMapping{
+						{
+							Name:  "isInstanceId",
+							Value: strExpr(`${resourceAttributes["service.instance.id"] == "627cc493"}`),
+						},
+						{
+							Name:  "instanceId",
+							Value: strExpr(`${resourceAttributes["service.instance.id"]}`),
+						},
+						{
+							Name:  "arguments",
+							Value: strExpr(`${resourceAttributes["process.command_args"]}`),
+						},
+					},
+				},
+			},
+			expected: []MessageWithKey{
+				{
+					Key: &topo_stream_v1.TopologyStreamMessageKey{
+						Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+						DataSource: "urn:otel-component-mapping:service",
+						ShardId:    "0",
+					},
+					Message: &topo_stream_v1.TopologyStreamMessage{
+						CollectionTimestamp: now,
+						SubmittedTimestamp:  submittedTime,
+						Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
+							TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
+								ExpiryIntervalMs: 60000,
+								Components: []*topo_stream_v1.TopologyStreamComponent{
+									{
+										ExternalId:       "627cc493",
+										Identifiers:      []string{"627cc493", "checkout-service-8675309"},
+										Name:             "checkout-service",
+										TypeName:         "service-instance",
+										TypeIdentifier:   ptr("service_instance_id"),
+										DomainName:       "shop",
+										DomainIdentifier: nil,
+										LayerName:        "backend",
+										Tags: []string{
+											"host:ip-10-1-2-3.ec2.internal",
+											"main_command:ls",
+										},
+									},
 								},
 							},
 						},

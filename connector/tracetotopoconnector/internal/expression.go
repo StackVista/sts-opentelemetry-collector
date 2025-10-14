@@ -68,10 +68,15 @@ type CacheSettings struct {
 }
 
 type ExpressionEvaluator interface {
+	// "String" Expressions expect/support the interpolation syntax ${}
 	EvalStringExpression(expr settings.OtelStringExpression, evalCtx *ExpressionEvalContext) (string, error)
 	EvalOptionalStringExpression(expr *settings.OtelStringExpression, evalCtx *ExpressionEvalContext) (*string, error)
+	// "Boolean" Expressions don't support interpolation, but must be a valid CEL boolean expression
 	EvalBooleanExpression(expr settings.OtelBooleanExpression, evalCtx *ExpressionEvalContext) (bool, error)
+	// "Map" Expressions expect/support the interpolation syntax ${}
 	EvalMapExpression(expr settings.OtelStringExpression, evalCtx *ExpressionEvalContext) (map[string]any, error)
+	// "Any" Expressions expect/support the interpolation syntax ${}
+	EvalAnyExpression(expr settings.OtelStringExpression, evalCtx *ExpressionEvalContext) (any, error)
 }
 
 type ExpressionEvalContext struct {
@@ -139,33 +144,7 @@ func (e *CelEvaluator) EvalStringExpression(
 	expr settings.OtelStringExpression,
 	evalCtx *ExpressionEvalContext,
 ) (string, error) {
-	// String literals are returned as-is without CEL evaluation and caching
-	if withoutInterpolation(expr.Expression) {
-		return expr.Expression, nil
-	}
-
-	// For non-literals, use the cached evaluation path
-	val, err := e.evalOrCached(expr.Expression, StringType, func(expression string) (string, error) {
-		actualKind, err := classifyExpression(expression)
-		if err != nil {
-			return "", err
-		}
-
-		switch actualKind {
-		case kindStringWithIdentifiers:
-			return unwrapExpression(expression), nil
-		case kindStringInterpolation:
-			// rewrite interpolation into valid CEL string concatenation
-			toCompile := rewriteInterpolations(expression)
-			return toCompile, nil
-		case kindStringLiteral:
-			// String literals are handled directly, if we detect a string literal here there is an error in the code path.
-			return "", fmt.Errorf("expression %q is a literal string, expected CEL expression", expression)
-		default:
-			return "", fmt.Errorf("expression %q is not a valid string expression", expression)
-		}
-	}, evalCtx)
-
+	val, err := e.EvalAnyExpression(expr, evalCtx)
 	if err != nil {
 		return "", err
 	}
@@ -228,6 +207,43 @@ func (e *CelEvaluator) EvalMapExpression(
 		return nil, toMapErr
 	}
 	return m, nil
+}
+
+func (e *CelEvaluator) EvalAnyExpression(
+	expr settings.OtelStringExpression,
+	evalCtx *ExpressionEvalContext,
+) (any, error) {
+	// String literals are returned as-is without CEL evaluation and caching
+	if withoutInterpolation(expr.Expression) {
+		return expr.Expression, nil
+	}
+
+	// For non-literals, use the cached evaluation path
+	val, err := e.evalOrCached(expr.Expression, StringType, func(expression string) (string, error) {
+		actualKind, err := classifyExpression(expression)
+		if err != nil {
+			return "", err
+		}
+
+		switch actualKind {
+		case kindStringWithIdentifiers:
+			return unwrapExpression(expression), nil
+		case kindStringInterpolation:
+			// rewrite interpolation into valid CEL string concatenation
+			toCompile := rewriteInterpolations(expression)
+			return toCompile, nil
+		case kindStringLiteral:
+			// String literals are handled directly, if we detect a string literal here there is an error in the code path.
+			return "", fmt.Errorf("expression %q is a literal string, expected CEL expression", expression)
+		default:
+			return "", fmt.Errorf("expression %q is not a valid string expression", expression)
+		}
+	}, evalCtx)
+
+	if err != nil {
+		return nil, err
+	}
+	return val, nil
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

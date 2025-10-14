@@ -14,11 +14,15 @@ import (
 )
 
 type mockEvalExpressionEvaluator struct {
-	varExpressionLookup map[string]string
+	varExpressionLookup map[string]any
 	varErrsLookup       map[string]error
 }
 
 func (f *mockEvalExpressionEvaluator) EvalStringExpression(expr settings.OtelStringExpression, _ *ExpressionEvalContext) (string, error) {
+	return "", nil
+}
+
+func (f *mockEvalExpressionEvaluator) EvalAnyExpression(expr settings.OtelStringExpression, _ *ExpressionEvalContext) (any, error) {
 	if err, ok := f.varErrsLookup[expr.Expression]; ok {
 		return "", err
 	}
@@ -66,7 +70,7 @@ func TestEvalVariables(t *testing.T) {
 	tests := []struct {
 		name                string
 		vars                []settings.OtelVariableMapping
-		varExpressionLookup map[string]string
+		varExpressionLookup map[string]any
 		varErrsLookup       map[string]error
 		want                map[string]any
 		expectErr           error
@@ -88,7 +92,7 @@ func TestEvalVariables(t *testing.T) {
 			vars: varMappings(
 				pair{"variable1", "static"},
 			),
-			varExpressionLookup: map[string]string{"static": "it is static value"},
+			varExpressionLookup: map[string]any{"static": "it is static value"},
 			want:                map[string]any{"variable1": "it is static value"},
 		},
 		{
@@ -97,13 +101,13 @@ func TestEvalVariables(t *testing.T) {
 				pair{"variable1", "spanAttributes.str-attr"},
 				pair{"variable2", "spanAttributes.bool-attr"},
 			),
-			varExpressionLookup: map[string]string{
+			varExpressionLookup: map[string]any{
 				"spanAttributes.str-attr":  "Hello",
-				"spanAttributes.bool-attr": "true",
+				"spanAttributes.bool-attr": true,
 			},
 			want: map[string]any{
 				"variable1": "Hello",
-				"variable2": "true",
+				"variable2": true,
 			},
 		},
 		{
@@ -113,7 +117,7 @@ func TestEvalVariables(t *testing.T) {
 				pair{"scopeVariable", "scopeAttributes.str-attr"},
 				pair{"resourceVariable", "resourceAttributes.str-attr"},
 			),
-			varExpressionLookup: map[string]string{
+			varExpressionLookup: map[string]any{
 				"spanAttributes.str-attr":     "Hello",
 				"scopeAttributes.str-attr":    "it is scope attribute",
 				"resourceAttributes.str-attr": "it is resource attribute",
@@ -141,7 +145,7 @@ func TestEvalVariables(t *testing.T) {
 				pair{"variable1", "spanAttributes.str-attr"},
 				pair{"variable2", "vars.not-existing-variable"},
 			),
-			varExpressionLookup: map[string]string{"spanAttributes.str-attr": "Hello"},
+			varExpressionLookup: map[string]any{"spanAttributes.str-attr": "Hello"},
 			varErrsLookup:       map[string]error{"vars.not-existing-variable": notFoundVarErr},
 			want: map[string]any{
 				"variable1": "Hello",
@@ -191,9 +195,9 @@ func TestEvalVariables_withRealContext(t *testing.T) {
 	)
 
 	fakeEval := &mockEvalExpressionEvaluator{
-		varExpressionLookup: map[string]string{
+		varExpressionLookup: map[string]any{
 			"spanAttributes.str-attr":     "hello",
-			"spanAttributes.bool-attr":    "true",
+			"spanAttributes.bool-attr":    true,
 			"scopeAttributes.scope-attr":  "world",
 			"resourceAttributes.res-attr": "infra",
 		},
@@ -205,7 +209,7 @@ func TestEvalVariables_withRealContext(t *testing.T) {
 	require.Nil(t, errs)
 	require.Equal(t, map[string]any{
 		"var1": "hello",
-		"var2": "true",
+		"var2": true,
 		"var3": "world",
 		"var4": "infra",
 	}, got)

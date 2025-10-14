@@ -22,8 +22,7 @@ func EvalVariables(
 	}
 
 	for _, variable := range *vars {
-		//TODO: Add EvalAnyExpression so variables can also be of other types and don't get stringified
-		if value, err := expressionEvaluator.EvalStringExpression(variable.Value, evalContext); err == nil {
+		if value, err := expressionEvaluator.EvalAnyExpression(variable.Value, evalContext); err == nil {
 			result[variable.Name] = value
 		} else {
 			errs[variable.Name] = err

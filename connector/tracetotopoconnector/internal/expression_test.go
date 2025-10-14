@@ -17,6 +17,8 @@ func makeContext() ExpressionEvalContext {
 	span.Attributes().PutInt("http.status_code", 200)
 	span.Attributes().PutStr("user.id", "123")
 	span.Attributes().PutStr("retries", "5")
+	span.Attributes().PutBool("sampled", true)
+	span.Attributes().PutDouble("pi", 3.14)
 
 	scope := ptrace.NewScopeSpans()
 	scope.Scope().Attributes().PutStr("otel.scope.name", "io.opentelemetry.instrumentation.http")
@@ -28,10 +30,7 @@ func makeContext() ExpressionEvalContext {
 	res.Resource().Attributes().PutStr("env", "dev")
 
 	// slice attribute type
-	args := res.Resource().Attributes().PutEmptySlice("process.command_args")
-	args.AppendEmpty().SetStr("java")
-	args.AppendEmpty().SetStr("-jar")
-	args.AppendEmpty().SetStr("app.jar")
+	res.Resource().Attributes().PutEmptySlice("process.command_args").FromRaw([]any{"java", "-jar", "app.jar"})
 
 	// map attribute type
 	depMap := res.Resource().Attributes().PutEmptyMap("deployment")
@@ -306,6 +305,8 @@ func TestEvalMapExpression(t *testing.T) {
 				"http.status_code": int64(200),
 				"retries":          "5",
 				"user.id":          "123",
+				"pi":               3.14,
+				"sampled":          true,
 			},
 			expectError: false,
 		},
@@ -370,6 +371,93 @@ func TestEvalMapExpression(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, tt.want, got)
 			}
+		})
+	}
+}
+
+// TestEvalStringExpression covers already much of the functionality, so here we focus on the differences.
+func TestEvalAnyExpression(t *testing.T) {
+	eval, err := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
+	require.NoError(t, err)
+
+	ctx := makeContext()
+
+	tests := []struct {
+		name        string
+		expr        string
+		expected    any
+		errContains string
+	}{
+		{
+			name:     "simple string",
+			expr:     "static string",
+			expected: "static string",
+		},
+		{
+			name:     "support array attribute",
+			expr:     `${resourceAttributes["process.command_args"]}`,
+			expected: []any{"java", "-jar", "app.jar"},
+		},
+		{
+			name: "support map attribute",
+			expr: `${resourceAttributes["deployment"]}`,
+			expected: map[string]any{
+				"env":    "prod",
+				"region": "eu-west-1",
+			},
+		},
+		{
+			name:     "support int attributes",
+			expr:     `${spanAttributes["http.status_code"]}`,
+			expected: int64(200),
+		},
+		{
+			name:     "support boolean attributes",
+			expr:     `${spanAttributes["sampled"]}`,
+			expected: true,
+		},
+		{
+			name:     "support doubles",
+			expr:     `${spanAttributes["pi"]}`,
+			expected: 3.14,
+		},
+		{
+			name:        "missing attribute key returns error",
+			expr:        `${resourceAttributes["not-existing-attr"]}`,
+			errContains: "no such key",
+		},
+		{
+			name:     "support string interpolation",
+			expr:     `service-${resourceAttributes["env"]}`,
+			expected: "service-dev",
+		},
+		{
+			name:     "complex string interpolation",
+			expr:     `ns-${resourceAttributes["service.name"]}-${vars.namespace}`,
+			expected: "ns-cart-service-test",
+		},
+		{
+			name:        "fail on unterminated interpolation",
+			expr:        `"foo-${vars["env"]"`, // missing closing }
+			errContains: "unterminated interpolation",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := eval.EvalAnyExpression(
+				settings.OtelStringExpression{Expression: tt.expr},
+				&ctx,
+			)
+
+			if tt.errContains != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.errContains)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tt.expected, result)
 		})
 	}
 }
