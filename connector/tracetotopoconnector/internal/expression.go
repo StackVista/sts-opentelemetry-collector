@@ -20,6 +20,7 @@ const (
 	StringType expressionType = iota
 	BooleanType
 	MapType
+	AnyType
 )
 
 type CacheSettings struct {
@@ -104,11 +105,36 @@ func (e *CelEvaluator) EvalStringExpression(
 	expr settings.OtelStringExpression,
 	evalCtx *ExpressionEvalContext,
 ) (string, error) {
-	val, err := e.EvalAnyExpression(expr, evalCtx)
+	// String literals are returned as-is without CEL evaluation and caching
+	if withoutInterpolation(expr.Expression) {
+		return expr.Expression, nil
+	}
+
+	// For non-literals, use the cached evaluation path
+	val, err := e.evalOrCached(expr.Expression, StringType, func(expression string) (string, error) {
+		actualKind, err := classifyExpression(expression)
+		if err != nil {
+			return "", err
+		}
+
+		switch actualKind {
+		case kindStringWithIdentifiers:
+			return unwrapExpression(expression), nil
+		case kindStringInterpolation:
+			// rewrite interpolation into valid CEL string concatenation
+			toCompile := rewriteInterpolations(expression)
+			return toCompile, nil
+		case kindStringLiteral:
+			// String literals are handled directly, if we detect a string literal here there is an error in the code path.
+			return "", fmt.Errorf("expression %q is a literal string, expected CEL expression", expression)
+		default:
+			return "", fmt.Errorf("expression %q is not a valid string expression", expression)
+		}
+	}, evalCtx)
+
 	if err != nil {
 		return "", err
 	}
-
 	return stringify(val)
 }
 
@@ -179,7 +205,7 @@ func (e *CelEvaluator) EvalAnyExpression(
 	}
 
 	// For non-literals, use the cached evaluation path
-	val, err := e.evalOrCached(expr.Expression, StringType, func(expression string) (string, error) {
+	val, err := e.evalOrCached(expr.Expression, AnyType, func(expression string) (string, error) {
 		actualKind, err := classifyExpression(expression)
 		if err != nil {
 			return "", err
@@ -294,6 +320,8 @@ func validateExpectedType(ast *cel.Ast, expectedType expressionType, expression 
 		if outputKind != cel.BoolKind && outputKind != cel.DynKind {
 			return fmt.Errorf("expected boolean type, got: %v, for expression '%v'", ast.OutputType(), expression)
 		}
+	case AnyType:
+		// anything goes
 	}
 	return nil
 }

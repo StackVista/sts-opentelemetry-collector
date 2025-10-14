@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/cel-go/common/types"
+	"github.com/google/cel-go/common/types/ref"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/ptrace"
@@ -420,6 +422,33 @@ func TestEvalAnyExpression(t *testing.T) {
 			name:     "support doubles",
 			expr:     `${spanAttributes["pi"]}`,
 			expected: 3.14,
+		},
+		{
+			name:     "support int literal",
+			expr:     "${42}",
+			expected: int64(42),
+		},
+		{
+			name:     "support double literal",
+			expr:     "${3.14}",
+			expected: 3.14,
+		},
+		{
+			name:     "support bool literal",
+			expr:     "${true}",
+			expected: true,
+		},
+		{
+			name:     "support slice literal",
+			expr:     "${['foo', 'bar']}",
+			expected: []ref.Val{types.String("foo"), types.String("bar")},
+		},
+		{
+			name: "support map literal",
+			expr: "${{'foo': 'bar'}}",
+			expected: map[ref.Val]ref.Val{
+				types.String("foo"): types.String("bar"),
+			},
 		},
 		{
 			name:        "missing attribute key returns error",
