@@ -2,10 +2,11 @@
 package internal
 
 import (
-	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/cel-go/common/types"
+	"github.com/google/cel-go/common/types/ref"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/ptrace"
@@ -17,6 +18,8 @@ func makeContext() ExpressionEvalContext {
 	span.Attributes().PutInt("http.status_code", 200)
 	span.Attributes().PutStr("user.id", "123")
 	span.Attributes().PutStr("retries", "5")
+	span.Attributes().PutBool("sampled", true)
+	span.Attributes().PutDouble("pi", 3.14)
 
 	scope := ptrace.NewScopeSpans()
 	scope.Scope().Attributes().PutStr("otel.scope.name", "io.opentelemetry.instrumentation.http")
@@ -28,26 +31,19 @@ func makeContext() ExpressionEvalContext {
 	res.Resource().Attributes().PutStr("env", "dev")
 
 	// slice attribute type
-	args := res.Resource().Attributes().PutEmptySlice("process.command_args")
-	args.AppendEmpty().SetStr("java")
-	args.AppendEmpty().SetStr("-jar")
-	args.AppendEmpty().SetStr("app.jar")
+	//nolint:unchecked
+	_ = res.Resource().Attributes().PutEmptySlice("process.command_args").FromRaw([]any{"java", "-jar", "app.jar"})
 
 	// map attribute type
 	depMap := res.Resource().Attributes().PutEmptyMap("deployment")
 	depMap.PutStr("region", "eu-west-1")
 	depMap.PutStr("env", "prod")
 
-	vars := map[string]string{
+	vars := map[string]any{
 		"namespace": "test",
 	}
 
-	return ExpressionEvalContext{
-		Span:     span,
-		Scope:    scope,
-		Resource: res,
-		Vars:     vars,
-	}
+	return *NewEvalContext(span.Attributes().AsRaw(), scope.Scope().Attributes().AsRaw(), res.Resource().Attributes().AsRaw()).CloneWithVariables(vars)
 }
 
 func TestEvalStringExpression(t *testing.T) {
@@ -125,7 +121,7 @@ func TestEvalStringExpression(t *testing.T) {
 		{
 			name:        "unsupported type returns error",
 			expr:        `${spanAttributes}`, // whole map, not string
-			errContains: "expression did not evaluate to string, got: map",
+			errContains: "expected string type, got: map(string, dyn), for expression '${spanAttributes}'",
 		},
 		{
 			name:     "support string interpolation with vars",
@@ -293,7 +289,7 @@ func TestEvalOptionalStringExpression(t *testing.T) {
 	}
 }
 
-func TestCelEvaluator_EvalMapExpression(t *testing.T) {
+func TestEvalMapExpression(t *testing.T) {
 	ctx := makeContext()
 	eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Minute})
 
@@ -311,6 +307,8 @@ func TestCelEvaluator_EvalMapExpression(t *testing.T) {
 				"http.status_code": int64(200),
 				"retries":          "5",
 				"user.id":          "123",
+				"pi":               3.14,
+				"sampled":          true,
 			},
 			expectError: false,
 		},
@@ -335,6 +333,14 @@ func TestCelEvaluator_EvalMapExpression(t *testing.T) {
 			want: map[string]any{
 				"otel.scope.name":    "io.opentelemetry.instrumentation.http",
 				"otel.scope.version": "1.2.3",
+			},
+			expectError: false,
+		},
+		{
+			name: "Map literal",
+			expr: settings.OtelStringExpression{Expression: "${{'key': 'value'}}"},
+			want: map[string]any{
+				"key": "value",
 			},
 			expectError: false,
 		},
@@ -367,6 +373,120 @@ func TestCelEvaluator_EvalMapExpression(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, tt.want, got)
 			}
+		})
+	}
+}
+
+// TestEvalStringExpression covers already much of the functionality, so here we focus on the differences.
+func TestEvalAnyExpression(t *testing.T) {
+	eval, err := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
+	require.NoError(t, err)
+
+	ctx := makeContext()
+
+	tests := []struct {
+		name        string
+		expr        string
+		expected    any
+		errContains string
+	}{
+		{
+			name:     "simple string",
+			expr:     "static string",
+			expected: "static string",
+		},
+		{
+			name:     "support array attribute",
+			expr:     `${resourceAttributes["process.command_args"]}`,
+			expected: []any{"java", "-jar", "app.jar"},
+		},
+		{
+			name: "support map attribute",
+			expr: `${resourceAttributes["deployment"]}`,
+			expected: map[string]any{
+				"env":    "prod",
+				"region": "eu-west-1",
+			},
+		},
+		{
+			name:     "support int attributes",
+			expr:     `${spanAttributes["http.status_code"]}`,
+			expected: int64(200),
+		},
+		{
+			name:     "support boolean attributes",
+			expr:     `${spanAttributes["sampled"]}`,
+			expected: true,
+		},
+		{
+			name:     "support doubles",
+			expr:     `${spanAttributes["pi"]}`,
+			expected: 3.14,
+		},
+		{
+			name:     "support int literal",
+			expr:     "${42}",
+			expected: int64(42),
+		},
+		{
+			name:     "support double literal",
+			expr:     "${3.14}",
+			expected: 3.14,
+		},
+		{
+			name:     "support bool literal",
+			expr:     "${true}",
+			expected: true,
+		},
+		{
+			name:     "support slice literal",
+			expr:     "${['foo', 'bar']}",
+			expected: []ref.Val{types.String("foo"), types.String("bar")},
+		},
+		{
+			name: "support map literal",
+			expr: "${{'foo': 'bar'}}",
+			expected: map[ref.Val]ref.Val{
+				types.String("foo"): types.String("bar"),
+			},
+		},
+		{
+			name:        "missing attribute key returns error",
+			expr:        `${resourceAttributes["not-existing-attr"]}`,
+			errContains: "no such key",
+		},
+		{
+			name:     "support string interpolation",
+			expr:     `service-${resourceAttributes["env"]}`,
+			expected: "service-dev",
+		},
+		{
+			name:     "complex string interpolation",
+			expr:     `ns-${resourceAttributes["service.name"]}-${vars.namespace}`,
+			expected: "ns-cart-service-test",
+		},
+		{
+			name:        "fail on unterminated interpolation",
+			expr:        `"foo-${vars["env"]"`, // missing closing }
+			errContains: "unterminated interpolation",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := eval.EvalAnyExpression(
+				settings.OtelStringExpression{Expression: tt.expr},
+				&ctx,
+			)
+
+			if tt.errContains != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.errContains)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tt.expected, result)
 		})
 	}
 }
@@ -446,205 +566,4 @@ func TestEvalCacheExpiryByTTL(t *testing.T) {
 	_, err = eval.EvalBooleanExpression(expr, &ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, eval.cacheSize()) // still 1, but it was recompiled after expiry
-}
-
-func TestValidateInterpolation(t *testing.T) {
-	tests := []struct {
-		name    string
-		in      string
-		wantErr string // substring; empty means valid
-	}{
-		// Valid: no interpolation at all
-		{"literal-no-markers", "hello-world", ""},
-
-		// Valid: single wrapped expression
-		{"wrapped-simple", "${foo}", ""},
-		{"wrapped-indexing-double-quotes", `${resourceAttributes["service.name"]}`, ""},
-		{"wrapped-indexing-single-quotes", `${resourceAttributes['service.name']}`, ""},
-		{"wrapped-spaces-inside", `${   vars["env"]   }`, ""},
-
-		// Valid: interpolated with surrounding literals
-		{"interp-prefix", `pre-${foo}`, ""},
-		{"interp-suffix", `${foo}-post`, ""},
-		{"interp-middle", `a-${foo}-b`, ""},
-		{"interp-slashes", `a/${foo}/b`, ""},
-		{"interp-multiple", `a-${x}-m-${y}-z`, ""},
-
-		// Valid: quoted outer string containing interpolation
-		{"quoted-double", `"svc-${vars["env"]}"`, ""},
-		{"quoted-single", `'svc-${vars["env"]}'`, ""},
-
-		// Invalid: empty
-		{"empty", `foo-${}`, "empty interpolation"},
-
-		// Invalid: unterminated
-		{"unterminated-simple", `foo-${bar`, "unterminated"},
-		{"unterminated-quoted", `"foo-${vars["env"]"`, "unterminated"},
-		{"unterminated-double", `foo-${{vars["env"]}`, "unterminated"},
-
-		// Valid: random braces in literal part
-		{"literal-brace-before", `foo-{bar-${x}`, ""},
-		{"literal-brace-after", `foo-${x}-bar}`, ""},
-		{"literal-braces-around", `{foo-${x}-bar}`, ""},
-
-		// Invalid: nested
-		{"nested-simple", `foo-${${bar}}`, "nested"},
-		{"nested-deeper", `${x+${y}}`, "nested"},
-
-		// Valid: unmatched closing brace, simply part of literal
-		{"unmatched-closing", `foo-}`, ""},
-		{"unmatched-closing-after", `pre-${bar}}-post`, ""},
-
-		// Valid: dollar not followed by '{' is just literal
-		{"dollar-space", `$ {foo}`, ""},
-		{"double-dollar-then-interp", `$${foo}`, ""},  // escaped interpolation: literal ${foo}
-		{"double-dollar-then-interp", `$$${foo}`, ""}, // interpolation prefixed with literal $: $ + value-of(foo)
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateInterpolation(tt.in)
-			if tt.wantErr == "" {
-				require.NoError(t, err, "expected valid but got error: %v", err)
-			} else {
-				require.Error(t, err, "expected error containing %q", tt.wantErr)
-				require.Contains(t, err.Error(), tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestClassifyStringExpression(t *testing.T) {
-	tests := []struct {
-		name      string
-		expr      string
-		wantKind  expressionKind
-		wantError string
-	}{
-		{"literal", "foo", kindStringLiteral, ""},
-		{"wrapped literal", `"foo"`, kindStringLiteral, ""},
-		{"wrapped identifier", "${vars[\"env\"]}", kindStringWithIdentifiers, ""},
-		{"wrapped map reference", "${vars}", kindMapReferenceOnly, ""},
-		{"interpolated ok", "foo-${vars[\"env\"]}-bar", kindStringInterpolation, ""},
-		{"unterminated interpolation", `"foo-${vars[\"env\"]"`, kindInvalid, "unterminated"},
-		{"empty interpolation", `foo-${}`, kindInvalid, "empty"},
-		{"nested interpolation", `foo-${${bar}}`, kindInvalid, "nested"},
-		{"dollar-space", `$ {foo}`, kindStringLiteral, ""}, // not interpolation
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			kind, err := classifyExpression(tt.expr)
-
-			if tt.wantError != "" {
-				if err == nil || !strings.Contains(err.Error(), tt.wantError) {
-					t.Errorf("expected error containing %q, got %v", tt.wantError, err)
-				}
-				if kind != kindInvalid {
-					t.Errorf("expected kindInvalid, got %v", kind)
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
-			if kind != tt.wantKind {
-				t.Errorf("expected %v, got %v", tt.wantKind, kind)
-			}
-		})
-	}
-}
-
-func TestRewriteInterpolations(t *testing.T) {
-	cases := []struct {
-		name      string
-		expr      string
-		result    string
-		errSubstr string
-	}{
-		{
-			name:   "no interpolation (literal remains unchanged)",
-			expr:   "just-a-literal",
-			result: "just-a-literal",
-		},
-		{
-			name:   "no interpolation (expression remains unchanged)",
-			expr:   `resourceAttributes["service.name"]`,
-			result: `resourceAttributes["service.name"]`,
-		},
-		{
-			name:   "quoted with interpolation",
-			expr:   `"service-${resourceAttributes["env"]}"`,
-			result: `"service-"+(resourceAttributes["env"])`,
-		},
-		{
-			name:   "unquoted with interpolation",
-			expr:   `ns-${vars.ns}:svc-${resourceAttributes["service.name"]}`,
-			result: `"ns-"+(vars.ns)+":svc-"+(resourceAttributes["service.name"])`,
-		},
-		{
-			name:   "adjacent interpolations",
-			expr:   `x-${a}${b}-y`,
-			result: `"x-"+(a)+(b)+"-y"`,
-		},
-		{
-			name:   "Curly brace after interpolation",
-			expr:   `hello ${resourceAttributes["service.name"]}}`,
-			result: `"hello "+(resourceAttributes["service.name"])+"}"`,
-		},
-		{
-			name:      "empty interpolation",
-			expr:      `foo-${}`,
-			errSubstr: "empty interpolation",
-		},
-		{
-			name:      "whitespace-only interpolation",
-			expr:      `foo-${   }`,
-			errSubstr: "empty interpolation",
-		},
-		{
-			name:      "unterminated",
-			expr:      `foo-${bar`,
-			errSubstr: "unterminated interpolation",
-		},
-		{
-			name:      "unterminated",
-			expr:      "foo-${ {bar}",
-			errSubstr: "unterminated interpolation",
-		},
-		{
-			name:      "nested interpolation not allowed",
-			expr:      `foo-${${bar}}`,
-			errSubstr: "nested interpolation",
-		},
-		{
-			name:   "support escaping ${ with $${ in literal part",
-			expr:   `$${a}-${b}`,
-			result: `"${a}-"+(b)`,
-		},
-		{
-			name:   "support escaping $$$${ with $${ in literal part",
-			expr:   `$$$${a}-${b}`,
-			result: `"$${a}-"+(b)`,
-		},
-		{
-			name:   "support escaping $${ with $$${",
-			expr:   `$$${a}-${b}`,
-			result: `"$"+(a)+"-"+(b)`,
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := rewriteInterpolations(tc.expr)
-			if tc.errSubstr != "" {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tc.errSubstr)
-				return
-			}
-			require.NoError(t, err)
-			require.Equal(t, tc.result, got)
-		})
-	}
 }

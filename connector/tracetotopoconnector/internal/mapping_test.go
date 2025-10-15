@@ -37,7 +37,7 @@ func TestMapping_MapComponent(t *testing.T) {
 		span      *ptrace.Span
 		scope     *ptrace.ScopeSpans
 		resource  *ptrace.ResourceSpans
-		vars      *map[string]string
+		vars      map[string]any
 		want      *topo_stream_v1.TopologyStreamComponent
 		expectErr []error
 	}{
@@ -86,7 +86,7 @@ func TestMapping_MapComponent(t *testing.T) {
 			span:     &testSpan,
 			scope:    &testScope,
 			resource: &testResource,
-			vars: &map[string]string{
+			vars: map[string]any{
 				"namespace": "payments_ns",
 			},
 			want: &topo_stream_v1.TopologyStreamComponent{
@@ -117,7 +117,7 @@ func TestMapping_MapComponent(t *testing.T) {
 			span:     &testSpan,
 			scope:    &testScope,
 			resource: &testResource,
-			vars:     &map[string]string{},
+			vars:     map[string]any{},
 			want: &topo_stream_v1.TopologyStreamComponent{
 				ExternalId:  "billing",
 				Identifiers: []string{"billing"},
@@ -166,7 +166,7 @@ func TestMapping_MapComponent(t *testing.T) {
 			span:     &testSpan,
 			scope:    &testScope,
 			resource: &testResource,
-			vars: &map[string]string{
+			vars: map[string]any{
 				"namespace": "payments_ns",
 			},
 			want:      nil,
@@ -174,11 +174,12 @@ func TestMapping_MapComponent(t *testing.T) {
 		},
 	}
 
+	mapper := NewMapper()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
-			evalCtx := ExpressionEvalContext{*tt.span, *tt.scope, *tt.resource, *tt.vars}
-			got, err := MapComponent(tt.mapping, eval, &evalCtx)
+			evalCtx := NewEvalContext(tt.span.Attributes().AsRaw(), tt.scope.Scope().Attributes().AsRaw(), tt.resource.Resource().Attributes().AsRaw()).CloneWithVariables(tt.vars)
+			got, err := mapper.MapComponent(tt.mapping, eval, evalCtx)
 			assert.Equal(t, errorStrings(tt.expectErr), errorStrings(err))
 			if got != nil {
 				sort.Strings(got.Tags)
@@ -214,11 +215,7 @@ func TestResolveTagMappings(t *testing.T) {
 	depMap.PutStr("region", "eu-west-1")
 	depMap.PutStr("env", "prod")
 
-	ctx := ExpressionEvalContext{
-		Span:     testSpan,
-		Scope:    testScope,
-		Resource: testResource,
-	}
+	ctx := NewEvalContext(testSpan.Attributes().AsRaw(), testScope.Scope().Attributes().AsRaw(), testResource.Resource().Attributes().AsRaw())
 	eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Minute})
 
 	tests := []struct {
@@ -314,7 +311,7 @@ func TestResolveTagMappings(t *testing.T) {
 				},
 			},
 			want:          map[string]string{},
-			errorContains: "expression did not evaluate to string",
+			errorContains: "failed to evaluate OtelTagMapping source \"${scopeAttributes}\": expected string type, got: map(string, dyn), for expression '${scopeAttributes}'",
 		},
 		// cases for group merge mapping and explicit mapping trying to populate the same key
 		{
@@ -408,9 +405,11 @@ func TestResolveTagMappings(t *testing.T) {
 		},
 	}
 
+	mapper := NewMapper()
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, errs := ResolveTagMappings(tt.mappings, eval, &ctx)
+			got, errs := mapper.ResolveTagMappings(tt.mappings, eval, ctx)
 			if tt.errorContains != "" {
 				require.NotEmpty(t, errs, "expected an error but got none")
 				require.Contains(t, errs[0].Error(), tt.errorContains)
@@ -444,7 +443,7 @@ func TestMapping_MapRelation(t *testing.T) {
 		span      *ptrace.Span
 		scope     *ptrace.ScopeSpans
 		resource  *ptrace.ResourceSpans
-		vars      *map[string]string
+		vars      map[string]any
 		want      *topo_stream_v1.TopologyStreamRelation
 		expectErr []error
 	}{
@@ -461,7 +460,7 @@ func TestMapping_MapRelation(t *testing.T) {
 			span:     &testSpan,
 			scope:    &testScope,
 			resource: &testResource,
-			vars:     &map[string]string{},
+			vars:     map[string]any{},
 			want: &topo_stream_v1.TopologyStreamRelation{
 				ExternalId:       "billing-database",
 				SourceIdentifier: "billing",
@@ -485,17 +484,18 @@ func TestMapping_MapRelation(t *testing.T) {
 			span:      &testSpan,
 			scope:     &testScope,
 			resource:  &testResource,
-			vars:      &map[string]string{},
+			vars:      map[string]any{},
 			want:      nil,
 			expectErr: []error{errors.New("CEL evaluation error: no such key: non-existing")},
 		},
 	}
 
+	mapper := NewMapper()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
-			evalCtx := ExpressionEvalContext{*tt.span, *tt.scope, *tt.resource, *tt.vars}
-			got, err := MapRelation(tt.mapping, eval, &evalCtx)
+			evalCtx := NewEvalContext(tt.span.Attributes().AsRaw(), tt.scope.Scope().Attributes().AsRaw(), tt.resource.Resource().Attributes().AsRaw()).CloneWithVariables(tt.vars)
+			got, err := mapper.MapRelation(tt.mapping, eval, evalCtx)
 			assert.Equal(t, errorStrings(tt.expectErr), errorStrings(err))
 			if got != nil {
 				sort.Strings(got.Tags)

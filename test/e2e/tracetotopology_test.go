@@ -155,7 +155,7 @@ func TestTraceToOtelTopology_ErrorReturnedOnIncorrectMappingConfig(t *testing.T)
 	require.Contains(
 		t,
 		errs[0].Message, // all the errors should be the same
-		"expression did not evaluate to string",
+		"expected string type, got: map(string, dyn), for expression '${resourceAttributes}'",
 		"expected error on incorrect mapping config",
 	)
 }

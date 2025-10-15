@@ -14,11 +14,15 @@ import (
 )
 
 type mockEvalExpressionEvaluator struct {
-	varExpressionLookup map[string]string
+	varExpressionLookup map[string]any
 	varErrsLookup       map[string]error
 }
 
-func (f *mockEvalExpressionEvaluator) EvalStringExpression(expr settings.OtelStringExpression, _ *ExpressionEvalContext) (string, error) {
+func (f *mockEvalExpressionEvaluator) EvalStringExpression(_ settings.OtelStringExpression, _ *ExpressionEvalContext) (string, error) {
+	return "", nil
+}
+
+func (f *mockEvalExpressionEvaluator) EvalAnyExpression(expr settings.OtelStringExpression, _ *ExpressionEvalContext) (any, error) {
 	if err, ok := f.varErrsLookup[expr.Expression]; ok {
 		return "", err
 	}
@@ -66,21 +70,21 @@ func TestEvalVariables(t *testing.T) {
 	tests := []struct {
 		name                string
 		vars                []settings.OtelVariableMapping
-		varExpressionLookup map[string]string
+		varExpressionLookup map[string]any
 		varErrsLookup       map[string]error
-		want                map[string]string
+		want                map[string]any
 		expectErr           error
 	}{
 		{
 			name:      "nil variables",
 			vars:      nil,
-			want:      map[string]string{},
+			want:      map[string]any{},
 			expectErr: nil,
 		},
 		{
 			name:      "empty variables",
 			vars:      []settings.OtelVariableMapping{},
-			want:      map[string]string{},
+			want:      map[string]any{},
 			expectErr: nil,
 		},
 		{
@@ -88,8 +92,8 @@ func TestEvalVariables(t *testing.T) {
 			vars: varMappings(
 				pair{"variable1", "static"},
 			),
-			varExpressionLookup: map[string]string{"static": "it is static value"},
-			want:                map[string]string{"variable1": "it is static value"},
+			varExpressionLookup: map[string]any{"static": "it is static value"},
+			want:                map[string]any{"variable1": "it is static value"},
 		},
 		{
 			name: "refer to span attribute",
@@ -97,13 +101,13 @@ func TestEvalVariables(t *testing.T) {
 				pair{"variable1", "spanAttributes.str-attr"},
 				pair{"variable2", "spanAttributes.bool-attr"},
 			),
-			varExpressionLookup: map[string]string{
+			varExpressionLookup: map[string]any{
 				"spanAttributes.str-attr":  "Hello",
-				"spanAttributes.bool-attr": "true",
+				"spanAttributes.bool-attr": true,
 			},
-			want: map[string]string{
+			want: map[string]any{
 				"variable1": "Hello",
-				"variable2": "true",
+				"variable2": true,
 			},
 		},
 		{
@@ -113,12 +117,12 @@ func TestEvalVariables(t *testing.T) {
 				pair{"scopeVariable", "scopeAttributes.str-attr"},
 				pair{"resourceVariable", "resourceAttributes.str-attr"},
 			),
-			varExpressionLookup: map[string]string{
+			varExpressionLookup: map[string]any{
 				"spanAttributes.str-attr":     "Hello",
 				"scopeAttributes.str-attr":    "it is scope attribute",
 				"resourceAttributes.str-attr": "it is resource attribute",
 			},
-			want: map[string]string{
+			want: map[string]any{
 				"spanVariable":     "Hello",
 				"scopeVariable":    "it is scope attribute",
 				"resourceVariable": "it is resource attribute",
@@ -132,7 +136,7 @@ func TestEvalVariables(t *testing.T) {
 			varErrsLookup: map[string]error{
 				"spanAttributes.not-existing": notFoundErr,
 			},
-			want:      map[string]string{},
+			want:      map[string]any{},
 			expectErr: fmt.Errorf("variable \"variable1\" evaluation failed: %w", notFoundErr),
 		},
 		{
@@ -141,9 +145,9 @@ func TestEvalVariables(t *testing.T) {
 				pair{"variable1", "spanAttributes.str-attr"},
 				pair{"variable2", "vars.not-existing-variable"},
 			),
-			varExpressionLookup: map[string]string{"spanAttributes.str-attr": "Hello"},
+			varExpressionLookup: map[string]any{"spanAttributes.str-attr": "Hello"},
 			varErrsLookup:       map[string]error{"vars.not-existing-variable": notFoundVarErr},
-			want: map[string]string{
+			want: map[string]any{
 				"variable1": "Hello",
 			},
 			expectErr: fmt.Errorf("variable \"variable2\" evaluation failed: %w", notFoundVarErr),
@@ -158,7 +162,7 @@ func TestEvalVariables(t *testing.T) {
 					varExpressionLookup: tt.varExpressionLookup,
 					varErrsLookup:       tt.varErrsLookup,
 				},
-				nil, nil, nil, &vars,
+				NewEvalContext(nil, nil, nil), &vars,
 			)
 
 			if tt.expectErr != nil {
@@ -191,21 +195,21 @@ func TestEvalVariables_withRealContext(t *testing.T) {
 	)
 
 	fakeEval := &mockEvalExpressionEvaluator{
-		varExpressionLookup: map[string]string{
+		varExpressionLookup: map[string]any{
 			"spanAttributes.str-attr":     "hello",
-			"spanAttributes.bool-attr":    "true",
+			"spanAttributes.bool-attr":    true,
 			"scopeAttributes.scope-attr":  "world",
 			"resourceAttributes.res-attr": "infra",
 		},
 	}
 
 	// Pass along constructed span, scope and resource to validate plumbing works as expected
-	got, errs := EvalVariables(fakeEval, &span, &scope, &resource, &vars)
+	got, errs := EvalVariables(fakeEval, NewEvalContext(span.Attributes().AsRaw(), scope.Scope().Attributes().AsRaw(), resource.Resource().Attributes().AsRaw()), &vars)
 
 	require.Nil(t, errs)
-	require.Equal(t, map[string]string{
+	require.Equal(t, map[string]any{
 		"var1": "hello",
-		"var2": "true",
+		"var2": true,
 		"var3": "world",
 		"var4": "infra",
 	}, got)
