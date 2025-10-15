@@ -449,7 +449,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 						ShardId:    "0",
 					},
 					Message: &topo_stream_v1.TopologyStreamMessage{
-						CollectionTimestamp: now,
+						CollectionTimestamp: collectionTimestampMs,
 						SubmittedTimestamp:  submittedTime,
 						Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 							TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"math"
+	"time"
 
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/metrics"
@@ -36,8 +37,11 @@ func ConvertSpanToTopologyStreamMessage(
 ) []MessageWithKey {
 	result := make([]MessageWithKey, 0)
 	var components, relations, componentErrs, relationErrs int
+	var componentMappingStart, relationMappingStart time.Time
+	var componentMappingDuration, relationMappingDuration time.Duration
 
 	iterateSpans(trace, func(expressionEvalContext *ExpressionEvalContext, span *ptrace.Span) {
+		componentMappingStart = time.Now()
 		for _, componentMapping := range componentMappings {
 			currentComponentMapping := componentMapping
 			component, errs := convertToComponent(eval, mapper, expressionEvalContext, &currentComponentMapping)
@@ -61,6 +65,9 @@ func ConvertSpanToTopologyStreamMessage(
 				componentErrs++
 			}
 		}
+		componentMappingDuration = time.Since(componentMappingStart)
+
+		relationMappingStart = time.Now()
 		for _, relationMapping := range relationMappings {
 			currentRelationMapping := relationMapping
 			relation, errs := convertToRelation(eval, mapper, expressionEvalContext, &currentRelationMapping)
@@ -84,6 +91,7 @@ func ConvertSpanToTopologyStreamMessage(
 				relationErrs++
 			}
 		}
+		relationMappingDuration = time.Since(relationMappingStart)
 	})
 
 	// Record metrics
@@ -93,18 +101,18 @@ func ConvertSpanToTopologyStreamMessage(
 	if componentErrs > 0 {
 		metricsRecorder.IncErrors(ctx, int64(componentErrs+relationErrs), "mapping")
 	}
-	//metricsRecorder.RecordMappingDuration(
-	//	ctx, componentMappingDuration,
-	//	attribute.String("phase", "convert_span_to_topology_stream_message"),
-	//	attribute.String("target", "components"),
-	//	attribute.Int("mapping_count", len(componentMappings)),
-	//)
-	//metricsRecorder.RecordMappingDuration(
-	//	ctx, relationMappingDuration,
-	//	attribute.String("phase", "convert_span_to_topology_stream_message"),
-	//	attribute.String("target", "relations"),
-	//	attribute.Int("mapping_count", len(relationMappings)),
-	//)
+	metricsRecorder.RecordMappingDuration(
+		ctx, componentMappingDuration,
+		attribute.String("phase", "convert_span_to_topology_stream_message"),
+		attribute.String("target", "components"),
+		attribute.Int("mapping_count", len(componentMappings)),
+	)
+	metricsRecorder.RecordMappingDuration(
+		ctx, relationMappingDuration,
+		attribute.String("phase", "convert_span_to_topology_stream_message"),
+		attribute.String("target", "relations"),
+		attribute.Int("mapping_count", len(relationMappings)),
+	)
 
 	logger.Debug(
 		"Converted spans to topology stream messages",
