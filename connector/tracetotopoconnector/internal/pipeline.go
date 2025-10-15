@@ -97,13 +97,13 @@ func ConvertSpanToTopologyStreamMessage(
 	//	ctx, componentMappingDuration,
 	//	attribute.String("phase", "convert_span_to_topology_stream_message"),
 	//	attribute.String("target", "components"),
-	//	attribute.Int("component_mapping_count", len(componentMappings)),
+	//	attribute.Int("mapping_count", len(componentMappings)),
 	//)
 	//metricsRecorder.RecordMappingDuration(
 	//	ctx, relationMappingDuration,
 	//	attribute.String("phase", "convert_span_to_topology_stream_message"),
 	//	attribute.String("target", "relations"),
-	//	attribute.Int("relation_mapping_count", len(relationMappings)),
+	//	attribute.Int("mapping_count", len(relationMappings)),
 	//)
 
 	logger.Debug(

@@ -148,6 +148,7 @@ func (p *connectorImpl) ConsumeTraces(ctx context.Context, td ptrace.Traces) err
 		ctx, duration,
 		attribute.String("phase", "consume_traces"),
 		attribute.String("target", "spans"),
+		attribute.Int("mapping_count", len(*p.componentMappings)+len(*p.relationMappings)),
 	)
 
 	return nil

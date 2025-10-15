@@ -8,8 +8,6 @@ import (
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	stsSettingsCore "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/core"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 )
 
@@ -25,15 +23,10 @@ type SettingsSnapshotProcessor interface {
 
 type DefaultSettingsSnapshotProcessor struct {
 	//nolint:containedctx
-	ctx               context.Context
-	logger            *zap.Logger
-	telemetrySettings component.TelemetrySettings
+	ctx    context.Context
+	logger *zap.Logger
 
-	// Metrics
-	incompleteSnapshotsCounter metric.Int64Counter
-	successfulEndsCounter      metric.Int64Counter
-	settingsCountHistogram     metric.Int64Histogram
-	settingsSizeHistogram      metric.Int64Histogram
+	metricsRecorder MetricsRecorder
 
 	settingsCache stsSettingsCore.SettingsCache
 
@@ -50,42 +43,13 @@ func NewDefaultSettingsSnapshotProcessor(
 	telemetrySettings component.TelemetrySettings,
 	cache stsSettingsCore.SettingsCache,
 ) *DefaultSettingsSnapshotProcessor {
-	meter := telemetrySettings.MeterProvider.Meter("settings_snapshot_processor")
-
-	incompleteSnapshotsCounter, _ := meter.Int64Counter(
-		metricName("settings_snapshot_incomplete_total"),
-		metric.WithDescription("Total number of incomplete snapshots (replaced by new starts)"),
-	)
-	successfulEndsCounter, _ := meter.Int64Counter(
-		metricName("settings_snapshot_ends_total"),
-		metric.WithDescription("Total number of successful snapshot ends processed"),
-	)
-	settingsCountHistogram, _ := meter.Int64Histogram(
-		metricName("settings_count_by_type"),
-		metric.WithDescription("Distribution of setting count by type in completed snapshots"),
-		metric.WithUnit("settings"),
-	)
-	settingsSizeHistogram, _ := meter.Int64Histogram(
-		metricName("settings_size_bytes"),
-		metric.WithDescription("Distribution of settings size in bytes in completed snapshots"),
-		metric.WithUnit("By"),
-	)
-
 	return &DefaultSettingsSnapshotProcessor{
-		ctx:                        context,
-		logger:                     logger,
-		telemetrySettings:          telemetrySettings,
-		incompleteSnapshotsCounter: incompleteSnapshotsCounter,
-		successfulEndsCounter:      successfulEndsCounter,
-		settingsCountHistogram:     settingsCountHistogram,
-		settingsSizeHistogram:      settingsSizeHistogram,
-		settingsCache:              cache,
-		InProgressSnapshots:        make(map[stsSettingsModel.SettingType]*InProgressSnapshot),
+		ctx:                 context,
+		logger:              logger,
+		metricsRecorder:     NewSettingsSnapshotProcessorMetrics(telemetrySettings),
+		settingsCache:       cache,
+		InProgressSnapshots: make(map[stsSettingsModel.SettingType]*InProgressSnapshot),
 	}
-}
-
-func metricName(name string) string {
-	return fmt.Sprintf("extension.sts_settings_provider.%s", name)
 }
 
 func (d *DefaultSettingsSnapshotProcessor) ProcessSettingsProtocol(
@@ -120,7 +84,7 @@ func (d *DefaultSettingsSnapshotProcessor) handleSnapshotStart(msg stsSettingsMo
 			zap.String("newSnapshotId", msg.Id),
 			zap.Int("orphanedSettingsCount", len(existingSnapshot.settings)))
 
-		d.incIncompleteSnapshotCount(msg.SettingType)
+		d.metricsRecorder.IncIncompleteSnapshots(d.ctx, msg.SettingType)
 	}
 
 	d.logger.Debug("Received snapshot start.",
@@ -179,8 +143,8 @@ func (d *DefaultSettingsSnapshotProcessor) handleSnapshotStop(msg stsSettingsMod
 	d.settingsCache.UpdateSettingsForType(targetSnapshot.settingType, settingEntries)
 
 	// Metrics
-	d.incCompleteSnapshotCount(targetSnapshot.settingType)
-	d.recordSettingsCount(targetSnapshot.settingType, int64(len(targetSnapshot.settings)))
+	d.metricsRecorder.IncCompleteSnapshots(d.ctx, targetSnapshot.settingType)
+	d.metricsRecorder.RecordSettingsCount(d.ctx, int64(len(targetSnapshot.settings)), targetSnapshot.settingType)
 	d.recordSettingsSize(targetSnapshot.settingType, targetSnapshot.settings)
 
 	return nil
@@ -193,31 +157,6 @@ func (d *DefaultSettingsSnapshotProcessor) findSnapshot(snapshotID string) *InPr
 		}
 	}
 	return nil
-}
-
-func (d *DefaultSettingsSnapshotProcessor) incIncompleteSnapshotCount(settingType stsSettingsModel.SettingType) {
-	d.incompleteSnapshotsCounter.Add(d.ctx, 1,
-		metric.WithAttributes(
-			attribute.String("setting_type", string(settingType)),
-			attribute.String("reason", "replaced_by_new_start"),
-		))
-}
-
-func (d *DefaultSettingsSnapshotProcessor) incCompleteSnapshotCount(settingType stsSettingsModel.SettingType) {
-	d.successfulEndsCounter.Add(d.ctx, 1,
-		metric.WithAttributes(
-			attribute.String("setting_type", string(settingType)),
-		))
-}
-
-func (d *DefaultSettingsSnapshotProcessor) recordSettingsCount(
-	settingType stsSettingsModel.SettingType,
-	settingsCounts int64,
-) {
-	d.settingsCountHistogram.Record(d.ctx, settingsCounts,
-		metric.WithAttributes(
-			attribute.String("setting_type", string(settingType)),
-		))
 }
 
 func (d *DefaultSettingsSnapshotProcessor) recordSettingsSize(
@@ -234,9 +173,5 @@ func (d *DefaultSettingsSnapshotProcessor) recordSettingsSize(
 		zap.Int64("settings_size_bytes", settingsSize),
 		zap.String("settings_size_kb", fmt.Sprintf("%.2f KB", float64(settingsSize)/1024)),
 	)
-
-	d.settingsCountHistogram.Record(d.ctx, settingsSize,
-		metric.WithAttributes(
-			attribute.String("setting_type", string(settingType)),
-		))
+	d.metricsRecorder.RecordSettingsSize(d.ctx, settingsSize, settingType)
 }
