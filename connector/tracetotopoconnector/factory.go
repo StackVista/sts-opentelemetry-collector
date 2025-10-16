@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/metrics"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/connector"
 	"go.opentelemetry.io/collector/consumer"
@@ -44,5 +45,10 @@ func createTracesToLogsConnector(
 		return nil, fmt.Errorf("invalid config type: %T", cfg)
 	}
 
-	return newConnector(*typedCfg, params.Logger, nextConsumer)
+	return newConnector(
+		*typedCfg,
+		params.Logger,
+		metrics.NewConnectorMetrics(Type.String(), params.TelemetrySettings),
+		nextConsumer,
+	)
 }

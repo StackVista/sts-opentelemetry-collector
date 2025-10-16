@@ -13,7 +13,7 @@ import (
 // In our domain model, expressions can be one of:
 //   - A plain string literal (no CEL evaluation): kindStringLiteral
 //   - A full CEL expression returning a String, or Map, wrapped expr ${...}:
-//     kindStringWithIdentifiers, kindMapReferenceOnly
+//     kindStringWithIdentifiers
 //   - A string with embedded interpolations ${...}, requiring rewrite to CEL concat: kindStringInterpolation
 //
 // CEL itself cannot distinguish between a bare string literal and an identifier,
@@ -45,7 +45,7 @@ var (
 
 // classifyExpression determines the kind of expression so the evaluator
 // can choose the right handling path. It distinguishes between:
-//   - ${expr} - a wrapped CEL expression (kindStringWithIdentifiers, kindMapReferenceOnly)
+//   - ${expr} - a wrapped CEL expression (kindStringWithIdentifiers)
 //   - "...${...}..." - a string with interpolations (kindStringInterpolation)
 //   - plain strings without ${} - treated as literals (kindStringLiteral)
 //

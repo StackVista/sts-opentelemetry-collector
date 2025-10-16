@@ -2,6 +2,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"testing"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap/zaptest"
 
 	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
@@ -30,9 +32,18 @@ func boolExpr(s string) settings.OtelBooleanExpression {
 	}
 }
 
+type noopMetrics struct{}
+
+func (n *noopMetrics) IncSpansProcessed(_ context.Context, _ int64)                              {}
+func (n *noopMetrics) IncComponentsProduced(_ context.Context, _ int64, _ ...attribute.KeyValue) {}
+func (n *noopMetrics) IncRelationsProduced(_ context.Context, _ int64, _ ...attribute.KeyValue)  {}
+func (n *noopMetrics) IncErrors(_ context.Context, _ int64, _ string)                            {}
+func (n *noopMetrics) RecordMappingDuration(_ context.Context, _ time.Duration, _ ...attribute.KeyValue) {
+}
+
 func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 
-	now := time.Now().UnixMilli()
+	collectionTimestampMs := time.Now().UnixMilli()
 	submittedTime := int64(1756851083000)
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()
@@ -148,7 +159,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 						ShardId:    "0",
 					},
 					Message: &topo_stream_v1.TopologyStreamMessage{
-						CollectionTimestamp: now,
+						CollectionTimestamp: collectionTimestampMs,
 						SubmittedTimestamp:  submittedTime,
 						Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 							TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
@@ -181,7 +192,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 						ShardId:    "2",
 					},
 					Message: &topo_stream_v1.TopologyStreamMessage{
-						CollectionTimestamp: now,
+						CollectionTimestamp: collectionTimestampMs,
 						SubmittedTimestamp:  submittedTime,
 						Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 							TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
@@ -349,7 +360,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 						ShardId:    "unknown",
 					},
 					Message: &topo_stream_v1.TopologyStreamMessage{
-						CollectionTimestamp: now,
+						CollectionTimestamp: collectionTimestampMs,
 						SubmittedTimestamp:  submittedTime,
 						Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 							TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
@@ -368,7 +379,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 						ShardId:    "unknown",
 					},
 					Message: &topo_stream_v1.TopologyStreamMessage{
-						CollectionTimestamp: now,
+						CollectionTimestamp: collectionTimestampMs,
 						SubmittedTimestamp:  submittedTime,
 						Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 							TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
@@ -439,7 +450,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 						ShardId:    "0",
 					},
 					Message: &topo_stream_v1.TopologyStreamMessage{
-						CollectionTimestamp: now,
+						CollectionTimestamp: collectionTimestampMs,
 						SubmittedTimestamp:  submittedTime,
 						Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 							TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
@@ -471,15 +482,19 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 	mapper := NewMapper()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			metrics := &noopMetrics{}
 			eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
 			result := ConvertSpanToTopologyStreamMessage(
+				ctx,
 				zaptest.NewLogger(t),
 				eval,
 				mapper,
 				traces,
 				tt.componentMappings,
 				tt.relationMappings,
-				now,
+				collectionTimestampMs,
+				metrics,
 			)
 			unify(&result)
 			//nolint:gosec
@@ -489,6 +504,8 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 	}
 
 	t.Run("Convert one span to multiple components and relations", func(t *testing.T) {
+		ctx := context.Background()
+		metrics := &noopMetrics{}
 		componentMappings := []settings.OtelComponentMapping{
 			createSimpleComponentMapping("cm1"),
 			createSimpleComponentMapping("cm2"),
@@ -500,13 +517,15 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 		eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
 		mapper := NewMapper()
 		result := ConvertSpanToTopologyStreamMessage(
+			ctx,
 			zaptest.NewLogger(t),
 			eval,
 			mapper,
 			traces,
 			componentMappings,
 			relationMappings,
-			now,
+			collectionTimestampMs,
+			metrics,
 		)
 		actualKeys := make([]topo_stream_v1.TopologyStreamMessageKey, 0)
 		for _, message := range result {
@@ -566,6 +585,8 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 		span2.Attributes().PutStr("http.status_code", "200")
 		span2.Attributes().PutStr("service.name", "payment-service")
 
+		ctx := context.Background()
+		metrics := &noopMetrics{}
 		componentMappings := []settings.OtelComponentMapping{
 			createSimpleComponentMapping("cm1"),
 		}
@@ -575,13 +596,15 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 		eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
 		mapper := NewMapper()
 		result := ConvertSpanToTopologyStreamMessage(
+			ctx,
 			zaptest.NewLogger(t),
 			eval,
 			mapper,
 			traceWithSpans,
 			componentMappings,
 			relationMappings,
-			now,
+			collectionTimestampMs,
+			metrics,
 		)
 		actualKeys := make([]topo_stream_v1.TopologyStreamMessageKey, 0)
 		for _, message := range result {

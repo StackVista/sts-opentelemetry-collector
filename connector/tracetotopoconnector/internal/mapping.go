@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
-	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
+	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 )
 
@@ -38,7 +38,7 @@ func (me *Mapper) MapComponent(
 	mapping *settings.OtelComponentMapping,
 	expressionEvaluator ExpressionEvaluator,
 	expressionEvalCtx *ExpressionEvalContext,
-) (*topo_stream_v1.TopologyStreamComponent, []error) {
+) (*topostreamv1.TopologyStreamComponent, []error) {
 	errors := make([]error, 0)
 
 	evalStr := func(expr settings.OtelStringExpression, field string) string {
@@ -95,7 +95,7 @@ func (me *Mapper) MapComponent(
 		tagsList = append(tagsList, key+":"+value)
 	}
 
-	result := topo_stream_v1.TopologyStreamComponent{
+	result := topostreamv1.TopologyStreamComponent{
 		ExternalId:         identifier,
 		Identifiers:        allIdentifiers,
 		Name:               evalStr(mapping.Output.Name, "name"),
@@ -207,7 +207,7 @@ func (me *Mapper) MapRelation(
 	mapping *settings.OtelRelationMapping,
 	expressionEvaluator ExpressionEvaluator,
 	expressionEvalCtx *ExpressionEvalContext,
-) (*topo_stream_v1.TopologyStreamRelation, []error) {
+) (*topostreamv1.TopologyStreamRelation, []error) {
 	errors := make([]error, 0)
 
 	evalStr := func(expr settings.OtelStringExpression, field string) string {
@@ -223,7 +223,7 @@ func (me *Mapper) MapRelation(
 
 	sourceID := evalStr(mapping.Output.SourceId, "sourceId")
 	targetID := evalStr(mapping.Output.TargetId, "targetId")
-	result := topo_stream_v1.TopologyStreamRelation{
+	result := topostreamv1.TopologyStreamRelation{
 		ExternalId:       sourceID + "-" + targetID,
 		SourceIdentifier: sourceID,
 		TargetIdentifier: targetID,

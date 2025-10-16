@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/google/uuid"
-	stsSettingsFkafka "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/provider/kafka"
+	stsSettingsKafka "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/provider/kafka"
 	"github.com/stretchr/testify/assert"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -30,7 +30,7 @@ const (
 
 type testContext struct {
 	ctx       context.Context
-	provider  *stsSettingsFkafka.SettingsProvider
+	provider  *stsSettingsKafka.SettingsProvider
 	client    *kgo.Client
 	cleanup   func()
 	topicName string
@@ -228,7 +228,7 @@ func setupTest(t *testing.T) *testContext {
 	}
 }
 
-func createProvider(t *testing.T, ctx context.Context, brokers []string, topicName string) *stsSettingsFkafka.SettingsProvider {
+func createProvider(t *testing.T, ctx context.Context, brokers []string, topicName string) *stsSettingsKafka.SettingsProvider {
 	providerCfg := &stsSettingsConfig.KafkaSettingsProviderConfig{
 		Brokers:     brokers,
 		Topic:       topicName,
@@ -236,7 +236,7 @@ func createProvider(t *testing.T, ctx context.Context, brokers []string, topicNa
 		ReadTimeout: 60 * time.Second,
 	}
 	logger := zaptest.NewLogger(t)
-	provider, err := stsSettingsFkafka.NewKafkaSettingsProvider(ctx, providerCfg, componenttest.NewNopTelemetrySettings(), logger)
+	provider, err := stsSettingsKafka.NewKafkaSettingsProvider(ctx, providerCfg, componenttest.NewNopTelemetrySettings(), logger)
 	require.NoError(t, err)
 
 	go provider.Start(ctx, componenttest.NewNopHost())

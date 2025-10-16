@@ -8,6 +8,7 @@ import (
 	"unsafe"
 
 	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/internal"
+	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter"
 	stsSettingsApi "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
@@ -16,11 +17,10 @@ import (
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )
-
-const SettingsProviderExtensionID = "sts_settings_provider"
 
 type connectorImpl struct {
 	cfg               *Config
@@ -32,9 +32,15 @@ type connectorImpl struct {
 	componentMappings *[]stsSettingsModel.OtelComponentMapping
 	relationMappings  *[]stsSettingsModel.OtelRelationMapping
 	subscriptionCh    <-chan stsSettingsEvents.UpdateSettingsEvent
+	metricsRecorder   metrics.Recorder
 }
 
-func newConnector(cfg Config, logger *zap.Logger, nextConsumer consumer.Logs) (*connectorImpl, error) {
+func newConnector(
+	cfg Config,
+	logger *zap.Logger,
+	metricsRecorder metrics.Recorder,
+	nextConsumer consumer.Logs,
+) (*connectorImpl, error) {
 	logger.Info("Building tracetotopo connector")
 	eval, err := internal.NewCELEvaluator(internal.CacheSettings{
 		Size: cfg.ExpressionCacheSettings.Size,
@@ -52,13 +58,14 @@ func newConnector(cfg Config, logger *zap.Logger, nextConsumer consumer.Logs) (*
 		mapper:            internal.NewMapper(),
 		componentMappings: &[]stsSettingsModel.OtelComponentMapping{},
 		relationMappings:  &[]stsSettingsModel.OtelRelationMapping{},
+		metricsRecorder:   metricsRecorder,
 	}, nil
 }
 
 func (p *connectorImpl) Start(ctx context.Context, host component.Host) error {
-	ext, ok := host.GetExtensions()[component.MustNewID(SettingsProviderExtensionID)]
+	ext, ok := host.GetExtensions()[component.MustNewID(stsSettingsApi.Type.String())]
 	if !ok {
-		return fmt.Errorf("sts_settings_provider extension not found")
+		return fmt.Errorf("%s extension not found", stsSettingsApi.Type.String())
 	}
 
 	// Cast to your interface
@@ -105,11 +112,23 @@ func (p *connectorImpl) Capabilities() consumer.Capabilities {
 }
 
 func (p *connectorImpl) ConsumeTraces(ctx context.Context, td ptrace.Traces) error {
+	start := time.Now()
+
 	log := plog.NewLogs()
 	scopeLog := log.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
 
-	messagesWithKeys := internal.ConvertSpanToTopologyStreamMessage(p.logger, p.eval, p.mapper, td, *p.componentMappings,
-		*p.relationMappings, time.Now().UnixMilli())
+	collectionTimestampMs := time.Now().UnixMilli()
+	messagesWithKeys := internal.ConvertSpanToTopologyStreamMessage(
+		ctx,
+		p.logger,
+		p.eval,
+		p.mapper,
+		td,
+		*p.componentMappings,
+		*p.relationMappings,
+		collectionTimestampMs,
+		p.metricsRecorder,
+	)
 	for _, mwk := range messagesWithKeys {
 		if err := addEvent(&scopeLog, mwk); err != nil {
 			p.logger.Error("failed to add event to scope log", zap.Error(err))
@@ -123,6 +142,15 @@ func (p *connectorImpl) ConsumeTraces(ctx context.Context, td ptrace.Traces) err
 			p.logger.Error("Error sending logs to the next component", zap.Error(err))
 		}
 	}
+
+	duration := time.Since(start)
+	p.metricsRecorder.RecordMappingDuration(
+		ctx, duration,
+		attribute.String("phase", "consume_traces"),
+		attribute.String("target", "spans"),
+		attribute.Int("mapping_count", len(*p.componentMappings)+len(*p.relationMappings)),
+	)
+
 	return nil
 }
 
