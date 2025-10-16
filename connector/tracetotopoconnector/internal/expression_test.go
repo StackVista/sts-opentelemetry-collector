@@ -116,7 +116,7 @@ func TestEvalStringExpression(t *testing.T) {
 		{
 			name:        "not coerce boolean to string",
 			expr:        `${true}`,
-			errContains: "expression did not evaluate to string",
+			errContains: "cannot convert 'bool' to 'string'",
 		},
 		{
 			name:        "unsupported type returns error",
@@ -359,6 +359,12 @@ func TestEvalMapExpression(t *testing.T) {
 		{
 			name:        "invalid: empty interpolation",
 			expr:        settings.OtelStringExpression{Expression: "${}"},
+			want:        nil,
+			expectError: true,
+		},
+		{
+			name:        "invalid: keys are not strings",
+			expr:        settings.OtelStringExpression{Expression: "${{true: 'value'}}"},
 			want:        nil,
 			expectError: true,
 		},

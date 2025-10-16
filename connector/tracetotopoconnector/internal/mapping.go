@@ -39,39 +39,36 @@ func (me *Mapper) MapComponent(
 	expressionEvalCtx *ExpressionEvalContext,
 ) (*topo_stream_v1.TopologyStreamComponent, []error) {
 	errors := make([]error, 0)
-	joinErr := func(err error) {
-		if err != nil {
-			errors = append(errors, err)
-		}
-	}
-	evalStr := func(expr settings.OtelStringExpression) string {
+
+	evalStr := func(expr settings.OtelStringExpression, field string) string {
 		val, err := expressionEvaluator.EvalStringExpression(expr, expressionEvalCtx)
-		joinErr(err)
+		errors = joinError(errors,err, field, false)
 		return val
 	}
-	evalOptStr := func(expr *settings.OtelStringExpression) *string {
+	evalOptStr := func(expr *settings.OtelStringExpression, field string) *string {
 		val, err := expressionEvaluator.EvalOptionalStringExpression(expr, expressionEvalCtx)
-		joinErr(err)
+		errors = joinError(errors, err, field, true)
 		return val
 	}
 
+	identifier := evalStr(mapping.Output.Identifier, "identifier")
 	allIdentifiers := make([]string, 0)
-	allIdentifiers = append(allIdentifiers, evalStr(mapping.Output.Identifier))
+	allIdentifiers = append(allIdentifiers, identifier)
 	if mapping.Output.Optional != nil && mapping.Output.Optional.AdditionalIdentifiers != nil {
 		for _, expr := range *mapping.Output.Optional.AdditionalIdentifiers {
-			if id, err := expressionEvaluator.EvalStringExpression(expr, expressionEvalCtx); err == nil {
-				allIdentifiers = append(allIdentifiers, id)
+			if id := evalOptStr(&expr, "optional.additionalIdentifiers"); id != nil {
+				allIdentifiers = append(allIdentifiers, *id)
 			}
 		}
 	}
 	if mapping.Output.Required != nil && mapping.Output.Required.AdditionalIdentifiers != nil {
 		for _, expr := range *mapping.Output.Required.AdditionalIdentifiers {
-			allIdentifiers = append(allIdentifiers, evalStr(expr))
+			allIdentifiers = append(allIdentifiers, evalStr(expr, "required.additionalIdentifiers"))
 		}
 	}
 
 	tags := make(map[string]string)
-	processTags := func(tagMappings *[]settings.OtelTagMapping, handleErrors bool) {
+	processTags := func(tagMappings *[]settings.OtelTagMapping, optional bool) {
 		if tagMappings == nil {
 			return
 		}
@@ -79,18 +76,16 @@ func (me *Mapper) MapComponent(
 		for k, v := range resolved {
 			tags[k] = v
 		}
-		if handleErrors {
-			for _, err := range errs {
-				joinErr(err)
-			}
+		for _, err := range errs {
+			errors = joinError(errors, err, "tags", optional)
 		}
 	}
 
 	if mapping.Output.Optional != nil {
-		processTags(mapping.Output.Optional.Tags, false)
+		processTags(mapping.Output.Optional.Tags, true)
 	}
 	if mapping.Output.Required != nil {
-		processTags(mapping.Output.Required.Tags, true)
+		processTags(mapping.Output.Required.Tags, false)
 	}
 	tagsList := make([]string, 0, len(tags))
 	for key, value := range tags {
@@ -98,15 +93,15 @@ func (me *Mapper) MapComponent(
 	}
 
 	result := topo_stream_v1.TopologyStreamComponent{
-		ExternalId:         evalStr(mapping.Output.Identifier),
+		ExternalId:         identifier,
 		Identifiers:        allIdentifiers,
-		Name:               evalStr(mapping.Output.Name),
-		TypeName:           evalStr(mapping.Output.TypeName),
-		TypeIdentifier:     evalOptStr(mapping.Output.TypeIdentifier),
-		LayerName:          evalStr(mapping.Output.LayerName),
-		LayerIdentifier:    evalOptStr(mapping.Output.LayerIdentifier),
-		DomainName:         evalStr(mapping.Output.DomainName),
-		DomainIdentifier:   evalOptStr(mapping.Output.DomainIdentifier),
+		Name:               evalStr(mapping.Output.Name, "name"),
+		TypeName:           evalStr(mapping.Output.TypeName, "typeName"),
+		TypeIdentifier:     evalOptStr(mapping.Output.TypeIdentifier, "typeIdentifier"),
+		LayerName:          evalStr(mapping.Output.LayerName, "layer"),
+		LayerIdentifier:    evalOptStr(mapping.Output.LayerIdentifier, "layerIdentifier"),
+		DomainName:         evalStr(mapping.Output.DomainName, "domainName"),
+		DomainIdentifier:   evalOptStr(mapping.Output.DomainIdentifier, "domainIdentifier"),
 		ResourceDefinition: nil,
 		StatusData:         nil,
 		Tags:               tagsList,
@@ -130,7 +125,8 @@ func (me *Mapper) ResolveTagMappings(
 			// no regex pattern assumes standard string expr evaluation
 			val, err := evaluator.EvalStringExpression(m.Source, evalCtx)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("failed to evaluate OtelTagMapping source %q: %w", m.Source.Expression, err))
+				errs = append(errs,
+					newCelEvaluationError("failed to evaluate OtelTagMapping source %q: %v", m.Source.Expression, err))
 				continue
 			}
 			tags[m.Target] = val
@@ -140,7 +136,8 @@ func (me *Mapper) ResolveTagMappings(
 		// regex-based mapping requires map evaluation
 		resolvedMap, err := evaluator.EvalMapExpression(m.Source, evalCtx)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to evaluate OtelTagMapping source %q: %w", m.Source.Expression, err))
+			errs = append(errs,
+				newCelEvaluationError("failed to evaluate OtelTagMapping source %q: %v", m.Source.Expression, err))
 			continue
 		}
 
@@ -171,8 +168,8 @@ func (me *Mapper) ResolveTagMappings(
 			if stringifyErr != nil {
 				errs = append(
 					errs,
-					fmt.Errorf(
-						"value for key %q in OtelTagMapping source %q is not a string: %w",
+					newCelEvaluationError(
+						"value for key %q in OtelTagMapping source %q is not a string: %v",
 						key, m.Source.Expression, stringifyErr,
 					),
 				)
@@ -209,33 +206,30 @@ func (me *Mapper) MapRelation(
 	expressionEvalCtx *ExpressionEvalContext,
 ) (*topo_stream_v1.TopologyStreamRelation, []error) {
 	errors := make([]error, 0)
-	joinErr := func(err error) {
-		if err != nil {
-			errors = append(errors, err)
-		}
-	}
-	evalStr := func(expr settings.OtelStringExpression) string {
+
+	evalStr := func(expr settings.OtelStringExpression, field string) string {
 		val, err := expressionEvaluator.EvalStringExpression(expr, expressionEvalCtx)
-		joinErr(err)
+		errors = joinError(errors, err, field, false)
 		return val
 	}
-	evalOptStr := func(expr *settings.OtelStringExpression) *string {
+	evalOptStr := func(expr *settings.OtelStringExpression, field string) *string {
 		val, err := expressionEvaluator.EvalOptionalStringExpression(expr, expressionEvalCtx)
-		joinErr(err)
+		errors = joinError(errors, err, field, true)
 		return val
 	}
 
-	sourceID := evalStr(mapping.Output.SourceId)
-	targetID := evalStr(mapping.Output.TargetId)
+	sourceID := evalStr(mapping.Output.SourceId, "sourceId")
+	targetID := evalStr(mapping.Output.TargetId, "targetId")
 	result := topo_stream_v1.TopologyStreamRelation{
 		ExternalId:       sourceID + "-" + targetID,
 		SourceIdentifier: sourceID,
 		TargetIdentifier: targetID,
 		Name:             "", // TODO the name should be nil
-		TypeName:         evalStr(mapping.Output.TypeName),
-		TypeIdentifier:   evalOptStr(mapping.Output.TypeIdentifier),
+		TypeName:         evalStr(mapping.Output.TypeName, "typeName"),
+		TypeIdentifier:   evalOptStr(mapping.Output.TypeIdentifier, "typeIdentifier"),
 		Tags:             nil,
 	}
+
 	if len(errors) > 0 {
 		return nil, errors
 	}
@@ -259,10 +253,24 @@ func stringifyTagValue(value interface{}) (string, error) {
 	case map[string]interface{}:
 		bytes, err := json.Marshal(v)
 		if err != nil {
-			return "", fmt.Errorf("failed to stringify map: %w", err)
+			return "", newCelEvaluationError("failed to stringify map: %v", err)
 		}
 		return string(bytes), nil
 	default:
-		return "", fmt.Errorf("value did not evaluate to string, got: %T", value)
+		return "", newCelEvaluationError("value did not evaluate to string, got: %T", value)
 	}
+}
+
+func joinError(errors []error, err error, field string, ignoreEvaluationErrors bool) []error {
+	if err != nil {
+		switch e := err.(type) {
+		case *CelEvaluationError:
+			if !ignoreEvaluationErrors {
+				errors = append(errors, fmt.Errorf("%s: %v", field, e))
+			}
+		default:
+			errors = append(errors, fmt.Errorf("%s: %v", field, e))
+		}
+	}
+	return errors
 }
