@@ -62,6 +62,25 @@ type CacheEntry struct {
 	Error   error
 }
 
+// Introduce a custom error type for evaluation errors:
+// 1. It allows the caller to recognize evaluation errors, because for optional fields evaluation errors are ignored
+// 2. It makes the error message lazy to avoid most of the allocations involved in building it when they are ignored
+type CelEvaluationError struct {
+	format    string
+	arguments []any
+}
+
+func newCelEvaluationError(format string, a ...any) *CelEvaluationError {
+	return &CelEvaluationError{
+		format:    format,
+		arguments: a,
+	}
+}
+
+func (e *CelEvaluationError) Error() string {
+	return fmt.Sprintf(e.format, e.arguments...)
+}
+
 func NewEvalContext(spanAttributes map[string]any, scopeAttributes map[string]any,
 	resourceAttributes map[string]any) *ExpressionEvalContext {
 	return &ExpressionEvalContext{
@@ -148,7 +167,10 @@ func (e *CelEvaluator) EvalOptionalStringExpression(
 	}
 
 	result, err := e.EvalStringExpression(*expr, evalCtx)
-	return &result, err
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 func (e *CelEvaluator) EvalBooleanExpression(
@@ -166,7 +188,7 @@ func (e *CelEvaluator) EvalBooleanExpression(
 		return boolResult, nil
 	}
 
-	return false, fmt.Errorf("condition did not evaluate to boolean, got: %T", result)
+	return false, newCelEvaluationError("condition did not evaluate to boolean, got: %T", result)
 }
 
 func (e *CelEvaluator) EvalMapExpression(
@@ -318,7 +340,7 @@ func validateExpectedType(ast *cel.Ast, expectedType expressionType, expression 
 		}
 	case BooleanType:
 		if outputKind != cel.BoolKind && outputKind != cel.DynKind {
-			return fmt.Errorf("expected boolean type, got: %v, for expression '%v'", ast.OutputType(), expression)
+			return fmt.Errorf("expected bool type, got: %v, for expression '%v'", ast.OutputType(), expression)
 		}
 	case AnyType:
 		// anything goes
@@ -337,7 +359,7 @@ func (e *CelEvaluator) evaluateProgram(prog cel.Program, ctx *ExpressionEvalCont
 
 	result, _, err := prog.Eval(runtimeVars)
 	if err != nil {
-		return nil, fmt.Errorf("CEL evaluation error: %w", err)
+		return nil, newCelEvaluationError("%v", err)
 	}
 
 	return result.Value(), nil
@@ -352,7 +374,7 @@ func stringify(result interface{}) (string, error) {
 	case int, int32, uint64, int64, float32, float64:
 		return fmt.Sprint(v), nil
 	default:
-		return "", fmt.Errorf("expression did not evaluate to string, got: %T", result)
+		return "", newCelEvaluationError("cannot convert '%T' to 'string'", result)
 	}
 }
 
@@ -365,13 +387,13 @@ func mapify(result interface{}) (map[string]any, error) {
 		for key, val := range v {
 			keyStr, keyErr := stringify(key.Value())
 			if keyErr != nil {
-				return nil, fmt.Errorf("could not convert map key to a string: %w, got: %T", keyErr, key.Value())
+				return nil, newCelEvaluationError("cannot convert key of type '%T' to string: %v: ", keyErr, key.Value())
 			}
 			m[keyStr] = val.Value()
 		}
 		return m, nil
 	default:
-		return nil, fmt.Errorf("expression did not evaluate to map[string]any, got: %T", result)
+		return nil, newCelEvaluationError("expected 'map[string]any', got '%T'", result)
 	}
 }
 

@@ -89,12 +89,13 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 					},
 					Identifier: "urn:otel-component-mapping:service",
 					Output: settings.OtelComponentMappingOutput{
-						Identifier:     strExpr("${vars.instanceId}"),
-						Name:           strExpr(`${resourceAttributes["service.name"]}`),
-						TypeName:       strExpr(`service-instance`),
-						TypeIdentifier: ptr(strExpr(`service_instance_id`)),
-						DomainName:     strExpr(`${resourceAttributes["service.namespace"]}`),
-						LayerName:      strExpr("backend"),
+						Identifier:       strExpr("${vars.instanceId}"),
+						Name:             strExpr(`${resourceAttributes["service.name"]}`),
+						TypeName:         strExpr(`service-instance`),
+						TypeIdentifier:   ptr(strExpr(`service_instance_id`)),
+						DomainName:       strExpr(`${resourceAttributes["service.namespace"]}`),
+						DomainIdentifier: ptr(strExpr(`${resourceAttributes["missing"]}`)), // Optional field, so no error on this
+						LayerName:        strExpr("backend"),
 						Required: &settings.OtelComponentMappingFieldMapping{
 							AdditionalIdentifiers: &[]settings.OtelStringExpression{
 								{Expression: `${resourceAttributes["k8s.pod.name"]}`},
@@ -365,7 +366,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
 								ExpiryIntervalMs: 0,
 								Errors: []*topo_stream_v1.TopoStreamError{
-									{Message: "CEL evaluation error: no such key: not-existing-attr"},
+									{Message: "name: no such key: not-existing-attr"},
 								},
 							},
 						},
@@ -384,7 +385,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
 								ExpiryIntervalMs: 0,
 								Errors: []*topo_stream_v1.TopoStreamError{
-									{Message: "CEL evaluation error: no such key: not-existing-attr"},
+									{Message: "sourceId: no such key: not-existing-attr"},
 								},
 							},
 						},

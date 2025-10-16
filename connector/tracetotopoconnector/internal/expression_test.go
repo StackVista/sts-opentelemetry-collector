@@ -31,7 +31,6 @@ func makeContext() ExpressionEvalContext {
 	res.Resource().Attributes().PutStr("env", "dev")
 
 	// slice attribute type
-	//nolint:unchecked
 	_ = res.Resource().Attributes().PutEmptySlice("process.command_args").FromRaw([]any{"java", "-jar", "app.jar"})
 
 	// map attribute type
@@ -116,7 +115,7 @@ func TestEvalStringExpression(t *testing.T) {
 		{
 			name:        "not coerce boolean to string",
 			expr:        `${true}`,
-			errContains: "expression did not evaluate to string",
+			errContains: "cannot convert 'bool' to 'string'",
 		},
 		{
 			name:        "unsupported type returns error",
@@ -233,8 +232,13 @@ func TestEvalBooleanExpression(t *testing.T) {
 		},
 		{
 			name:                "type mismatch returns error",
-			expr:                `spanAttributes["retries"]`, // int but expected boolean
+			expr:                `spanAttributes["retries"]`, // int but expected boolean, cannot be recognized by type check because type of expression is Dyn
 			expectErrorContains: "condition did not evaluate to boolean",
+		},
+		{
+			name:                "unsupported type returns error",
+			expr:                `spanAttributes`, // whole map, not a boolean
+			expectErrorContains: "expected bool type, got: map(string, dyn), for expression 'spanAttributes'",
 		},
 	}
 
@@ -297,7 +301,7 @@ func TestEvalMapExpression(t *testing.T) {
 		name        string
 		expr        settings.OtelStringExpression
 		want        map[string]any
-		expectError bool
+		expectError string
 	}{
 		{
 			name: "pure map reference spanAttributes",
@@ -310,7 +314,6 @@ func TestEvalMapExpression(t *testing.T) {
 				"pi":               3.14,
 				"sampled":          true,
 			},
-			expectError: false,
 		},
 		{
 			name: "pure map reference resourceAttributes",
@@ -325,7 +328,6 @@ func TestEvalMapExpression(t *testing.T) {
 				},
 				"process.command_args": []interface{}{"java", "-jar", "app.jar"},
 			},
-			expectError: false,
 		},
 		{
 			name: "pure map reference scopeAttributes",
@@ -334,7 +336,6 @@ func TestEvalMapExpression(t *testing.T) {
 				"otel.scope.name":    "io.opentelemetry.instrumentation.http",
 				"otel.scope.version": "1.2.3",
 			},
-			expectError: false,
 		},
 		{
 			name: "Map literal",
@@ -342,37 +343,50 @@ func TestEvalMapExpression(t *testing.T) {
 			want: map[string]any{
 				"key": "value",
 			},
-			expectError: false,
 		},
 		{
 			name:        "invalid: not a pure map reference",
 			expr:        settings.OtelStringExpression{Expression: "foo-${spanAttributes}"},
 			want:        nil,
-			expectError: true,
+			expectError: `foo-${spanAttributes}" is not a valid map expression`,
 		},
 		{
 			name:        "invalid: literal string",
 			expr:        settings.OtelStringExpression{Expression: `"just a string"`},
 			want:        nil,
-			expectError: true,
+			expectError: `expression "\"just a string\"" is not a valid map expression`,
 		},
 		{
 			name:        "invalid: empty interpolation",
 			expr:        settings.OtelStringExpression{Expression: "${}"},
 			want:        nil,
-			expectError: true,
+			expectError: `empty interpolation at pos 0`,
+		},
+		{
+			name:        "invalid: keys are not strings",
+			expr:        settings.OtelStringExpression{Expression: "${{true: 'value'}}"},
+			want:        nil,
+			expectError: "cannot convert key of type '*internal.CelEvaluationError' to string: true",
+		},
+		{
+			name:        "unsupported type returns error",
+			expr:        settings.OtelStringExpression{Expression: `${'test'}`}, // a string type that can be statically checked
+			expectError: `expected map type, got: string, for expression '${'test'}'`,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := eval.EvalMapExpression(tt.expr, &ctx)
-			if tt.expectError {
+
+			if tt.expectError != "" {
 				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, tt.want, got)
+				require.Contains(t, err.Error(), tt.expectError)
+				return
 			}
+
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
 		})
 	}
 }
