@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-type Recorder interface {
+type ConnectorMetricsRecorder interface {
 	IncSpansProcessed(ctx context.Context, n int64)
 	IncComponentsProduced(ctx context.Context, n int64, attrs ...attribute.KeyValue)
 	IncRelationsProduced(ctx context.Context, n int64, attrs ...attribute.KeyValue)
@@ -18,7 +18,7 @@ type Recorder interface {
 	RecordMappingDuration(ctx context.Context, d time.Duration, labels ...attribute.KeyValue)
 }
 
-type Metrics struct {
+type ConnectorMetrics struct {
 	// Counters
 	spansProcessed     metric.Int64Counter
 	componentsProduced metric.Int64Counter
@@ -30,7 +30,7 @@ type Metrics struct {
 }
 
 // NewConnectorMetrics registers all metric instruments for this connector.
-func NewConnectorMetrics(typeName string, telemetrySettings component.TelemetrySettings) *Metrics {
+func NewConnectorMetrics(typeName string, telemetrySettings component.TelemetrySettings) *ConnectorMetrics {
 	meter := telemetrySettings.MeterProvider.Meter(typeName)
 	name := newMetricNameForType(typeName)
 
@@ -56,7 +56,7 @@ func NewConnectorMetrics(typeName string, telemetrySettings component.TelemetryS
 		metric.WithUnit("s"),
 	)
 
-	return &Metrics{
+	return &ConnectorMetrics{
 		spansProcessed:     spansProcessed,
 		componentsProduced: componentsProduced,
 		relationsProduced:  relationsProduced,
@@ -71,7 +71,7 @@ func newMetricNameForType(typeName string) func(string) string {
 	}
 }
 
-func (pm *Metrics) RecordMappingDuration(
+func (pm *ConnectorMetrics) RecordMappingDuration(
 	ctx context.Context,
 	d time.Duration,
 	attrs ...attribute.KeyValue,
@@ -79,18 +79,18 @@ func (pm *Metrics) RecordMappingDuration(
 	pm.mappingDuration.Record(ctx, d.Seconds(), metric.WithAttributes(attrs...))
 }
 
-func (pm *Metrics) IncSpansProcessed(ctx context.Context, n int64) {
+func (pm *ConnectorMetrics) IncSpansProcessed(ctx context.Context, n int64) {
 	pm.spansProcessed.Add(ctx, n)
 }
 
-func (pm *Metrics) IncComponentsProduced(ctx context.Context, n int64, attrs ...attribute.KeyValue) {
+func (pm *ConnectorMetrics) IncComponentsProduced(ctx context.Context, n int64, attrs ...attribute.KeyValue) {
 	pm.componentsProduced.Add(ctx, n, metric.WithAttributes(attrs...))
 }
 
-func (pm *Metrics) IncRelationsProduced(ctx context.Context, n int64, attrs ...attribute.KeyValue) {
+func (pm *ConnectorMetrics) IncRelationsProduced(ctx context.Context, n int64, attrs ...attribute.KeyValue) {
 	pm.relationsProduced.Add(ctx, n, metric.WithAttributes(attrs...))
 }
 
-func (pm *Metrics) IncErrors(ctx context.Context, n int64, errorType string) {
+func (pm *ConnectorMetrics) IncErrors(ctx context.Context, n int64, errorType string) {
 	pm.errorsTotal.Add(ctx, n, metric.WithAttributes(attribute.String("error.type", errorType)))
 }

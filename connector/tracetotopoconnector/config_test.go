@@ -3,9 +3,10 @@ package tracetotopoconnector
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -21,54 +22,60 @@ func TestConfig_Validation(t *testing.T) {
 		{
 			name: "valid config",
 			cfg: &Config{
-				ExpressionCacheSettings: ExpressionCacheSettings{
+				ExpressionCacheSettings: CacheSettings{
 					Size: 1000,
 					TTL:  10 * time.Minute,
 				},
 			},
-			wantErr: "",
 		},
 		{
 			name: "apply default size if not set",
 			cfg: &Config{
-				ExpressionCacheSettings: ExpressionCacheSettings{
+				ExpressionCacheSettings: CacheSettings{
 					Size: 0,
 					TTL:  10 * time.Minute,
 				},
 			},
-			wantErr:  "",
 			wantSize: defaultCacheSize,
 		},
 		{
 			name: "return error if size exceeds max",
 			cfg: &Config{
-				ExpressionCacheSettings: ExpressionCacheSettings{
+				ExpressionCacheSettings: CacheSettings{
 					Size: maxCacheSize + 1,
 					TTL:  10 * time.Minute,
 				},
 			},
-			wantErr: fmt.Sprintf("expression_cache.size exceeds max allowed (%d)", maxCacheSize),
+			wantErr: fmt.Sprintf("expression_cache.size: must not exceed %d", maxCacheSize),
 		},
 		{
-			name: "apply default ttl if not set",
+			name: "allow ttl = 0 (no expiration)",
 			cfg: &Config{
-				ExpressionCacheSettings: ExpressionCacheSettings{
+				ExpressionCacheSettings: CacheSettings{
 					Size: 100,
 					TTL:  0,
 				},
 			},
-			wantErr:    "",
-			wantTTLMin: defaultCacheTTL,
 		},
 		{
 			name: "return error if ttl is too small",
 			cfg: &Config{
-				ExpressionCacheSettings: ExpressionCacheSettings{
+				ExpressionCacheSettings: CacheSettings{
 					Size: 100,
-					TTL:  50, // <= 100ns
+					TTL:  50 * time.Nanosecond, // <= minValidTTL
 				},
 			},
-			wantErr: "parameter expression_cache.ttl must be a positive value greater than 100ns",
+			wantErr: fmt.Sprintf("expression_cache.ttl: must be greater than %s to avoid internal timer issues", minValidTTL),
+		},
+		{
+			name: "return error if ttl is negative",
+			cfg: &Config{
+				ExpressionCacheSettings: CacheSettings{
+					Size: 100,
+					TTL:  -1 * time.Second,
+				},
+			},
+			wantErr: "expression_cache.ttl: must not be negative (0 disables expiration)",
 		},
 	}
 
@@ -84,12 +91,9 @@ func TestConfig_Validation(t *testing.T) {
 
 			require.NoError(t, err)
 
-			// Check size normalization
 			if tt.wantSize > 0 {
 				assert.Equal(t, tt.wantSize, tt.cfg.ExpressionCacheSettings.Size)
 			}
-
-			// Check ttl normalization
 			if tt.wantTTLMin > 0 {
 				assert.Equal(t, tt.wantTTLMin, tt.cfg.ExpressionCacheSettings.TTL)
 			}
