@@ -2,9 +2,10 @@
 package tracetotopoconnector
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/component/componenttest"
-	"testing"
 )
 
 func TestFactory_CreateDefaultConfig(t *testing.T) {

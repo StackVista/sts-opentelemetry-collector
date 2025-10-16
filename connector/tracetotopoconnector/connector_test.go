@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
-	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
+	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter"
+	stsSettingsApi "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"github.com/stretchr/testify/assert"
@@ -18,22 +20,33 @@ import (
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )
 
+type noopMetrics struct{}
+
+func (n *noopMetrics) IncSpansProcessed(_ context.Context, _ int64)                              {}
+func (n *noopMetrics) IncComponentsProduced(_ context.Context, _ int64, _ ...attribute.KeyValue) {}
+func (n *noopMetrics) IncRelationsProduced(_ context.Context, _ int64, _ ...attribute.KeyValue)  {}
+func (n *noopMetrics) IncErrors(_ context.Context, _ int64, _ string)                            {}
+func (n *noopMetrics) RecordMappingDuration(_ context.Context, _ time.Duration, _ ...attribute.KeyValue) {
+}
+
 func TestConnectorStart(t *testing.T) {
 	logConsumer := &consumertest.LogsSink{}
+	metrics := &noopMetrics{}
 
 	t.Run("return an error if not found settings provider", func(t *testing.T) {
-		connector, err := newConnector(Config{}, zap.NewNop(), logConsumer)
+		connector, err := newConnector(Config{}, zap.NewNop(), metrics, logConsumer)
 		require.NoError(t, err)
 		err = connector.Start(context.Background(), componenttest.NewNopHost())
 		require.ErrorContains(t, err, "sts_settings_provider extension not found")
 	})
 
 	t.Run("start with initial mappings and observe changes", func(t *testing.T) {
-		connector, _ := newConnector(Config{}, zap.NewNop(), logConsumer)
+		connector, _ := newConnector(Config{}, zap.NewNop(), metrics, logConsumer)
 		provider := newMockStsSettingsProvider(
 			[]settings.OtelComponentMapping{
 				createSimpleComponentMapping("mapping1"),
@@ -44,7 +57,7 @@ func TestConnectorStart(t *testing.T) {
 			},
 		)
 		var extensions = map[component.ID]component.Component{
-			component.MustNewID(SettingsProviderExtensionID): provider,
+			component.MustNewID(stsSettingsApi.Type.String()): provider,
 		}
 		host := &mockHost{ext: extensions}
 		err := connector.Start(context.Background(), host)
@@ -71,7 +84,8 @@ func TestConnectorStart(t *testing.T) {
 
 func TestConnectorConsumeTraces(t *testing.T) {
 	logConsumer := &consumertest.LogsSink{}
-	connector, _ := newConnector(Config{}, zap.NewNop(), logConsumer)
+	metrics := &noopMetrics{}
+	connector, _ := newConnector(Config{}, zap.NewNop(), metrics, logConsumer)
 	provider := newMockStsSettingsProvider(
 		[]settings.OtelComponentMapping{
 			createSimpleComponentMapping("mapping1"),
@@ -81,7 +95,7 @@ func TestConnectorConsumeTraces(t *testing.T) {
 		},
 	)
 	var extensions = map[component.ID]component.Component{
-		component.MustNewID(SettingsProviderExtensionID): provider,
+		component.MustNewID(stsSettingsApi.Type.String()): provider,
 	}
 	host := &mockHost{ext: extensions}
 	err := connector.Start(context.Background(), host)
@@ -164,16 +178,16 @@ func TestConnectorConsumeTraces(t *testing.T) {
 
 		componentLogRecord := actual[0].ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0)
 		componentKeyRaw, _ := componentLogRecord.Attributes().Get(stskafkaexporter.KafkaMessageKey)
-		componentKey := topo_stream_v1.TopologyStreamMessageKey{}
+		componentKey := topostreamv1.TopologyStreamMessageKey{}
 		err = proto.Unmarshal(componentKeyRaw.Bytes().AsRaw(), &componentKey)
 		require.NoError(t, err)
-		assert.Equal(t, topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL, componentKey.Owner)
+		assert.Equal(t, topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL, componentKey.Owner)
 		assert.Equal(t, "urn:otel-component-mapping:mapping1", componentKey.DataSource)
 		assert.Equal(t, "0", componentKey.ShardId)
-		componentMassage := topo_stream_v1.TopologyStreamMessage{}
+		componentMassage := topostreamv1.TopologyStreamMessage{}
 		err = proto.Unmarshal(componentLogRecord.Body().Bytes().AsRaw(), &componentMassage)
 		require.NoError(t, err)
-		componentPayload, _ := componentMassage.Payload.(*topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData)
+		componentPayload, _ := componentMassage.Payload.(*topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData)
 		assert.Equal(t, int64(60000), componentPayload.TopologyStreamRepeatElementsData.ExpiryIntervalMs)
 		assert.Equal(t, 1, len(componentPayload.TopologyStreamRepeatElementsData.Components))
 		assert.Equal(t, "627cc493", componentPayload.TopologyStreamRepeatElementsData.Components[0].ExternalId)
@@ -184,16 +198,16 @@ func TestConnectorConsumeTraces(t *testing.T) {
 
 		relationLogRecord := actual[0].ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(1)
 		relationKeyRaw, _ := relationLogRecord.Attributes().Get(stskafkaexporter.KafkaMessageKey)
-		relationKey := topo_stream_v1.TopologyStreamMessageKey{}
+		relationKey := topostreamv1.TopologyStreamMessageKey{}
 		err = proto.Unmarshal(relationKeyRaw.Bytes().AsRaw(), &relationKey)
 		require.NoError(t, err)
-		assert.Equal(t, topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL, relationKey.Owner)
+		assert.Equal(t, topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL, relationKey.Owner)
 		assert.Equal(t, "urn:otel-relation-mapping:mapping2", relationKey.DataSource)
 		assert.Equal(t, "2", relationKey.ShardId)
-		relationMessage := topo_stream_v1.TopologyStreamMessage{}
+		relationMessage := topostreamv1.TopologyStreamMessage{}
 		err = proto.Unmarshal(relationLogRecord.Body().Bytes().AsRaw(), &relationMessage)
 		require.NoError(t, err)
-		relationPayload, _ := relationMessage.Payload.(*topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData)
+		relationPayload, _ := relationMessage.Payload.(*topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData)
 		assert.Equal(t, int64(300000), relationPayload.TopologyStreamRepeatElementsData.ExpiryIntervalMs)
 		assert.Equal(t, 1, len(relationPayload.TopologyStreamRepeatElementsData.Relations))
 		assert.Equal(t, "checkout-service", relationPayload.TopologyStreamRepeatElementsData.Relations[0].SourceIdentifier)

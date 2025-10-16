@@ -3,10 +3,11 @@ package kafka
 
 import (
 	"context"
+	"testing"
+
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
 	stsSettingsCore "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/core"
 	"go.opentelemetry.io/collector/component/componenttest"
-	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -38,8 +39,7 @@ func (m *mockSettingsCache) Shutdown()                               {}
 
 func newProcessorWithMockCache(t *testing.T) (*DefaultSettingsSnapshotProcessor, *mockSettingsCache) {
 	cache := &mockSettingsCache{}
-	p, err := NewDefaultSettingsSnapshotProcessor(context.Background(), zaptest.NewLogger(t), componenttest.NewNopTelemetrySettings(), cache)
-	assert.NoError(t, err)
+	p := NewDefaultSettingsSnapshotProcessor(context.Background(), zaptest.NewLogger(t), componenttest.NewNopTelemetrySettings(), cache)
 
 	return p, cache
 }

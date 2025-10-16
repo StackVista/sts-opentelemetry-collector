@@ -1,0 +1,96 @@
+package metrics
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+)
+
+type Recorder interface {
+	IncSpansProcessed(ctx context.Context, n int64)
+	IncComponentsProduced(ctx context.Context, n int64, attrs ...attribute.KeyValue)
+	IncRelationsProduced(ctx context.Context, n int64, attrs ...attribute.KeyValue)
+	IncErrors(ctx context.Context, n int64, kind string)
+	RecordMappingDuration(ctx context.Context, d time.Duration, labels ...attribute.KeyValue)
+}
+
+type Metrics struct {
+	// Counters
+	spansProcessed     metric.Int64Counter
+	componentsProduced metric.Int64Counter
+	relationsProduced  metric.Int64Counter
+	errorsTotal        metric.Int64Counter
+
+	// Histograms
+	mappingDuration metric.Float64Histogram
+}
+
+// NewConnectorMetrics registers all metric instruments for this connector.
+func NewConnectorMetrics(typeName string, telemetrySettings component.TelemetrySettings) *Metrics {
+	meter := telemetrySettings.MeterProvider.Meter(typeName)
+	name := newMetricNameForType(typeName)
+
+	spansProcessed, _ := meter.Int64Counter(
+		name("spans_processed_total"),
+		metric.WithDescription("Total number of spans processed by the connector"),
+	)
+	componentsProduced, _ := meter.Int64Counter(
+		name("components_produced_total"),
+		metric.WithDescription("Total number of components produced"),
+	)
+	relationsProduced, _ := meter.Int64Counter(
+		name("relations_produced_total"),
+		metric.WithDescription("Total number of relations produced"),
+	)
+	errorsTotal, _ := meter.Int64Counter(
+		name("mapping_errors_total"),
+		metric.WithDescription("Total number of mapping errors"),
+	)
+	mappingDuration, _ := meter.Float64Histogram(
+		name("mapping_duration_seconds"),
+		metric.WithDescription("Time spent converting spans to topology stream messages"),
+		metric.WithUnit("s"),
+	)
+
+	return &Metrics{
+		spansProcessed:     spansProcessed,
+		componentsProduced: componentsProduced,
+		relationsProduced:  relationsProduced,
+		errorsTotal:        errorsTotal,
+		mappingDuration:    mappingDuration,
+	}
+}
+
+func newMetricNameForType(typeName string) func(string) string {
+	return func(name string) string {
+		return fmt.Sprintf("connector.%s.%s", typeName, name)
+	}
+}
+
+func (pm *Metrics) RecordMappingDuration(
+	ctx context.Context,
+	d time.Duration,
+	attrs ...attribute.KeyValue,
+) {
+	pm.mappingDuration.Record(ctx, d.Seconds(), metric.WithAttributes(attrs...))
+}
+
+func (pm *Metrics) IncSpansProcessed(ctx context.Context, n int64) {
+	pm.spansProcessed.Add(ctx, n)
+}
+
+func (pm *Metrics) IncComponentsProduced(ctx context.Context, n int64, attrs ...attribute.KeyValue) {
+	pm.componentsProduced.Add(ctx, n, metric.WithAttributes(attrs...))
+}
+
+func (pm *Metrics) IncRelationsProduced(ctx context.Context, n int64, attrs ...attribute.KeyValue) {
+	pm.relationsProduced.Add(ctx, n, metric.WithAttributes(attrs...))
+}
+
+func (pm *Metrics) IncErrors(ctx context.Context, n int64, errorType string) {
+	pm.errorsTotal.Add(ctx, n, metric.WithAttributes(attribute.String("error.type", errorType)))
+}
