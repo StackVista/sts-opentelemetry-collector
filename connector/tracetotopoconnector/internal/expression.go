@@ -1,10 +1,10 @@
 package internal
 
 import (
+	"context"
 	"fmt"
-	"time"
 
-	"github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/metrics"
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/types/ref"
@@ -23,20 +23,15 @@ const (
 	AnyType
 )
 
-type CacheSettings struct {
-	Size int
-	TTL  time.Duration
-}
-
 type ExpressionEvaluator interface {
-	// "String" Expressions expect/support the interpolation syntax ${}
+	// EvalStringExpression "String" Expressions expect/support the interpolation syntax ${}
 	EvalStringExpression(expr settings.OtelStringExpression, evalCtx *ExpressionEvalContext) (string, error)
 	EvalOptionalStringExpression(expr *settings.OtelStringExpression, evalCtx *ExpressionEvalContext) (*string, error)
-	// "Boolean" Expressions don't support interpolation, but must be a valid CEL boolean expression
+	// EvalBooleanExpression "Boolean" Expressions don't support interpolation, but must be a valid CEL boolean expression
 	EvalBooleanExpression(expr settings.OtelBooleanExpression, evalCtx *ExpressionEvalContext) (bool, error)
-	// "Map" Expressions expect/support the interpolation syntax ${}
+	// EvalMapExpression "Map" Expressions expect/support the interpolation syntax ${}
 	EvalMapExpression(expr settings.OtelAnyExpression, evalCtx *ExpressionEvalContext) (map[string]any, error)
-	// "Any" Expressions expect/support the interpolation syntax ${}
+	// EvalAnyExpression "Any" Expressions expect/support the interpolation syntax ${}
 	EvalAnyExpression(expr settings.OtelAnyExpression, evalCtx *ExpressionEvalContext) (any, error)
 }
 
@@ -49,7 +44,7 @@ type ExpressionEvalContext struct {
 
 type CelEvaluator struct {
 	env   *cel.Env
-	cache *expirable.LRU[CacheKey, *CacheEntry]
+	cache *metrics.MeteredCache[CacheKey, *CacheEntry]
 }
 
 type CacheKey struct {
@@ -100,19 +95,18 @@ func (ec *ExpressionEvalContext) CloneWithVariables(vars map[string]any) *Expres
 	}
 }
 
-func NewCELEvaluator(cacheSettings CacheSettings) (*CelEvaluator, error) {
+func NewCELEvaluator(ctx context.Context, cacheSettings metrics.MeteredCacheSettings) (*CelEvaluator, error) {
 	env, err := cel.NewEnv(
 		cel.Variable("spanAttributes", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("scopeAttributes", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("resourceAttributes", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("vars", cel.MapType(cel.StringType, cel.DynType)),
 		ext.Strings(), // enables string manipulation functions
-		// ext.Math(ext.MathOption(...)) // TODO: enable math operators
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CEL environment: %w", err)
 	}
-	cache := expirable.NewLRU[CacheKey, *CacheEntry](cacheSettings.Size, nil, cacheSettings.TTL)
+	cache := metrics.NewCache[CacheKey, *CacheEntry](ctx, cacheSettings, nil)
 	return &CelEvaluator{env, cache}, nil
 }
 

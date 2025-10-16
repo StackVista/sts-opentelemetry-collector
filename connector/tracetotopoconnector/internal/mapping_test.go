@@ -2,6 +2,7 @@
 package internal
 
 import (
+	"context"
 	"errors"
 	"sort"
 	"testing"
@@ -282,10 +283,10 @@ func TestMapping_MapComponent(t *testing.T) {
 		},
 	}
 
-	mapper := NewMapper()
+	mapper := NewMapper(context.Background(), makeMeteredCacheSettings(100, 30*time.Second), makeMeteredCacheSettings(100, 30*time.Second))
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
+			eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 			evalCtx := NewEvalContext(tt.span.Attributes().AsRaw(), tt.scope.Scope().Attributes().AsRaw(), tt.resource.Resource().Attributes().AsRaw()).CloneWithVariables(tt.vars)
 			got, err := mapper.MapComponent(tt.mapping, eval, evalCtx)
 			assert.Equal(t, errorStrings(tt.expectErr), errorStrings(err))
@@ -324,7 +325,7 @@ func TestResolveTagMappings(t *testing.T) {
 	depMap.PutStr("env", "prod")
 
 	ctx := NewEvalContext(testSpan.Attributes().AsRaw(), testScope.Scope().Attributes().AsRaw(), testResource.Resource().Attributes().AsRaw())
-	eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Minute})
+	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 
 	tests := []struct {
 		name          string
@@ -526,7 +527,7 @@ func TestResolveTagMappings(t *testing.T) {
 		},
 	}
 
-	mapper := NewMapper()
+	mapper := NewMapper(context.Background(), makeMeteredCacheSettings(100, 30*time.Second), makeMeteredCacheSettings(100, 30*time.Second))
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -652,10 +653,10 @@ func TestMapping_MapRelation(t *testing.T) {
 		},
 	}
 
-	mapper := NewMapper()
+	mapper := NewMapper(context.Background(), makeMeteredCacheSettings(100, 30*time.Second), makeMeteredCacheSettings(100, 30*time.Second))
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
+			eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 			evalCtx := NewEvalContext(tt.span.Attributes().AsRaw(), tt.scope.Scope().Attributes().AsRaw(), tt.resource.Resource().Attributes().AsRaw()).CloneWithVariables(tt.vars)
 			got, err := mapper.MapRelation(tt.mapping, eval, evalCtx)
 			assert.Equal(t, errorStrings(tt.expectErr), errorStrings(err))
