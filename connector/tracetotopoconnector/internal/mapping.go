@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -42,7 +43,7 @@ func (me *Mapper) MapComponent(
 
 	evalStr := func(expr settings.OtelStringExpression, field string) string {
 		val, err := expressionEvaluator.EvalStringExpression(expr, expressionEvalCtx)
-		errors = joinError(errors,err, field, false)
+		errors = joinError(errors, err, field, false)
 		return val
 	}
 	evalOptStr := func(expr *settings.OtelStringExpression, field string) *string {
@@ -55,8 +56,10 @@ func (me *Mapper) MapComponent(
 	allIdentifiers := make([]string, 0)
 	allIdentifiers = append(allIdentifiers, identifier)
 	if mapping.Output.Optional != nil && mapping.Output.Optional.AdditionalIdentifiers != nil {
-		for _, expr := range *mapping.Output.Optional.AdditionalIdentifiers {
-			if id := evalOptStr(&expr, "optional.additionalIdentifiers"); id != nil {
+		for i := range *mapping.Output.Optional.AdditionalIdentifiers {
+			if id := evalOptStr(&(*mapping.Output.Optional.AdditionalIdentifiers)[i],
+				"optional.additionalIdentifiers"); id != nil {
+
 				allIdentifiers = append(allIdentifiers, *id)
 			}
 		}
@@ -261,16 +264,15 @@ func stringifyTagValue(value interface{}) (string, error) {
 	}
 }
 
-func joinError(errors []error, err error, field string, ignoreEvaluationErrors bool) []error {
-	if err != nil {
-		switch e := err.(type) {
-		case *CelEvaluationError:
-			if !ignoreEvaluationErrors {
-				errors = append(errors, fmt.Errorf("%s: %v", field, e))
-			}
-		default:
-			errors = append(errors, fmt.Errorf("%s: %v", field, e))
-		}
+func joinError(errs []error, err error, field string, ignoreEvaluationErrors bool) []error {
+	if err == nil {
+		return errs
 	}
-	return errors
+
+	var celErr *CelEvaluationError
+	if errors.As(err, &celErr) && ignoreEvaluationErrors {
+		return errs
+	}
+
+	return append(errs, fmt.Errorf("%s: %w", field, err))
 }

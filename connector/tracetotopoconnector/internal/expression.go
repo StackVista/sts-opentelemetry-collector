@@ -66,21 +66,20 @@ type CacheEntry struct {
 // 1. It allows the caller to recognize evaluation errors, because for optional fields evaluation errors are ignored
 // 2. It makes the error message lazy to avoid most of the allocations involved in building it when they are ignored
 type CelEvaluationError struct {
-	format string
-	a      []any
+	format    string
+	arguments []any
 }
 
 func newCelEvaluationError(format string, a ...any) *CelEvaluationError {
 	return &CelEvaluationError{
-		format: format,
-		a:      a,
+		format:    format,
+		arguments: a,
 	}
 }
 
 func (e *CelEvaluationError) Error() string {
-	return fmt.Sprintf(e.format, e.a...)
+	return fmt.Sprintf(e.format, e.arguments...)
 }
-
 
 func NewEvalContext(spanAttributes map[string]any, scopeAttributes map[string]any,
 	resourceAttributes map[string]any) *ExpressionEvalContext {
@@ -341,7 +340,7 @@ func validateExpectedType(ast *cel.Ast, expectedType expressionType, expression 
 		}
 	case BooleanType:
 		if outputKind != cel.BoolKind && outputKind != cel.DynKind {
-			return fmt.Errorf("expected boolean type, got: %v, for expression '%v'", ast.OutputType(), expression)
+			return fmt.Errorf("expected bool type, got: %v, for expression '%v'", ast.OutputType(), expression)
 		}
 	case AnyType:
 		// anything goes

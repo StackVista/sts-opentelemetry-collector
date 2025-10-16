@@ -512,6 +512,18 @@ func TestResolveTagMappings(t *testing.T) {
 				"filtered.intAttr": "5",
 			},
 		},
+		{
+			name: "invalid source: not a map with pattern",
+			mappings: []settings.OtelTagMapping{
+				{
+					Source:  strExpr("${resourceAttributes['service.name']}"),
+					Pattern: ptr("telemetry.sdk.(.*)"),
+					Target:  "oops",
+				},
+			},
+			want:          map[string]string{},
+			errorContains: "expected 'map[string]any', got 'string'",
+		},
 	}
 
 	mapper := NewMapper()
