@@ -33,7 +33,7 @@ func ConvertSpanToTopologyStreamMessage(
 	componentMappings []settings.OtelComponentMapping,
 	relationMappings []settings.OtelRelationMapping,
 	collectionTimestampMs int64,
-	metricsRecorder metrics.Recorder,
+	metricsRecorder metrics.ConnectorMetricsRecorder,
 ) []MessageWithKey {
 	result := make([]MessageWithKey, 0)
 	var components, relations, componentErrs, relationErrs int

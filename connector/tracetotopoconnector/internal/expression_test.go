@@ -2,13 +2,16 @@
 package internal
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
+	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
@@ -45,8 +48,17 @@ func makeContext() ExpressionEvalContext {
 	return *NewEvalContext(span.Attributes().AsRaw(), scope.Scope().Attributes().AsRaw(), res.Resource().Attributes().AsRaw()).CloneWithVariables(vars)
 }
 
+func makeMeteredCacheSettings(size int, ttl time.Duration) metrics.MeteredCacheSettings {
+	return metrics.MeteredCacheSettings{
+		Size:              size,
+		EnableMetrics:     false,
+		TTL:               ttl,
+		TelemetrySettings: componenttest.NewNopTelemetrySettings(),
+	}
+}
+
 func TestEvalStringExpression(t *testing.T) {
-	eval, err := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
+	eval, err := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 	require.NoError(t, err)
 
 	ctx := makeContext()
@@ -184,7 +196,7 @@ func TestEvalStringExpression(t *testing.T) {
 }
 
 func TestEvalBooleanExpression(t *testing.T) {
-	eval, err := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
+	eval, err := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 	require.NoError(t, err)
 
 	ctx := makeContext()
@@ -262,7 +274,7 @@ func TestEvalBooleanExpression(t *testing.T) {
 }
 
 func TestEvalOptionalStringExpression(t *testing.T) {
-	eval, err := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
+	eval, err := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 	require.NoError(t, err)
 
 	ctx := makeContext()
@@ -295,7 +307,7 @@ func TestEvalOptionalStringExpression(t *testing.T) {
 
 func TestEvalMapExpression(t *testing.T) {
 	ctx := makeContext()
-	eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Minute})
+	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 
 	tests := []struct {
 		name        string
@@ -393,7 +405,7 @@ func TestEvalMapExpression(t *testing.T) {
 
 // TestEvalStringExpression covers already much of the functionality, so here we focus on the differences.
 func TestEvalAnyExpression(t *testing.T) {
-	eval, err := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
+	eval, err := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 	require.NoError(t, err)
 
 	ctx := makeContext()
@@ -506,7 +518,7 @@ func TestEvalAnyExpression(t *testing.T) {
 }
 
 func TestBoolEvalTypeMismatch(t *testing.T) {
-	eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
+	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 	ctx := makeContext()
 
 	// String expression but evaluated with boolean
@@ -515,7 +527,7 @@ func TestBoolEvalTypeMismatch(t *testing.T) {
 }
 
 func TestStringEvalTypeMismatch(t *testing.T) {
-	eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
+	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 	ctx := makeContext()
 
 	// Bool expression but evaluated with string
@@ -524,7 +536,7 @@ func TestStringEvalTypeMismatch(t *testing.T) {
 }
 
 func TestEvalCacheReuse(t *testing.T) {
-	eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
+	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 	ctx := makeContext()
 
 	expr := settings.OtelBooleanExpression{Expression: `spanAttributes["retries"] == 2`}
@@ -546,7 +558,7 @@ func TestEvalCacheReuse(t *testing.T) {
 
 func TestEvalCacheEvictionBySize(t *testing.T) {
 	// very small cache to force eviction
-	eval, _ := NewCELEvaluator(CacheSettings{Size: 2, TTL: 1 * time.Minute})
+	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(2, 1*time.Minute))
 	ctx := makeContext()
 
 	exprs := []settings.OtelBooleanExpression{
@@ -565,7 +577,7 @@ func TestEvalCacheEvictionBySize(t *testing.T) {
 
 func TestEvalCacheExpiryByTTL(t *testing.T) {
 	// short TTL so entries expire quickly
-	eval, _ := NewCELEvaluator(CacheSettings{Size: 10, TTL: 200 * time.Millisecond})
+	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 200*time.Millisecond))
 	ctx := makeContext()
 
 	expr := settings.OtelBooleanExpression{Expression: `spanAttributes["http.method"] == "GET"`}

@@ -1,15 +1,15 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
-	"github.com/hashicorp/golang-lru/v2/expirable"
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
+	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 )
 
@@ -21,14 +21,17 @@ func init() {
 }
 
 type Mapper struct {
-	regexCache    *expirable.LRU[string, *regexp.Regexp]
-	templateCache *expirable.LRU[string, string]
+	regexCache    *metrics.MeteredCache[string, *regexp.Regexp]
+	templateCache *metrics.MeteredCache[string, string]
 }
 
-func NewMapper() *Mapper {
+func NewMapper(
+	ctx context.Context,
+	tagRegexCacheSettings, tagTemplateCacheSettings metrics.MeteredCacheSettings,
+) *Mapper {
 	return &Mapper{
-		regexCache:    expirable.NewLRU[string, *regexp.Regexp](1000, nil, 12*time.Hour),
-		templateCache: expirable.NewLRU[string, string](1000, nil, 12*time.Hour),
+		regexCache:    metrics.NewCache[string, *regexp.Regexp](ctx, tagRegexCacheSettings, nil),
+		templateCache: metrics.NewCache[string, string](ctx, tagTemplateCacheSettings, nil),
 	}
 }
 

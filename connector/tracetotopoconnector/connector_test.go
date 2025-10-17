@@ -20,33 +20,26 @@ import (
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
-	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )
 
-type noopMetrics struct{}
-
-func (n *noopMetrics) IncSpansProcessed(_ context.Context, _ int64)                              {}
-func (n *noopMetrics) IncComponentsProduced(_ context.Context, _ int64, _ ...attribute.KeyValue) {}
-func (n *noopMetrics) IncRelationsProduced(_ context.Context, _ int64, _ ...attribute.KeyValue)  {}
-func (n *noopMetrics) IncErrors(_ context.Context, _ int64, _ string)                            {}
-func (n *noopMetrics) RecordMappingDuration(_ context.Context, _ time.Duration, _ ...attribute.KeyValue) {
-}
-
 func TestConnectorStart(t *testing.T) {
 	logConsumer := &consumertest.LogsSink{}
-	metrics := &noopMetrics{}
 
 	t.Run("return an error if not found settings provider", func(t *testing.T) {
-		connector, err := newConnector(Config{}, zap.NewNop(), metrics, logConsumer)
+		connector, err := newConnector(
+			context.Background(), Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer,
+		)
 		require.NoError(t, err)
 		err = connector.Start(context.Background(), componenttest.NewNopHost())
 		require.ErrorContains(t, err, "sts_settings_provider extension not found")
 	})
 
 	t.Run("start with initial mappings and observe changes", func(t *testing.T) {
-		connector, _ := newConnector(Config{}, zap.NewNop(), metrics, logConsumer)
+		connector, _ := newConnector(
+			context.Background(), Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer,
+		)
 		provider := newMockStsSettingsProvider(
 			[]settings.OtelComponentMapping{
 				createSimpleComponentMapping("mapping1"),
@@ -77,6 +70,7 @@ func TestConnectorStart(t *testing.T) {
 		assert.Len(t, *connector.relationMappings, 2)
 
 		provider.channel <- stsSettingsEvents.UpdateSettingsEvent{}
+		time.Sleep(50 * time.Millisecond) // settle time to process update event (can be flaky if omitted)
 		assert.Len(t, *connector.componentMappings, 3)
 		assert.Len(t, *connector.relationMappings, 1)
 	})
@@ -84,8 +78,7 @@ func TestConnectorStart(t *testing.T) {
 
 func TestConnectorConsumeTraces(t *testing.T) {
 	logConsumer := &consumertest.LogsSink{}
-	metrics := &noopMetrics{}
-	connector, _ := newConnector(Config{}, zap.NewNop(), metrics, logConsumer)
+	connector, _ := newConnector(context.Background(), Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer)
 	provider := newMockStsSettingsProvider(
 		[]settings.OtelComponentMapping{
 			createSimpleComponentMapping("mapping1"),
