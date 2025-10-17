@@ -57,15 +57,15 @@ func TestMapping_MapComponent(t *testing.T) {
 					Optional: &settings.OtelComponentMappingFieldMapping{
 						Tags: &[]settings.OtelTagMapping{
 							{
-								Source: strExpr("${spanAttributes.priority}"),
+								Source: anyExpr("${spanAttributes.priority}"),
 								Target: "priority",
 							},
 							{
-								Source: strExpr("${scopeAttributes.name}"),
+								Source: anyExpr("${scopeAttributes.name}"),
 								Target: "scopeName",
 							},
 							{
-								Source: strExpr("${resourceAttributes.name}"),
+								Source: anyExpr("${resourceAttributes.name}"),
 								Target: "resourceName",
 							},
 						},
@@ -73,11 +73,11 @@ func TestMapping_MapComponent(t *testing.T) {
 					Required: &settings.OtelComponentMappingFieldMapping{
 						Tags: &[]settings.OtelTagMapping{
 							{
-								Source: strExpr("${spanAttributes.kind}"),
+								Source: anyExpr("${spanAttributes.kind}"),
 								Target: "kind",
 							},
 							{
-								Source: strExpr("${spanAttributes.amount}"),
+								Source: anyExpr("${spanAttributes.amount}"),
 								Target: "amount",
 							},
 						},
@@ -145,7 +145,7 @@ func TestMapping_MapComponent(t *testing.T) {
 					Optional: &settings.OtelComponentMappingFieldMapping{
 						Tags: &[]settings.OtelTagMapping{
 							{
-								Source: strExpr("${spanAttributes.priority}"),
+								Source: anyExpr("${spanAttributes.priority}"),
 								Target: "priority",
 							},
 						},
@@ -153,11 +153,11 @@ func TestMapping_MapComponent(t *testing.T) {
 					Required: &settings.OtelComponentMappingFieldMapping{
 						Tags: &[]settings.OtelTagMapping{
 							{
-								Source: strExpr("${spanAttributes.kind}"),
+								Source: anyExpr("${spanAttributes.kind}"),
 								Target: "kind",
 							},
 							{
-								Source: strExpr("${spanAttributes.amount}"),
+								Source: anyExpr("${spanAttributes.amount}"),
 								Target: "amount",
 							},
 						},
@@ -192,7 +192,7 @@ func TestMapping_MapComponent(t *testing.T) {
 
 						Tags: &[]settings.OtelTagMapping{
 							{
-								Source: strExpr(`${spanAttributes["non-existing-attr4"]}`),
+								Source: anyExpr(`${spanAttributes["non-existing-attr4"]}`),
 								Target: "priority",
 							},
 						},
@@ -200,11 +200,11 @@ func TestMapping_MapComponent(t *testing.T) {
 					Required: &settings.OtelComponentMappingFieldMapping{
 						Tags: &[]settings.OtelTagMapping{
 							{
-								Source: strExpr("${spanAttributes.kind}"),
+								Source: anyExpr("${spanAttributes.kind}"),
 								Target: "kind",
 							},
 							{
-								Source: strExpr("${spanAttributes.amount}"),
+								Source: anyExpr("${spanAttributes.amount}"),
 								Target: "amount",
 							},
 						},
@@ -247,7 +247,7 @@ func TestMapping_MapComponent(t *testing.T) {
 
 						Tags: &[]settings.OtelTagMapping{
 							{
-								Source: strExpr(`${spanAttributes["nope}`),
+								Source: anyExpr(`${spanAttributes["nope}`),
 								Target: "priority",
 							},
 						},
@@ -255,11 +255,11 @@ func TestMapping_MapComponent(t *testing.T) {
 					Required: &settings.OtelComponentMappingFieldMapping{
 						Tags: &[]settings.OtelTagMapping{
 							{
-								Source: strExpr("${spanAttributes.kind}"),
+								Source: anyExpr("${spanAttributes.kind}"),
 								Target: "kind",
 							},
 							{
-								Source: strExpr("${spanAttributes.amount}"),
+								Source: anyExpr("${spanAttributes.amount}"),
 								Target: "amount",
 							},
 						},
@@ -336,11 +336,11 @@ func TestResolveTagMappings(t *testing.T) {
 			name: "simple mapping without pattern",
 			mappings: []settings.OtelTagMapping{
 				{
-					Source: strExpr(`${resourceAttributes["service.name"]}`),
+					Source: anyExpr(`${resourceAttributes["service.name"]}`),
 					Target: "service.name",
 				},
 				{
-					Source: strExpr("static-value"),
+					Source: anyExpr("static-value"),
 					Target: "static",
 				},
 			},
@@ -353,7 +353,7 @@ func TestResolveTagMappings(t *testing.T) {
 			name: "mapping with regex pattern and capture group",
 			mappings: []settings.OtelTagMapping{
 				{
-					Source:  strExpr("${scopeAttributes}"),
+					Source:  anyExpr("${scopeAttributes}"),
 					Pattern: ptr("telemetry.sdk.(.*)"),
 					Target:  "otel.${1}",
 				},
@@ -368,7 +368,7 @@ func TestResolveTagMappings(t *testing.T) {
 			name: "mapping with multiple capture groups",
 			mappings: []settings.OtelTagMapping{
 				{
-					Source:  strExpr("${scopeAttributes}"),
+					Source:  anyExpr("${scopeAttributes}"),
 					Pattern: ptr("telemetry.(sdk).(.*)"),
 					Target:  "otel.${1}.${2}",
 				},
@@ -383,7 +383,7 @@ func TestResolveTagMappings(t *testing.T) {
 			name: "mapping with regex that matches nothing",
 			mappings: []settings.OtelTagMapping{
 				{
-					Source:  strExpr("${scopeAttributes}"),
+					Source:  anyExpr("${scopeAttributes}"),
 					Pattern: ptr("foo(.*)"),
 					Target:  "ignored.${1}",
 				},
@@ -394,11 +394,11 @@ func TestResolveTagMappings(t *testing.T) {
 			name: "mixed simple and regex mappings",
 			mappings: []settings.OtelTagMapping{
 				{
-					Source: strExpr(`${resourceAttributes["service.name"]}`),
+					Source: anyExpr(`${resourceAttributes["service.name"]}`),
 					Target: "service",
 				},
 				{
-					Source:  strExpr("${scopeAttributes}"),
+					Source:  anyExpr("${scopeAttributes}"),
 					Pattern: ptr("telemetry.sdk.(.*)"),
 					Target:  "otel.${1}",
 				},
@@ -414,7 +414,7 @@ func TestResolveTagMappings(t *testing.T) {
 			name: "invalid map source without pattern (string expression expected)",
 			mappings: []settings.OtelTagMapping{
 				{
-					Source: strExpr("${scopeAttributes}"),
+					Source: anyExpr("${scopeAttributes}"),
 					Target: "oops",
 				},
 			},
@@ -427,13 +427,13 @@ func TestResolveTagMappings(t *testing.T) {
 			mappings: []settings.OtelTagMapping{
 				{
 					// Group mapping injects all scope attributes with pattern
-					Source:  strExpr("${scopeAttributes}"),
+					Source:  anyExpr("${scopeAttributes}"),
 					Pattern: ptr("telemetry.sdk.(.*)"),
 					Target:  "otel.${1}",
 				},
 				{
 					// Explicit mapping for one key that would otherwise be produced by the group
-					Source: strExpr("overridden-value"),
+					Source: anyExpr("overridden-value"),
 					Target: "otel.lang",
 				},
 			},
@@ -447,11 +447,11 @@ func TestResolveTagMappings(t *testing.T) {
 			name: "merged group mapping does not override explicit key",
 			mappings: []settings.OtelTagMapping{
 				{
-					Source: strExpr("explicit-value"),
+					Source: anyExpr("explicit-value"),
 					Target: "otel.lang",
 				},
 				{
-					Source:  strExpr("${scopeAttributes}"),
+					Source:  anyExpr("${scopeAttributes}"),
 					Pattern: ptr("telemetry.sdk.(.*)"),
 					Target:  "otel.${1}",
 				},
@@ -466,12 +466,12 @@ func TestResolveTagMappings(t *testing.T) {
 			name: "explicit mapping overrides merged resource attribute",
 			mappings: []settings.OtelTagMapping{
 				{
-					Source:  strExpr("${resourceAttributes}"),
+					Source:  anyExpr("${resourceAttributes}"),
 					Pattern: ptr("(.*)"),
 					Target:  "res.${1}",
 				},
 				{
-					Source: strExpr("special"),
+					Source: anyExpr("special"),
 					Target: "res.name",
 				},
 			},
@@ -486,7 +486,7 @@ func TestResolveTagMappings(t *testing.T) {
 			name: "merge full attribute map without overrides",
 			mappings: []settings.OtelTagMapping{
 				{
-					Source:  strExpr("${scopeAttributes}"),
+					Source:  anyExpr("${scopeAttributes}"),
 					Pattern: ptr("(.*)"),
 					Target:  "all.${1}",
 				},
@@ -501,7 +501,7 @@ func TestResolveTagMappings(t *testing.T) {
 			name: "merge filtered attribute map by prefix",
 			mappings: []settings.OtelTagMapping{
 				{
-					Source:  strExpr("${scopeAttributes}"),
+					Source:  anyExpr("${scopeAttributes}"),
 					Pattern: ptr("telemetry.sdk.(.*)"),
 					Target:  "filtered.${1}",
 				},
@@ -516,7 +516,7 @@ func TestResolveTagMappings(t *testing.T) {
 			name: "invalid source: not a map with pattern",
 			mappings: []settings.OtelTagMapping{
 				{
-					Source:  strExpr("${resourceAttributes['service.name']}"),
+					Source:  anyExpr("${resourceAttributes['service.name']}"),
 					Pattern: ptr("telemetry.sdk.(.*)"),
 					Target:  "oops",
 				},

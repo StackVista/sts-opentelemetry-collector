@@ -13,7 +13,7 @@ type mockFilterExpressionEvaluator struct {
 	conditionExpressionLookup map[string]bool
 }
 
-func (f *mockFilterExpressionEvaluator) EvalAnyExpression(_ settings.OtelStringExpression, _ *ExpressionEvalContext) (any, error) {
+func (f *mockFilterExpressionEvaluator) EvalAnyExpression(_ settings.OtelAnyExpression, _ *ExpressionEvalContext) (any, error) {
 	return "", nil
 }
 func (f *mockFilterExpressionEvaluator) EvalStringExpression(_ settings.OtelStringExpression, _ *ExpressionEvalContext) (string, error) {
@@ -32,7 +32,7 @@ func (f *mockFilterExpressionEvaluator) EvalBooleanExpression(expr settings.Otel
 	return false, nil
 }
 
-func (f *mockFilterExpressionEvaluator) EvalMapExpression(_ settings.OtelStringExpression, _ *ExpressionEvalContext) (map[string]any, error) {
+func (f *mockFilterExpressionEvaluator) EvalMapExpression(_ settings.OtelAnyExpression, _ *ExpressionEvalContext) (map[string]any, error) {
 	//nolint:nilnil
 	return nil, nil
 }

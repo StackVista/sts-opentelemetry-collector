@@ -1109,7 +1109,8 @@ components:
       description: Defines how a tag should be mapped from an input source to an output target, optionally using a regex pattern.
       properties:
         source:
-          $ref: "#/components/schemas/OtelStringExpression"
+          $ref: "#/components/schemas/OtelAnyExpression"
+          description: When a `pattern` is specified the expression must return a Map, when no `pattern` is specified the expression must return a string.
         target:
           type: string
           description: Name of the target tag key to which the value should be mapped.
@@ -1156,7 +1157,7 @@ components:
         name:
           type: string
         value:
-          $ref: "#/components/schemas/OtelStringExpression"
+          $ref: "#/components/schemas/OtelAnyExpression"
       required:
         - name
         - value
@@ -1204,8 +1205,20 @@ components:
       description: |-
         An expression that must produce a string. It must be one of these formats:
           - A plain string, for example `"this is a plain string"`
-          - A string containing a CEL expression within curly braces `${}`, for example "a string with a cell expression: `${input.tags.namespace}"`
-        A string with only a cell expression is also valid as long as it is within a `${}` section, for example `"${input.tags.namespace}"`.
+          - A string containing a CEL expression within curly braces `${}`, for example "a string with a cell expression: `${resourceAttributes['service.namespace']}"`
+        A string with only a cell expression is also valid as long as it is within a `${}` section, for example `"${resourceAttributes['service.namespace']}"`.
+      properties:
+        expression:
+          type: string
+      required:
+        - expression
+
+    OtelAnyExpression:
+      type: object
+      description: |-
+        An expression that can produce any type. It uses the CEL expression within curly braces `${}` syntax.
+        Variables use it to store any type of value. For example, to store a boolean in a variable named  `inTestNamespace` assign 
+        it the expression `"${resourceAttributes['service.namespace'] == 'test'}"`. The variable can now be used directly in the conditions like this: `vars.inTestNamespace`.
       properties:
         expression:
           type: string

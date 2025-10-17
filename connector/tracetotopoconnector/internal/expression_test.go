@@ -299,13 +299,13 @@ func TestEvalMapExpression(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		expr        settings.OtelStringExpression
+		expr        settings.OtelAnyExpression
 		want        map[string]any
 		expectError string
 	}{
 		{
 			name: "pure map reference spanAttributes",
-			expr: settings.OtelStringExpression{Expression: "${spanAttributes}"},
+			expr: settings.OtelAnyExpression{Expression: "${spanAttributes}"},
 			want: map[string]any{
 				"http.method":      "GET",
 				"http.status_code": int64(200),
@@ -317,7 +317,7 @@ func TestEvalMapExpression(t *testing.T) {
 		},
 		{
 			name: "pure map reference resourceAttributes",
-			expr: settings.OtelStringExpression{Expression: "${resourceAttributes}"},
+			expr: settings.OtelAnyExpression{Expression: "${resourceAttributes}"},
 			want: map[string]any{
 				"cloud.provider": "aws",
 				"service.name":   "cart-service",
@@ -331,7 +331,7 @@ func TestEvalMapExpression(t *testing.T) {
 		},
 		{
 			name: "pure map reference scopeAttributes",
-			expr: settings.OtelStringExpression{Expression: "${scopeAttributes}"},
+			expr: settings.OtelAnyExpression{Expression: "${scopeAttributes}"},
 			want: map[string]any{
 				"otel.scope.name":    "io.opentelemetry.instrumentation.http",
 				"otel.scope.version": "1.2.3",
@@ -339,38 +339,38 @@ func TestEvalMapExpression(t *testing.T) {
 		},
 		{
 			name: "Map literal",
-			expr: settings.OtelStringExpression{Expression: "${{'key': 'value'}}"},
+			expr: settings.OtelAnyExpression{Expression: "${{'key': 'value'}}"},
 			want: map[string]any{
 				"key": "value",
 			},
 		},
 		{
 			name:        "invalid: not a pure map reference",
-			expr:        settings.OtelStringExpression{Expression: "foo-${spanAttributes}"},
+			expr:        settings.OtelAnyExpression{Expression: "foo-${spanAttributes}"},
 			want:        nil,
 			expectError: `foo-${spanAttributes}" is not a valid map expression`,
 		},
 		{
 			name:        "invalid: literal string",
-			expr:        settings.OtelStringExpression{Expression: `"just a string"`},
+			expr:        settings.OtelAnyExpression{Expression: `"just a string"`},
 			want:        nil,
 			expectError: `expression "\"just a string\"" is not a valid map expression`,
 		},
 		{
 			name:        "invalid: empty interpolation",
-			expr:        settings.OtelStringExpression{Expression: "${}"},
+			expr:        settings.OtelAnyExpression{Expression: "${}"},
 			want:        nil,
 			expectError: `empty interpolation at pos 0`,
 		},
 		{
 			name:        "invalid: keys are not strings",
-			expr:        settings.OtelStringExpression{Expression: "${{true: 'value'}}"},
+			expr:        settings.OtelAnyExpression{Expression: "${{true: 'value'}}"},
 			want:        nil,
 			expectError: "cannot convert key of type '*internal.CelEvaluationError' to string: true",
 		},
 		{
 			name:        "unsupported type returns error",
-			expr:        settings.OtelStringExpression{Expression: `${'test'}`}, // a string type that can be statically checked
+			expr:        settings.OtelAnyExpression{Expression: `${'test'}`}, // a string type that can be statically checked
 			expectError: `expected map type, got: string, for expression '${'test'}'`,
 		},
 	}
@@ -489,7 +489,7 @@ func TestEvalAnyExpression(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := eval.EvalAnyExpression(
-				settings.OtelStringExpression{Expression: tt.expr},
+				settings.OtelAnyExpression{Expression: tt.expr},
 				&ctx,
 			)
 

@@ -178,7 +178,7 @@ func publishUpdatedSettingSnapshots(t *testing.T, env *TopologyTestEnv, newVersi
 
 	// Update 2: additional required tag
 	*component.Output.Required.Tags = append(*component.Output.Required.Tags, settings.OtelTagMapping{
-		Source: strExpr(newVersion),
+		Source: anyExpr(newVersion),
 		Target: "version",
 	})
 
@@ -335,14 +335,14 @@ func otelComponentMappingSnapshot() *harness.OtelComponentMappingSnapshot {
 				},
 				Tags: &[]settings.OtelTagMapping{
 					{
-						Source: strExpr(`${resourceAttributes["host.name"]}`),
+						Source: anyExpr(`${resourceAttributes["host.name"]}`),
 						Target: "host",
 					},
 				},
 			},
 		},
 		Vars: []settings.OtelVariableMapping{
-			{Name: "instanceId", Value: strExpr(`${resourceAttributes["service.instance.id"]}`)},
+			{Name: "instanceId", Value: anyExpr(`${resourceAttributes["service.instance.id"]}`)},
 		},
 	}
 }
@@ -360,6 +360,11 @@ func otelRelationMappingSnapshot() *harness.OtelRelationMappingSnapshot {
 			TargetId: strExpr(`${spanAttributes["service.name"]}`),
 			TypeName: strExpr("http-request"),
 		},
+	}
+}
+func anyExpr(s string) settings.OtelAnyExpression {
+	return settings.OtelAnyExpression{
+		Expression: s,
 	}
 }
 

@@ -22,7 +22,7 @@ func (f *mockEvalExpressionEvaluator) EvalStringExpression(_ settings.OtelString
 	return "", nil
 }
 
-func (f *mockEvalExpressionEvaluator) EvalAnyExpression(expr settings.OtelStringExpression, _ *ExpressionEvalContext) (any, error) {
+func (f *mockEvalExpressionEvaluator) EvalAnyExpression(expr settings.OtelAnyExpression, _ *ExpressionEvalContext) (any, error) {
 	if err, ok := f.varErrsLookup[expr.Expression]; ok {
 		return "", err
 	}
@@ -41,7 +41,7 @@ func (f *mockEvalExpressionEvaluator) EvalBooleanExpression(_ settings.OtelBoole
 	return false, nil
 }
 
-func (f *mockEvalExpressionEvaluator) EvalMapExpression(_ settings.OtelStringExpression, _ *ExpressionEvalContext) (map[string]any, error) {
+func (f *mockEvalExpressionEvaluator) EvalMapExpression(_ settings.OtelAnyExpression, _ *ExpressionEvalContext) (map[string]any, error) {
 	//nolint:nilnil
 	return nil, nil
 }
@@ -55,7 +55,7 @@ func varMappings(pairs ...pair) []settings.OtelVariableMapping {
 	for i, p := range pairs {
 		mappings[i] = settings.OtelVariableMapping{
 			Name:  p.name,
-			Value: settings.OtelStringExpression{Expression: p.expr},
+			Value: settings.OtelAnyExpression{Expression: p.expr},
 		}
 	}
 	return mappings
