@@ -35,9 +35,9 @@ type ExpressionEvaluator interface {
 	// "Boolean" Expressions don't support interpolation, but must be a valid CEL boolean expression
 	EvalBooleanExpression(expr settings.OtelBooleanExpression, evalCtx *ExpressionEvalContext) (bool, error)
 	// "Map" Expressions expect/support the interpolation syntax ${}
-	EvalMapExpression(expr settings.OtelStringExpression, evalCtx *ExpressionEvalContext) (map[string]any, error)
+	EvalMapExpression(expr settings.OtelAnyExpression, evalCtx *ExpressionEvalContext) (map[string]any, error)
 	// "Any" Expressions expect/support the interpolation syntax ${}
-	EvalAnyExpression(expr settings.OtelStringExpression, evalCtx *ExpressionEvalContext) (any, error)
+	EvalAnyExpression(expr settings.OtelAnyExpression, evalCtx *ExpressionEvalContext) (any, error)
 }
 
 type ExpressionEvalContext struct {
@@ -192,7 +192,7 @@ func (e *CelEvaluator) EvalBooleanExpression(
 }
 
 func (e *CelEvaluator) EvalMapExpression(
-	expr settings.OtelStringExpression,
+	expr settings.OtelAnyExpression,
 	evalCtx *ExpressionEvalContext,
 ) (map[string]any, error) {
 	val, err := e.evalOrCached(expr.Expression, MapType, func(expression string) (string, error) {
@@ -218,7 +218,7 @@ func (e *CelEvaluator) EvalMapExpression(
 }
 
 func (e *CelEvaluator) EvalAnyExpression(
-	expr settings.OtelStringExpression,
+	expr settings.OtelAnyExpression,
 	evalCtx *ExpressionEvalContext,
 ) (any, error) {
 	// String literals are returned as-is without CEL evaluation and caching

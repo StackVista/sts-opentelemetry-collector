@@ -26,6 +26,12 @@ func strExpr(s string) settings.OtelStringExpression {
 	}
 }
 
+func anyExpr(s string) settings.OtelAnyExpression {
+	return settings.OtelAnyExpression{
+		Expression: s,
+	}
+}
+
 func boolExpr(s string) settings.OtelBooleanExpression {
 	return settings.OtelBooleanExpression{
 		Expression: s,
@@ -102,7 +108,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							},
 							Tags: &[]settings.OtelTagMapping{
 								{
-									Source: strExpr(`${resourceAttributes["host.name"]}`),
+									Source: anyExpr(`${resourceAttributes["host.name"]}`),
 									Target: "host",
 								},
 							},
@@ -113,16 +119,16 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							},
 							Tags: &[]settings.OtelTagMapping{
 								{
-									Source: strExpr(`${scopeAttributes["otel.scope.name"]}`),
+									Source: anyExpr(`${scopeAttributes["otel.scope.name"]}`),
 									Target: "instrumentation-lib",
 								},
 								{
-									Source: strExpr(`${scopeAttributes["otel.scope.version"]}`),
+									Source: anyExpr(`${scopeAttributes["otel.scope.version"]}`),
 									Target: "instrumentation-version",
 								},
 								{
 									// this attribute doesn't exist expr the span but it is Optional tag so it ignored by mapping
-									Source: strExpr(`${scopeAttributes["otel.scope.provider"]}`),
+									Source: anyExpr(`${scopeAttributes["otel.scope.provider"]}`),
 									Target: "instrumentation-provider",
 								},
 							},
@@ -131,7 +137,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 					Vars: &[]settings.OtelVariableMapping{
 						{
 							Name:  "instanceId",
-							Value: strExpr(`${resourceAttributes["service.instance.id"]}`),
+							Value: anyExpr(`${resourceAttributes["service.instance.id"]}`),
 						},
 					},
 				},
@@ -235,7 +241,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							},
 							Tags: &[]settings.OtelTagMapping{
 								{
-									Source: strExpr(`${resourceAttributes["host.name"]}`),
+									Source: anyExpr(`${resourceAttributes["host.name"]}`),
 									Target: "host",
 								},
 							},
@@ -246,15 +252,15 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							},
 							Tags: &[]settings.OtelTagMapping{
 								{
-									Source: strExpr(`${scopeAttributes["otel.scope.name"]}`),
+									Source: anyExpr(`${scopeAttributes["otel.scope.name"]}`),
 									Target: "instrumentation-lib",
 								},
 								{
-									Source: strExpr(`${scopeAttributes["otel.scope.version"]}`),
+									Source: anyExpr(`${scopeAttributes["otel.scope.version"]}`),
 									Target: "instrumentation-version",
 								},
 								{
-									Source: strExpr(`${scopeAttributes["otel.scope.provider"]}`),
+									Source: anyExpr(`${scopeAttributes["otel.scope.provider"]}`),
 									Target: "instrumentation-provider",
 								},
 							},
@@ -263,7 +269,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 					Vars: &[]settings.OtelVariableMapping{
 						{
 							Name:  "instanceId",
-							Value: strExpr(`${resourceAttributes["service.instance.id"]}`),
+							Value: anyExpr(`${resourceAttributes["service.instance.id"]}`),
 						},
 					},
 				},
@@ -304,7 +310,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							},
 							Tags: &[]settings.OtelTagMapping{
 								{
-									Source: strExpr(`${resourceAttributes["host.name"]}`),
+									Source: anyExpr(`${resourceAttributes["host.name"]}`),
 									Target: "host",
 								},
 							},
@@ -315,16 +321,16 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							},
 							Tags: &[]settings.OtelTagMapping{
 								{
-									Source: strExpr(`${scopeAttributes["otel.scope.name"]}`),
+									Source: anyExpr(`${scopeAttributes["otel.scope.name"]}`),
 									Target: "instrumentation-lib",
 								},
 								{
-									Source: strExpr(`${scopeAttributes["otel.scope.version"]}`),
+									Source: anyExpr(`${scopeAttributes["otel.scope.version"]}`),
 									Target: "instrumentation-version",
 								},
 								{
 									// this attribute doesn't exist, but it is an Optional tag, so it is ignored by mapping
-									Source: strExpr(`${scopeAttributes["otel.scope.provider"]}`),
+									Source: anyExpr(`${scopeAttributes["otel.scope.provider"]}`),
 									Target: "instrumentation-provider",
 								},
 							},
@@ -333,7 +339,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 					Vars: &[]settings.OtelVariableMapping{
 						{
 							Name:  "instanceId",
-							Value: strExpr(`${resourceAttributes["service.instance.id"]}`),
+							Value: anyExpr(`${resourceAttributes["service.instance.id"]}`),
 						},
 					},
 				},
@@ -416,11 +422,11 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							},
 							Tags: &[]settings.OtelTagMapping{
 								{
-									Source: strExpr(`${resourceAttributes["host.name"]}`),
+									Source: anyExpr(`${resourceAttributes["host.name"]}`),
 									Target: "host",
 								},
 								{
-									Source: strExpr(`${vars.arguments[0]}`),
+									Source: anyExpr(`${vars.arguments[0]}`),
 									Target: "main_command",
 								},
 							},
@@ -429,15 +435,15 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 					Vars: &[]settings.OtelVariableMapping{
 						{
 							Name:  "isInstanceId",
-							Value: strExpr(`${resourceAttributes["service.instance.id"] == "627cc493"}`),
+							Value: anyExpr(`${resourceAttributes["service.instance.id"] == "627cc493"}`),
 						},
 						{
 							Name:  "instanceId",
-							Value: strExpr(`${resourceAttributes["service.instance.id"]}`),
+							Value: anyExpr(`${resourceAttributes["service.instance.id"]}`),
 						},
 						{
 							Name:  "arguments",
-							Value: strExpr(`${resourceAttributes["process.command_args"]}`),
+							Value: anyExpr(`${resourceAttributes["process.command_args"]}`),
 						},
 					},
 				},
