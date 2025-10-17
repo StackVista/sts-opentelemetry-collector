@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
@@ -15,18 +16,14 @@ type MeteredCacheMetricsRecorder interface {
 	IncMiss()
 	IncAdd()
 	IncEvict()
-	RecordSize(size int)
-	Close()
 }
 
 type noopMeter struct{}
 
-func (noopMeter) IncHit()        {}
-func (noopMeter) IncMiss()       {}
-func (noopMeter) IncAdd()        {}
-func (noopMeter) IncEvict()      {}
-func (noopMeter) RecordSize(int) {}
-func (noopMeter) Close()         {}
+func (noopMeter) IncHit()   {}
+func (noopMeter) IncMiss()  {}
+func (noopMeter) IncAdd()   {}
+func (noopMeter) IncEvict() {}
 
 type otelMeter struct {
 	//nolint:containedctx
@@ -37,16 +34,12 @@ type otelMeter struct {
 	missCounter  metric.Int64Counter
 	addCounter   metric.Int64Counter
 	evictCounter metric.Int64Counter
-
-	sizeCounter metric.Int64UpDownCounter
 }
 
 func newOtelMeter(
 	ctx context.Context,
 	settings component.TelemetrySettings,
 	name string,
-	reportInterval time.Duration,
-	cacheLenFunc func() int,
 ) *otelMeter {
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -57,7 +50,6 @@ func newOtelMeter(
 	miss, _ := meter.Int64Counter(metricBaseName + ".misses")
 	add, _ := meter.Int64Counter(metricBaseName + ".adds")
 	evict, _ := meter.Int64Counter(metricBaseName + ".evictions")
-	size, _ := meter.Int64UpDownCounter(metricBaseName + ".size")
 
 	om := &otelMeter{
 		ctx:          ctx,
@@ -66,22 +58,6 @@ func newOtelMeter(
 		missCounter:  miss,
 		addCounter:   add,
 		evictCounter: evict,
-		sizeCounter:  size,
-	}
-
-	if reportInterval > 0 {
-		go func() {
-			ticker := time.NewTicker(reportInterval)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ticker.C:
-					om.RecordSize(cacheLenFunc())
-				case <-ctx.Done():
-					return
-				}
-			}
-		}()
 	}
 
 	return om
@@ -91,13 +67,12 @@ func (m *otelMeter) IncHit()   { m.hitCounter.Add(m.ctx, 1) }
 func (m *otelMeter) IncMiss()  { m.missCounter.Add(m.ctx, 1) }
 func (m *otelMeter) IncAdd()   { m.addCounter.Add(m.ctx, 1) }
 func (m *otelMeter) IncEvict() { m.evictCounter.Add(m.ctx, 1) }
-func (m *otelMeter) RecordSize(size int) {
-	m.sizeCounter.Add(m.ctx, int64(size))
-}
-func (m *otelMeter) Close() { m.cancel() }
+func (m *otelMeter) Close()    { m.cancel() }
 
 type MeteredCache[K comparable, V any] struct {
-	cache           *expirable.LRU[K, V]
+	cache *expirable.LRU[K, V]
+
+	metricsLock     sync.Mutex // protects metrics consistency
 	metricsRecorder MeteredCacheMetricsRecorder
 }
 
@@ -105,9 +80,8 @@ type MeteredCacheSettings struct {
 	Name          string // metric name prefix
 	EnableMetrics bool   // if false, metrics are disabled
 
-	Size               int
-	TTL                time.Duration // 0 disables eviction
-	ReportSizeInterval time.Duration // 0 disables periodic reporting
+	Size int
+	TTL  time.Duration // 0 disables eviction
 
 	TelemetrySettings component.TelemetrySettings
 }
@@ -139,19 +113,11 @@ func NewCacheWithMeter[K comparable, V any](
 	var cache *expirable.LRU[K, V]
 	var meter MeteredCacheMetricsRecorder
 
-	// lazily create a reference to the cache size
-	cacheLenRef := func() int {
-		if cache == nil {
-			return 0
-		}
-		return cache.Len()
-	}
-
 	switch {
 	case recorder != nil:
 		meter = recorder
 	case settings.EnableMetrics:
-		meter = newOtelMeter(ctx, settings.TelemetrySettings, settings.Name, settings.ReportSizeInterval, cacheLenRef)
+		meter = newOtelMeter(ctx, settings.TelemetrySettings, settings.Name)
 	default:
 		meter = noopMeter{}
 	}
@@ -170,12 +136,20 @@ func NewCacheWithMeter[K comparable, V any](
 	return &MeteredCache[K, V]{
 		cache:           cache,
 		metricsRecorder: meter,
+		metricsLock:     sync.Mutex{},
 	}
 }
 
 func (m *MeteredCache[K, V]) Add(key K, value V) {
-	m.cache.Add(key, value)
-	m.metricsRecorder.IncAdd()
+	m.metricsLock.Lock()
+	defer m.metricsLock.Unlock()
+
+	_, existed := m.cache.Peek(key)
+	m.cache.Add(key, value) //
+
+	if !existed {
+		m.metricsRecorder.IncAdd()
+	}
 }
 
 func (m *MeteredCache[K, V]) Get(key K) (V, bool) {
@@ -186,10 +160,6 @@ func (m *MeteredCache[K, V]) Get(key K) (V, bool) {
 		m.metricsRecorder.IncMiss()
 	}
 	return val, ok
-}
-
-func (m *MeteredCache[K, V]) Close() {
-	m.metricsRecorder.Close()
 }
 
 func (m *MeteredCache[K, V]) Len() int {

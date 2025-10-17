@@ -50,11 +50,10 @@ func makeContext() ExpressionEvalContext {
 
 func makeMeteredCacheSettings(size int, ttl time.Duration) metrics.MeteredCacheSettings {
 	return metrics.MeteredCacheSettings{
-		Size:               size,
-		EnableMetrics:      false,
-		TTL:                ttl,
-		ReportSizeInterval: 0,
-		TelemetrySettings:  componenttest.NewNopTelemetrySettings(),
+		Size:              size,
+		EnableMetrics:     false,
+		TTL:               ttl,
+		TelemetrySettings: componenttest.NewNopTelemetrySettings(),
 	}
 }
 

@@ -32,12 +32,11 @@ func (c *CacheSettings) ToMetered(
 	telemetrySettings component.TelemetrySettings,
 ) metrics.MeteredCacheSettings {
 	return metrics.MeteredCacheSettings{
-		Name:               name,
-		EnableMetrics:      c.EnableMetrics,
-		Size:               c.Size,
-		TTL:                c.TTL,
-		ReportSizeInterval: 1 * time.Second,
-		TelemetrySettings:  telemetrySettings,
+		Name:              name,
+		EnableMetrics:     c.EnableMetrics,
+		Size:              c.Size,
+		TTL:               c.TTL,
+		TelemetrySettings: telemetrySettings,
 	}
 }
 

@@ -36,7 +36,6 @@ func TestMeteredCache_BasicMetrics(t *testing.T) {
 		nil,
 		meter,
 	)
-	defer mc.Close()
 
 	mc.Add("a", "1") // add
 	mc.Get("a")      // hit

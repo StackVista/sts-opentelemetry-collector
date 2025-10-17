@@ -34,12 +34,12 @@ func createDefaultConfig() component.Config {
 		TagRegexCacheSettings: CacheSettings{
 			EnableMetrics: false,
 			Size:          2000,
-			TTL:           12 * time.Hour,
+			TTL:           15 * time.Minute,
 		},
 		TagTemplateCacheSettings: CacheSettings{
 			EnableMetrics: false,
 			Size:          2000,
-			TTL:           12 * time.Hour,
+			TTL:           15 * time.Minute,
 		},
 	}
 }
