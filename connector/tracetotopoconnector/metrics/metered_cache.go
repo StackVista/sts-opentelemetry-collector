@@ -90,7 +90,7 @@ type MeteredCacheSettings struct {
 //
 // This is the standard constructor for production use. If metrics are enabled via
 // MeteredCacheSettings.EnableMetrics, the cache will automatically register OpenTelemetry
-// instruments (hits, misses, adds, evictions, and size).
+// instruments (hits, misses, adds and evictions).
 //
 // If metrics are disabled, a lightweight no-op meter is used to minimize performance overhead.
 func NewCache[K comparable, V any](
