@@ -16,7 +16,7 @@ func SizeOfRawSetting(s Setting) int64 {
 	return int64(len(s.union))
 }
 
-type Mapping interface {
+type SettingExtension interface {
 	GetId() string
 	GetIdentifier() string
 	GetExpireAfterMs() int64

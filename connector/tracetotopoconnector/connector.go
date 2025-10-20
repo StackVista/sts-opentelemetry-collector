@@ -3,9 +3,7 @@ package tracetotopoconnector
 import (
 	"context"
 	"fmt"
-	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/internal"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/metrics"
@@ -29,8 +27,7 @@ type connectorImpl struct {
 	settingsProvider  stsSettingsApi.StsSettingsProvider
 	eval              *internal.CelEvaluator
 	mapper            *internal.Mapper
-	componentMappings *[]stsSettingsModel.OtelComponentMapping
-	relationMappings  *[]stsSettingsModel.OtelRelationMapping
+	snapshotManager  *SnapshotManager
 	subscriptionCh    <-chan stsSettingsEvents.UpdateSettingsEvent
 	metricsRecorder   metrics.ConnectorMetricsRecorder
 }
@@ -60,8 +57,7 @@ func newConnector(
 			cfg.TagRegexCacheSettings.ToMetered("tag_regex_cache", telemetrySettings),
 			cfg.TagRegexCacheSettings.ToMetered("tag_template_cache", telemetrySettings),
 		),
-		componentMappings: &[]stsSettingsModel.OtelComponentMapping{},
-		relationMappings:  &[]stsSettingsModel.OtelRelationMapping{},
+		snapshotManager: NewSnapshotManager(logger),
 		metricsRecorder:   metrics.NewConnectorMetrics(Type.String(), telemetrySettings),
 	}, nil
 }
@@ -97,11 +93,11 @@ func (p *connectorImpl) Start(ctx context.Context, host component.Host) error {
 			case <-ctx.Done():
 				return
 			case <-subscriptionCh:
-				p.updateMappings()
+				p.updateMappings(ctx)
 			}
 		}
 	}()
-	p.updateMappings()
+	p.updateMappings(ctx)
 
 	return nil
 }
@@ -117,60 +113,80 @@ func (p *connectorImpl) Capabilities() consumer.Capabilities {
 
 func (p *connectorImpl) ConsumeTraces(ctx context.Context, td ptrace.Traces) error {
 	start := time.Now()
+	collectionTimestampMs := start.UnixMilli()
 
-	log := plog.NewLogs()
-	scopeLog := log.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
-
-	collectionTimestampMs := time.Now().UnixMilli()
-	messagesWithKeys := internal.ConvertSpanToTopologyStreamMessage(
+	componentMappings, relationMappings := p.snapshotManager.Current()
+	messages := internal.ConvertSpanToTopologyStreamMessage(
 		ctx,
 		p.logger,
 		p.eval,
 		p.mapper,
 		td,
-		*p.componentMappings,
-		*p.relationMappings,
+		componentMappings,
+		relationMappings,
 		collectionTimestampMs,
 		p.metricsRecorder,
 	)
-	for _, mwk := range messagesWithKeys {
-		if err := addEvent(&scopeLog, mwk); err != nil {
-			p.logger.Error("failed to add event to scope log", zap.Error(err))
-		} else {
-			p.logger.Debug("added event to scope log", zap.Any("key", mwk.Key))
-		}
-	}
-	if log.LogRecordCount() > 0 {
-		err := p.logsConsumer.ConsumeLogs(ctx, log)
-		if err != nil {
-			p.logger.Error("Error sending logs to the next component", zap.Error(err))
-		}
-	}
+	p.publishMessagesAsLogs(ctx, messages)
 
 	duration := time.Since(start)
 	p.metricsRecorder.RecordMappingDuration(
 		ctx, duration,
 		attribute.String("phase", "consume_traces"),
 		attribute.String("target", "spans"),
-		attribute.Int("mapping_count", len(*p.componentMappings)+len(*p.relationMappings)),
+		attribute.Int("mapping_count", len(componentMappings)+len(relationMappings)),
 	)
 
 	return nil
 }
 
 // updateMappings updates the mappings from the settings provider
-func (p *connectorImpl) updateMappings() {
-	componentMappings, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelComponentMapping](p.settingsProvider)
+func (p *connectorImpl) updateMappings(ctx context.Context) {
+	newComponents, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelComponentMapping](p.settingsProvider)
 	if err != nil {
 		p.logger.Error("failed to get component mappings", zap.Error(err))
-	} else {
-		atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&p.componentMappings)), unsafe.Pointer(&componentMappings))
+		return
 	}
-	relationMappings, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelRelationMapping](p.settingsProvider)
+
+	newRelations, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelRelationMapping](p.settingsProvider)
 	if err != nil {
 		p.logger.Error("failed to get relation mappings", zap.Error(err))
-	} else {
-		atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&p.relationMappings)), unsafe.Pointer(&relationMappings))
+		return
+	}
+
+	snapshotChange := p.snapshotManager.Update(newComponents, newRelations)
+	if len(snapshotChange.RemovedComponents) == 0 && len(snapshotChange.RemovedRelations) == 0 {
+		return
+	}
+
+	messages := internal.ConvertMappingRemovalsToTopologyStreamMessage(
+		ctx, p.logger, snapshotChange.RemovedComponents, snapshotChange.RemovedRelations, p.metricsRecorder,
+	)
+	p.publishMessagesAsLogs(ctx, messages)
+}
+
+func (p *connectorImpl) publishMessagesAsLogs(ctx context.Context, messages []internal.MessageWithKey) {
+	if len(messages) == 0 {
+		return
+	}
+
+	log := plog.NewLogs()
+	scopeLog := log.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+
+	for _, mwk := range messages {
+		if err := addEvent(&scopeLog, mwk); err != nil {
+			p.logger.Error("failed to add event to scope log", zap.Error(err))
+			continue
+		}
+		p.logger.Debug("added event to scope log", zap.Any("key", mwk.Key))
+	}
+
+	if log.LogRecordCount() == 0 {
+		return
+	}
+
+	if err := p.logsConsumer.ConsumeLogs(ctx, log); err != nil {
+		p.logger.Error("Error sending logs to the next component", zap.Error(err))
 	}
 }
 
@@ -179,12 +195,12 @@ func (p *connectorImpl) updateMappings() {
 func addEvent(scopeLog *plog.ScopeLogs, mwk internal.MessageWithKey) error {
 	msgAsBytes, err := proto.Marshal(mwk.Message)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal message: %w", err)
 	}
 
 	keyAsBytes, err := proto.Marshal(mwk.Key)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal key: %w", err)
 	}
 
 	logRecord := scopeLog.LogRecords().AppendEmpty()

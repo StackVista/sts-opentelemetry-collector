@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/otel/attribute"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 
 	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
@@ -40,10 +42,11 @@ func boolExpr(s string) settings.OtelBooleanExpression {
 
 type noopMetrics struct{}
 
-func (n *noopMetrics) IncSpansProcessed(_ context.Context, _ int64)                              {}
-func (n *noopMetrics) IncComponentsProduced(_ context.Context, _ int64, _ ...attribute.KeyValue) {}
-func (n *noopMetrics) IncRelationsProduced(_ context.Context, _ int64, _ ...attribute.KeyValue)  {}
-func (n *noopMetrics) IncErrors(_ context.Context, _ int64, _ string)                            {}
+func (n *noopMetrics) IncSpansProcessed(_ context.Context, _ int64) {}
+func (n *noopMetrics) IncMappingsProduced(_ context.Context, _ int64, _ settings.SettingType, _ ...attribute.KeyValue) {
+}
+func (n *noopMetrics) IncSettingsRemoved(_ context.Context, _ int64, _ settings.SettingType) {}
+func (n *noopMetrics) IncMappingErrors(_ context.Context, _ int64, _ settings.SettingType)   {}
 func (n *noopMetrics) RecordMappingDuration(_ context.Context, _ time.Duration, _ ...attribute.KeyValue) {
 }
 
@@ -641,6 +644,54 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 		}
 		assert.Equal(t, expectedKeys, actualKeys)
 	})
+}
+
+func TestPipeline_ConvertMappingRemovalsToTopologyStreamMessage(t *testing.T) {
+	ctx := context.Background()
+	logger := zap.NewNop()
+
+	componentMappings := []settings.OtelComponentMapping{
+		createSimpleComponentMapping("mapping1"),
+		createSimpleComponentMapping("mapping2"),
+	}
+	relationMappings := []settings.OtelRelationMapping{
+		createSimpleRelationMapping("mapping3"),
+	}
+
+	messages := ConvertMappingRemovalsToTopologyStreamMessage(
+		ctx, logger, componentMappings, relationMappings, &noopMetrics{},
+	)
+
+	// Expect one message per mapping per shard
+	expectedMessages := (len(componentMappings) + len(relationMappings)) * ShardCount
+	require.Len(t, messages, expectedMessages)
+
+	// Validate message content
+	for _, msg := range messages {
+		assert.NotNil(t, msg.Key)
+		assert.NotNil(t, msg.Message)
+
+		assert.Equal(t, topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL, msg.Key.Owner)
+		assert.Contains(t, msg.Key.DataSource, "mapping")
+
+		// Validate the payload type
+		payload := msg.Message.GetTopologyStreamRemove()
+		require.NotNil(t, payload)
+		assert.Contains(t, payload.RemovalCause, "was removed")
+
+		// Validate timestamps are reasonable
+		assert.Greater(t, msg.Message.SubmittedTimestamp, int64(0))
+		assert.GreaterOrEqual(t, msg.Message.CollectionTimestamp, msg.Message.SubmittedTimestamp)
+	}
+
+	// Validate shard IDs cover all expected shards
+	seenShards := map[string]bool{}
+	for _, msg := range messages {
+		seenShards[msg.Key.ShardId] = true
+	}
+	for i := 0; i < ShardCount; i++ {
+		assert.True(t, seenShards[fmt.Sprintf("%d", i)], "expected shard %d to be present", i)
+	}
 }
 
 func createSimpleComponentMapping(id string) settings.OtelComponentMapping {

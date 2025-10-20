@@ -59,7 +59,7 @@ func createTracesToLogsConnector(
 		ctx,
 		*typedCfg,
 		params.Logger,
-		params.TelemetrySettings,
+		metrics.NewConnectorMetrics(Type.String(), params.MeterProvider),
 		nextConsumer,
 	)
 }

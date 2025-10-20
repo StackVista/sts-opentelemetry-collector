@@ -9,6 +9,7 @@ import (
 	"time"
 
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
+	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/internal"
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter"
 	stsSettingsApi "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
@@ -19,10 +20,21 @@ import (
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )
+
+type noopMetrics struct{}
+
+func (n *noopMetrics) IncSpansProcessed(_ context.Context, _ int64) {}
+func (n *noopMetrics) IncMappingsProduced(_ context.Context, _ int64, _ settings.SettingType, _ ...attribute.KeyValue) {
+}
+func (n *noopMetrics) IncSettingsRemoved(_ context.Context, _ int64, _ settings.SettingType) {}
+func (n *noopMetrics) IncMappingErrors(_ context.Context, _ int64, _ settings.SettingType)   {}
+func (n *noopMetrics) RecordMappingDuration(_ context.Context, _ time.Duration, _ ...attribute.KeyValue) {
+}
 
 func TestConnectorStart(t *testing.T) {
 	logConsumer := &consumertest.LogsSink{}
@@ -55,8 +67,9 @@ func TestConnectorStart(t *testing.T) {
 		host := &mockHost{ext: extensions}
 		err := connector.Start(context.Background(), host)
 		require.NoError(t, err)
-		assert.Len(t, *connector.componentMappings, 1)
-		assert.Len(t, *connector.relationMappings, 2)
+		componentMappings, relationMappings := connector.snapshotManager.Current()
+		assert.Len(t, componentMappings, 1)
+		assert.Len(t, relationMappings, 2)
 
 		provider.componentMappings = []settings.OtelComponentMapping{
 			createSimpleComponentMapping("mapping1"),
@@ -66,13 +79,74 @@ func TestConnectorStart(t *testing.T) {
 		provider.relationMappings = []settings.OtelRelationMapping{
 			createSimpleRelationMapping("mapping4"),
 		}
-		assert.Len(t, *connector.componentMappings, 1)
-		assert.Len(t, *connector.relationMappings, 2)
+		componentMappings, relationMappings = connector.snapshotManager.Current()
+		assert.Len(t, componentMappings, 1)
+		assert.Len(t, relationMappings, 2)
 
 		provider.channel <- stsSettingsEvents.UpdateSettingsEvent{}
-		time.Sleep(50 * time.Millisecond) // settle time to process update event (can be flaky if omitted)
-		assert.Len(t, *connector.componentMappings, 3)
-		assert.Len(t, *connector.relationMappings, 1)
+		time.Sleep(100 * time.Millisecond) // wait for snapshot manager to update
+		componentMappings, relationMappings = connector.snapshotManager.Current()
+		assert.Len(t, componentMappings, 3)
+		assert.Len(t, relationMappings, 1)
+	})
+
+	t.Run("emits removal messages when mappings are deleted", func(t *testing.T) {
+		ctx := context.Background()
+		logConsumer := &consumertest.LogsSink{}
+		metrics := &noopMetrics{}
+		connector, _ := newConnector(Config{}, zap.NewNop(), metrics, logConsumer)
+
+		provider := newMockStsSettingsProvider(
+			[]settings.OtelComponentMapping{
+				createSimpleComponentMapping("mapping1"),
+			},
+			[]settings.OtelRelationMapping{
+				createSimpleRelationMapping("mapping2"),
+			},
+		)
+		var extensions = map[component.ID]component.Component{
+			component.MustNewID(stsSettingsApi.Type.String()): provider,
+		}
+		host := &mockHost{ext: extensions}
+		require.NoError(t, connector.Start(ctx, host))
+
+		// Verify initial state has mappings
+		componentMappings, relationMappings := connector.snapshotManager.Current()
+		require.Len(t, componentMappings, 1)
+		require.Len(t, relationMappings, 1)
+
+		// Simulate removal (empty provider)
+		provider.componentMappings = nil
+		provider.relationMappings = nil
+		provider.channel <- stsSettingsEvents.UpdateSettingsEvent{}
+
+		expectedLogRecordsCount := (len(componentMappings) + len(relationMappings)) * 4 // 4 shards
+
+		// Wait for async update to propagate and removal logs to be emitted
+		require.Eventually(t, func() bool {
+			return logConsumer.LogRecordCount() >= expectedLogRecordsCount
+		}, 2*time.Second, 100*time.Millisecond)
+
+		allLogs := logConsumer.AllLogs()
+		require.NotEmpty(t, allLogs)
+
+		// Extract all log records
+		var records []plog.LogRecord
+		for i := 0; i < len(allLogs); i++ {
+			rl := allLogs[i].ResourceLogs()
+			for j := 0; j < rl.Len(); j++ {
+				sl := rl.At(j).ScopeLogs()
+				for k := 0; k < sl.Len(); k++ {
+					lr := sl.At(k).LogRecords()
+					for n := 0; n < lr.Len(); n++ {
+						records = append(records, lr.At(n))
+					}
+				}
+			}
+		}
+		require.Len(t, records, expectedLogRecordsCount)
+
+		// message content is validated by the pipeline_test.go
 	})
 }
 
@@ -207,6 +281,60 @@ func TestConnectorConsumeTraces(t *testing.T) {
 		assert.Equal(t, "web-service", relationPayload.TopologyStreamRepeatElementsData.Relations[0].TargetIdentifier)
 		assert.Equal(t, "http-request", relationPayload.TopologyStreamRepeatElementsData.Relations[0].TypeName)
 
+	})
+}
+
+func TestPublishTopologyMessagesAsLogs(t *testing.T) {
+	ctx := context.Background()
+	logConsumer := &consumertest.LogsSink{}
+	logger := zap.NewNop()
+
+	conn := &connectorImpl{
+		logger:       logger,
+		logsConsumer: logConsumer,
+	}
+
+	t.Run("publishes valid messages", func(t *testing.T) {
+		logConsumer.Reset()
+		key := &topostreamv1.TopologyStreamMessageKey{
+			Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+			DataSource: "urn:test:component",
+			ShardId:    "1",
+		}
+		message := &topostreamv1.TopologyStreamMessage{
+			Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
+				TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
+					ExpiryIntervalMs: 60000,
+				},
+			},
+		}
+
+		conn.publishMessagesAsLogs(ctx, []internal.MessageWithKey{{
+			Key:     key,
+			Message: message,
+		}})
+
+		require.Equal(t, 1, logConsumer.LogRecordCount())
+
+		allLogs := logConsumer.AllLogs()
+		require.Len(t, allLogs, 1)
+		scopeLogs := allLogs[0].ResourceLogs().At(0).ScopeLogs().At(0)
+		require.Equal(t, 1, scopeLogs.LogRecords().Len())
+
+		logRecord := scopeLogs.LogRecords().At(0)
+		keyRaw, _ := logRecord.Attributes().Get(stskafkaexporter.KafkaMessageKey)
+		var decodedKey topostreamv1.TopologyStreamMessageKey
+		err := proto.Unmarshal(keyRaw.Bytes().AsRaw(), &decodedKey)
+		require.NoError(t, err)
+		assert.Equal(t, "urn:test:component", decodedKey.DataSource)
+	})
+
+	t.Run("handles empty messages gracefully", func(t *testing.T) {
+		logConsumer.Reset()
+		conn.publishMessagesAsLogs(ctx, nil)
+		assert.Equal(t, 0, logConsumer.LogRecordCount())
+		conn.publishMessagesAsLogs(ctx, []internal.MessageWithKey{})
+		assert.Equal(t, 0, logConsumer.LogRecordCount())
 	})
 }
 
