@@ -2,6 +2,7 @@ package tracetotopoconnector
 
 import (
 	"context"
+	"slices"
 	"sync"
 
 	stsSettingsApi "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
@@ -18,17 +19,19 @@ type SnapshotManager struct {
 	logger  *zap.Logger
 	mu      sync.RWMutex
 	cancel  context.CancelFunc
+	signal  stsSettingsModel.OtelInputSignal
 	stopped chan struct{}
 
 	componentMappings []stsSettingsModel.OtelComponentMapping
 	relationMappings  []stsSettingsModel.OtelRelationMapping
 }
 
-func NewSnapshotManager(logger *zap.Logger) *SnapshotManager {
+func NewSnapshotManager(logger *zap.Logger, signal stsSettingsModel.OtelInputSignal) *SnapshotManager {
 	return &SnapshotManager{
 		logger:            logger,
 		componentMappings: []stsSettingsModel.OtelComponentMapping{},
 		relationMappings:  []stsSettingsModel.OtelRelationMapping{},
+		signal:            signal,
 	}
 }
 
@@ -73,19 +76,31 @@ func (s *SnapshotManager) GetAndUpdateSettingSnapshots(
 	provider stsSettingsApi.StsSettingsProvider,
 	onRemovals func(context.Context, []stsSettingsModel.OtelComponentMapping, []stsSettingsModel.OtelRelationMapping),
 ) {
-	newComponents, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelComponentMapping](provider)
+	newComponentMappings, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelComponentMapping](provider)
 	if err != nil {
 		s.logger.Error("failed to get component mappings", zap.Error(err))
 		return
 	}
+	applicableComponentMappings := []stsSettingsModel.OtelComponentMapping{}
+	for _, mapping := range newComponentMappings {
+		if slices.Contains(mapping.InputSignals, s.signal) {
+			applicableComponentMappings = append(applicableComponentMappings, mapping)
+		}
+	}
 
-	newRelations, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelRelationMapping](provider)
+	newRelationMappings, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelRelationMapping](provider)
 	if err != nil {
 		s.logger.Error("failed to get relation mappings", zap.Error(err))
 		return
 	}
+	applicableRelationMappings := []stsSettingsModel.OtelRelationMapping{}
+	for _, mapping := range newRelationMappings {
+		if slices.Contains(mapping.InputSignals, s.signal) {
+			applicableRelationMappings = append(applicableRelationMappings, mapping)
+		}
+	}
 
-	change := s.Update(newComponents, newRelations)
+	change := s.Update(applicableComponentMappings, applicableRelationMappings)
 	if len(change.RemovedComponentMappings) > 0 || len(change.RemovedRelationMappings) > 0 {
 		onRemovals(ctx, change.RemovedComponentMappings, change.RemovedRelationMappings)
 	}

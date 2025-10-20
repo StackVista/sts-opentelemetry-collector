@@ -162,7 +162,7 @@ func TestEvalVariables(t *testing.T) {
 					varExpressionLookup: tt.varExpressionLookup,
 					varErrsLookup:       tt.varErrsLookup,
 				},
-				NewEvalContext(nil, nil, nil), &vars,
+				NewSpanEvalContext(nil, nil, nil), &vars,
 			)
 
 			if tt.expectErr != nil {
@@ -204,7 +204,7 @@ func TestEvalVariables_withRealContext(t *testing.T) {
 	}
 
 	// Pass along constructed span, scope and resource to validate plumbing works as expected
-	got, errs := EvalVariables(fakeEval, NewEvalContext(span.Attributes().AsRaw(), scope.Scope().Attributes().AsRaw(), resource.Resource().Attributes().AsRaw()), &vars)
+	got, errs := EvalVariables(fakeEval, NewSpanEvalContext(span.Attributes().AsRaw(), scope.Scope().Attributes().AsRaw(), resource.Resource().Attributes().AsRaw()), &vars)
 
 	require.Nil(t, errs)
 	require.Equal(t, map[string]any{

@@ -9,10 +9,12 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter"
 	stsSettingsApi "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/plog"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
@@ -28,6 +30,7 @@ type connectorImpl struct {
 	eval             *internal.CelEvaluator
 	mapper           *internal.Mapper
 	metricsRecorder  metrics.ConnectorMetricsRecorder
+	supportedSignal   settings.OtelInputSignal
 }
 
 func newConnector(
@@ -36,8 +39,9 @@ func newConnector(
 	logger *zap.Logger,
 	telemetrySettings component.TelemetrySettings,
 	nextConsumer consumer.Logs,
+	supportedSignal settings.OtelInputSignal,
 ) (*connectorImpl, error) {
-	logger.Info("Building tracetotopo connector")
+	logger.Info("Building topology connector")
 	eval, err := internal.NewCELEvaluator(
 		ctx, cfg.ExpressionCacheSettings.ToMetered("cel_expression_cache", telemetrySettings),
 	)
@@ -50,7 +54,7 @@ func newConnector(
 		cfg.TagRegexCacheSettings.ToMetered("tag_regex_cache", telemetrySettings),
 		cfg.TagRegexCacheSettings.ToMetered("tag_template_cache", telemetrySettings),
 	)
-	snapshotManager := NewSnapshotManager(logger)
+	snapshotManager := NewSnapshotManager(logger, supportedSignal)
 	metricsRecorder := metrics.NewConnectorMetrics(Type.String(), telemetrySettings)
 
 	return &connectorImpl{
@@ -61,6 +65,7 @@ func newConnector(
 		mapper:          mapper,
 		snapshotManager: snapshotManager,
 		metricsRecorder: metricsRecorder,
+		supportedSignal:   supportedSignal,
 	}, nil
 }
 
@@ -100,7 +105,37 @@ func (p *connectorImpl) Capabilities() consumer.Capabilities {
 	return consumer.Capabilities{MutatesData: false}
 }
 
-func (p *connectorImpl) ConsumeTraces(ctx context.Context, td ptrace.Traces) error {
+func (p *connectorImpl) ConsumeMetrics(ctx context.Context, metrics pmetric.Metrics) error {
+	start := time.Now()
+
+	collectionTimestampMs := time.Now().UnixMilli()
+		componentMappings, relationMappings := p.snapshotManager.Current()
+
+	messagesWithKeys := internal.ConvertMetricsToTopologyStreamMessage(
+		ctx,
+		p.logger,
+		p.eval,
+		p.mapper,
+		metrics,
+		componentMappings,
+		relationMappings,
+		collectionTimestampMs,
+		p.metricsRecorder,
+	)
+
+	duration := time.Since(start)
+	p.publishMessagesAsLogs(ctx, messagesWithKeys)
+
+	p.metricsRecorder.RecordMappingDuration(
+		ctx, duration,
+		attribute.String("phase", "consume_traces"),
+		attribute.String("target", "spans"),
+		attribute.Int("mapping_count", len(componentMappings)+len(relationMappings)),
+	)
+
+}
+
+func (p *connectorImpl) ConsumeTraces(ctx context.Context, traceData ptrace.Traces) error {
 	start := time.Now()
 	collectionTimestampMs := start.UnixMilli()
 
@@ -110,15 +145,17 @@ func (p *connectorImpl) ConsumeTraces(ctx context.Context, td ptrace.Traces) err
 		p.logger,
 		p.eval,
 		p.mapper,
-		td,
+		traceData,
 		componentMappings,
 		relationMappings,
 		collectionTimestampMs,
 		p.metricsRecorder,
 	)
-	p.publishMessagesAsLogs(ctx, messages)
 
 	duration := time.Since(start)
+
+	p.publishMessagesAsLogs(ctx, messages)
+
 	p.metricsRecorder.RecordMappingDuration(
 		ctx, duration,
 		attribute.String("phase", "consume_traces"),

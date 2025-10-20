@@ -45,7 +45,7 @@ func makeContext() ExpressionEvalContext {
 		"namespace": "test",
 	}
 
-	return *NewEvalContext(span.Attributes().AsRaw(), scope.Scope().Attributes().AsRaw(), res.Resource().Attributes().AsRaw()).CloneWithVariables(vars)
+	return *NewSpanEvalContext(span.Attributes().AsRaw(), scope.Scope().Attributes().AsRaw(), res.Resource().Attributes().AsRaw()).CloneWithVariables(vars)
 }
 
 func makeMeteredCacheSettings(size int, ttl time.Duration) metrics.MeteredCacheSettings {

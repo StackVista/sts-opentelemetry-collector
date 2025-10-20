@@ -13,8 +13,8 @@ import (
 
 type ConnectorMetricsRecorder interface {
 	IncSpansProcessed(ctx context.Context, n int64)
-	IncMappingsProduced(ctx context.Context, n int64, settingType settings.SettingType, attrs ...attribute.KeyValue)
-	IncMappingsRemoved(ctx context.Context, n int64, settingType settings.SettingType)
+	IncComponentsProduced(ctx context.Context, n int64, settingType settings.SettingType, attrs ...attribute.KeyValue)
+	IncComponentsRemoved(ctx context.Context, n int64, settingType settings.SettingType)
 	IncMappingErrors(ctx context.Context, n int64, settingType settings.SettingType)
 	RecordMappingDuration(ctx context.Context, d time.Duration, labels ...attribute.KeyValue)
 }
@@ -84,7 +84,7 @@ func (pm *ConnectorMetrics) IncSpansProcessed(ctx context.Context, n int64) {
 	pm.spansProcessed.Add(ctx, n)
 }
 
-func (pm *ConnectorMetrics) IncMappingsProduced(
+func (pm *ConnectorMetrics) IncComponentsProduced(
 	ctx context.Context,
 	n int64,
 	settingType settings.SettingType,
@@ -94,7 +94,7 @@ func (pm *ConnectorMetrics) IncMappingsProduced(
 	pm.mappingsTotal.Add(ctx, n, metric.WithAttributes(attrs...))
 }
 
-func (pm *ConnectorMetrics) IncMappingsRemoved(ctx context.Context, n int64, settingType settings.SettingType) {
+func (pm *ConnectorMetrics) IncComponentsRemoved(ctx context.Context, n int64, settingType settings.SettingType) {
 	pm.mappingsRemoved.Add(ctx, n, metric.WithAttributes(attribute.String("setting_type", string(settingType))))
 }
 

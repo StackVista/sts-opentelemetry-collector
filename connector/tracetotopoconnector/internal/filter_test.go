@@ -55,7 +55,7 @@ func conditionMapping(expr string, action settings.OtelConditionMappingAction) s
 func TestFilter_evalCondition(t *testing.T) {
 	t.Parallel()
 
-	evalCtx := NewEvalContext(map[string]any{}, map[string]any{}, map[string]any{}).CloneWithVariables(map[string]any{})
+	evalCtx := NewSpanEvalContext(map[string]any{}, map[string]any{}, map[string]any{}).CloneWithVariables(map[string]any{})
 
 	matchingExpr := "spanAttributes.test-attr"
 	nonMatchingExpr := "spanAttributes.non-existing-attr"
@@ -109,7 +109,7 @@ func TestFilter_evalCondition(t *testing.T) {
 func TestFilter_filterByConditions(t *testing.T) {
 	t.Parallel()
 
-	evalCtx := NewEvalContext(map[string]any{}, map[string]any{}, map[string]any{}).CloneWithVariables(map[string]any{})
+	evalCtx := NewSpanEvalContext(map[string]any{}, map[string]any{}, map[string]any{}).CloneWithVariables(map[string]any{})
 
 	matchingExpr := "spanAttributes.test-attr"
 	nonMatchingExpr := "spanAttributes.non-existing-attr"

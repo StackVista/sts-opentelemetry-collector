@@ -31,7 +31,7 @@ func TestConnectorStart(t *testing.T) {
 
 	t.Run("return an error if not found settings provider", func(t *testing.T) {
 		connector, err := newConnector(
-			context.Background(), Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer,
+			context.Background(), Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer, settings.TRACES,
 		)
 		require.NoError(t, err)
 		err = connector.Start(context.Background(), componenttest.NewNopHost())
@@ -40,7 +40,7 @@ func TestConnectorStart(t *testing.T) {
 
 	t.Run("start with initial mappings and observe changes", func(t *testing.T) {
 		connector, _ := newConnector(
-			context.Background(), Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer,
+			context.Background(), Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer, settings.TRACES,
 		)
 		provider := NewMockStsSettingsProvider(
 			[]settings.OtelComponentMapping{
@@ -83,7 +83,7 @@ func TestConnectorStart(t *testing.T) {
 	t.Run("emits removal messages when mappings are deleted", func(t *testing.T) {
 		ctx := context.Background()
 		logConsumer := &consumertest.LogsSink{}
-		connector, _ := newConnector(ctx, Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer)
+		connector, _ := newConnector(ctx, Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer, settings.TRACES)
 
 		provider := NewMockStsSettingsProvider(
 			[]settings.OtelComponentMapping{
@@ -141,7 +141,7 @@ func TestConnectorStart(t *testing.T) {
 
 func TestConnectorConsumeTraces(t *testing.T) {
 	logConsumer := &consumertest.LogsSink{}
-	connector, _ := newConnector(context.Background(), Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer)
+	connector, _ := newConnector(context.Background(), Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer, settings.TRACES)
 	provider := NewMockStsSettingsProvider(
 		[]settings.OtelComponentMapping{
 			createSimpleComponentMapping("mapping1"),
@@ -150,6 +150,7 @@ func TestConnectorConsumeTraces(t *testing.T) {
 			createSimpleRelationMapping("mapping2"),
 		},
 	)
+
 	var extensions = map[component.ID]component.Component{
 		component.MustNewID(stsSettingsApi.Type.String()): provider,
 	}

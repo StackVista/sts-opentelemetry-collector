@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/connector"
 	"go.opentelemetry.io/collector/consumer"
@@ -21,6 +22,7 @@ func NewFactory() connector.Factory {
 		Type,
 		createDefaultConfig,
 		connector.WithTracesToLogs(createTracesToLogsConnector, component.StabilityLevelAlpha),
+		connector.WithMetricsToLogs(createMetricsToLogsConnector, component.StabilityLevelAlpha),
 	)
 }
 
@@ -61,5 +63,27 @@ func createTracesToLogsConnector(
 		params.Logger,
 		params.TelemetrySettings,
 		nextConsumer,
+		settings.TRACES,
+	)
+}
+
+func createMetricsToLogsConnector(
+	ctx context.Context,
+	params connector.CreateSettings,
+	cfg component.Config,
+	nextConsumer consumer.Logs,
+) (connector.Metrics, error) {
+	typedCfg, ok := cfg.(*Config)
+	if !ok {
+		return nil, fmt.Errorf("invalid config type: %T", cfg)
+	}
+
+	return newConnector(
+		ctx,
+		*typedCfg,
+		params.Logger,
+		params.TelemetrySettings,
+		nextConsumer,
+		settings.TRACES,
 	)
 }
