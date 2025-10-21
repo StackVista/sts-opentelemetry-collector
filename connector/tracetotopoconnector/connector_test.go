@@ -14,7 +14,6 @@ import (
 	stsSettingsApi "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
@@ -23,8 +22,46 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.uber.org/zap"
+
+	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
 )
+
+// ptr is a helper to get a pointer to any value.
+type MessageWithKey struct {
+	Key     *topostreamv1.TopologyStreamMessageKey
+	Message *topostreamv1.TopologyStreamMessage
+}
+// Helper to create a TopologyStreamMessageKey
+func extractMessagesWithKey(t *testing.T, logs plog.Logs) []*MessageWithKey {
+	var messages []*MessageWithKey
+	for i := 0; i < logs.ResourceLogs().Len(); i++ {
+		rl := logs.ResourceLogs().At(i)
+		for j := 0; j < rl.ScopeLogs().Len(); j++ {
+			sl := rl.ScopeLogs().At(j)
+			for k := 0; k < sl.LogRecords().Len(); k++ {
+				messages = append(messages, extractMessageWithKey(t, sl.LogRecords().At(k)))
+			}
+		}
+	}
+	return messages
+}
+
+func extractMessageWithKey(t *testing.T, lr plog.LogRecord) *MessageWithKey {
+	keyBytes, ok := lr.Attributes().Get(stskafkaexporter.KafkaMessageKey)
+	require.True(t, ok)
+	msgBytes := lr.Body().Bytes().AsRaw()
+
+	var key topostreamv1.TopologyStreamMessageKey
+	err := proto.Unmarshal(keyBytes.Bytes().AsRaw(), &key)
+	require.NoError(t, err)
+
+	var msg topostreamv1.TopologyStreamMessage
+	err = proto.Unmarshal(msgBytes, &msg)
+	require.NoError(t, err)
+
+	return &MessageWithKey{Key: &key, Message: &msg}
+}
 
 func TestConnectorStart(t *testing.T) {
 	logConsumer := &consumertest.LogsSink{}
@@ -163,27 +200,30 @@ func TestConnectorConsumeTraces(t *testing.T) {
 		submittedTime := uint64(1756851083000)
 		traces := ptrace.NewTraces()
 		rs := traces.ResourceSpans().AppendEmpty()
-		rs.Resource().Attributes().PutStr("service.name", "checkout-service")
-		rs.Resource().Attributes().PutStr("service.instance.id", "627cc493")
-		rs.Resource().Attributes().PutStr("service.namespace", "shop")
-		rs.Resource().Attributes().PutStr("service.version", "1.2.3")
-		rs.Resource().Attributes().PutStr("host.name", "ip-10-1-2-3.ec2.internal")
-		rs.Resource().Attributes().PutStr("os.type", "linux")
-		rs.Resource().Attributes().PutStr("process.pid", "12345")
-		rs.Resource().Attributes().PutStr("cloud.provider", "aws")
-		rs.Resource().Attributes().PutStr("k8s.pod.name", "checkout-service-8675309")
+		_ = rs.Resource().Attributes().FromRaw(map[string]any{
+			"service.name":        "checkout-service",
+			"service.instance.id": "627cc493",
+			"service.namespace":   "shop",
+			"service.version":     "1.2.3",
+			"host.name":           "ip-10-1-2-3.ec2.internal",
+			"os.type":             "linux",
+			"process.pid":         "12345",
+			"cloud.provider":      "aws",
+			"k8s.pod.name":        "checkout-service-8675309",
+		})
 		ss := rs.ScopeSpans().AppendEmpty()
-		ss.Scope().Attributes().PutStr("otel.scope.name", "io.opentelemetry.instrumentation.http")
-		ss.Scope().Attributes().PutStr("otel.scope.version", "1.17.0")
+		_ = ss.Scope().Attributes().FromRaw(map[string]any{"otel.scope.name": "io.opentelemetry.instrumentation.http", "otel.scope.version": "1.17.0"})
 		span := ss.Spans().AppendEmpty()
 		span.SetEndTimestamp(pcommon.Timestamp(submittedTime))
-		span.Attributes().PutStr("http.method", "POST")     // doesn't match component conditions
-		span.Attributes().PutStr("http.status_code", "404") // doesn't match relation conditions
-		span.Attributes().PutStr("db.system", "postgresql")
-		span.Attributes().PutStr("db.statement", "SELECT * FROM users WHERE id = 123")
-		span.Attributes().PutStr("net.peer.name", "api.example.com")
-		span.Attributes().PutStr("user.id", "123")
-		span.Attributes().PutStr("service.name", "web-service")
+		_ = span.Attributes().FromRaw(map[string]any{
+			"http.method":      "POST", // doesn't match component conditions
+			"http.status_code": "404",  // doesn't match relation conditions
+			"db.system":        "postgresql",
+			"db.statement":     "SELECT * FROM users WHERE id = 123",
+			"net.peer.name":    "api.example.com",
+			"user.id":          "123",
+			"service.name":     "web-service",
+		})
 
 		assert.Equal(t, 0, logConsumer.LogRecordCount())
 
@@ -199,78 +239,79 @@ func TestConnectorConsumeTraces(t *testing.T) {
 		submittedTime := uint64(1756851083000)
 		traces := ptrace.NewTraces()
 		rs := traces.ResourceSpans().AppendEmpty()
-		rs.Resource().Attributes().PutStr("service.name", "checkout-service")
-		rs.Resource().Attributes().PutStr("service.instance.id", "627cc493")
-		rs.Resource().Attributes().PutStr("service.namespace", "shop")
-		rs.Resource().Attributes().PutStr("service.version", "1.2.3")
-		rs.Resource().Attributes().PutStr("host.name", "ip-10-1-2-3.ec2.internal")
-		rs.Resource().Attributes().PutStr("os.type", "linux")
-		rs.Resource().Attributes().PutStr("process.pid", "12345")
-		rs.Resource().Attributes().PutStr("cloud.provider", "aws")
-		rs.Resource().Attributes().PutStr("k8s.pod.name", "checkout-service-8675309")
+		_ = rs.Resource().Attributes().FromRaw(map[string]any{
+			"service.name":        "checkout-service",
+			"service.instance.id": "627cc493",
+			"service.namespace":   "shop",
+			"service.version":     "1.2.3",
+			"host.name":           "ip-10-1-2-3.ec2.internal",
+			"os.type":             "linux",
+			"process.pid":         "12345",
+			"cloud.provider":      "aws",
+			"k8s.pod.name":        "checkout-service-8675309",
+		})
 		ss := rs.ScopeSpans().AppendEmpty()
-		ss.Scope().Attributes().PutStr("otel.scope.name", "io.opentelemetry.instrumentation.http")
-		ss.Scope().Attributes().PutStr("otel.scope.version", "1.17.0")
+		_ = ss.Scope().Attributes().FromRaw(map[string]any{"otel.scope.name": "io.opentelemetry.instrumentation.http", "otel.scope.version": "1.17.0"})
 		span := ss.Spans().AppendEmpty()
 		span.SetEndTimestamp(pcommon.Timestamp(submittedTime))
-		span.Attributes().PutStr("http.method", "GET")
-		span.Attributes().PutStr("http.status_code", "200")
-		span.Attributes().PutStr("db.system", "postgresql")
-		span.Attributes().PutStr("db.statement", "SELECT * FROM users WHERE id = 123")
-		span.Attributes().PutStr("net.peer.name", "api.example.com")
-		span.Attributes().PutStr("user.id", "123")
-		span.Attributes().PutStr("service.name", "web-service")
+		_ = span.Attributes().FromRaw(map[string]any{
+			"http.method":      "GET",
+			"http.status_code": "200",
+			"db.system":        "postgresql",
+			"db.statement":     "SELECT * FROM users WHERE id = 123",
+			"net.peer.name":    "api.example.com",
+			"user.id":          "123",
+			"service.name":     "web-service",
+		})
 
 		assert.Equal(t, 0, logConsumer.LogRecordCount())
 
-		err := connector.ConsumeTraces(context.Background(), traces)
+		err = connector.ConsumeTraces(context.Background(), traces)
 		require.NoError(t, err)
 
-		assert.Equal(t, 2, logConsumer.LogRecordCount()) // one for component and one for relation
-		actual := logConsumer.AllLogs()
-		assert.Len(t, actual, 1)
-		assert.Equal(t, 1, actual[0].ResourceLogs().Len())
-		assert.Equal(t, 1, actual[0].ResourceLogs().At(0).ScopeLogs().Len())
-		assert.Equal(t, 2, actual[0].ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().Len())
+		actualLogs := logConsumer.AllLogs()
+		require.Len(t, actualLogs, 1)
+		messages := extractMessagesWithKey(t, actualLogs[0])
+		require.Len(t, messages, 2)
 
-		componentLogRecord := actual[0].ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0)
-		componentKeyRaw, _ := componentLogRecord.Attributes().Get(stskafkaexporter.KafkaMessageKey)
-		componentKey := topostreamv1.TopologyStreamMessageKey{}
-		err = proto.Unmarshal(componentKeyRaw.Bytes().AsRaw(), &componentKey)
-		require.NoError(t, err)
-		assert.Equal(t, topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL, componentKey.Owner)
-		assert.Equal(t, "urn:otel-component-mapping:mapping1", componentKey.DataSource)
-		assert.Equal(t, "0", componentKey.ShardId)
-		componentMassage := topostreamv1.TopologyStreamMessage{}
-		err = proto.Unmarshal(componentLogRecord.Body().Bytes().AsRaw(), &componentMassage)
-		require.NoError(t, err)
-		componentPayload, _ := componentMassage.Payload.(*topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData)
-		assert.Equal(t, int64(60000), componentPayload.TopologyStreamRepeatElementsData.ExpiryIntervalMs)
-		assert.Equal(t, 1, len(componentPayload.TopologyStreamRepeatElementsData.Components))
-		assert.Equal(t, "627cc493", componentPayload.TopologyStreamRepeatElementsData.Components[0].ExternalId)
-		assert.Equal(t, "checkout-service", componentPayload.TopologyStreamRepeatElementsData.Components[0].Name)
-		assert.Equal(t, "service-instance", componentPayload.TopologyStreamRepeatElementsData.Components[0].TypeName)
-		assert.Equal(t, "shop", componentPayload.TopologyStreamRepeatElementsData.Components[0].DomainName)
-		assert.Equal(t, "backend", componentPayload.TopologyStreamRepeatElementsData.Components[0].LayerName)
+		var componentMsg, relationMsg *MessageWithKey
+		for _, msg := range messages {
+			if msg.Message.GetTopologyStreamRepeatElementsData().GetComponents() != nil {
+				componentMsg = msg
+			}
+			if msg.Message.GetTopologyStreamRepeatElementsData().GetRelations() != nil {
+				relationMsg = msg
+			}
+		}
+		require.NotNil(t, componentMsg, "component message not found")
+		require.NotNil(t, relationMsg, "relation message not found")
 
-		relationLogRecord := actual[0].ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(1)
-		relationKeyRaw, _ := relationLogRecord.Attributes().Get(stskafkaexporter.KafkaMessageKey)
-		relationKey := topostreamv1.TopologyStreamMessageKey{}
-		err = proto.Unmarshal(relationKeyRaw.Bytes().AsRaw(), &relationKey)
-		require.NoError(t, err)
-		assert.Equal(t, topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL, relationKey.Owner)
-		assert.Equal(t, "urn:otel-relation-mapping:mapping2", relationKey.DataSource)
-		assert.Equal(t, "2", relationKey.ShardId)
-		relationMessage := topostreamv1.TopologyStreamMessage{}
-		err = proto.Unmarshal(relationLogRecord.Body().Bytes().AsRaw(), &relationMessage)
-		require.NoError(t, err)
-		relationPayload, _ := relationMessage.Payload.(*topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData)
-		assert.Equal(t, int64(300000), relationPayload.TopologyStreamRepeatElementsData.ExpiryIntervalMs)
-		assert.Equal(t, 1, len(relationPayload.TopologyStreamRepeatElementsData.Relations))
-		assert.Equal(t, "checkout-service", relationPayload.TopologyStreamRepeatElementsData.Relations[0].SourceIdentifier)
-		assert.Equal(t, "web-service", relationPayload.TopologyStreamRepeatElementsData.Relations[0].TargetIdentifier)
-		assert.Equal(t, "http-request", relationPayload.TopologyStreamRepeatElementsData.Relations[0].TypeName)
+		// Assert Component Message
+		assert.Equal(t, "urn:otel-component-mapping:mapping1", componentMsg.Key.DataSource)
+		assert.Equal(t, int64(submittedTime), componentMsg.Message.SubmittedTimestamp)
+		compData := componentMsg.Message.GetTopologyStreamRepeatElementsData()
+		require.NotNil(t, compData)
+		assert.Equal(t, int64(60000), compData.ExpiryIntervalMs)
+		require.Len(t, compData.Components, 1)
+		component := compData.Components[0]
+		assert.Equal(t, "627cc493", component.ExternalId)
+		assert.Equal(t, "checkout-service", component.Name)
+		assert.Equal(t, "service-instance", component.TypeName)
+		assert.Equal(t, "shop", component.DomainName)
+		assert.Equal(t, "backend", component.LayerName)
 
+		// Assert Relation Message
+		assert.Equal(t, "urn:otel-relation-mapping:mapping2", relationMsg.Key.DataSource)
+		assert.Equal(t, int64(submittedTime), relationMsg.Message.SubmittedTimestamp)
+		relData := relationMsg.Message.GetTopologyStreamRepeatElementsData()
+		require.NotNil(t, relData)
+		assert.Equal(t, int64(300000), relData.ExpiryIntervalMs)
+		require.Len(t, relData.Relations, 1)
+		relation := relData.Relations[0]
+		assert.Equal(t, "checkout-service-web-service", relation.ExternalId)
+		assert.Equal(t, "checkout-service", relation.SourceIdentifier)
+		assert.Equal(t, "web-service", relation.TargetIdentifier)
+		assert.Equal(t, "http-request", relation.TypeName)
 	})
 }
 
@@ -414,6 +455,7 @@ func createSimpleComponentMapping(id string) settings.OtelComponentMapping {
 			DomainName: strExpr(`${resourceAttributes["service.namespace"]}`),
 			LayerName:  strExpr("backend"),
 		},
+		InputSignals: []settings.OtelInputSignal{settings.TRACES},
 	}
 }
 
@@ -430,5 +472,6 @@ func createSimpleRelationMapping(id string) settings.OtelRelationMapping {
 			TargetId: strExpr(`${spanAttributes["service.name"]}`),
 			TypeName: strExpr("http-request"),
 		},
+		InputSignals: []settings.OtelInputSignal{settings.TRACES},
 	}
 }

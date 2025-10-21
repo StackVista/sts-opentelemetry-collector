@@ -58,29 +58,32 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 	submittedTime := int64(1756851083000)
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()
-	rs.Resource().Attributes().PutStr("service.name", "checkout-service")
-	rs.Resource().Attributes().PutStr("service.instance.id", "627cc493")
-	rs.Resource().Attributes().PutStr("service.namespace", "shop")
-	rs.Resource().Attributes().PutStr("service.version", "1.2.3")
-	rs.Resource().Attributes().PutStr("host.name", "ip-10-1-2-3.ec2.internal")
-	rs.Resource().Attributes().PutStr("os.type", "linux")
-	rs.Resource().Attributes().PutStr("process.pid", "12345")
+	_ = rs.Resource().Attributes().FromRaw(map[string]any{
+		"service.name":        "checkout-service",
+		"service.instance.id": "627cc493",
+		"service.namespace":   "shop",
+		"service.version":     "1.2.3",
+		"host.name":           "ip-10-1-2-3.ec2.internal",
+		"os.type":             "linux",
+		"process.pid":         "12345",
+		"cloud.provider":      "aws",
+		"k8s.pod.name":        "checkout-service-8675309",
+	})
 	_ = rs.Resource().Attributes().PutEmptySlice("process.command_args").FromRaw([]any{"ls", "-la", "/home"})
-	rs.Resource().Attributes().PutStr("cloud.provider", "aws")
-	rs.Resource().Attributes().PutStr("k8s.pod.name", "checkout-service-8675309")
 	ss := rs.ScopeSpans().AppendEmpty()
-	ss.Scope().Attributes().PutStr("otel.scope.name", "io.opentelemetry.instrumentation.http")
-	ss.Scope().Attributes().PutStr("otel.scope.version", "1.17.0")
+	_ = ss.Scope().Attributes().FromRaw(map[string]any{"otel.scope.name": "io.opentelemetry.instrumentation.http", "otel.scope.version": "1.17.0"})
 	span := ss.Spans().AppendEmpty()
 	//nolint:gosec
 	span.SetEndTimestamp(pcommon.Timestamp(submittedTime))
-	span.Attributes().PutStr("http.method", "GET")
-	span.Attributes().PutStr("http.status_code", "200")
-	span.Attributes().PutStr("db.system", "postgresql")
-	span.Attributes().PutStr("db.statement", "SELECT * FROM users WHERE id = 123")
-	span.Attributes().PutStr("net.peer.name", "api.example.com")
-	span.Attributes().PutStr("user.id", "123")
-	span.Attributes().PutStr("service.name", "web-service")
+	_ = span.Attributes().FromRaw(map[string]any{
+		"http.method":      "GET",
+		"http.status_code": "200",
+		"db.system":        "postgresql",
+		"db.statement":     "SELECT * FROM users WHERE id = 123",
+		"net.peer.name":    "api.example.com",
+		"user.id":          "123",
+		"service.name":     "web-service",
+	})
 
 	//nolint:dupl,govet
 	tests := []struct {
@@ -571,30 +574,31 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 	t.Run("Convert a trace with two span to multiple components and relations", func(t *testing.T) {
 		traceWithSpans := ptrace.NewTraces()
 		rsWithSpans := traceWithSpans.ResourceSpans().AppendEmpty()
-		rsWithSpans.Resource().Attributes().PutStr("service.name", "checkout-service")
-		rsWithSpans.Resource().Attributes().PutStr("service.instance.id", "627cc493")
-		rsWithSpans.Resource().Attributes().PutStr("service.namespace", "shop")
-		rsWithSpans.Resource().Attributes().PutStr("service.version", "1.2.3")
-		rsWithSpans.Resource().Attributes().PutStr("host.name", "ip-10-1-2-3.ec2.internal")
-		rsWithSpans.Resource().Attributes().PutStr("os.type", "linux")
-		rsWithSpans.Resource().Attributes().PutStr("process.pid", "12345")
-		rsWithSpans.Resource().Attributes().PutStr("cloud.provider", "aws")
-		rsWithSpans.Resource().Attributes().PutStr("k8s.pod.name", "checkout-service-8675309")
+		_ = rsWithSpans.Resource().Attributes().FromRaw(map[string]any{
+			"service.name":        "checkout-service",
+			"service.instance.id": "627cc493",
+			"service.namespace":   "shop",
+			"service.version":     "1.2.3",
+			"host.name":           "ip-10-1-2-3.ec2.internal",
+			"os.type":             "linux",
+			"process.pid":         "12345",
+			"cloud.provider":      "aws",
+			"k8s.pod.name":        "checkout-service-8675309",
+		})
 		ssWithSpans := rsWithSpans.ScopeSpans().AppendEmpty()
-		ssWithSpans.Scope().Attributes().PutStr("otel.scope.name", "io.opentelemetry.instrumentation.http")
-		ssWithSpans.Scope().Attributes().PutStr("otel.scope.version", "1.17.0")
+		_ = ssWithSpans.Scope().Attributes().FromRaw(map[string]any{"otel.scope.name": "io.opentelemetry.instrumentation.http", "otel.scope.version": "1.17.0"})
 		span1 := ssWithSpans.Spans().AppendEmpty()
 		//nolint:gosec
 		span1.SetEndTimestamp(pcommon.Timestamp(submittedTime))
-		span1.Attributes().PutStr("http.method", "GET")
-		span1.Attributes().PutStr("http.status_code", "200")
-		span1.Attributes().PutStr("service.name", "web-service")
+		_ = span1.Attributes().FromRaw(map[string]any{
+			"http.method":      "GET",
+			"http.status_code": "200",
+			"service.name":     "web-service",
+		})
 		span2 := ssWithSpans.Spans().AppendEmpty()
 		//nolint:gosec
 		span2.SetEndTimestamp(pcommon.Timestamp(submittedTime))
-		span2.Attributes().PutStr("http.method", "GET")
-		span2.Attributes().PutStr("http.status_code", "200")
-		span2.Attributes().PutStr("service.name", "payment-service")
+		_ = span2.Attributes().FromRaw(map[string]any{"http.method": "GET", "http.status_code": "200", "service.name": "payment-service"})
 
 		ctx := context.Background()
 		metrics := &noopMetrics{}
@@ -704,12 +708,14 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 	newTestMetrics := func(addMetric func(m pmetric.Metric)) pmetric.Metrics {
 		metrics := pmetric.NewMetrics()
 		rm := metrics.ResourceMetrics().AppendEmpty()
-		rm.Resource().Attributes().PutStr("service.name", "checkout-service")
-		rm.Resource().Attributes().PutStr("service.instance.id", "627cc493")
-		rm.Resource().Attributes().PutStr("service.namespace", "shop")
-		rm.Resource().Attributes().PutStr("k8s.pod.name", "checkout-service-8675309")
+		_ = rm.Resource().Attributes().FromRaw(map[string]any{
+			"service.name":        "checkout-service",
+			"service.instance.id": "627cc493",
+			"service.namespace":   "shop",
+			"k8s.pod.name":        "checkout-service-8675309",
+		})
 		sm := rm.ScopeMetrics().AppendEmpty()
-		sm.Scope().Attributes().PutStr("otel.scope.name", "io.opentelemetry.instrumentation.http")
+		_ = sm.Scope().Attributes().FromRaw(map[string]any{"otel.scope.name": "io.opentelemetry.instrumentation.http"})
 		m := sm.Metrics().AppendEmpty()
 		addMetric(m)
 		return metrics
@@ -725,10 +731,11 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 				sum := m.SetEmptySum()
 				dp := sum.DataPoints().AppendEmpty()
 				dp.SetTimestamp(pcommon.Timestamp(submittedTime))
-				dp.Attributes().PutStr("http.method", "GET")
-				dp.Attributes().PutStr("http.status_code", "200")
-				dp.Attributes().PutStr("net.peer.name", "api.example.com")
-				dp.Attributes().PutStr("service.name", "web-service") // This is a destination service
+				_ = dp.Attributes().FromRaw(map[string]any{
+					"http.method":      "GET",
+					"http.status_code": "200",
+					"net.peer.name":    "api.example.com",
+					"service.name":     "web-service"}) // This is a destination service
 			})}, {
 			name: "gaugeMetrics",
 			metrics: newTestMetrics(func(m pmetric.Metric) {
@@ -737,10 +744,11 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 				dp := gauge.DataPoints().AppendEmpty()
 				dp.SetTimestamp(pcommon.Timestamp(submittedTime))
 				dp.SetIntValue(10)
-				dp.Attributes().PutStr("http.method", "GET")
-				dp.Attributes().PutStr("http.status_code", "200")
-				dp.Attributes().PutStr("net.peer.name", "api.example.com")
-				dp.Attributes().PutStr("service.name", "web-service")
+				_ = dp.Attributes().FromRaw(map[string]any{
+					"http.method":      "GET",
+					"http.status_code": "200",
+					"net.peer.name":    "api.example.com",
+					"service.name":     "web-service"})
 			})},
 		{
 			name: "histogramMetrics",
@@ -753,10 +761,11 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 				dp.SetSum(10)
 				dp.BucketCounts().FromRaw([]uint64{1, 1})
 				dp.ExplicitBounds().FromRaw([]float64{10})
-				dp.Attributes().PutStr("http.method", "GET")
-				dp.Attributes().PutStr("http.status_code", "200")
-				dp.Attributes().PutStr("net.peer.name", "api.example.com")
-				dp.Attributes().PutStr("service.name", "web-service")
+				_ = dp.Attributes().FromRaw(map[string]any{
+					"http.method":      "GET",
+					"http.status_code": "200",
+					"net.peer.name":    "api.example.com",
+					"service.name":     "web-service"})
 			})}, {
 			name: "exponentialHistogramMetrics",
 
@@ -770,10 +779,11 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 				dp.SetScale(1)
 				dp.Positive().SetOffset(0)
 				dp.Positive().BucketCounts().FromRaw([]uint64{1, 1})
-				dp.Attributes().PutStr("http.method", "GET")
-				dp.Attributes().PutStr("http.status_code", "200")
-				dp.Attributes().PutStr("net.peer.name", "api.example.com")
-				dp.Attributes().PutStr("service.name", "web-service")
+				_ = dp.Attributes().FromRaw(map[string]any{
+					"http.method":      "GET",
+					"http.status_code": "200",
+					"net.peer.name":    "api.example.com",
+					"service.name":     "web-service"})
 			})}, {
 			name: "summaryMetrics",
 			metrics: newTestMetrics(func(m pmetric.Metric) {
@@ -789,10 +799,11 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 				qv = dp.QuantileValues().AppendEmpty()
 				qv.SetQuantile(0.99)
 				qv.SetValue(8)
-				dp.Attributes().PutStr("http.method", "GET")
-				dp.Attributes().PutStr("http.status_code", "200")
-				dp.Attributes().PutStr("net.peer.name", "api.example.com")
-				dp.Attributes().PutStr("service.name", "web-service")
+				_ = dp.Attributes().FromRaw(map[string]any{
+					"http.method":      "GET",
+					"http.status_code": "200",
+					"net.peer.name":    "api.example.com",
+					"service.name":     "web-service"})
 			}),
 		},
 	}
