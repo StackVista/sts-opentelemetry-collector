@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
@@ -29,8 +30,8 @@ type ConnectorMetrics struct {
 }
 
 // NewConnectorMetrics registers all metric instruments for this connector.
-func NewConnectorMetrics(typeName string, meterProvider metric.MeterProvider) *ConnectorMetrics  {
-	meter := meterProvider.Meter(typeName)
+func NewConnectorMetrics(typeName string, telemetrySettings component.TelemetrySettings) *ConnectorMetrics {
+	meter := telemetrySettings.MeterProvider.Meter(typeName)
 	name := newMetricNameForType(typeName)
 
 	spansProcessed, _ := meter.Int64Counter(

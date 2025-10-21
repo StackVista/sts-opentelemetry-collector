@@ -143,7 +143,7 @@ func ConvertMappingRemovalsToTopologyStreamMessage(
 	logger *zap.Logger,
 	componentMappings []settings.OtelComponentMapping,
 	relationMappings []settings.OtelRelationMapping,
-	metricsRecorder metrics.Recorder,
+	metricsRecorder metrics.ConnectorMetricsRecorder,
 ) []MessageWithKey {
 	result := make([]MessageWithKey, 0)
 	var componentsRemoved, relationsRemoved int

@@ -21,15 +21,15 @@ import (
 )
 
 type connectorImpl struct {
-	cfg               *Config
-	logger            *zap.Logger
-	logsConsumer      consumer.Logs
-	settingsProvider  stsSettingsApi.StsSettingsProvider
-	eval              *internal.CelEvaluator
-	mapper            *internal.Mapper
+	cfg              *Config
+	logger           *zap.Logger
+	logsConsumer     consumer.Logs
+	settingsProvider stsSettingsApi.StsSettingsProvider
+	eval             *internal.CelEvaluator
+	mapper           *internal.Mapper
 	snapshotManager  *SnapshotManager
-	subscriptionCh    <-chan stsSettingsEvents.UpdateSettingsEvent
-	metricsRecorder   metrics.ConnectorMetricsRecorder
+	subscriptionCh   <-chan stsSettingsEvents.UpdateSettingsEvent
+	metricsRecorder  metrics.ConnectorMetricsRecorder
 }
 
 func newConnector(
@@ -58,7 +58,7 @@ func newConnector(
 			cfg.TagRegexCacheSettings.ToMetered("tag_template_cache", telemetrySettings),
 		),
 		snapshotManager: NewSnapshotManager(logger),
-		metricsRecorder:   metrics.NewConnectorMetrics(Type.String(), telemetrySettings),
+		metricsRecorder: metrics.NewConnectorMetrics(Type.String(), telemetrySettings),
 	}, nil
 }
 

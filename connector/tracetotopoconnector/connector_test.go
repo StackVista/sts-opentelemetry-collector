@@ -26,16 +26,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type noopMetrics struct{}
-
-func (n *noopMetrics) IncSpansProcessed(_ context.Context, _ int64) {}
-func (n *noopMetrics) IncMappingsProduced(_ context.Context, _ int64, _ settings.SettingType, _ ...attribute.KeyValue) {
-}
-func (n *noopMetrics) IncSettingsRemoved(_ context.Context, _ int64, _ settings.SettingType) {}
-func (n *noopMetrics) IncMappingErrors(_ context.Context, _ int64, _ settings.SettingType)   {}
-func (n *noopMetrics) RecordMappingDuration(_ context.Context, _ time.Duration, _ ...attribute.KeyValue) {
-}
-
 func TestConnectorStart(t *testing.T) {
 	logConsumer := &consumertest.LogsSink{}
 
@@ -93,8 +83,7 @@ func TestConnectorStart(t *testing.T) {
 	t.Run("emits removal messages when mappings are deleted", func(t *testing.T) {
 		ctx := context.Background()
 		logConsumer := &consumertest.LogsSink{}
-		metrics := &noopMetrics{}
-		connector, _ := newConnector(Config{}, zap.NewNop(), metrics, logConsumer)
+		connector, _ := newConnector(ctx, Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer)
 
 		provider := newMockStsSettingsProvider(
 			[]settings.OtelComponentMapping{
