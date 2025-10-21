@@ -32,33 +32,37 @@ type connectorImpl struct {
 	componentMappings *[]stsSettingsModel.OtelComponentMapping
 	relationMappings  *[]stsSettingsModel.OtelRelationMapping
 	subscriptionCh    <-chan stsSettingsEvents.UpdateSettingsEvent
-	metricsRecorder   metrics.Recorder
+	metricsRecorder   metrics.ConnectorMetricsRecorder
 }
 
 func newConnector(
+	ctx context.Context,
 	cfg Config,
 	logger *zap.Logger,
-	metricsRecorder metrics.Recorder,
+	telemetrySettings component.TelemetrySettings,
 	nextConsumer consumer.Logs,
 ) (*connectorImpl, error) {
 	logger.Info("Building tracetotopo connector")
-	eval, err := internal.NewCELEvaluator(internal.CacheSettings{
-		Size: cfg.ExpressionCacheSettings.Size,
-		TTL:  cfg.ExpressionCacheSettings.TTL,
-	})
+	eval, err := internal.NewCELEvaluator(
+		ctx, cfg.ExpressionCacheSettings.ToMetered("cel_expression_cache", telemetrySettings),
+	)
 	if err != nil {
 		return nil, err
 	}
 
 	return &connectorImpl{
-		cfg:               &cfg,
-		logger:            logger,
-		logsConsumer:      nextConsumer,
-		eval:              eval,
-		mapper:            internal.NewMapper(),
+		cfg:          &cfg,
+		logger:       logger,
+		logsConsumer: nextConsumer,
+		eval:         eval,
+		mapper: internal.NewMapper(
+			ctx,
+			cfg.TagRegexCacheSettings.ToMetered("tag_regex_cache", telemetrySettings),
+			cfg.TagRegexCacheSettings.ToMetered("tag_template_cache", telemetrySettings),
+		),
 		componentMappings: &[]stsSettingsModel.OtelComponentMapping{},
 		relationMappings:  &[]stsSettingsModel.OtelRelationMapping{},
-		metricsRecorder:   metricsRecorder,
+		metricsRecorder:   metrics.NewConnectorMetrics(Type.String(), telemetrySettings),
 	}, nil
 }
 

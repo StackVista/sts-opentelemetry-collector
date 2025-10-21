@@ -485,12 +485,12 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 		},
 	}
 
-	mapper := NewMapper()
+	mapper := NewMapper(context.Background(), makeMeteredCacheSettings(100, 30*time.Second), makeMeteredCacheSettings(100, 30*time.Second))
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			metrics := &noopMetrics{}
-			eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
+			eval, _ := NewCELEvaluator(ctx, makeMeteredCacheSettings(100, 30*time.Second))
 			result := ConvertSpanToTopologyStreamMessage(
 				ctx,
 				zaptest.NewLogger(t),
@@ -520,8 +520,8 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			createSimpleRelationMapping("rm1"),
 			createSimpleRelationMapping("rm2"),
 		}
-		eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
-		mapper := NewMapper()
+		eval, _ := NewCELEvaluator(ctx, makeMeteredCacheSettings(100, 30*time.Second))
+		mapper := NewMapper(context.Background(), makeMeteredCacheSettings(100, 30*time.Second), makeMeteredCacheSettings(100, 30*time.Second))
 		result := ConvertSpanToTopologyStreamMessage(
 			ctx,
 			zaptest.NewLogger(t),
@@ -599,8 +599,8 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 		relationMappings := []settings.OtelRelationMapping{
 			createSimpleRelationMapping("rm1"),
 		}
-		eval, _ := NewCELEvaluator(CacheSettings{Size: 100, TTL: 30 * time.Second})
-		mapper := NewMapper()
+		eval, _ := NewCELEvaluator(ctx, makeMeteredCacheSettings(100, 30*time.Second))
+		mapper := NewMapper(context.Background(), makeMeteredCacheSettings(100, 30*time.Second), makeMeteredCacheSettings(100, 30*time.Second))
 		result := ConvertSpanToTopologyStreamMessage(
 			ctx,
 			zaptest.NewLogger(t),

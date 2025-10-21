@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/metrics"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/connector"
 	"go.opentelemetry.io/collector/consumer"
@@ -27,15 +26,26 @@ func NewFactory() connector.Factory {
 
 func createDefaultConfig() component.Config {
 	return &Config{
-		ExpressionCacheSettings: ExpressionCacheSettings{
-			Size: 1000,
-			TTL:  15 * time.Minute,
+		ExpressionCacheSettings: CacheSettings{
+			EnableMetrics: false,
+			Size:          20000,
+			TTL:           15 * time.Minute,
+		},
+		TagRegexCacheSettings: CacheSettings{
+			EnableMetrics: false,
+			Size:          2000,
+			TTL:           15 * time.Minute,
+		},
+		TagTemplateCacheSettings: CacheSettings{
+			EnableMetrics: false,
+			Size:          2000,
+			TTL:           15 * time.Minute,
 		},
 	}
 }
 
 func createTracesToLogsConnector(
-	_ context.Context,
+	ctx context.Context,
 	params connector.CreateSettings,
 	cfg component.Config,
 	nextConsumer consumer.Logs,
@@ -46,9 +56,10 @@ func createTracesToLogsConnector(
 	}
 
 	return newConnector(
+		ctx,
 		*typedCfg,
 		params.Logger,
-		metrics.NewConnectorMetrics(Type.String(), params.TelemetrySettings),
+		params.TelemetrySettings,
 		nextConsumer,
 	)
 }
