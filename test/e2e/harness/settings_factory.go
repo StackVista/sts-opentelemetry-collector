@@ -2,9 +2,10 @@ package harness
 
 import (
 	"fmt"
+	"time"
+
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"github.com/twmb/franz-go/pkg/kgo"
-	"time"
 )
 
 // TestSnapshot is a collection of Kafka records that represent a settings protocol snapshot.
@@ -74,38 +75,43 @@ func newSettingsEnvelope(
 
 type settingBuilder func() (stsSettingsModel.Setting, string, error)
 
-// buildSnapshot wraps the setting snapshot start, envelope(setting), stop pattern.
+// buildSnapshot wraps the setting snapshot start, envelope(setting1)...envelope(settingN), stop pattern.
 func buildSnapshot(
 	settingType stsSettingsModel.SettingType,
 	snapshotID string,
 	topic string,
-	build settingBuilder,
+	builders ...settingBuilder,
 ) ([]*kgo.Record, error) {
 	startKey, startVal, err := newSnapshotStart(settingType, snapshotID)
 	if err != nil {
 		return nil, err
 	}
 
-	setting, settingID, err := build()
-	if err != nil {
-		return nil, err
+	records := []*kgo.Record{
+		{Topic: topic, Key: []byte(startKey), Value: startVal},
 	}
 
-	envKey, envVal, err := newSettingsEnvelope(settingType, setting, settingID, snapshotID)
-	if err != nil {
-		return nil, err
+	for _, build := range builders {
+		setting, settingID, err := build()
+		if err != nil {
+			return nil, err
+		}
+
+		envKey, envVal, err := newSettingsEnvelope(settingType, setting, settingID, snapshotID)
+		if err != nil {
+			return nil, err
+		}
+
+		records = append(records, &kgo.Record{Topic: topic, Key: []byte(envKey), Value: envVal})
 	}
 
 	stopKey, stopVal, err := newSnapshotStop(settingType, snapshotID)
 	if err != nil {
 		return nil, err
 	}
+	records = append(records, &kgo.Record{Topic: topic, Key: []byte(stopKey), Value: stopVal})
 
-	return []*kgo.Record{
-		{Topic: topic, Key: []byte(startKey), Value: startVal},
-		{Topic: topic, Key: []byte(envKey), Value: envVal},
-		{Topic: topic, Key: []byte(stopKey), Value: stopVal},
-	}, nil
+	return records, nil
 }
 
 // -------------------------------------------------------------------
@@ -114,14 +120,17 @@ func buildSnapshot(
 
 type OtelComponentMappingSnapshot struct {
 	SnapshotID string
-	MappingID  string
-	Name       string
+	Mappings   []*OtelComponentMappingSpec
+}
 
-	Conditions []stsSettingsModel.OtelConditionMapping
-	Output     stsSettingsModel.OtelComponentMappingOutput
-	Vars       []stsSettingsModel.OtelVariableMapping
-
-	ExpireAfterMs int64
+type OtelComponentMappingSpec struct {
+	MappingID         string
+	MappingIdentifier string
+	Name              string
+	Conditions        []stsSettingsModel.OtelConditionMapping
+	Output            stsSettingsModel.OtelComponentMappingOutput
+	Vars              []stsSettingsModel.OtelVariableMapping
+	ExpireAfterMs     int64
 }
 
 func (s OtelComponentMappingSnapshot) Type() stsSettingsModel.SettingType {
@@ -129,39 +138,48 @@ func (s OtelComponentMappingSnapshot) Type() stsSettingsModel.SettingType {
 }
 
 func (s OtelComponentMappingSnapshot) Records(topic string) ([]*kgo.Record, error) {
-	return buildSnapshot(s.Type(), s.SnapshotID, topic, func() (stsSettingsModel.Setting, string, error) {
-		mapping := stsSettingsModel.OtelComponentMapping{
-			CreatedTimeStamp: time.Now().Unix(),
-			ExpireAfterMs:    s.ExpireAfterMs,
-			Id:               s.MappingID,
-			Name:             s.Name,
-			Conditions:       s.Conditions,
-			Output:           s.Output,
-			Shard:            0,
-			Type:             stsSettingsModel.OtelComponentMappingTypeOtelComponentMapping,
-		}
+	builders := make([]settingBuilder, 0, len(s.Mappings))
 
-		if len(s.Vars) > 0 {
-			mapping.Vars = &s.Vars
-		}
+	for _, mapping := range s.Mappings {
+		builders = append(builders, func() (stsSettingsModel.Setting, string, error) {
+			component := stsSettingsModel.OtelComponentMapping{
+				CreatedTimeStamp: time.Now().Unix(),
+				ExpireAfterMs:    mapping.ExpireAfterMs,
+				Id:               mapping.MappingID,
+				Identifier:       mapping.MappingIdentifier,
+				Name:             mapping.Name,
+				Conditions:       mapping.Conditions,
+				Output:           mapping.Output,
+				Shard:            0,
+				Type:             stsSettingsModel.OtelComponentMappingTypeOtelComponentMapping,
+			}
+			if len(mapping.Vars) > 0 {
+				component.Vars = &mapping.Vars
+			}
 
-		var setting stsSettingsModel.Setting
-		if err := setting.FromOtelComponentMapping(mapping); err != nil {
-			return stsSettingsModel.Setting{}, "", fmt.Errorf("failed to convert component mapping to setting: %w", err)
-		}
-		return setting, mapping.Id, nil
-	})
+			var setting stsSettingsModel.Setting
+			if err := setting.FromOtelComponentMapping(component); err != nil {
+				return stsSettingsModel.Setting{}, "", fmt.Errorf("failed to convert component mapping to setting: %w", err)
+			}
+			return setting, mapping.MappingID, nil
+		})
+	}
+
+	return buildSnapshot(s.Type(), s.SnapshotID, topic, builders...)
 }
 
 type OtelRelationMappingSnapshot struct {
 	SnapshotID string
-	MappingID  string
+	Mappings   []*OtelRelationMappingSpec
+}
 
-	Conditions []stsSettingsModel.OtelConditionMapping
-	Output     stsSettingsModel.OtelRelationMappingOutput
-	Vars       []stsSettingsModel.OtelVariableMapping
-
-	ExpireAfterMs int64
+type OtelRelationMappingSpec struct {
+	MappingID         string
+	MappingIdentifier string
+	Conditions        []stsSettingsModel.OtelConditionMapping
+	Output            stsSettingsModel.OtelRelationMappingOutput
+	Vars              []stsSettingsModel.OtelVariableMapping
+	ExpireAfterMs     int64
 }
 
 func (s OtelRelationMappingSnapshot) Type() stsSettingsModel.SettingType {
@@ -169,25 +187,32 @@ func (s OtelRelationMappingSnapshot) Type() stsSettingsModel.SettingType {
 }
 
 func (s OtelRelationMappingSnapshot) Records(topic string) ([]*kgo.Record, error) {
-	return buildSnapshot(s.Type(), s.SnapshotID, topic, func() (stsSettingsModel.Setting, string, error) {
-		mapping := stsSettingsModel.OtelRelationMapping{
-			CreatedTimeStamp: time.Now().Unix(),
-			ExpireAfterMs:    s.ExpireAfterMs,
-			Id:               s.MappingID,
-			Conditions:       s.Conditions,
-			Output:           s.Output,
-			Shard:            0,
-			Type:             stsSettingsModel.OtelRelationMappingTypeOtelRelationMapping,
-		}
+	builders := make([]settingBuilder, 0, len(s.Mappings))
 
-		if len(s.Vars) > 0 {
-			mapping.Vars = &s.Vars
-		}
+	for _, mapping := range s.Mappings {
+		builders = append(builders, func() (stsSettingsModel.Setting, string, error) {
+			relation := stsSettingsModel.OtelRelationMapping{
+				CreatedTimeStamp: time.Now().Unix(),
+				ExpireAfterMs:    mapping.ExpireAfterMs,
+				Id:               mapping.MappingID,
+				Identifier:       mapping.MappingIdentifier,
+				Conditions:       mapping.Conditions,
+				Output:           mapping.Output,
+				Shard:            0,
+				Type:             stsSettingsModel.OtelRelationMappingTypeOtelRelationMapping,
+			}
 
-		var setting stsSettingsModel.Setting
-		if err := setting.FromOtelRelationMapping(mapping); err != nil {
-			return stsSettingsModel.Setting{}, "", fmt.Errorf("failed to convert relation mapping to setting: %w", err)
-		}
-		return setting, mapping.Id, nil
-	})
+			if len(mapping.Vars) > 0 {
+				relation.Vars = &mapping.Vars
+			}
+
+			var setting stsSettingsModel.Setting
+			if err := setting.FromOtelRelationMapping(relation); err != nil {
+				return stsSettingsModel.Setting{}, "", fmt.Errorf("failed to convert relation mapping to setting: %w", err)
+			}
+			return setting, mapping.MappingID, nil
+		})
+	}
+
+	return buildSnapshot(s.Type(), s.SnapshotID, topic, builders...)
 }

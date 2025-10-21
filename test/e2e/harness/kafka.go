@@ -2,6 +2,7 @@ package harness
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -129,42 +130,80 @@ func PublishSettings(
 	)
 
 	// A bit of settle time to ensure setting snapshots are processed in the collector and subscribers notified
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
+}
+
+type TopologyConsumer struct {
+	client *kgo.Client
+	logger *zap.Logger
+	topic  string
+}
+
+func NewTopologyConsumer(brokers, topic, groupID string, logger *zap.Logger) (*TopologyConsumer, error) {
+	cl, err := kgo.NewClient(
+		kgo.SeedBrokers(brokers),
+		kgo.ConsumerGroup(groupID),
+		kgo.ConsumeTopics(topic),
+		kgo.AutoCommitMarks(), // automatically commit offsets for marked records
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Kafka client: %w", err)
+	}
+
+	return &TopologyConsumer{
+		client: cl,
+		logger: logger,
+		topic:  topic,
+	}, nil
+}
+
+func (tc *TopologyConsumer) Close() {
+	tc.client.Close()
 }
 
 // ConsumeTopology reads N records of TopologyStreamMessage from the topology topic.
-func ConsumeTopology(
+func (tc *TopologyConsumer) ConsumeTopology(
 	ctx context.Context,
-	logger *zap.Logger,
-	brokers string,
-	topologyTopic string,
 	minRecords int,
-) []*kgo.Record {
-	cl, err := kgo.NewClient(
-		kgo.SeedBrokers(brokers),
-		kgo.ConsumerGroup("test-consumer-"+uuid.New().String()),
-		kgo.ConsumeTopics(topologyTopic),
-	)
-	if err != nil {
-		logger.Fatal("Failed to create Kafka client", zap.Error(err))
-	}
-	defer cl.Close()
-
+	pollDeadline time.Duration,
+) ([]*kgo.Record, error) {
 	var recs []*kgo.Record
-	deadline := time.Now().Add(20 * time.Second)
 
-	for len(recs) < minRecords && time.Now().Before(deadline) {
-		fetches := cl.PollFetches(ctx)
+	ctx, cancel := context.WithTimeout(ctx, pollDeadline)
+	defer cancel()
+
+	for {
+		fetches := tc.client.PollFetches(ctx)
 		if errs := fetches.Errors(); len(errs) > 0 {
 			for _, e := range errs {
-				logger.Fatal("Kafka fetch error", zap.Any("fetchError", e))
+				if errors.Is(e.Err, context.DeadlineExceeded) || errors.Is(e.Err, context.Canceled) {
+					tc.logger.Info("Kafka poll timeout or context canceled")
+					return recs, nil
+				}
+				return recs, fmt.Errorf("kafka fetch error: %w", e.Err)
 			}
 		}
+
 		fetches.EachRecord(func(r *kgo.Record) {
 			recs = append(recs, r)
+			tc.client.MarkCommitRecords(r)
 		})
+
+		if len(recs) >= minRecords {
+			break
+		}
+
+		if ctx.Err() != nil {
+			tc.logger.Info("Context deadline reached before collecting enough records")
+			break
+		}
 	}
 
-	logger.Info("Consumed records from Kafka", zap.String("topic", topologyTopic), zap.Int("# records", len(recs)))
-	return recs
+	// Commit offsets to Kafka so subsequent calls resume from the next record
+	if err := tc.client.CommitUncommittedOffsets(ctx); err != nil {
+		tc.logger.Warn("Failed to commit offsets", zap.Error(err))
+	}
+
+	tc.logger.Info("Consumed records from Kafka", zap.String("topic", tc.topic), zap.Int("# records", len(recs)))
+	return recs, nil
 }
