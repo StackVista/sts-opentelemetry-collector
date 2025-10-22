@@ -18,10 +18,10 @@ import (
 
 func TestMappingSpan_MapComponent(t *testing.T) {
 
-	spanEvalContext :=  &ExpressionEvalContext {
+	spanEvalContext := &ExpressionEvalContext{
 		SpanAttributes: map[string]any{
-			"kind": "licence",
-			"amount": 1000,
+			"kind":     "licence",
+			"amount":   1000,
 			"priority": "urgent",
 			"env.name": "prod",
 		},
@@ -29,19 +29,19 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 			"name": "kamon",
 		},
 		ResourceAttributes: map[string]any{
-			"name": "microservice",
-			"service.name": "billing",
+			"name":              "microservice",
+			"service.name":      "billing",
 			"service.namespace": "billing-ns",
 		},
 	}
 	//nolint:govet
 	tests := []struct {
-		name      string
-		mapping   *settings.OtelComponentMapping
+		name        string
+		mapping     *settings.OtelComponentMapping
 		evalContext *ExpressionEvalContext
-		vars      map[string]any
-		want      *topo_stream_v1.TopologyStreamComponent
-		expectErr []error
+		vars        map[string]any
+		want        *topo_stream_v1.TopologyStreamComponent
+		expectErr   []error
 	}{
 		{
 			name: "valid mapping with all required fields",
@@ -115,7 +115,7 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 				},
 			},
 			evalContext: spanEvalContext,
-			vars:     map[string]any{},
+			vars:        map[string]any{},
 			want: &topo_stream_v1.TopologyStreamComponent{
 				ExternalId:  "billing",
 				Identifiers: []string{"billing"},
@@ -534,10 +534,10 @@ func TestResolveTagMappings(t *testing.T) {
 
 func TestMapping_MapRelation(t *testing.T) {
 
-	spanEvalContext :=  &ExpressionEvalContext {
+	spanEvalContext := &ExpressionEvalContext{
 		SpanAttributes: map[string]any{
-			"kind": "licence",
-			"amount": 1000,
+			"kind":     "licence",
+			"amount":   1000,
 			"priority": "urgent",
 			"env.name": "prod",
 		},
@@ -545,20 +545,20 @@ func TestMapping_MapRelation(t *testing.T) {
 			"name": "kamon",
 		},
 		ResourceAttributes: map[string]any{
-			"name": "microservice",
-			"service.name": "billing",
+			"name":              "microservice",
+			"service.name":      "billing",
 			"service.namespace": "billing-ns",
 		},
 	}
 
 	//nolint:govet
 	tests := []struct {
-		name      string
-		mapping   *settings.OtelRelationMapping
+		name        string
+		mapping     *settings.OtelRelationMapping
 		evalContext *ExpressionEvalContext
-		vars      map[string]any
-		want      *topo_stream_v1.TopologyStreamRelation
-		expectErr []error
+		vars        map[string]any
+		want        *topo_stream_v1.TopologyStreamRelation
+		expectErr   []error
 	}{
 		{
 			name: "valid relation mapping",
@@ -571,7 +571,7 @@ func TestMapping_MapRelation(t *testing.T) {
 				},
 			},
 			evalContext: spanEvalContext,
-			vars:     map[string]any{},
+			vars:        map[string]any{},
 			want: &topo_stream_v1.TopologyStreamRelation{
 				ExternalId:       "billing-database",
 				SourceIdentifier: "billing",
@@ -594,7 +594,7 @@ func TestMapping_MapRelation(t *testing.T) {
 				},
 			},
 			evalContext: spanEvalContext,
-			vars:     map[string]any{},
+			vars:        map[string]any{},
 			want: &topo_stream_v1.TopologyStreamRelation{
 				ExternalId:       "billing-database",
 				SourceIdentifier: "billing",
@@ -617,9 +617,9 @@ func TestMapping_MapRelation(t *testing.T) {
 				},
 			},
 			evalContext: spanEvalContext,
-			vars:      map[string]any{},
-			want:      nil,
-			expectErr: []error{errors.New("typeIdentifier: ERROR: <input>:1:5: Syntax error: extraneous input 'here' expecting <EOF>\n | not here\n | ....^")},
+			vars:        map[string]any{},
+			want:        nil,
+			expectErr:   []error{errors.New("typeIdentifier: ERROR: <input>:1:5: Syntax error: extraneous input 'here' expecting <EOF>\n | not here\n | ....^")},
 		},
 		{
 			name: "missing mandatory attributes",
@@ -631,9 +631,9 @@ func TestMapping_MapRelation(t *testing.T) {
 				},
 			},
 			evalContext: spanEvalContext,
-			vars:      map[string]any{},
-			want:      nil,
-			expectErr: []error{errors.New("sourceId: no such key: non-existing")},
+			vars:        map[string]any{},
+			want:        nil,
+			expectErr:   []error{errors.New("sourceId: no such key: non-existing")},
 		},
 	}
 

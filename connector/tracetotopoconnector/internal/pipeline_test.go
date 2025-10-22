@@ -48,7 +48,7 @@ func (n *noopMetrics) IncMetricsProcessed(_ context.Context, _ int64) {}
 func (n *noopMetrics) IncComponentsProduced(_ context.Context, _ int64, _ settings.SettingType, _ ...attribute.KeyValue) {
 }
 func (n *noopMetrics) IncComponentsRemoved(_ context.Context, _ int64, _ settings.SettingType) {}
-func (n *noopMetrics) IncMappingErrors(_ context.Context, _ int64, _ settings.SettingType)   {}
+func (n *noopMetrics) IncMappingErrors(_ context.Context, _ int64, _ settings.SettingType)     {}
 func (n *noopMetrics) RecordMappingDuration(_ context.Context, _ time.Duration, _ ...attribute.KeyValue) {
 }
 

@@ -373,6 +373,8 @@ func iterateMetrics(metrics pmetric.Metrics, handler mappingHandler) {
 				metric := metrics.At(k)
 
 				switch metric.Type() {
+				case pmetric.MetricTypeEmpty:
+					continue
 				case pmetric.MetricTypeGauge:
 					for l := metric.Gauge().DataPoints().Len() - 1; l >= 0; l-- {
 						datapoint := metric.Gauge().DataPoints().At(l)

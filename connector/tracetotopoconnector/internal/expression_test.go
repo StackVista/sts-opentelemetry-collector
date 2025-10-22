@@ -123,7 +123,7 @@ func TestEvalStringExpression(t *testing.T) {
 			expr:     `${spanAttributes["http.method"]}`,
 			expected: "GET",
 		},
-				{
+		{
 			name:     "support metric attributes",
 			expr:     `${metricAttributes["http.method"]}`,
 			expected: "GET",

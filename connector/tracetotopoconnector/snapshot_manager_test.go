@@ -16,11 +16,11 @@ import (
 )
 
 func comp(id string) stsSettingsApi.OtelComponentMapping {
-	return stsSettingsApi.OtelComponentMapping{Identifier: id}
+	return stsSettingsApi.OtelComponentMapping{Identifier: id, InputSignals: []stsSettingsApi.OtelInputSignal{stsSettingsApi.TRACES}}
 }
 
 func rel(id string) stsSettingsApi.OtelRelationMapping {
-	return stsSettingsApi.OtelRelationMapping{Identifier: id}
+	return stsSettingsApi.OtelRelationMapping{Identifier: id, InputSignals: []stsSettingsApi.OtelInputSignal{stsSettingsApi.TRACES}}
 }
 
 func TestSnapshotManager_StartStopLifecycle(t *testing.T) {
@@ -31,7 +31,7 @@ func TestSnapshotManager_StartStopLifecycle(t *testing.T) {
 	initialRelations := []stsSettingsApi.OtelRelationMapping{rel("r1")}
 	provider := stsTraceToTopo.NewMockStsSettingsProvider(initialComponents, initialRelations)
 
-	manager := stsTraceToTopo.NewSnapshotManager(logger)
+	manager := stsTraceToTopo.NewSnapshotManager(logger, stsSettingsApi.TRACES)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -89,7 +89,7 @@ func TestSnapshotManager_StartStopLifecycle(t *testing.T) {
 
 func TestSnapshotManager_UpdateDetectsChanges(t *testing.T) {
 	logger := zap.NewNop()
-	manager := stsTraceToTopo.NewSnapshotManager(logger)
+	manager := stsTraceToTopo.NewSnapshotManager(logger, stsSettingsApi.TRACES)
 
 	initialComponentMappings := []stsSettingsApi.OtelComponentMapping{
 		comp("c1"),
@@ -126,7 +126,7 @@ func TestSnapshotManager_UpdateDetectsChanges(t *testing.T) {
 
 func TestSnapshotManager_CurrentReturnsCopy(t *testing.T) {
 	logger := zap.NewNop()
-	manager := stsTraceToTopo.NewSnapshotManager(logger)
+	manager := stsTraceToTopo.NewSnapshotManager(logger, stsSettingsApi.TRACES)
 
 	initialComponentMappings := []stsSettingsApi.OtelComponentMapping{comp("c1")}
 	initialRelationMappings := []stsSettingsApi.OtelRelationMapping{rel("r1")}

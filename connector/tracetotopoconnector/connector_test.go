@@ -318,6 +318,7 @@ func TestConnectorConsumeTraces(t *testing.T) {
 	})
 }
 
+// TODO: Add tests that trace mappings are excluded for metrics connector and vice versa
 func TestConnectorConsumeMetrics(t *testing.T) {
 	logConsumer := &consumertest.LogsSink{}
 	connector, _ := newConnector(context.Background(), Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer, settings.METRICS)

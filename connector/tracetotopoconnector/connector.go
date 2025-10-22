@@ -10,7 +10,6 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter"
 	stsSettingsApi "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
-	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -30,7 +29,7 @@ type connectorImpl struct {
 	eval             *internal.CelEvaluator
 	mapper           *internal.Mapper
 	metricsRecorder  metrics.ConnectorMetricsRecorder
-	supportedSignal   settings.OtelInputSignal
+	supportedSignal  settings.OtelInputSignal
 }
 
 func newConnector(
@@ -65,7 +64,7 @@ func newConnector(
 		mapper:          mapper,
 		snapshotManager: snapshotManager,
 		metricsRecorder: metricsRecorder,
-		supportedSignal:   supportedSignal,
+		supportedSignal: supportedSignal,
 	}, nil
 }
 
@@ -109,7 +108,7 @@ func (p *connectorImpl) ConsumeMetrics(ctx context.Context, metrics pmetric.Metr
 	start := time.Now()
 
 	collectionTimestampMs := time.Now().UnixMilli()
-		componentMappings, relationMappings := p.snapshotManager.Current()
+	componentMappings, relationMappings := p.snapshotManager.Current()
 
 	messagesWithKeys := internal.ConvertMetricsToTopologyStreamMessage(
 		ctx,
@@ -132,8 +131,8 @@ func (p *connectorImpl) ConsumeMetrics(ctx context.Context, metrics pmetric.Metr
 		attribute.String("target", "spans"),
 		attribute.Int("mapping_count", len(componentMappings)+len(relationMappings)),
 	)
-	
-  return nil
+
+	return nil
 }
 
 func (p *connectorImpl) ConsumeTraces(ctx context.Context, traceData ptrace.Traces) error {
@@ -169,8 +168,8 @@ func (p *connectorImpl) ConsumeTraces(ctx context.Context, traceData ptrace.Trac
 
 func (p *connectorImpl) handleMappingRemovals(
 	ctx context.Context,
-	removedComponentMappings []stsSettingsModel.OtelComponentMapping,
-	removedRelationMappings []stsSettingsModel.OtelRelationMapping,
+	removedComponentMappings []settings.OtelComponentMapping,
+	removedRelationMappings []settings.OtelRelationMapping,
 ) {
 	if len(removedComponentMappings) == 0 && len(removedRelationMappings) == 0 {
 		return
