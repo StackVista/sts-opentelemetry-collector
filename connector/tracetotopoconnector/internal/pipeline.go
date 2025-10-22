@@ -96,10 +96,23 @@ func ConvertSpanToTopologyStreamMessage(
 
 	// Record metrics
 	metricsRecorder.IncSpansProcessed(ctx, int64(trace.SpanCount()))
-	metricsRecorder.IncComponentsProduced(ctx, int64(components), attribute.String("inputSignal", "spans"))
-	metricsRecorder.IncRelationsProduced(ctx, int64(relations), attribute.String("inputSignal", "spans"))
+	if components > 0 {
+		metricsRecorder.IncMappingsProduced(
+			ctx, int64(components),
+			settings.SettingTypeOtelComponentMapping, attribute.String("input_signal", "spans"),
+		)
+	}
+	if relations > 0 {
+		metricsRecorder.IncMappingsProduced(
+			ctx, int64(components),
+			settings.SettingTypeOtelRelationMapping, attribute.String("input_signal", "spans"),
+		)
+	}
 	if componentErrs > 0 {
-		metricsRecorder.IncErrors(ctx, int64(componentErrs+relationErrs), "mapping")
+		metricsRecorder.IncMappingErrors(ctx, int64(componentErrs), settings.SettingTypeOtelComponentMapping)
+	}
+	if relationErrs > 0 {
+		metricsRecorder.IncMappingErrors(ctx, int64(relationErrs), settings.SettingTypeOtelRelationMapping)
 	}
 	metricsRecorder.RecordMappingDuration(
 		ctx, componentMappingDuration,
@@ -120,6 +133,44 @@ func ConvertSpanToTopologyStreamMessage(
 		zap.Int("relations", relations),
 		zap.Int("componentErrs", componentErrs),
 		zap.Int("relationErrors", relationErrs),
+	)
+
+	return result
+}
+
+func ConvertMappingRemovalsToTopologyStreamMessage(
+	ctx context.Context,
+	logger *zap.Logger,
+	componentMappings []settings.OtelComponentMapping,
+	relationMappings []settings.OtelRelationMapping,
+	metricsRecorder metrics.ConnectorMetricsRecorder,
+) []MessageWithKey {
+	result := make([]MessageWithKey, 0)
+	var componentMappingsRemoved, relationMappingsRemoved int
+
+	for _, componentMapping := range componentMappings {
+		messages := removalToMessageWithKey(componentMapping)
+		result = append(result, messages...)
+		componentMappingsRemoved++
+	}
+
+	for _, relationMapping := range relationMappings {
+		messages := removalToMessageWithKey(relationMapping)
+		result = append(result, messages...)
+		relationMappingsRemoved++
+	}
+
+	if componentMappingsRemoved > 0 {
+		metricsRecorder.IncMappingsRemoved(ctx, int64(componentMappingsRemoved), settings.SettingTypeOtelComponentMapping)
+	}
+	if relationMappingsRemoved > 0 {
+		metricsRecorder.IncMappingsRemoved(ctx, int64(relationMappingsRemoved), settings.SettingTypeOtelRelationMapping)
+	}
+
+	logger.Debug(
+		"Converted mapping removals to topology stream messages",
+		zap.Int("componentMappingsRemoved", componentMappingsRemoved),
+		zap.Int("relationMappingsRemoved", relationMappingsRemoved),
 	)
 
 	return result
@@ -193,7 +244,7 @@ func iterateSpans(trace ptrace.Traces, handler mappingHandler) {
 
 func errorsToMessageWithKey(
 	errs *[]error,
-	mapping settings.Mapping,
+	mapping settings.SettingExtension,
 	span *ptrace.Span,
 	collectionTimestampMs int64,
 ) *MessageWithKey {
@@ -224,7 +275,7 @@ func errorsToMessageWithKey(
 
 func outputToMessageWithKey(
 	output topostreamv1.ComponentOrRelation,
-	mapping settings.Mapping,
+	mapping settings.SettingExtension,
 	span *ptrace.Span,
 	collectionTimestampMs int64,
 	toComponents func() []*topostreamv1.TopologyStreamComponent,
@@ -249,6 +300,33 @@ func outputToMessageWithKey(
 			},
 		},
 	}
+}
+
+func removalToMessageWithKey(
+	mapping settings.SettingExtension,
+) []MessageWithKey {
+	messages := make([]MessageWithKey, 0)
+	now := time.Now().UnixMilli()
+	for shard := 0; shard < ShardCount; shard++ {
+		message := &MessageWithKey{
+			Key: &topostreamv1.TopologyStreamMessageKey{
+				Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+				DataSource: mapping.GetIdentifier(),
+				ShardId:    fmt.Sprintf("%d", shard),
+			},
+			Message: &topostreamv1.TopologyStreamMessage{
+				CollectionTimestamp: now,
+				SubmittedTimestamp:  now,
+				Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRemove{
+					TopologyStreamRemove: &topostreamv1.TopologyStreamRemove{
+						RemovalCause: fmt.Sprintf("Setting with identifier '%s' was removed'", mapping.GetIdentifier()),
+					},
+				},
+			},
+		}
+		messages = append(messages, *message)
+	}
+	return messages
 }
 
 func stableShardID(shardKey string, shardCount uint32) string {

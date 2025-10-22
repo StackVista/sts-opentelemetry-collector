@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -12,18 +13,18 @@ import (
 
 type ConnectorMetricsRecorder interface {
 	IncSpansProcessed(ctx context.Context, n int64)
-	IncComponentsProduced(ctx context.Context, n int64, attrs ...attribute.KeyValue)
-	IncRelationsProduced(ctx context.Context, n int64, attrs ...attribute.KeyValue)
-	IncErrors(ctx context.Context, n int64, kind string)
+	IncMappingsProduced(ctx context.Context, n int64, settingType settings.SettingType, attrs ...attribute.KeyValue)
+	IncMappingsRemoved(ctx context.Context, n int64, settingType settings.SettingType)
+	IncMappingErrors(ctx context.Context, n int64, settingType settings.SettingType)
 	RecordMappingDuration(ctx context.Context, d time.Duration, labels ...attribute.KeyValue)
 }
 
 type ConnectorMetrics struct {
 	// Counters
-	spansProcessed     metric.Int64Counter
-	componentsProduced metric.Int64Counter
-	relationsProduced  metric.Int64Counter
-	errorsTotal        metric.Int64Counter
+	spansProcessed  metric.Int64Counter
+	mappingsTotal   metric.Int64Counter
+	mappingsRemoved metric.Int64Counter
+	errorsTotal     metric.Int64Counter
 
 	// Histograms
 	mappingDuration metric.Float64Histogram
@@ -38,13 +39,13 @@ func NewConnectorMetrics(typeName string, telemetrySettings component.TelemetryS
 		name("spans_processed_total"),
 		metric.WithDescription("Total number of spans processed by the connector"),
 	)
-	componentsProduced, _ := meter.Int64Counter(
-		name("components_produced_total"),
-		metric.WithDescription("Total number of components produced"),
+	mappingsTotal, _ := meter.Int64Counter(
+		name("mappings_produced_total"),
+		metric.WithDescription("Total number of mappings produced"),
 	)
-	relationsProduced, _ := meter.Int64Counter(
-		name("relations_produced_total"),
-		metric.WithDescription("Total number of relations produced"),
+	mappingsRemoved, _ := meter.Int64Counter(
+		name("mappings_removed_total"),
+		metric.WithDescription("Total number of mappings removed"),
 	)
 	errorsTotal, _ := meter.Int64Counter(
 		name("mapping_errors_total"),
@@ -57,11 +58,11 @@ func NewConnectorMetrics(typeName string, telemetrySettings component.TelemetryS
 	)
 
 	return &ConnectorMetrics{
-		spansProcessed:     spansProcessed,
-		componentsProduced: componentsProduced,
-		relationsProduced:  relationsProduced,
-		errorsTotal:        errorsTotal,
-		mappingDuration:    mappingDuration,
+		spansProcessed:  spansProcessed,
+		mappingsTotal:   mappingsTotal,
+		mappingsRemoved: mappingsRemoved,
+		errorsTotal:     errorsTotal,
+		mappingDuration: mappingDuration,
 	}
 }
 
@@ -83,14 +84,20 @@ func (pm *ConnectorMetrics) IncSpansProcessed(ctx context.Context, n int64) {
 	pm.spansProcessed.Add(ctx, n)
 }
 
-func (pm *ConnectorMetrics) IncComponentsProduced(ctx context.Context, n int64, attrs ...attribute.KeyValue) {
-	pm.componentsProduced.Add(ctx, n, metric.WithAttributes(attrs...))
+func (pm *ConnectorMetrics) IncMappingsProduced(
+	ctx context.Context,
+	n int64,
+	settingType settings.SettingType,
+	attrs ...attribute.KeyValue,
+) {
+	attrs = append(attrs, attribute.String("setting_type", string(settingType)))
+	pm.mappingsTotal.Add(ctx, n, metric.WithAttributes(attrs...))
 }
 
-func (pm *ConnectorMetrics) IncRelationsProduced(ctx context.Context, n int64, attrs ...attribute.KeyValue) {
-	pm.relationsProduced.Add(ctx, n, metric.WithAttributes(attrs...))
+func (pm *ConnectorMetrics) IncMappingsRemoved(ctx context.Context, n int64, settingType settings.SettingType) {
+	pm.mappingsRemoved.Add(ctx, n, metric.WithAttributes(attribute.String("setting_type", string(settingType))))
 }
 
-func (pm *ConnectorMetrics) IncErrors(ctx context.Context, n int64, errorType string) {
-	pm.errorsTotal.Add(ctx, n, metric.WithAttributes(attribute.String("error.type", errorType)))
+func (pm *ConnectorMetrics) IncMappingErrors(ctx context.Context, n int64, settingType settings.SettingType) {
+	pm.errorsTotal.Add(ctx, n, metric.WithAttributes(attribute.String("setting_type", string(settingType))))
 }
