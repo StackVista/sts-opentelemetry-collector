@@ -43,12 +43,12 @@ func boolExpr(s string) settings.OtelBooleanExpression {
 
 type noopMetrics struct{}
 
-func (n *noopMetrics) IncSpansProcessed(_ context.Context, _ int64)   {}
-func (n *noopMetrics) IncMetricsProcessed(_ context.Context, _ int64) {}
-func (n *noopMetrics) IncComponentsProduced(_ context.Context, _ int64, _ settings.SettingType, _ ...attribute.KeyValue) {
+func (n *noopMetrics) IncInputsProcessed(_ context.Context, _ int64, _ settings.OtelInputSignal) {}
+func (n *noopMetrics) IncTopologyProduced(_ context.Context, _ int64, _ settings.SettingType, _ settings.OtelInputSignal) {
 }
-func (n *noopMetrics) IncComponentsRemoved(_ context.Context, _ int64, _ settings.SettingType) {}
-func (n *noopMetrics) IncMappingErrors(_ context.Context, _ int64, _ settings.SettingType)     {}
+func (n *noopMetrics) IncMappingsRemoved(_ context.Context, _ int64, _ settings.SettingType) {}
+func (n *noopMetrics) IncMappingErrors(_ context.Context, _ int64, _ settings.SettingType, _ settings.OtelInputSignal) {
+}
 func (n *noopMetrics) RecordMappingDuration(_ context.Context, _ time.Duration, _ ...attribute.KeyValue) {
 }
 

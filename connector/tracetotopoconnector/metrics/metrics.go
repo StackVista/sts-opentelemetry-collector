@@ -12,16 +12,18 @@ import (
 )
 
 type ConnectorMetricsRecorder interface {
-	IncSpansProcessed(ctx context.Context, n int64)
-	IncComponentsProduced(ctx context.Context, n int64, settingType settings.SettingType, attrs ...attribute.KeyValue)
-	IncComponentsRemoved(ctx context.Context, n int64, settingType settings.SettingType)
-	IncMappingErrors(ctx context.Context, n int64, settingType settings.SettingType)
+	IncInputsProcessed(ctx context.Context, n int64, signal settings.OtelInputSignal)
+
+	IncTopologyProduced(ctx context.Context, n int64, settingType settings.SettingType, signal settings.OtelInputSignal)
+	IncMappingErrors(ctx context.Context, n int64, settingType settings.SettingType, signal settings.OtelInputSignal)
 	RecordMappingDuration(ctx context.Context, d time.Duration, labels ...attribute.KeyValue)
+
+	IncMappingsRemoved(ctx context.Context, n int64, settingType settings.SettingType)
 }
 
 type ConnectorMetrics struct {
 	// Counters
-	spansProcessed  metric.Int64Counter
+	inputsProcessed metric.Int64Counter
 	mappingsTotal   metric.Int64Counter
 	mappingsRemoved metric.Int64Counter
 	errorsTotal     metric.Int64Counter
@@ -35,13 +37,13 @@ func NewConnectorMetrics(typeName string, telemetrySettings component.TelemetryS
 	meter := telemetrySettings.MeterProvider.Meter(typeName)
 	name := newMetricNameForType(typeName)
 
-	spansProcessed, _ := meter.Int64Counter(
-		name("spans_processed_total"),
+	inputsProcessed, _ := meter.Int64Counter(
+		name("inputs_processed_total"),
 		metric.WithDescription("Total number of spans processed by the connector"),
 	)
-	mappingsTotal, _ := meter.Int64Counter(
-		name("mappings_produced_total"),
-		metric.WithDescription("Total number of mappings produced"),
+	topologyTotal, _ := meter.Int64Counter(
+		name("topology_produced_total"),
+		metric.WithDescription("Total number of topology elements produced"),
 	)
 	mappingsRemoved, _ := meter.Int64Counter(
 		name("mappings_removed_total"),
@@ -58,8 +60,8 @@ func NewConnectorMetrics(typeName string, telemetrySettings component.TelemetryS
 	)
 
 	return &ConnectorMetrics{
-		spansProcessed:  spansProcessed,
-		mappingsTotal:   mappingsTotal,
+		inputsProcessed: inputsProcessed,
+		mappingsTotal:   topologyTotal,
 		mappingsRemoved: mappingsRemoved,
 		errorsTotal:     errorsTotal,
 		mappingDuration: mappingDuration,
@@ -80,24 +82,32 @@ func (pm *ConnectorMetrics) RecordMappingDuration(
 	pm.mappingDuration.Record(ctx, d.Seconds(), metric.WithAttributes(attrs...))
 }
 
-func (pm *ConnectorMetrics) IncSpansProcessed(ctx context.Context, n int64) {
-	pm.spansProcessed.Add(ctx, n)
+func (pm *ConnectorMetrics) IncInputsProcessed(ctx context.Context, n int64, signal settings.OtelInputSignal) {
+	pm.inputsProcessed.Add(ctx, n, metric.WithAttributeSet(attribute.NewSet(attribute.String("signal", string(signal)))))
 }
 
-func (pm *ConnectorMetrics) IncComponentsProduced(
+func (pm *ConnectorMetrics) IncTopologyProduced(
 	ctx context.Context,
 	n int64,
 	settingType settings.SettingType,
-	attrs ...attribute.KeyValue,
+	signal settings.OtelInputSignal,
 ) {
-	attrs = append(attrs, attribute.String("setting_type", string(settingType)))
-	pm.mappingsTotal.Add(ctx, n, metric.WithAttributes(attrs...))
+	pm.mappingsTotal.Add(ctx, n, metric.WithAttributeSet(topologyAttributes(settingType, signal)))
 }
 
-func (pm *ConnectorMetrics) IncComponentsRemoved(ctx context.Context, n int64, settingType settings.SettingType) {
-	pm.mappingsRemoved.Add(ctx, n, metric.WithAttributes(attribute.String("setting_type", string(settingType))))
+func (pm *ConnectorMetrics) IncMappingsRemoved(ctx context.Context, n int64, settingType settings.SettingType) {
+	pm.mappingsRemoved.Add(ctx, n, metric.WithAttributeSet(
+		attribute.NewSet(attribute.String("setting_type", string(settingType))),
+	))
 }
 
-func (pm *ConnectorMetrics) IncMappingErrors(ctx context.Context, n int64, settingType settings.SettingType) {
-	pm.errorsTotal.Add(ctx, n, metric.WithAttributes(attribute.String("setting_type", string(settingType))))
+func (pm *ConnectorMetrics) IncMappingErrors(ctx context.Context, n int64, settingType settings.SettingType,
+	signal settings.OtelInputSignal) {
+	pm.errorsTotal.Add(ctx, n, metric.WithAttributeSet(topologyAttributes(settingType, signal)))
+}
+
+func topologyAttributes(settingType settings.SettingType, signal settings.OtelInputSignal) attribute.Set {
+	return attribute.NewSet(
+		attribute.String("setting_type", string(settingType)),
+		attribute.String("signal", string(signal)))
 }

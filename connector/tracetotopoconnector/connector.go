@@ -127,9 +127,8 @@ func (p *connectorImpl) ConsumeMetrics(ctx context.Context, metrics pmetric.Metr
 
 	p.metricsRecorder.RecordMappingDuration(
 		ctx, duration,
-		attribute.String("phase", "consume_traces"),
+		attribute.String("phase", "consume_metrics"),
 		attribute.String("target", "spans"),
-		attribute.Int("mapping_count", len(componentMappings)+len(relationMappings)),
 	)
 
 	return nil
@@ -160,7 +159,6 @@ func (p *connectorImpl) ConsumeTraces(ctx context.Context, traceData ptrace.Trac
 		ctx, duration,
 		attribute.String("phase", "consume_traces"),
 		attribute.String("target", "spans"),
-		attribute.Int("mapping_count", len(componentMappings)+len(relationMappings)),
 	)
 
 	return nil

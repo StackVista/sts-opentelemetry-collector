@@ -69,6 +69,12 @@ func ConvertSpanToTopologyStreamMessage(
 		}
 		componentMappingDuration = time.Since(componentMappingStart)
 
+		metricsRecorder.RecordMappingDuration(
+			ctx, componentMappingDuration,
+			attribute.String("phase", "spans_to_topology"),
+			attribute.String("target", "components"),
+		)
+
 		relationMappingStart = time.Now()
 		for _, relationMapping := range relationMappings {
 			currentRelationMapping := relationMapping
@@ -94,40 +100,34 @@ func ConvertSpanToTopologyStreamMessage(
 			}
 		}
 		relationMappingDuration = time.Since(relationMappingStart)
+
+		metricsRecorder.RecordMappingDuration(
+			ctx, relationMappingDuration,
+			attribute.String("phase", "spans_to_topology"),
+			attribute.String("target", "relations"),
+		)
 	})
 
 	// Record metrics
-	metricsRecorder.IncSpansProcessed(ctx, int64(trace.SpanCount()))
+	metricsRecorder.IncInputsProcessed(ctx, int64(trace.SpanCount()), settings.TRACES)
 	if components > 0 {
-		metricsRecorder.IncComponentsProduced(
+		metricsRecorder.IncTopologyProduced(
 			ctx, int64(components),
-			settings.SettingTypeOtelComponentMapping, attribute.String("input_signal", "spans"),
+			settings.SettingTypeOtelComponentMapping, settings.TRACES,
 		)
 	}
 	if relations > 0 {
-		metricsRecorder.IncComponentsProduced(
+		metricsRecorder.IncTopologyProduced(
 			ctx, int64(components),
-			settings.SettingTypeOtelRelationMapping, attribute.String("input_signal", "spans"),
+			settings.SettingTypeOtelRelationMapping, settings.TRACES,
 		)
 	}
 	if componentErrs > 0 {
-		metricsRecorder.IncMappingErrors(ctx, int64(componentErrs), settings.SettingTypeOtelComponentMapping)
+		metricsRecorder.IncMappingErrors(ctx, int64(componentErrs), settings.SettingTypeOtelComponentMapping, settings.TRACES)
 	}
 	if relationErrs > 0 {
-		metricsRecorder.IncMappingErrors(ctx, int64(relationErrs), settings.SettingTypeOtelRelationMapping)
+		metricsRecorder.IncMappingErrors(ctx, int64(relationErrs), settings.SettingTypeOtelRelationMapping, settings.TRACES)
 	}
-	metricsRecorder.RecordMappingDuration(
-		ctx, componentMappingDuration,
-		attribute.String("phase", "convert_span_to_topology_stream_message"),
-		attribute.String("target", "components"),
-		attribute.Int("mapping_count", len(componentMappings)),
-	)
-	metricsRecorder.RecordMappingDuration(
-		ctx, relationMappingDuration,
-		attribute.String("phase", "convert_span_to_topology_stream_message"),
-		attribute.String("target", "relations"),
-		attribute.Int("mapping_count", len(relationMappings)),
-	)
 
 	logger.Debug(
 		"Converted spans to topology stream messages",
@@ -155,8 +155,10 @@ func ConvertMetricsToTopologyStreamMessage(
 	var components, relations, componentErrs, relationErrs int
 	var componentMappingStart, relationMappingStart time.Time
 	var componentMappingDuration, relationMappingDuration time.Duration
+	metricsDatapointCount := int64(0)
 
 	iterateMetrics(metricData, func(expressionEvalContext *ExpressionEvalContext, timestamp pcommon.Timestamp) {
+		metricsDatapointCount++
 		componentMappingStart = time.Now()
 		for _, componentMapping := range componentMappings {
 			currentComponentMapping := componentMapping
@@ -182,6 +184,11 @@ func ConvertMetricsToTopologyStreamMessage(
 			}
 		}
 		componentMappingDuration = time.Since(componentMappingStart)
+		metricsRecorder.RecordMappingDuration(
+			ctx, componentMappingDuration,
+			attribute.String("phase", "metrics_to_topology"),
+			attribute.String("target", "components"),
+		)
 
 		relationMappingStart = time.Now()
 		for _, relationMapping := range relationMappings {
@@ -208,41 +215,35 @@ func ConvertMetricsToTopologyStreamMessage(
 			}
 		}
 		relationMappingDuration = time.Since(relationMappingStart)
+		metricsRecorder.RecordMappingDuration(
+			ctx, relationMappingDuration,
+			attribute.String("phase", "metrics_to_topology"),
+			attribute.String("target", "relations"),
+		)
 	})
 
 	// Record metrics
-	// metricsRecorder.IncSpansProcessed(ctx, int64(trace.SpanCount()))
-	// TODO: Add metricsProcessed metric
+	metricsRecorder.IncInputsProcessed(ctx, metricsDatapointCount, settings.METRICS)
+
 	if components > 0 {
-		metricsRecorder.IncComponentsProduced(
+		metricsRecorder.IncTopologyProduced(
 			ctx, int64(components),
-			settings.SettingTypeOtelComponentMapping, attribute.String("input_signal", "spans"),
+			settings.SettingTypeOtelComponentMapping, settings.METRICS,
 		)
 	}
 	if relations > 0 {
-		metricsRecorder.IncComponentsProduced(
+		metricsRecorder.IncTopologyProduced(
 			ctx, int64(components),
-			settings.SettingTypeOtelRelationMapping, attribute.String("input_signal", "spans"),
+			settings.SettingTypeOtelRelationMapping, settings.METRICS,
 		)
 	}
 	if componentErrs > 0 {
-		metricsRecorder.IncMappingErrors(ctx, int64(componentErrs), settings.SettingTypeOtelComponentMapping)
+		metricsRecorder.IncMappingErrors(ctx, int64(componentErrs),
+			settings.SettingTypeOtelComponentMapping, settings.METRICS)
 	}
 	if relationErrs > 0 {
-		metricsRecorder.IncMappingErrors(ctx, int64(relationErrs), settings.SettingTypeOtelRelationMapping)
+		metricsRecorder.IncMappingErrors(ctx, int64(relationErrs), settings.SettingTypeOtelRelationMapping, settings.METRICS)
 	}
-	metricsRecorder.RecordMappingDuration(
-		ctx, componentMappingDuration,
-		attribute.String("phase", "convert_metrics_to_topology_stream_message"),
-		attribute.String("target", "components"),
-		attribute.Int("mapping_count", len(componentMappings)),
-	)
-	metricsRecorder.RecordMappingDuration(
-		ctx, relationMappingDuration,
-		attribute.String("phase", "convert_metrics_to_topology_stream_message"),
-		attribute.String("target", "relations"),
-		attribute.Int("mapping_count", len(relationMappings)),
-	)
 
 	logger.Debug(
 		"Converted metrics to topology stream messages",
@@ -278,10 +279,12 @@ func ConvertMappingRemovalsToTopologyStreamMessage(
 	}
 
 	if componentMappingsRemoved > 0 {
-		metricsRecorder.IncComponentsRemoved(ctx, int64(componentMappingsRemoved), settings.SettingTypeOtelComponentMapping)
+		metricsRecorder.IncMappingsRemoved(ctx, int64(componentMappingsRemoved),
+			settings.SettingTypeOtelComponentMapping)
 	}
 	if relationMappingsRemoved > 0 {
-		metricsRecorder.IncComponentsRemoved(ctx, int64(relationMappingsRemoved), settings.SettingTypeOtelRelationMapping)
+		metricsRecorder.IncMappingsRemoved(ctx, int64(relationMappingsRemoved),
+			settings.SettingTypeOtelRelationMapping)
 	}
 
 	logger.Debug(
