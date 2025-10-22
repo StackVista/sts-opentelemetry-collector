@@ -1,33 +1,93 @@
 package tracetotopoconnector
 
 import (
+	"context"
 	"sync"
 
+	stsSettingsApi "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"go.uber.org/zap"
 )
 
 type SnapshotChange struct {
-	AddedComponents   []stsSettingsModel.OtelComponentMapping
-	RemovedComponents []stsSettingsModel.OtelComponentMapping
-
-	AddedRelations   []stsSettingsModel.OtelRelationMapping
-	RemovedRelations []stsSettingsModel.OtelRelationMapping
+	RemovedComponentMappings []stsSettingsModel.OtelComponentMapping
+	RemovedRelationMappings  []stsSettingsModel.OtelRelationMapping
 }
 
 type SnapshotManager struct {
-	logger *zap.Logger
-	mu     sync.RWMutex
+	logger  *zap.Logger
+	mu      sync.RWMutex
+	cancel  context.CancelFunc
+	stopped chan struct{}
 
-	components []stsSettingsModel.OtelComponentMapping
-	relations  []stsSettingsModel.OtelRelationMapping
+	componentMappings []stsSettingsModel.OtelComponentMapping
+	relationMappings  []stsSettingsModel.OtelRelationMapping
 }
 
 func NewSnapshotManager(logger *zap.Logger) *SnapshotManager {
 	return &SnapshotManager{
-		logger:     logger,
-		components: []stsSettingsModel.OtelComponentMapping{},
-		relations:  []stsSettingsModel.OtelRelationMapping{},
+		logger:            logger,
+		componentMappings: []stsSettingsModel.OtelComponentMapping{},
+		relationMappings:  []stsSettingsModel.OtelRelationMapping{},
+	}
+}
+
+func (s *SnapshotManager) Start(
+	ctx context.Context,
+	settingsProvider stsSettingsApi.StsSettingsProvider,
+	onRemovals func(context.Context, []stsSettingsModel.OtelComponentMapping, []stsSettingsModel.OtelRelationMapping),
+) error {
+	settingUpdatesCh, err := settingsProvider.RegisterForUpdates(
+		stsSettingsModel.SettingTypeOtelComponentMapping,
+		stsSettingsModel.SettingTypeOtelRelationMapping,
+	)
+	if err != nil {
+		return err
+	}
+
+	s.logger.Info("SnapshotManager subscribed to setting updates")
+	s.stopped = make(chan struct{})
+	ctx, cancel := context.WithCancel(ctx)
+	s.cancel = cancel
+
+	go func() {
+		defer close(s.stopped)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-settingUpdatesCh:
+				s.logger.Info("Settings update received, updating mapping snapshots")
+				s.GetAndUpdateSettingSnapshots(ctx, settingsProvider, onRemovals)
+			}
+		}
+	}()
+
+	// Initial load
+	s.GetAndUpdateSettingSnapshots(ctx, settingsProvider, onRemovals)
+	return nil
+}
+
+func (s *SnapshotManager) GetAndUpdateSettingSnapshots(
+	ctx context.Context,
+	provider stsSettingsApi.StsSettingsProvider,
+	onRemovals func(context.Context, []stsSettingsModel.OtelComponentMapping, []stsSettingsModel.OtelRelationMapping),
+) {
+	newComponents, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelComponentMapping](provider)
+	if err != nil {
+		s.logger.Error("failed to get component mappings", zap.Error(err))
+		return
+	}
+
+	newRelations, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelRelationMapping](provider)
+	if err != nil {
+		s.logger.Error("failed to get relation mappings", zap.Error(err))
+		return
+	}
+
+	change := s.Update(newComponents, newRelations)
+	if len(change.RemovedComponentMappings) > 0 || len(change.RemovedRelationMappings) > 0 {
+		onRemovals(ctx, change.RemovedComponentMappings, change.RemovedRelationMappings)
 	}
 }
 
@@ -41,15 +101,13 @@ func (s *SnapshotManager) Update(
 	defer s.mu.Unlock()
 
 	change := SnapshotChange{
-		AddedComponents:   DiffSettings(newComponents, s.components),
-		RemovedComponents: DiffSettings(s.components, newComponents),
-		AddedRelations:    DiffSettings(newRelations, s.relations),
-		RemovedRelations:  DiffSettings(s.relations, newRelations),
+		RemovedComponentMappings: DiffSettings(s.componentMappings, newComponents),
+		RemovedRelationMappings:  DiffSettings(s.relationMappings, newRelations),
 	}
 
 	// Update the internal state
-	s.components = newComponents
-	s.relations = newRelations
+	s.componentMappings = newComponents
+	s.relationMappings = newRelations
 
 	return change
 }
@@ -60,8 +118,18 @@ func (s *SnapshotManager) Current() (
 ) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return append([]stsSettingsModel.OtelComponentMapping(nil), s.components...),
-		append([]stsSettingsModel.OtelRelationMapping(nil), s.relations...)
+	return append([]stsSettingsModel.OtelComponentMapping(nil), s.componentMappings...),
+		append([]stsSettingsModel.OtelRelationMapping(nil), s.relationMappings...)
+}
+
+func (s *SnapshotManager) Stop() {
+	if s.cancel != nil {
+		s.cancel()
+	}
+	if s.stopped != nil {
+		<-s.stopped
+	}
+
 }
 
 // DiffSettings returns all settings that exist in `primary` but not in `comparison`.

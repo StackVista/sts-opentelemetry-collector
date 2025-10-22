@@ -9,7 +9,6 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter"
 	stsSettingsApi "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
-	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
@@ -25,10 +24,9 @@ type connectorImpl struct {
 	logger           *zap.Logger
 	logsConsumer     consumer.Logs
 	settingsProvider stsSettingsApi.StsSettingsProvider
+	snapshotManager  *SnapshotManager
 	eval             *internal.CelEvaluator
 	mapper           *internal.Mapper
-	snapshotManager  *SnapshotManager
-	subscriptionCh   <-chan stsSettingsEvents.UpdateSettingsEvent
 	metricsRecorder  metrics.ConnectorMetricsRecorder
 }
 
@@ -47,63 +45,54 @@ func newConnector(
 		return nil, err
 	}
 
+	mapper := internal.NewMapper(
+		ctx,
+		cfg.TagRegexCacheSettings.ToMetered("tag_regex_cache", telemetrySettings),
+		cfg.TagRegexCacheSettings.ToMetered("tag_template_cache", telemetrySettings),
+	)
+	snapshotManager := NewSnapshotManager(logger)
+	metricsRecorder := metrics.NewConnectorMetrics(Type.String(), telemetrySettings)
+
 	return &connectorImpl{
-		cfg:          &cfg,
-		logger:       logger,
-		logsConsumer: nextConsumer,
-		eval:         eval,
-		mapper: internal.NewMapper(
-			ctx,
-			cfg.TagRegexCacheSettings.ToMetered("tag_regex_cache", telemetrySettings),
-			cfg.TagRegexCacheSettings.ToMetered("tag_template_cache", telemetrySettings),
-		),
-		snapshotManager: NewSnapshotManager(logger),
-		metricsRecorder: metrics.NewConnectorMetrics(Type.String(), telemetrySettings),
+		cfg:             &cfg,
+		logger:          logger,
+		logsConsumer:    nextConsumer,
+		eval:            eval,
+		mapper:          mapper,
+		snapshotManager: snapshotManager,
+		metricsRecorder: metricsRecorder,
 	}, nil
 }
 
 func (p *connectorImpl) Start(ctx context.Context, host component.Host) error {
-	ext, ok := host.GetExtensions()[component.MustNewID(stsSettingsApi.Type.String())]
-	if !ok {
-		return fmt.Errorf("%s extension not found", stsSettingsApi.Type.String())
-	}
-
-	// Cast to your interface
-	settingsProvider, ok := ext.(stsSettingsApi.StsSettingsProvider)
-	if !ok {
-		return fmt.Errorf("extension does not implement StsSettingsProvider interface")
-	}
-
-	p.logger.Info("StsSettingsProvider extension found and bound to the tracetotopo connector")
-	p.settingsProvider = settingsProvider
-
-	subscriptionCh, err := p.settingsProvider.RegisterForUpdates(
-		stsSettingsModel.SettingTypeOtelComponentMapping,
-		stsSettingsModel.SettingTypeOtelRelationMapping,
-	)
+	settingsProvider, err := resolveSettingsProvider(host, p.logger)
 	if err != nil {
 		return err
 	}
-	p.subscriptionCh = subscriptionCh
+	p.settingsProvider = settingsProvider
 
-	// Update mappings on a separate goroutine when settings change
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-subscriptionCh:
-				p.updateMappings(ctx)
-			}
-		}
-	}()
-	p.updateMappings(ctx)
+	if err := p.snapshotManager.Start(ctx, settingsProvider, p.handleMappingRemovals); err != nil {
+		return fmt.Errorf("failed to start snapshot manager: %w", err)
+	}
 
 	return nil
 }
 
+func resolveSettingsProvider(host component.Host, logger *zap.Logger) (stsSettingsApi.StsSettingsProvider, error) {
+	ext, ok := host.GetExtensions()[component.MustNewID(stsSettingsApi.Type.String())]
+	if !ok {
+		return nil, fmt.Errorf("%s extension not found", stsSettingsApi.Type.String())
+	}
+	provider, ok := ext.(stsSettingsApi.StsSettingsProvider)
+	if !ok {
+		return nil, fmt.Errorf("extension does not implement StsSettingsProvider interface")
+	}
+	logger.Info("Resolved StsSettingsProvider extension")
+	return provider, nil
+}
+
 func (p *connectorImpl) Shutdown(_ context.Context) error {
-	p.settingsProvider.Unregister(p.subscriptionCh)
+	p.snapshotManager.Stop()
 	return nil
 }
 
@@ -140,29 +129,19 @@ func (p *connectorImpl) ConsumeTraces(ctx context.Context, td ptrace.Traces) err
 	return nil
 }
 
-// updateMappings updates the mappings from the settings provider
-func (p *connectorImpl) updateMappings(ctx context.Context) {
-	newComponents, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelComponentMapping](p.settingsProvider)
-	if err != nil {
-		p.logger.Error("failed to get component mappings", zap.Error(err))
+func (p *connectorImpl) handleMappingRemovals(
+	ctx context.Context,
+	removedComponentMappings []stsSettingsModel.OtelComponentMapping,
+	removedRelationMappings []stsSettingsModel.OtelRelationMapping,
+) {
+	if len(removedComponentMappings) == 0 && len(removedRelationMappings) == 0 {
 		return
 	}
 
-	newRelations, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelRelationMapping](p.settingsProvider)
-	if err != nil {
-		p.logger.Error("failed to get relation mappings", zap.Error(err))
-		return
-	}
-
-	snapshotChange := p.snapshotManager.Update(newComponents, newRelations)
-	if len(snapshotChange.RemovedComponents) == 0 && len(snapshotChange.RemovedRelations) == 0 {
-		return
-	}
-
-	messages := internal.ConvertMappingRemovalsToTopologyStreamMessage(
-		ctx, p.logger, snapshotChange.RemovedComponents, snapshotChange.RemovedRelations, p.metricsRecorder,
+	msgs := internal.ConvertMappingRemovalsToTopologyStreamMessage(
+		ctx, p.logger, removedComponentMappings, removedRelationMappings, p.metricsRecorder,
 	)
-	p.publishMessagesAsLogs(ctx, messages)
+	p.publishMessagesAsLogs(ctx, msgs)
 }
 
 func (p *connectorImpl) publishMessagesAsLogs(ctx context.Context, messages []internal.MessageWithKey) {

@@ -14,16 +14,17 @@ import (
 type ConnectorMetricsRecorder interface {
 	IncSpansProcessed(ctx context.Context, n int64)
 	IncMappingsProduced(ctx context.Context, n int64, settingType settings.SettingType, attrs ...attribute.KeyValue)
-	IncSettingsRemoved(ctx context.Context, n int64, settingType settings.SettingType)
+	IncMappingsRemoved(ctx context.Context, n int64, settingType settings.SettingType)
 	IncMappingErrors(ctx context.Context, n int64, settingType settings.SettingType)
 	RecordMappingDuration(ctx context.Context, d time.Duration, labels ...attribute.KeyValue)
 }
 
 type ConnectorMetrics struct {
 	// Counters
-	spansProcessed metric.Int64Counter
-	mappingsTotal  metric.Int64Counter
-	errorsTotal    metric.Int64Counter
+	spansProcessed  metric.Int64Counter
+	mappingsTotal   metric.Int64Counter
+	mappingsRemoved metric.Int64Counter
+	errorsTotal     metric.Int64Counter
 
 	// Histograms
 	mappingDuration metric.Float64Histogram
@@ -42,6 +43,10 @@ func NewConnectorMetrics(typeName string, telemetrySettings component.TelemetryS
 		name("mappings_produced_total"),
 		metric.WithDescription("Total number of mappings produced"),
 	)
+	mappingsRemoved, _ := meter.Int64Counter(
+		name("mappings_removed_total"),
+		metric.WithDescription("Total number of mappings removed"),
+	)
 	errorsTotal, _ := meter.Int64Counter(
 		name("mapping_errors_total"),
 		metric.WithDescription("Total number of mapping errors"),
@@ -55,6 +60,7 @@ func NewConnectorMetrics(typeName string, telemetrySettings component.TelemetryS
 	return &ConnectorMetrics{
 		spansProcessed:  spansProcessed,
 		mappingsTotal:   mappingsTotal,
+		mappingsRemoved: mappingsRemoved,
 		errorsTotal:     errorsTotal,
 		mappingDuration: mappingDuration,
 	}
@@ -88,8 +94,8 @@ func (pm *ConnectorMetrics) IncMappingsProduced(
 	pm.mappingsTotal.Add(ctx, n, metric.WithAttributes(attrs...))
 }
 
-func (pm *ConnectorMetrics) IncSettingsRemoved(ctx context.Context, n int64, settingType settings.SettingType) {
-	pm.mappingsTotal.Add(ctx, n, metric.WithAttributes(attribute.String("setting_type", string(settingType))))
+func (pm *ConnectorMetrics) IncMappingsRemoved(ctx context.Context, n int64, settingType settings.SettingType) {
+	pm.mappingsRemoved.Add(ctx, n, metric.WithAttributes(attribute.String("setting_type", string(settingType))))
 }
 
 func (pm *ConnectorMetrics) IncMappingErrors(ctx context.Context, n int64, settingType settings.SettingType) {

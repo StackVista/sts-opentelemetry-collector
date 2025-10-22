@@ -45,7 +45,7 @@ type noopMetrics struct{}
 func (n *noopMetrics) IncSpansProcessed(_ context.Context, _ int64) {}
 func (n *noopMetrics) IncMappingsProduced(_ context.Context, _ int64, _ settings.SettingType, _ ...attribute.KeyValue) {
 }
-func (n *noopMetrics) IncSettingsRemoved(_ context.Context, _ int64, _ settings.SettingType) {}
+func (n *noopMetrics) IncMappingsRemoved(_ context.Context, _ int64, _ settings.SettingType) {}
 func (n *noopMetrics) IncMappingErrors(_ context.Context, _ int64, _ settings.SettingType)   {}
 func (n *noopMetrics) RecordMappingDuration(_ context.Context, _ time.Duration, _ ...attribute.KeyValue) {
 }

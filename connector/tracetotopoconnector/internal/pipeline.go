@@ -146,31 +146,31 @@ func ConvertMappingRemovalsToTopologyStreamMessage(
 	metricsRecorder metrics.ConnectorMetricsRecorder,
 ) []MessageWithKey {
 	result := make([]MessageWithKey, 0)
-	var componentsRemoved, relationsRemoved int
+	var componentMappingsRemoved, relationMappingsRemoved int
 
 	for _, componentMapping := range componentMappings {
 		messages := removalToMessageWithKey(componentMapping)
 		result = append(result, messages...)
-		componentsRemoved++
+		componentMappingsRemoved++
 	}
 
 	for _, relationMapping := range relationMappings {
 		messages := removalToMessageWithKey(relationMapping)
 		result = append(result, messages...)
-		relationsRemoved++
+		relationMappingsRemoved++
 	}
 
-	if componentsRemoved > 0 {
-		metricsRecorder.IncSettingsRemoved(ctx, int64(componentsRemoved), settings.SettingTypeOtelComponentMapping)
+	if componentMappingsRemoved > 0 {
+		metricsRecorder.IncMappingsRemoved(ctx, int64(componentMappingsRemoved), settings.SettingTypeOtelComponentMapping)
 	}
-	if relationsRemoved > 0 {
-		metricsRecorder.IncSettingsRemoved(ctx, int64(relationsRemoved), settings.SettingTypeOtelRelationMapping)
+	if relationMappingsRemoved > 0 {
+		metricsRecorder.IncMappingsRemoved(ctx, int64(relationMappingsRemoved), settings.SettingTypeOtelRelationMapping)
 	}
 
 	logger.Debug(
 		"Converted mapping removals to topology stream messages",
-		zap.Int("componentsRemoved", componentsRemoved),
-		zap.Int("relationsRemoved", relationsRemoved),
+		zap.Int("componentMappingsRemoved", componentMappingsRemoved),
+		zap.Int("relationMappingsRemoved", relationMappingsRemoved),
 	)
 
 	return result

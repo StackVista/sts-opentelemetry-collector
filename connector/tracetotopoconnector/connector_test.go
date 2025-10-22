@@ -42,7 +42,7 @@ func TestConnectorStart(t *testing.T) {
 		connector, _ := newConnector(
 			context.Background(), Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer,
 		)
-		provider := newMockStsSettingsProvider(
+		provider := NewMockStsSettingsProvider(
 			[]settings.OtelComponentMapping{
 				createSimpleComponentMapping("mapping1"),
 			},
@@ -61,19 +61,19 @@ func TestConnectorStart(t *testing.T) {
 		assert.Len(t, componentMappings, 1)
 		assert.Len(t, relationMappings, 2)
 
-		provider.componentMappings = []settings.OtelComponentMapping{
+		provider.ComponentMappings = []settings.OtelComponentMapping{
 			createSimpleComponentMapping("mapping1"),
 			createSimpleComponentMapping("mapping2"),
 			createSimpleComponentMapping("mapping3"),
 		}
-		provider.relationMappings = []settings.OtelRelationMapping{
+		provider.RelationMappings = []settings.OtelRelationMapping{
 			createSimpleRelationMapping("mapping4"),
 		}
 		componentMappings, relationMappings = connector.snapshotManager.Current()
 		assert.Len(t, componentMappings, 1)
 		assert.Len(t, relationMappings, 2)
 
-		provider.channel <- stsSettingsEvents.UpdateSettingsEvent{}
+		provider.SettingUpdatesCh <- stsSettingsEvents.UpdateSettingsEvent{}
 		time.Sleep(100 * time.Millisecond) // wait for snapshot manager to update
 		componentMappings, relationMappings = connector.snapshotManager.Current()
 		assert.Len(t, componentMappings, 3)
@@ -85,7 +85,7 @@ func TestConnectorStart(t *testing.T) {
 		logConsumer := &consumertest.LogsSink{}
 		connector, _ := newConnector(ctx, Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer)
 
-		provider := newMockStsSettingsProvider(
+		provider := NewMockStsSettingsProvider(
 			[]settings.OtelComponentMapping{
 				createSimpleComponentMapping("mapping1"),
 			},
@@ -105,9 +105,9 @@ func TestConnectorStart(t *testing.T) {
 		require.Len(t, relationMappings, 1)
 
 		// Simulate removal (empty provider)
-		provider.componentMappings = nil
-		provider.relationMappings = nil
-		provider.channel <- stsSettingsEvents.UpdateSettingsEvent{}
+		provider.ComponentMappings = nil
+		provider.RelationMappings = nil
+		provider.SettingUpdatesCh <- stsSettingsEvents.UpdateSettingsEvent{}
 
 		expectedLogRecordsCount := (len(componentMappings) + len(relationMappings)) * 4 // 4 shards
 
@@ -142,7 +142,7 @@ func TestConnectorStart(t *testing.T) {
 func TestConnectorConsumeTraces(t *testing.T) {
 	logConsumer := &consumertest.LogsSink{}
 	connector, _ := newConnector(context.Background(), Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer)
-	provider := newMockStsSettingsProvider(
+	provider := NewMockStsSettingsProvider(
 		[]settings.OtelComponentMapping{
 			createSimpleComponentMapping("mapping1"),
 		},
@@ -336,33 +336,33 @@ func (nh *mockHost) GetExtensions() map[component.ID]component.Component {
 	return nh.ext
 }
 
-type mockStsSettingsProvider struct {
-	componentMappings []settings.OtelComponentMapping
-	relationMappings  []settings.OtelRelationMapping
-	channel           chan stsSettingsEvents.UpdateSettingsEvent
+type MockStsSettingsProvider struct {
+	ComponentMappings []settings.OtelComponentMapping
+	RelationMappings  []settings.OtelRelationMapping
+	SettingUpdatesCh  chan stsSettingsEvents.UpdateSettingsEvent
 }
 
-func newMockStsSettingsProvider(componentMappings []settings.OtelComponentMapping, relationMappings []settings.OtelRelationMapping) *mockStsSettingsProvider {
-	return &mockStsSettingsProvider{
-		componentMappings: componentMappings,
-		relationMappings:  relationMappings,
-		channel:           make(chan stsSettingsEvents.UpdateSettingsEvent),
+func NewMockStsSettingsProvider(componentMappings []settings.OtelComponentMapping, relationMappings []settings.OtelRelationMapping) *MockStsSettingsProvider {
+	return &MockStsSettingsProvider{
+		ComponentMappings: componentMappings,
+		RelationMappings:  relationMappings,
+		SettingUpdatesCh:  make(chan stsSettingsEvents.UpdateSettingsEvent),
 	}
 }
 
-func (m *mockStsSettingsProvider) Start(_ context.Context, _ component.Host) error {
+func (m *MockStsSettingsProvider) Start(_ context.Context, _ component.Host) error {
 	return nil
 }
 
-func (m *mockStsSettingsProvider) Shutdown(_ context.Context) error {
+func (m *MockStsSettingsProvider) Shutdown(_ context.Context) error {
 	return nil
 }
 
-func (m *mockStsSettingsProvider) RegisterForUpdates(_ ...settings.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
-	return m.channel, nil
+func (m *MockStsSettingsProvider) RegisterForUpdates(_ ...settings.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
+	return m.SettingUpdatesCh, nil
 }
 
-func (m *mockStsSettingsProvider) Unregister(_ <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
+func (m *MockStsSettingsProvider) Unregister(_ <-chan stsSettingsEvents.UpdateSettingsEvent) bool {
 	return true
 }
 
@@ -374,13 +374,13 @@ func toAnySlice[T any](slice []T) []any {
 	return result
 }
 
-func (m *mockStsSettingsProvider) UnsafeGetCurrentSettingsByType(typ settings.SettingType) ([]any, error) {
+func (m *MockStsSettingsProvider) UnsafeGetCurrentSettingsByType(typ settings.SettingType) ([]any, error) {
 	//nolint:exhaustive
 	switch typ {
 	case settings.SettingTypeOtelComponentMapping:
-		return toAnySlice(m.componentMappings), nil
+		return toAnySlice(m.ComponentMappings), nil
 	case settings.SettingTypeOtelRelationMapping:
-		return toAnySlice(m.relationMappings), nil
+		return toAnySlice(m.RelationMappings), nil
 	default:
 		return nil, errors.New("not supported type of settings")
 	}
