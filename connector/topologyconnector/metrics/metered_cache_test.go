@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/metrics"
+	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
 	"go.opentelemetry.io/collector/component/componenttest"
 )
 

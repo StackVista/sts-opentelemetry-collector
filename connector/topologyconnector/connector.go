@@ -1,12 +1,12 @@
-package tracetotopoconnector
+package topologyconnector
 
 import (
 	"context"
 	"fmt"
 	"time"
 
-	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/internal"
-	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/metrics"
+	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/internal"
+	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter"
 	stsSettingsApi "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"

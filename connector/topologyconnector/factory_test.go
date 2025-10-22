@@ -1,5 +1,5 @@
 //nolint:testpackage
-package tracetotopoconnector
+package topologyconnector
 
 import (
 	"testing"

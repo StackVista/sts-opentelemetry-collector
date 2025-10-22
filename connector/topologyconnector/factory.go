@@ -1,4 +1,4 @@
-package tracetotopoconnector
+package topologyconnector
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 
 //nolint:gochecknoglobals
 var (
-	Type = component.MustNewType("tracetotopo")
+	Type = component.MustNewType("topology")
 )
 
 // NewFactory returns a ConnectorFactory.

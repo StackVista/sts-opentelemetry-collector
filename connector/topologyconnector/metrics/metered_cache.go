@@ -43,7 +43,7 @@ func newOtelMeter(
 ) *otelMeter {
 	ctx, cancel := context.WithCancel(ctx)
 
-	metricBaseName := fmt.Sprintf("connector.tracetotopo.%s", name)
+	metricBaseName := fmt.Sprintf("connector.topology.%s", name)
 	meter := settings.MeterProvider.Meter("meteredcache")
 
 	hit, _ := meter.Int64Counter(metricBaseName + ".hits")

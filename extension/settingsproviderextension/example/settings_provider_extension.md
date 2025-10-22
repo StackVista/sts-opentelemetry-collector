@@ -114,7 +114,7 @@ receivers:
         endpoint: 0.0.0.0:4318
 
 connectors:
-  tracetotopo:
+  topology:
   # the extension wiring is done in the source code, by looking up the extension through the component.Host interface
 
 processors:
@@ -133,13 +133,13 @@ service:
     traces:
       receivers: [ otlp ]
       processors: [ batch ]
-      exporters: [ debug, tracetotopo ]
+      exporters: [ debug, topology ]
     metrics:
       receivers: [ otlp ]
       processors: [ batch ]
       exporters: [ debug ]
     logs:
-      receivers: [ otlp, tracetotopo ]
+      receivers: [ otlp, topology ]
       processors: [ batch ]
       exporters: [ debug ]
 ```

@@ -11,7 +11,7 @@ receivers:
         endpoint: "{{ .OtlpGRPCEndpoint }}"
 
 connectors:
-  tracetotopo:
+  topology:
 
 exporters:
   sts_kafka_exporter:
@@ -29,7 +29,7 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      exporters: [tracetotopo, debug] # so we can see spans exported
+      exporters: [topology, debug] # so we can see spans exported
     logs:
-      receivers: [tracetotopo]
+      receivers: [topology]
       exporters: [sts_kafka_exporter]

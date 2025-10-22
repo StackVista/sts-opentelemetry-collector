@@ -1,4 +1,4 @@
-package tracetotopoconnector
+package topologyconnector
 
 import (
 	"context"

@@ -1,4 +1,4 @@
-module github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector
+module github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector
 
 go 1.21.0
 
