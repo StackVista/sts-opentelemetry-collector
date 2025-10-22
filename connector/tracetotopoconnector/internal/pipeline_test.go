@@ -510,9 +510,9 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 				collectionTimestampMs,
 				metrics,
 			)
-			unify(&result)
+			unifyMessages(&result)
 			//nolint:gosec
-			unify(&tt.expected)
+			unifyMessages(&tt.expected)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -698,6 +698,147 @@ func TestPipeline_ConvertMappingRemovalsToTopologyStreamMessage(t *testing.T) {
 	for i := 0; i < ShardCount; i++ {
 		assert.True(t, seenShards[fmt.Sprintf("%d", i)], "expected shard %d to be present", i)
 	}
+}
+
+func TestPipeline_ConvertMetricsToTopologyStreamMessage_MultipleComponents(t *testing.T) {
+	collectionTimestampMs := time.Now().UnixMilli()
+	submittedTime := int64(1756851083000)
+
+	metrics := func() pmetric.Metrics {
+		metrics := pmetric.NewMetrics()
+		rs := metrics.ResourceMetrics().AppendEmpty()
+		_ = rs.Resource().Attributes().FromRaw(map[string]any{
+			"service.name":        "api-gateway",
+			"service.instance.id": "instance-1",
+			"service.namespace":   "default",
+		})
+		ss := rs.ScopeMetrics().AppendEmpty()
+		_ = ss.Scope().Attributes().FromRaw(map[string]any{"otel.scope.name": "http"})
+		m := ss.Metrics().AppendEmpty()
+		m.SetName("http.server.request_count")
+		sum := m.SetEmptySum()
+
+		// Datapoint 1
+		dp1 := sum.DataPoints().AppendEmpty()
+		dp1.SetTimestamp(pcommon.Timestamp(submittedTime))
+		_ = dp1.Attributes().FromRaw(map[string]any{
+			"http.method":      "GET",
+			"http.route":       "/users",
+			"http.status_code": "200",
+		})
+
+		// Datapoint 2
+		dp2 := sum.DataPoints().AppendEmpty()
+		dp2.SetTimestamp(pcommon.Timestamp(submittedTime))
+		_ = dp2.Attributes().FromRaw(map[string]any{
+			"http.method":      "POST",
+			"http.route":       "/products",
+			"http.status_code": "201",
+		})
+		return metrics
+	}()
+	componentMappings := []settings.OtelComponentMapping{
+		{
+			Id:            "mapping-multi-dp-comp",
+			ExpireAfterMs: 60000,
+			Conditions: []settings.OtelConditionMapping{
+				{Action: settings.CREATE, Expression: boolExpr(`resourceAttributes["service.name"] == "api-gateway"`)},
+			},
+			Identifier: "urn:otel-component-mapping:api-route",
+			Output: settings.OtelComponentMappingOutput{
+				Identifier: strExpr(`api-gateway-${metricAttributes["http.route"]}`),
+				Name:       strExpr(`API Route: ${metricAttributes["http.route"]}`),
+				TypeName:   strExpr(`api-route`),
+				DomainName: strExpr(`${resourceAttributes["service.namespace"]}`),
+				LayerName:  strExpr("frontend"),
+				Required: &settings.OtelComponentMappingFieldMapping{
+					Tags: &[]settings.OtelTagMapping{
+						{
+							Source: anyExpr(`${metricAttributes["http.method"]}`),
+							Target: "http_method",
+						},
+					},
+				},
+			},
+		},
+	}
+	relationMappings := []settings.OtelRelationMapping{}
+	expected := []MessageWithKey{
+		{
+			Key: &topo_stream_v1.TopologyStreamMessageKey{
+				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+				DataSource: "urn:otel-component-mapping:api-route",
+				ShardId:    stableShardID("api-gateway-/products", ShardCount),
+			},
+			Message: &topo_stream_v1.TopologyStreamMessage{
+				CollectionTimestamp: collectionTimestampMs,
+				SubmittedTimestamp:  submittedTime,
+				Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
+					TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
+						ExpiryIntervalMs: 60000,
+						Components: []*topo_stream_v1.TopologyStreamComponent{
+							{
+								ExternalId:  "api-gateway-/products",
+								Identifiers: []string{"api-gateway-/products"},
+								Name:        "API Route: /products",
+								TypeName:    "api-route",
+								DomainName:  "default",
+								LayerName:   "frontend",
+								Tags:        []string{"http_method:POST"},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Key: &topo_stream_v1.TopologyStreamMessageKey{
+				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+				DataSource: "urn:otel-component-mapping:api-route",
+				ShardId:    stableShardID("api-gateway-/users", ShardCount),
+			},
+			Message: &topo_stream_v1.TopologyStreamMessage{
+				CollectionTimestamp: collectionTimestampMs,
+				SubmittedTimestamp:  submittedTime,
+				Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
+					TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
+						ExpiryIntervalMs: 60000,
+						Components: []*topo_stream_v1.TopologyStreamComponent{
+							{
+								ExternalId:  "api-gateway-/users",
+								Identifiers: []string{"api-gateway-/users"},
+								Name:        "API Route: /users",
+								TypeName:    "api-route",
+								DomainName:  "default",
+								LayerName:   "frontend",
+								Tags:        []string{"http_method:GET"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	mapper := NewMapper(context.Background(), makeMeteredCacheSettings(100, 30*time.Second), makeMeteredCacheSettings(100, 30*time.Second))
+	ctx := context.Background()
+	metricsReporter := &noopMetrics{}
+	eval, _ := NewCELEvaluator(ctx, makeMeteredCacheSettings(100, 30*time.Second))
+	result := ConvertMetricsToTopologyStreamMessage(
+		ctx,
+		zaptest.NewLogger(t),
+		eval,
+		mapper,
+		metrics,
+		componentMappings,
+		relationMappings,
+		collectionTimestampMs,
+		metricsReporter,
+	)
+	// Unify to handle unpredictable map and slice ordering
+	unifyMessages(&result)
+	unifyMessages(&expected)
+	assert.Equal(t, expected, result)
 }
 
 func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
@@ -921,8 +1062,8 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 				collectionTimestampMs,
 				metricsReporter,
 			)
-			unify(&result)
-			unify(&expected)
+			unifyMessages(&result)
+			unifyMessages(&expected)
 			assert.Equal(t, expected, result)
 		})
 	}
@@ -962,11 +1103,20 @@ func createSimpleRelationMapping(id string) settings.OtelRelationMapping {
 	}
 }
 
-func unify(data *[]MessageWithKey) {
+func unifyMessages(data *[]MessageWithKey) {
 	for _, message := range *data {
-		//nolint:forcetypeassert
-		for _, component := range message.Message.Payload.(*topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData).TopologyStreamRepeatElementsData.Components {
-			sort.Strings(component.Tags)
+		if pl := message.Message.GetTopologyStreamRepeatElementsData(); pl != nil {
+			for _, component := range pl.Components {
+				if component != nil {
+					sort.Strings(component.Tags)
+					sort.Strings(component.Identifiers)
+				}
+			}
+			for _, relation := range pl.Relations {
+				if relation != nil && relation.Name == "" {
+					relation.Name = "" // Ensure empty is not nil for comparison
+				}
+			}
 		}
 	}
 }

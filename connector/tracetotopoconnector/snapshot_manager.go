@@ -26,6 +26,12 @@ type SnapshotManager struct {
 	relationMappings  []stsSettingsModel.OtelRelationMapping
 }
 
+type onRemovals = func(
+	ctx context.Context,
+	componentMappings []stsSettingsModel.OtelComponentMapping,
+	relationMappings []stsSettingsModel.OtelRelationMapping,
+)
+
 func NewSnapshotManager(logger *zap.Logger, signal stsSettingsModel.OtelInputSignal) *SnapshotManager {
 	return &SnapshotManager{
 		logger:            logger,
@@ -38,7 +44,7 @@ func NewSnapshotManager(logger *zap.Logger, signal stsSettingsModel.OtelInputSig
 func (s *SnapshotManager) Start(
 	ctx context.Context,
 	settingsProvider stsSettingsApi.StsSettingsProvider,
-	onRemovals func(context.Context, []stsSettingsModel.OtelComponentMapping, []stsSettingsModel.OtelRelationMapping),
+	onRemovals onRemovals,
 ) error {
 	settingUpdatesCh, err := settingsProvider.RegisterForUpdates(
 		stsSettingsModel.SettingTypeOtelComponentMapping,
@@ -74,18 +80,12 @@ func (s *SnapshotManager) Start(
 func (s *SnapshotManager) GetAndUpdateSettingSnapshots(
 	ctx context.Context,
 	provider stsSettingsApi.StsSettingsProvider,
-	onRemovals func(context.Context, []stsSettingsModel.OtelComponentMapping, []stsSettingsModel.OtelRelationMapping),
+	onRemovals onRemovals,
 ) {
 	newComponentMappings, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelComponentMapping](provider)
 	if err != nil {
 		s.logger.Error("failed to get component mappings", zap.Error(err))
 		return
-	}
-	applicableComponentMappings := []stsSettingsModel.OtelComponentMapping{}
-	for _, mapping := range newComponentMappings {
-		if slices.Contains(mapping.InputSignals, s.signal) {
-			applicableComponentMappings = append(applicableComponentMappings, mapping)
-		}
 	}
 
 	newRelationMappings, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelRelationMapping](provider)
@@ -93,6 +93,25 @@ func (s *SnapshotManager) GetAndUpdateSettingSnapshots(
 		s.logger.Error("failed to get relation mappings", zap.Error(err))
 		return
 	}
+
+	s.Update(ctx, newComponentMappings, newRelationMappings, onRemovals)
+}
+
+// Filter mappings for the selected input signal and trigger onRemovals
+// when mappings have been removed
+func (s *SnapshotManager) Update(
+	ctx context.Context,
+	newComponentMappings []stsSettingsModel.OtelComponentMapping,
+	newRelationMappings []stsSettingsModel.OtelRelationMapping,
+	onRemovals onRemovals,
+) {
+	applicableComponentMappings := []stsSettingsModel.OtelComponentMapping{}
+	for _, mapping := range newComponentMappings {
+		if slices.Contains(mapping.InputSignals, s.signal) {
+			applicableComponentMappings = append(applicableComponentMappings, mapping)
+		}
+	}
+
 	applicableRelationMappings := []stsSettingsModel.OtelRelationMapping{}
 	for _, mapping := range newRelationMappings {
 		if slices.Contains(mapping.InputSignals, s.signal) {
@@ -100,7 +119,7 @@ func (s *SnapshotManager) GetAndUpdateSettingSnapshots(
 		}
 	}
 
-	change := s.Update(applicableComponentMappings, applicableRelationMappings)
+	change := s.updateInteral(applicableComponentMappings, applicableRelationMappings)
 	if len(change.RemovedComponentMappings) > 0 || len(change.RemovedRelationMappings) > 0 {
 		onRemovals(ctx, change.RemovedComponentMappings, change.RemovedRelationMappings)
 	}
@@ -108,7 +127,7 @@ func (s *SnapshotManager) GetAndUpdateSettingSnapshots(
 
 // Update compares the provided component and relation mappings against the
 // current snapshot, computes the differences, and updates the internal state.
-func (s *SnapshotManager) Update(
+func (s *SnapshotManager) updateInteral(
 	newComponents []stsSettingsModel.OtelComponentMapping,
 	newRelations []stsSettingsModel.OtelRelationMapping,
 ) SnapshotChange {

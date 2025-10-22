@@ -15,20 +15,20 @@ import (
 	stsSettingsApi "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 )
 
-func comp(id string) stsSettingsApi.OtelComponentMapping {
-	return stsSettingsApi.OtelComponentMapping{Identifier: id, InputSignals: []stsSettingsApi.OtelInputSignal{stsSettingsApi.TRACES}}
+func componentMapping(id string, signals ...stsSettingsApi.OtelInputSignal) stsSettingsApi.OtelComponentMapping {
+	return stsSettingsApi.OtelComponentMapping{Identifier: id, InputSignals: signals}
 }
 
-func rel(id string) stsSettingsApi.OtelRelationMapping {
-	return stsSettingsApi.OtelRelationMapping{Identifier: id, InputSignals: []stsSettingsApi.OtelInputSignal{stsSettingsApi.TRACES}}
+func relationMapping(id string, signals ...stsSettingsApi.OtelInputSignal) stsSettingsApi.OtelRelationMapping {
+	return stsSettingsApi.OtelRelationMapping{Identifier: id, InputSignals: signals}
 }
 
 func TestSnapshotManager_StartStopLifecycle(t *testing.T) {
 	logger := zap.NewNop()
 
 	// 1. Initialize mock provider with initial settings
-	initialComponents := []stsSettingsApi.OtelComponentMapping{comp("c1")}
-	initialRelations := []stsSettingsApi.OtelRelationMapping{rel("r1")}
+	initialComponents := []stsSettingsApi.OtelComponentMapping{componentMapping("c1", stsSettingsApi.TRACES)}
+	initialRelations := []stsSettingsApi.OtelRelationMapping{relationMapping("r1", stsSettingsApi.TRACES)}
 	provider := stsTraceToTopo.NewMockStsSettingsProvider(initialComponents, initialRelations)
 
 	manager := stsTraceToTopo.NewSnapshotManager(logger, stsSettingsApi.TRACES)
@@ -56,8 +56,8 @@ func TestSnapshotManager_StartStopLifecycle(t *testing.T) {
 	require.Equal(t, initialRelations, rels)
 
 	// Update: remove c1/r1 and add c2/r2
-	provider.ComponentMappings = []stsSettingsApi.OtelComponentMapping{comp("c2")}
-	provider.RelationMappings = []stsSettingsApi.OtelRelationMapping{rel("r2")}
+	provider.ComponentMappings = []stsSettingsApi.OtelComponentMapping{componentMapping("c2", stsSettingsApi.TRACES)}
+	provider.RelationMappings = []stsSettingsApi.OtelRelationMapping{relationMapping("r2", stsSettingsApi.TRACES)}
 	provider.SettingUpdatesCh <- stsSettingsEvents.UpdateSettingsEvent{}
 
 	// Verify callback was triggered with removals
@@ -71,8 +71,8 @@ func TestSnapshotManager_StartStopLifecycle(t *testing.T) {
 
 	manager.Stop()
 
-	provider.ComponentMappings = []stsSettingsApi.OtelComponentMapping{comp("c3")}
-	provider.RelationMappings = []stsSettingsApi.OtelRelationMapping{rel("r3")}
+	provider.ComponentMappings = []stsSettingsApi.OtelComponentMapping{componentMapping("c3", stsSettingsApi.TRACES)}
+	provider.RelationMappings = []stsSettingsApi.OtelRelationMapping{relationMapping("r3", stsSettingsApi.TRACES)}
 	select {
 	case provider.SettingUpdatesCh <- stsSettingsEvents.UpdateSettingsEvent{}:
 		t.Fatal("expected closed channel to panic or be ignored")
@@ -92,17 +92,24 @@ func TestSnapshotManager_UpdateDetectsChanges(t *testing.T) {
 	manager := stsTraceToTopo.NewSnapshotManager(logger, stsSettingsApi.TRACES)
 
 	initialComponentMappings := []stsSettingsApi.OtelComponentMapping{
-		comp("c1"),
-		comp("c2"),
+		componentMapping("c1", stsSettingsApi.TRACES),
+		componentMapping("c2", stsSettingsApi.TRACES),
 	}
 	initialRelationMappings := []stsSettingsApi.OtelRelationMapping{
-		rel("r1"),
-		rel("r2"),
+		relationMapping("r1", stsSettingsApi.TRACES),
+		relationMapping("r2", stsSettingsApi.TRACES),
 	}
 
-	change := manager.Update(initialComponentMappings, initialRelationMappings)
-	assert.Empty(t, change.RemovedComponentMappings)
-	assert.Empty(t, change.RemovedRelationMappings)
+	var removedComponentMappings []stsSettingsApi.OtelComponentMapping
+	var removedRelationMappings []stsSettingsApi.OtelRelationMapping
+	onRemovals := func(_ context.Context, cMappings []stsSettingsApi.OtelComponentMapping, rMappings []stsSettingsApi.OtelRelationMapping) {
+		removedComponentMappings = cMappings
+		removedRelationMappings = rMappings
+	}
+
+	manager.Update(t.Context(), initialComponentMappings, initialRelationMappings, onRemovals)
+	assert.Empty(t, removedComponentMappings)
+	assert.Empty(t, removedRelationMappings)
 
 	// The current snapshot should be the same as the initial snapshot
 	componentMappings, relationMappings := manager.Current()
@@ -111,26 +118,26 @@ func TestSnapshotManager_UpdateDetectsChanges(t *testing.T) {
 
 	// Second update: add one and remove one
 	newComponentMappings := []stsSettingsApi.OtelComponentMapping{
-		comp("c2"), // existing
-		comp("c3"), // new
+		componentMapping("c2", stsSettingsApi.TRACES), // existing
+		componentMapping("c3", stsSettingsApi.TRACES), // new
 	}
 	newRelationMappings := []stsSettingsApi.OtelRelationMapping{
-		rel("r2"), // existing
-		rel("r3"), // new
+		relationMapping("r2", stsSettingsApi.TRACES), // existing
+		relationMapping("r3", stsSettingsApi.TRACES), // new
 	}
 
-	change = manager.Update(newComponentMappings, newRelationMappings)
-	assert.ElementsMatch(t, []stsSettingsApi.OtelComponentMapping{comp("c1")}, change.RemovedComponentMappings)
-	assert.ElementsMatch(t, []stsSettingsApi.OtelRelationMapping{rel("r1")}, change.RemovedRelationMappings)
+	manager.Update(t.Context(), newComponentMappings, newRelationMappings, onRemovals)
+	assert.ElementsMatch(t, []stsSettingsApi.OtelComponentMapping{componentMapping("c1", stsSettingsApi.TRACES)}, removedComponentMappings)
+	assert.ElementsMatch(t, []stsSettingsApi.OtelRelationMapping{relationMapping("r1", stsSettingsApi.TRACES)}, removedRelationMappings)
 }
 
 func TestSnapshotManager_CurrentReturnsCopy(t *testing.T) {
 	logger := zap.NewNop()
 	manager := stsTraceToTopo.NewSnapshotManager(logger, stsSettingsApi.TRACES)
 
-	initialComponentMappings := []stsSettingsApi.OtelComponentMapping{comp("c1")}
-	initialRelationMappings := []stsSettingsApi.OtelRelationMapping{rel("r1")}
-	manager.Update(initialComponentMappings, initialRelationMappings)
+	initialComponentMappings := []stsSettingsApi.OtelComponentMapping{componentMapping("c1", stsSettingsApi.TRACES)}
+	initialRelationMappings := []stsSettingsApi.OtelRelationMapping{relationMapping("r1", stsSettingsApi.TRACES)}
+	manager.Update(t.Context(), initialComponentMappings, initialRelationMappings, dummyOnRemovals)
 
 	componentMappings, relationMappings := manager.Current()
 	assert.Equal(t, initialComponentMappings, componentMappings)
@@ -146,13 +153,35 @@ func TestSnapshotManager_CurrentReturnsCopy(t *testing.T) {
 	assert.Equal(t, "r1", relationMappings2[0].Identifier)
 }
 
+func TestSnapshotManager_MappingsAreFilteredForSignal(t *testing.T) {
+	logger := zap.NewNop()
+	tracesManager := stsTraceToTopo.NewSnapshotManager(logger, stsSettingsApi.TRACES)
+	metricsManager := stsTraceToTopo.NewSnapshotManager(logger, stsSettingsApi.METRICS)
+
+	initialComponentMappings := []stsSettingsApi.OtelComponentMapping{componentMapping("c1", stsSettingsApi.TRACES)}
+	initialRelationMappings := []stsSettingsApi.OtelRelationMapping{relationMapping("r1", stsSettingsApi.METRICS)}
+	tracesManager.Update(t.Context(), initialComponentMappings, initialRelationMappings, dummyOnRemovals)
+	metricsManager.Update(t.Context(), initialComponentMappings, initialRelationMappings, dummyOnRemovals)
+
+	tracesComponentMappings, tracesRelationMappings := tracesManager.Current()
+	assert.Equal(t, initialComponentMappings, tracesComponentMappings)
+	assert.Empty(t, tracesRelationMappings)
+
+	metricsComponentMappings, metricsRelationMappings := metricsManager.Current()
+	assert.Equal(t, initialRelationMappings, metricsRelationMappings)
+	assert.Empty(t, metricsComponentMappings)
+}
+
 func TestDiffSettings_GenericFunction(t *testing.T) {
-	a := []stsSettingsApi.OtelComponentMapping{comp("1"), comp("2"), comp("3")}
-	b := []stsSettingsApi.OtelComponentMapping{comp("2"), comp("3"), comp("4")}
+	a := []stsSettingsApi.OtelComponentMapping{componentMapping("1", stsSettingsApi.TRACES), componentMapping("2", stsSettingsApi.TRACES), componentMapping("3", stsSettingsApi.TRACES)}
+	b := []stsSettingsApi.OtelComponentMapping{componentMapping("2", stsSettingsApi.TRACES), componentMapping("3", stsSettingsApi.TRACES), componentMapping("4", stsSettingsApi.TRACES)}
 
 	added := stsTraceToTopo.DiffSettings(a, b)
 	removed := stsTraceToTopo.DiffSettings(b, a) // symmetric
 
-	assert.ElementsMatch(t, []stsSettingsApi.OtelComponentMapping{comp("1")}, added)
-	assert.ElementsMatch(t, []stsSettingsApi.OtelComponentMapping{comp("4")}, removed)
+	assert.ElementsMatch(t, []stsSettingsApi.OtelComponentMapping{componentMapping("1", stsSettingsApi.TRACES)}, added)
+	assert.ElementsMatch(t, []stsSettingsApi.OtelComponentMapping{componentMapping("4", stsSettingsApi.TRACES)}, removed)
+}
+
+func dummyOnRemovals(_ context.Context, _ []stsSettingsApi.OtelComponentMapping, _ []stsSettingsApi.OtelRelationMapping) {
 }
