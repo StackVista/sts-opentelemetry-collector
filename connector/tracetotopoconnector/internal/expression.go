@@ -360,11 +360,19 @@ func validateExpectedType(ast *cel.Ast, expectedType expressionType, expression 
 // evaluateProgram executes a compiled CEL program with the given context.
 func (e *CelEvaluator) evaluateProgram(prog cel.Program, ctx *ExpressionEvalContext) (interface{}, error) {
 	runtimeVars := map[string]interface{}{
-		"spanAttributes":     ctx.SpanAttributes,
-		"metricAttributes":   ctx.MetricAttributes,
 		"scopeAttributes":    ctx.ScopeAttributes,
 		"resourceAttributes": ctx.ResourceAttributes,
 		"vars":               ctx.Vars,
+	}
+
+	// To get the best error messages the metricAttributes/spanAttributes should not be set at all
+	// if they are not defined
+	if ctx.MetricAttributes != nil {
+		runtimeVars["metricAttributes"] = ctx.MetricAttributes
+	}
+
+	if ctx.SpanAttributes != nil {
+		runtimeVars["spanAttributes"] = ctx.SpanAttributes
 	}
 
 	result, _, err := prog.Eval(runtimeVars)

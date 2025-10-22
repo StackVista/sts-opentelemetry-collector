@@ -132,7 +132,8 @@ func (p *connectorImpl) ConsumeMetrics(ctx context.Context, metrics pmetric.Metr
 		attribute.String("target", "spans"),
 		attribute.Int("mapping_count", len(componentMappings)+len(relationMappings)),
 	)
-
+	
+  return nil
 }
 
 func (p *connectorImpl) ConsumeTraces(ctx context.Context, traceData ptrace.Traces) error {

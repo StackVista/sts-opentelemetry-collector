@@ -10,42 +10,61 @@ import (
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component/componenttest"
-	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
-func makeContext() ExpressionEvalContext {
-	span := ptrace.NewSpan()
-	span.Attributes().PutStr("http.method", "GET")
-	span.Attributes().PutInt("http.status_code", 200)
-	span.Attributes().PutStr("user.id", "123")
-	span.Attributes().PutStr("retries", "5")
-	span.Attributes().PutBool("sampled", true)
-	span.Attributes().PutDouble("pi", 3.14)
+func makeContext(includeSpanAttributes bool, includeMetricAttributes bool) ExpressionEvalContext {
+	spanAttributes := map[string]any{
+		"http.method":      "GET",
+		"http.status_code": int64(200),
+		"user.id":          "123",
+		"retries":          "5",
+		"sampled":          true,
+		"pi":               3.14,
+	}
 
-	scope := ptrace.NewScopeSpans()
-	scope.Scope().Attributes().PutStr("otel.scope.name", "io.opentelemetry.instrumentation.http")
-	scope.Scope().Attributes().PutStr("otel.scope.version", "1.2.3")
+	metricAttributes := map[string]any{
+		"http.method":      "GET",
+		"http.status_code": int64(200),
+		"user.id":          "123",
+	}
 
-	res := ptrace.NewResourceSpans()
-	res.Resource().Attributes().PutStr("service.name", "cart-service")
-	res.Resource().Attributes().PutStr("cloud.provider", "aws")
-	res.Resource().Attributes().PutStr("env", "dev")
+	scopeAttributes := map[string]any{
+		"otel.scope.name":    "io.opentelemetry.instrumentation.http",
+		"otel.scope.version": "1.2.3",
+	}
 
-	// slice attribute type
-	_ = res.Resource().Attributes().PutEmptySlice("process.command_args").FromRaw([]any{"java", "-jar", "app.jar"})
-
-	// map attribute type
-	depMap := res.Resource().Attributes().PutEmptyMap("deployment")
-	depMap.PutStr("region", "eu-west-1")
-	depMap.PutStr("env", "prod")
+	resourceAttributes := map[string]any{
+		"service.name":   "cart-service",
+		"cloud.provider": "aws",
+		"env":            "dev",
+		// slice attribute type
+		"process.command_args": []any{"java", "-jar", "app.jar"},
+		// map attribute type
+		"deployment": map[string]any{
+			"region": "eu-west-1",
+			"env":    "prod",
+		},
+	}
 
 	vars := map[string]any{
 		"namespace": "test",
 	}
 
-	return *NewSpanEvalContext(span.Attributes().AsRaw(), scope.Scope().Attributes().AsRaw(), res.Resource().Attributes().AsRaw()).CloneWithVariables(vars)
+	context := ExpressionEvalContext{
+		ScopeAttributes:    scopeAttributes,
+		ResourceAttributes: resourceAttributes,
+		Vars:               vars,
+	}
+	if includeSpanAttributes {
+		context.SpanAttributes = spanAttributes
+	}
+	if includeMetricAttributes {
+		context.MetricAttributes = metricAttributes
+	}
+	return context
 }
 
 func makeMeteredCacheSettings(size int, ttl time.Duration) metrics.MeteredCacheSettings {
@@ -61,7 +80,7 @@ func TestEvalStringExpression(t *testing.T) {
 	eval, err := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 	require.NoError(t, err)
 
-	ctx := makeContext()
+	ctx := makeContext(true, true)
 
 	tests := []struct {
 		name        string
@@ -102,6 +121,11 @@ func TestEvalStringExpression(t *testing.T) {
 		{
 			name:     "support span attributes",
 			expr:     `${spanAttributes["http.method"]}`,
+			expected: "GET",
+		},
+				{
+			name:     "support metric attributes",
+			expr:     `${metricAttributes["http.method"]}`,
 			expected: "GET",
 		},
 		{
@@ -199,7 +223,7 @@ func TestEvalBooleanExpression(t *testing.T) {
 	eval, err := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 	require.NoError(t, err)
 
-	ctx := makeContext()
+	ctx := makeContext(true, true)
 
 	tests := []struct {
 		name                string
@@ -277,7 +301,7 @@ func TestEvalOptionalStringExpression(t *testing.T) {
 	eval, err := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 	require.NoError(t, err)
 
-	ctx := makeContext()
+	ctx := makeContext(true, true)
 
 	tests := []struct {
 		name     string
@@ -306,7 +330,7 @@ func TestEvalOptionalStringExpression(t *testing.T) {
 }
 
 func TestEvalMapExpression(t *testing.T) {
-	ctx := makeContext()
+	ctx := makeContext(true, true)
 	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 
 	tests := []struct {
@@ -408,7 +432,7 @@ func TestEvalAnyExpression(t *testing.T) {
 	eval, err := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 	require.NoError(t, err)
 
-	ctx := makeContext()
+	ctx := makeContext(true, true)
 
 	tests := []struct {
 		name        string
@@ -519,7 +543,7 @@ func TestEvalAnyExpression(t *testing.T) {
 
 func TestBoolEvalTypeMismatch(t *testing.T) {
 	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
-	ctx := makeContext()
+	ctx := makeContext(false, false)
 
 	// String expression but evaluated with boolean
 	_, err := eval.EvalBooleanExpression(settings.OtelBooleanExpression{Expression: `resourceAttributes["cloud.provider"]`}, &ctx)
@@ -528,16 +552,32 @@ func TestBoolEvalTypeMismatch(t *testing.T) {
 
 func TestStringEvalTypeMismatch(t *testing.T) {
 	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
-	ctx := makeContext()
+	ctx := makeContext(false, false)
 
 	// Bool expression but evaluated with string
 	_, err := eval.EvalStringExpression(settings.OtelStringExpression{Expression: `${resourceAttributes["cloud.provider"] == "aws"}`}, &ctx)
 	require.Error(t, err)
 }
 
+func TestNoMetricAttributesError(t *testing.T) {
+	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
+	ctx := makeContext(false, false)
+
+	_, err := eval.EvalStringExpression(settings.OtelStringExpression{Expression: `${metricAttributes["http.method"]}`}, &ctx)
+	assert.Equal(t, err.Error(), "no such attribute(s): metricAttributes")
+}
+
+func TestNoSpanAttributesError(t *testing.T) {
+	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
+	ctx := makeContext(false, false)
+
+	_, err := eval.EvalStringExpression(settings.OtelStringExpression{Expression: `${spanAttributes["http.method"]}`}, &ctx)
+	assert.Equal(t, err.Error(), "no such attribute(s): spanAttributes")
+}
+
 func TestEvalCacheReuse(t *testing.T) {
 	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
-	ctx := makeContext()
+	ctx := makeContext(true, false)
 
 	expr := settings.OtelBooleanExpression{Expression: `spanAttributes["retries"] == 2`}
 
@@ -559,7 +599,7 @@ func TestEvalCacheReuse(t *testing.T) {
 func TestEvalCacheEvictionBySize(t *testing.T) {
 	// very small cache to force eviction
 	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(2, 1*time.Minute))
-	ctx := makeContext()
+	ctx := makeContext(true, true)
 
 	exprs := []settings.OtelBooleanExpression{
 		{Expression: `spanAttributes["retries"] == 1`},
@@ -578,7 +618,7 @@ func TestEvalCacheEvictionBySize(t *testing.T) {
 func TestEvalCacheExpiryByTTL(t *testing.T) {
 	// short TTL so entries expire quickly
 	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 200*time.Millisecond))
-	ctx := makeContext()
+	ctx := makeContext(true, true)
 
 	expr := settings.OtelBooleanExpression{Expression: `spanAttributes["http.method"] == "GET"`}
 

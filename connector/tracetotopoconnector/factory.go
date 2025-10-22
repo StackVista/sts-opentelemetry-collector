@@ -84,6 +84,6 @@ func createMetricsToLogsConnector(
 		params.Logger,
 		params.TelemetrySettings,
 		nextConsumer,
-		settings.TRACES,
+		settings.METRICS,
 	)
 }

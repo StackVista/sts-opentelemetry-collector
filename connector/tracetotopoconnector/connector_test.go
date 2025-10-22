@@ -20,6 +20,7 @@ import (
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.uber.org/zap"
 
@@ -32,6 +33,7 @@ type MessageWithKey struct {
 	Key     *topostreamv1.TopologyStreamMessageKey
 	Message *topostreamv1.TopologyStreamMessage
 }
+
 // Helper to create a TopologyStreamMessageKey
 func extractMessagesWithKey(t *testing.T, logs plog.Logs) []*MessageWithKey {
 	var messages []*MessageWithKey
@@ -81,11 +83,11 @@ func TestConnectorStart(t *testing.T) {
 		)
 		provider := NewMockStsSettingsProvider(
 			[]settings.OtelComponentMapping{
-				createSimpleComponentMapping("mapping1"),
+				createSimpleTraceComponentMapping("mapping1"),
 			},
 			[]settings.OtelRelationMapping{
-				createSimpleRelationMapping("mapping2"),
-				createSimpleRelationMapping("mapping3"),
+				createSimpleTraceRelationMapping("mapping2"),
+				createSimpleTraceRelationMapping("mapping3"),
 			},
 		)
 		var extensions = map[component.ID]component.Component{
@@ -99,12 +101,12 @@ func TestConnectorStart(t *testing.T) {
 		assert.Len(t, relationMappings, 2)
 
 		provider.ComponentMappings = []settings.OtelComponentMapping{
-			createSimpleComponentMapping("mapping1"),
-			createSimpleComponentMapping("mapping2"),
-			createSimpleComponentMapping("mapping3"),
+			createSimpleTraceComponentMapping("mapping1"),
+			createSimpleTraceComponentMapping("mapping2"),
+			createSimpleTraceComponentMapping("mapping3"),
 		}
 		provider.RelationMappings = []settings.OtelRelationMapping{
-			createSimpleRelationMapping("mapping4"),
+			createSimpleTraceRelationMapping("mapping4"),
 		}
 		componentMappings, relationMappings = connector.snapshotManager.Current()
 		assert.Len(t, componentMappings, 1)
@@ -124,10 +126,10 @@ func TestConnectorStart(t *testing.T) {
 
 		provider := NewMockStsSettingsProvider(
 			[]settings.OtelComponentMapping{
-				createSimpleComponentMapping("mapping1"),
+				createSimpleTraceComponentMapping("mapping1"),
 			},
 			[]settings.OtelRelationMapping{
-				createSimpleRelationMapping("mapping2"),
+				createSimpleTraceRelationMapping("mapping2"),
 			},
 		)
 		var extensions = map[component.ID]component.Component{
@@ -181,10 +183,10 @@ func TestConnectorConsumeTraces(t *testing.T) {
 	connector, _ := newConnector(context.Background(), Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer, settings.TRACES)
 	provider := NewMockStsSettingsProvider(
 		[]settings.OtelComponentMapping{
-			createSimpleComponentMapping("mapping1"),
+			createSimpleTraceComponentMapping("mapping1"),
 		},
 		[]settings.OtelRelationMapping{
-			createSimpleRelationMapping("mapping2"),
+			createSimpleTraceRelationMapping("mapping2"),
 		},
 	)
 
@@ -299,6 +301,7 @@ func TestConnectorConsumeTraces(t *testing.T) {
 		assert.Equal(t, "service-instance", component.TypeName)
 		assert.Equal(t, "shop", component.DomainName)
 		assert.Equal(t, "backend", component.LayerName)
+		assert.Equal(t, "status_code:200", compData.Components[0].Tags[0])
 
 		// Assert Relation Message
 		assert.Equal(t, "urn:otel-relation-mapping:mapping2", relationMsg.Key.DataSource)
@@ -306,6 +309,129 @@ func TestConnectorConsumeTraces(t *testing.T) {
 		relData := relationMsg.Message.GetTopologyStreamRepeatElementsData()
 		require.NotNil(t, relData)
 		assert.Equal(t, int64(300000), relData.ExpiryIntervalMs)
+		require.Len(t, relData.Relations, 1)
+		relation := relData.Relations[0]
+		assert.Equal(t, "checkout-service-web-service", relation.ExternalId)
+		assert.Equal(t, "checkout-service", relation.SourceIdentifier)
+		assert.Equal(t, "web-service", relation.TargetIdentifier)
+		assert.Equal(t, "http-request", relation.TypeName)
+	})
+}
+
+func TestConnectorConsumeMetrics(t *testing.T) {
+	logConsumer := &consumertest.LogsSink{}
+	connector, _ := newConnector(context.Background(), Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer, settings.METRICS)
+
+	provider := NewMockStsSettingsProvider(
+		[]settings.OtelComponentMapping{
+			createSimpleMetricComponentMapping("mapping1"),
+		},
+		[]settings.OtelRelationMapping{
+			createSimpleMetricRelationMapping("mapping2"),
+		},
+	)
+	var extensions = map[component.ID]component.Component{
+		component.MustNewID(stsSettingsApi.Type.String()): provider,
+	}
+	host := &mockHost{ext: extensions}
+	err := connector.Start(context.Background(), host)
+	require.NoError(t, err)
+
+	t.Run("skip metrics which don't match to conditions", func(t *testing.T) {
+		logConsumer.Reset()
+		submittedTime := uint64(1756851083000)
+		metrics := pmetric.NewMetrics()
+		rm := metrics.ResourceMetrics().AppendEmpty()
+		_ = rm.Resource().Attributes().FromRaw(map[string]any{
+			"service.name":        "checkout-service",
+			"service.instance.id": "627cc493",
+			"service.namespace":   "shop",
+		})
+		sm := rm.ScopeMetrics().AppendEmpty()
+		m := sm.Metrics().AppendEmpty()
+		m.SetName("http.server.duration")
+		sum := m.SetEmptySum()
+		dp := sum.DataPoints().AppendEmpty()
+		dp.SetTimestamp(pcommon.Timestamp(submittedTime))
+		_ = dp.Attributes().FromRaw(map[string]any{
+			"http.method":      "POST", // doesn't match component conditions
+			"http.status_code": "404",  // doesn't match relation conditions
+			"service.name":     "web-service",
+		})
+
+		assert.Equal(t, 0, logConsumer.LogRecordCount())
+
+		err := connector.ConsumeMetrics(context.Background(), metrics)
+		require.NoError(t, err)
+
+		assert.Equal(t, 0, logConsumer.LogRecordCount()) // all conditions doesn't match so it is empty
+		assert.Empty(t, logConsumer.AllLogs())
+	})
+
+	t.Run("start with initial mappings and observe changes", func(t *testing.T) {
+		logConsumer.Reset()
+		submittedTime := uint64(1756851083000)
+		metrics := pmetric.NewMetrics()
+		rm := metrics.ResourceMetrics().AppendEmpty()
+		_ = rm.Resource().Attributes().FromRaw(map[string]any{
+			"service.name":        "checkout-service",
+			"service.instance.id": "627cc493",
+			"service.namespace":   "shop",
+		})
+		sm := rm.ScopeMetrics().AppendEmpty()
+		m := sm.Metrics().AppendEmpty()
+		m.SetName("http.server.duration")
+		sum := m.SetEmptySum()
+		dp := sum.DataPoints().AppendEmpty()
+		dp.SetTimestamp(pcommon.Timestamp(submittedTime))
+		_ = dp.Attributes().FromRaw(map[string]any{
+			"http.method":      "GET",
+			"http.status_code": "200",
+			"service.name":     "web-service",
+		})
+
+		assert.Equal(t, 0, logConsumer.LogRecordCount())
+
+		err = connector.ConsumeMetrics(context.Background(), metrics)
+		require.NoError(t, err)
+
+		actualLogs := logConsumer.AllLogs()
+		require.Len(t, actualLogs, 1)
+		messages := extractMessagesWithKey(t, actualLogs[0])
+		require.Len(t, messages, 2)
+
+		var componentMsg, relationMsg *MessageWithKey
+		for _, msg := range messages {
+			if msg.Message.GetTopologyStreamRepeatElementsData().GetComponents() != nil {
+				componentMsg = msg
+			}
+			if msg.Message.GetTopologyStreamRepeatElementsData().GetRelations() != nil {
+				relationMsg = msg
+			}
+		}
+		require.NotNil(t, componentMsg, "component message not found")
+		require.NotNil(t, relationMsg, "relation message not found")
+
+		// Assert Component Message
+		assert.Equal(t, "urn:otel-component-mapping:mapping1", componentMsg.Key.DataSource)
+		assert.Equal(t, int64(submittedTime), componentMsg.Message.SubmittedTimestamp)
+		compData := componentMsg.Message.GetTopologyStreamRepeatElementsData()
+		require.NotNil(t, compData)
+		require.Len(t, compData.Components, 1)
+		component := compData.Components[0]
+		assert.Equal(t, "627cc493", component.ExternalId)
+		assert.Equal(t, "checkout-service", component.Name)
+		assert.Equal(t, "service-instance", component.TypeName)
+		assert.Equal(t, "shop", component.DomainName)
+		assert.Equal(t, "backend", component.LayerName)
+
+		assert.Equal(t, "status_code:200", compData.Components[0].Tags[0])
+
+		// Assert Relation Message
+		assert.Equal(t, "urn:otel-relation-mapping:mapping2", relationMsg.Key.DataSource)
+		assert.Equal(t, int64(submittedTime), relationMsg.Message.SubmittedTimestamp)
+		relData := relationMsg.Message.GetTopologyStreamRepeatElementsData()
+		require.NotNil(t, relData)
 		require.Len(t, relData.Relations, 1)
 		relation := relData.Relations[0]
 		assert.Equal(t, "checkout-service-web-service", relation.ExternalId)
@@ -434,13 +560,19 @@ func strExpr(s string) settings.OtelStringExpression {
 	}
 }
 
+func anyExpr(s string) settings.OtelAnyExpression {
+	return settings.OtelAnyExpression{
+		Expression: s,
+	}
+}
+
 func boolExpr(s string) settings.OtelBooleanExpression {
 	return settings.OtelBooleanExpression{
 		Expression: s,
 	}
 }
 
-func createSimpleComponentMapping(id string) settings.OtelComponentMapping {
+func createSimpleTraceComponentMapping(id string) settings.OtelComponentMapping {
 	return settings.OtelComponentMapping{
 		Id:            id,
 		Identifier:    fmt.Sprintf("urn:otel-component-mapping:%s", id),
@@ -454,12 +586,20 @@ func createSimpleComponentMapping(id string) settings.OtelComponentMapping {
 			TypeName:   strExpr("service-instance"),
 			DomainName: strExpr(`${resourceAttributes["service.namespace"]}`),
 			LayerName:  strExpr("backend"),
+			Required: &settings.OtelComponentMappingFieldMapping{
+				Tags: &[]settings.OtelTagMapping{
+					{
+						Source: anyExpr(`${spanAttributes["http.status_code"]}`),
+						Target: "status_code",
+					},
+				},
+			},
 		},
 		InputSignals: []settings.OtelInputSignal{settings.TRACES},
 	}
 }
 
-func createSimpleRelationMapping(id string) settings.OtelRelationMapping {
+func createSimpleTraceRelationMapping(id string) settings.OtelRelationMapping {
 	return settings.OtelRelationMapping{
 		Id:            id,
 		Identifier:    fmt.Sprintf("urn:otel-relation-mapping:%s", id),
@@ -473,5 +613,49 @@ func createSimpleRelationMapping(id string) settings.OtelRelationMapping {
 			TypeName: strExpr("http-request"),
 		},
 		InputSignals: []settings.OtelInputSignal{settings.TRACES},
+	}
+}
+
+func createSimpleMetricComponentMapping(id string) settings.OtelComponentMapping {
+	return settings.OtelComponentMapping{
+		Id:            id,
+		Identifier:    fmt.Sprintf("urn:otel-component-mapping:%s", id),
+		ExpireAfterMs: 60000,
+		Conditions: []settings.OtelConditionMapping{
+			{Action: settings.CREATE, Expression: boolExpr(`metricAttributes["http.method"] == "GET"`)},
+		},
+		Output: settings.OtelComponentMappingOutput{
+			Identifier: strExpr("${resourceAttributes[\"service.instance.id\"]}"),
+			Name:       strExpr(`${resourceAttributes["service.name"]}`),
+			TypeName:   strExpr("service-instance"),
+			DomainName: strExpr(`${resourceAttributes["service.namespace"]}`),
+			LayerName:  strExpr("backend"),
+			Required: &settings.OtelComponentMappingFieldMapping{
+				Tags: &[]settings.OtelTagMapping{
+					{
+						Source: anyExpr(`${metricAttributes["http.status_code"]}`),
+						Target: "status_code",
+					},
+				},
+			},
+		},
+		InputSignals: []settings.OtelInputSignal{settings.METRICS},
+	}
+}
+
+func createSimpleMetricRelationMapping(id string) settings.OtelRelationMapping {
+	return settings.OtelRelationMapping{
+		Id:            id,
+		Identifier:    fmt.Sprintf("urn:otel-relation-mapping:%s", id),
+		ExpireAfterMs: 300000,
+		Conditions: []settings.OtelConditionMapping{
+			{Action: settings.CREATE, Expression: boolExpr(`metricAttributes["http.status_code"] == "200"`)},
+		},
+		Output: settings.OtelRelationMappingOutput{
+			SourceId: strExpr(`${resourceAttributes["service.name"]}`),
+			TargetId: strExpr(`${metricAttributes["service.name"]}`),
+			TypeName: strExpr("http-request"),
+		},
+		InputSignals: []settings.OtelInputSignal{settings.METRICS},
 	}
 }
