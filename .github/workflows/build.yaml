@@ -41,7 +41,7 @@ jobs:
         env:
           GITLAB_READ_TOKEN: ${{ secrets.GITLAB_READ_TOKEN }}
         run: |
-          ./connector/tracetotopoconnector/scripts/generate_protobuf_model.sh
+          ./connector/topologyconnector/scripts/generate_protobuf_model.sh
           ./extension/settingsproviderextension/scripts/generate_openapi_model.sh
           ./scripts/check_no_changes.sh
       - name: Set up QEMU
@@ -116,7 +116,7 @@ jobs:
           go test ./extension/servicetokenauthextension/...
           go test ./extension/settingsproviderextension/...
           go test ./connector/stsservicegraphconnector/...
-          go test ./connector/tracetotopoconnector/...
+          go test ./connector/topologyconnector/...
   integration-test:
     runs-on: ubuntu-latest
     steps:

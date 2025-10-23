@@ -1,10 +1,10 @@
-package tracetotopoconnector
+package topologyconnector
 
 import (
 	"fmt"
 	"time"
 
-	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/metrics"
+	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
 	"go.opentelemetry.io/collector/component"
 )
 
@@ -14,7 +14,7 @@ const (
 	minValidTTL      = 100 * time.Nanosecond // to avoid hashicorp/golang-lru ticker panic
 )
 
-// Config defines the configuration options for tracetotopoconnector.
+// Config defines the configuration options for topologyconnector.
 type Config struct {
 	ExpressionCacheSettings  CacheSettings `mapstructure:"expression_cache_settings"`
 	TagRegexCacheSettings    CacheSettings `mapstructure:"tag_regex_cache_settings"`

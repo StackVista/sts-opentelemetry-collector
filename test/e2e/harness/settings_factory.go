@@ -131,6 +131,7 @@ type OtelComponentMappingSpec struct {
 	Output            stsSettingsModel.OtelComponentMappingOutput
 	Vars              []stsSettingsModel.OtelVariableMapping
 	ExpireAfterMs     int64
+	InputSignals      []stsSettingsModel.OtelInputSignal
 }
 
 func (s OtelComponentMappingSnapshot) Type() stsSettingsModel.SettingType {
@@ -152,6 +153,7 @@ func (s OtelComponentMappingSnapshot) Records(topic string) ([]*kgo.Record, erro
 				Output:           mapping.Output,
 				Shard:            0,
 				Type:             stsSettingsModel.OtelComponentMappingTypeOtelComponentMapping,
+				InputSignals:     mapping.InputSignals,
 			}
 			if len(mapping.Vars) > 0 {
 				component.Vars = &mapping.Vars
@@ -180,6 +182,7 @@ type OtelRelationMappingSpec struct {
 	Output            stsSettingsModel.OtelRelationMappingOutput
 	Vars              []stsSettingsModel.OtelVariableMapping
 	ExpireAfterMs     int64
+	InputSignals      []stsSettingsModel.OtelInputSignal
 }
 
 func (s OtelRelationMappingSnapshot) Type() stsSettingsModel.SettingType {
@@ -200,6 +203,7 @@ func (s OtelRelationMappingSnapshot) Records(topic string) ([]*kgo.Record, error
 				Output:           mapping.Output,
 				Shard:            0,
 				Type:             stsSettingsModel.OtelRelationMappingTypeOtelRelationMapping,
+				InputSignals:     mapping.InputSignals,
 			}
 
 			if len(mapping.Vars) > 0 {

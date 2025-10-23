@@ -11,37 +11,37 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"github.com/stretchr/testify/require"
 
-	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
+	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
-func TestMapping_MapComponent(t *testing.T) {
+func TestMappingSpan_MapComponent(t *testing.T) {
 
-	testSpan := ptrace.NewSpan()
-	testSpan.Attributes().PutStr("env.name", "prod")
-	testSpan.Attributes().PutInt("amount", 1000)
-	testSpan.Attributes().PutStr("kind", "licence")
-	testSpan.Attributes().PutStr("priority", "urgent")
-
-	testScope := ptrace.NewScopeSpans()
-	testScope.Scope().Attributes().PutStr("name", "kamon")
-
-	testResource := ptrace.NewResourceSpans()
-	testResource.Resource().Attributes().PutStr("name", "microservice")
-	testResource.Resource().Attributes().PutStr("service.name", "billing")
-	testResource.Resource().Attributes().PutStr("service.namespace", "billing-ns")
-
+	spanEvalContext := &ExpressionEvalContext{
+		SpanAttributes: map[string]any{
+			"kind":     "licence",
+			"amount":   1000,
+			"priority": "urgent",
+			"env.name": "prod",
+		},
+		ScopeAttributes: map[string]any{
+			"name": "kamon",
+		},
+		ResourceAttributes: map[string]any{
+			"name":              "microservice",
+			"service.name":      "billing",
+			"service.namespace": "billing-ns",
+		},
+	}
 	//nolint:govet
 	tests := []struct {
-		name      string
-		mapping   *settings.OtelComponentMapping
-		span      *ptrace.Span
-		scope     *ptrace.ScopeSpans
-		resource  *ptrace.ResourceSpans
-		vars      map[string]any
-		want      *topo_stream_v1.TopologyStreamComponent
-		expectErr []error
+		name        string
+		mapping     *settings.OtelComponentMapping
+		evalContext *ExpressionEvalContext
+		vars        map[string]any
+		want        *topo_stream_v1.TopologyStreamComponent
+		expectErr   []error
 	}{
 		{
 			name: "valid mapping with all required fields",
@@ -85,9 +85,7 @@ func TestMapping_MapComponent(t *testing.T) {
 					},
 				},
 			},
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
+			evalContext: spanEvalContext,
 			vars: map[string]any{
 				"namespace": "payments_ns",
 			},
@@ -116,10 +114,8 @@ func TestMapping_MapComponent(t *testing.T) {
 					LayerName:  strExpr("backend"),
 				},
 			},
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			vars:     map[string]any{},
+			evalContext: spanEvalContext,
+			vars:        map[string]any{},
 			want: &topo_stream_v1.TopologyStreamComponent{
 				ExternalId:  "billing",
 				Identifiers: []string{"billing"},
@@ -127,7 +123,7 @@ func TestMapping_MapComponent(t *testing.T) {
 				TypeName:    "service",
 				DomainName:  "payment",
 				LayerName:   "backend",
-				Tags:        []string{},
+				Tags:        nil,
 			},
 			expectErr: nil,
 		},
@@ -165,9 +161,7 @@ func TestMapping_MapComponent(t *testing.T) {
 					},
 				},
 			},
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
+			evalContext: spanEvalContext,
 			vars: map[string]any{
 				"namespace": "payments_ns",
 			},
@@ -212,9 +206,7 @@ func TestMapping_MapComponent(t *testing.T) {
 					},
 				},
 			},
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
+			evalContext: spanEvalContext,
 			vars: map[string]any{
 				"namespace": "payments_ns",
 			},
@@ -267,9 +259,7 @@ func TestMapping_MapComponent(t *testing.T) {
 					},
 				},
 			},
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
+			evalContext: spanEvalContext,
 			vars: map[string]any{
 				"namespace": "payments_ns",
 			},
@@ -287,8 +277,7 @@ func TestMapping_MapComponent(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
-			evalCtx := NewEvalContext(tt.span.Attributes().AsRaw(), tt.scope.Scope().Attributes().AsRaw(), tt.resource.Resource().Attributes().AsRaw()).CloneWithVariables(tt.vars)
-			got, err := mapper.MapComponent(tt.mapping, eval, evalCtx)
+			got, err := mapper.MapComponent(tt.mapping, eval, tt.evalContext.CloneWithVariables(tt.vars))
 			assert.Equal(t, errorStrings(tt.expectErr), errorStrings(err))
 			if got != nil {
 				sort.Strings(got.Tags)
@@ -324,8 +313,8 @@ func TestResolveTagMappings(t *testing.T) {
 	depMap.PutStr("region", "eu-west-1")
 	depMap.PutStr("env", "prod")
 
-	ctx := NewEvalContext(testSpan.Attributes().AsRaw(), testScope.Scope().Attributes().AsRaw(), testResource.Resource().Attributes().AsRaw())
 	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
+	ctx := NewSpanEvalContext(testSpan.Attributes().AsRaw(), testScope.Scope().Attributes().AsRaw(), testResource.Resource().Attributes().AsRaw())
 
 	tests := []struct {
 		name          string
@@ -545,28 +534,31 @@ func TestResolveTagMappings(t *testing.T) {
 
 func TestMapping_MapRelation(t *testing.T) {
 
-	testSpan := ptrace.NewSpan()
-	testSpan.Attributes().PutStr("env.name", "prod")
-	testSpan.Attributes().PutInt("amount", 1000)
-	testSpan.Attributes().PutStr("kind", "licence")
-	testSpan.Attributes().PutStr("priority", "urgent")
-
-	testScope := ptrace.NewScopeSpans()
-	testScope.Scope().Attributes().PutStr("name", "kamon")
-
-	testResource := ptrace.NewResourceSpans()
-	testResource.Resource().Attributes().PutStr("service.name", "billing")
+	spanEvalContext := &ExpressionEvalContext{
+		SpanAttributes: map[string]any{
+			"kind":     "licence",
+			"amount":   1000,
+			"priority": "urgent",
+			"env.name": "prod",
+		},
+		ScopeAttributes: map[string]any{
+			"name": "kamon",
+		},
+		ResourceAttributes: map[string]any{
+			"name":              "microservice",
+			"service.name":      "billing",
+			"service.namespace": "billing-ns",
+		},
+	}
 
 	//nolint:govet
 	tests := []struct {
-		name      string
-		mapping   *settings.OtelRelationMapping
-		span      *ptrace.Span
-		scope     *ptrace.ScopeSpans
-		resource  *ptrace.ResourceSpans
-		vars      map[string]any
-		want      *topo_stream_v1.TopologyStreamRelation
-		expectErr []error
+		name        string
+		mapping     *settings.OtelRelationMapping
+		evalContext *ExpressionEvalContext
+		vars        map[string]any
+		want        *topo_stream_v1.TopologyStreamRelation
+		expectErr   []error
 	}{
 		{
 			name: "valid relation mapping",
@@ -578,10 +570,8 @@ func TestMapping_MapRelation(t *testing.T) {
 					TypeIdentifier: ptr(strExpr("${spanAttributes.kind}")),
 				},
 			},
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			vars:     map[string]any{},
+			evalContext: spanEvalContext,
+			vars:        map[string]any{},
 			want: &topo_stream_v1.TopologyStreamRelation{
 				ExternalId:       "billing-database",
 				SourceIdentifier: "billing",
@@ -603,10 +593,8 @@ func TestMapping_MapRelation(t *testing.T) {
 					TypeIdentifier: ptr(strExpr("${spanAttributes.blabla}")),
 				},
 			},
-			span:     &testSpan,
-			scope:    &testScope,
-			resource: &testResource,
-			vars:     map[string]any{},
+			evalContext: spanEvalContext,
+			vars:        map[string]any{},
 			want: &topo_stream_v1.TopologyStreamRelation{
 				ExternalId:       "billing-database",
 				SourceIdentifier: "billing",
@@ -628,12 +616,10 @@ func TestMapping_MapRelation(t *testing.T) {
 					TypeIdentifier: ptr(strExpr("${not here}")),
 				},
 			},
-			span:      &testSpan,
-			scope:     &testScope,
-			resource:  &testResource,
-			vars:      map[string]any{},
-			want:      nil,
-			expectErr: []error{errors.New("typeIdentifier: ERROR: <input>:1:5: Syntax error: extraneous input 'here' expecting <EOF>\n | not here\n | ....^")},
+			evalContext: spanEvalContext,
+			vars:        map[string]any{},
+			want:        nil,
+			expectErr:   []error{errors.New("typeIdentifier: ERROR: <input>:1:5: Syntax error: extraneous input 'here' expecting <EOF>\n | not here\n | ....^")},
 		},
 		{
 			name: "missing mandatory attributes",
@@ -644,12 +630,10 @@ func TestMapping_MapRelation(t *testing.T) {
 					TypeName: strExpr(`query`),
 				},
 			},
-			span:      &testSpan,
-			scope:     &testScope,
-			resource:  &testResource,
-			vars:      map[string]any{},
-			want:      nil,
-			expectErr: []error{errors.New("sourceId: no such key: non-existing")},
+			evalContext: spanEvalContext,
+			vars:        map[string]any{},
+			want:        nil,
+			expectErr:   []error{errors.New("sourceId: no such key: non-existing")},
 		},
 	}
 
@@ -657,8 +641,7 @@ func TestMapping_MapRelation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
-			evalCtx := NewEvalContext(tt.span.Attributes().AsRaw(), tt.scope.Scope().Attributes().AsRaw(), tt.resource.Resource().Attributes().AsRaw()).CloneWithVariables(tt.vars)
-			got, err := mapper.MapRelation(tt.mapping, eval, evalCtx)
+			got, err := mapper.MapRelation(tt.mapping, eval, tt.evalContext.CloneWithVariables(tt.vars))
 			assert.Equal(t, errorStrings(tt.expectErr), errorStrings(err))
 			if got != nil {
 				sort.Strings(got.Tags)

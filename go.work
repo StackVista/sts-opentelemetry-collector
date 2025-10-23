@@ -3,7 +3,7 @@ go 1.22.0
 use (
 	./common
 	./connector/stsservicegraphconnector
-	./connector/tracetotopoconnector
+	./connector/topologyconnector
 	./exporter/clickhousestsexporter
 	./exporter/stskafkaexporter
 	./exporter/ststopologyexporter

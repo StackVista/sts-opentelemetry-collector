@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
+	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"github.com/stretchr/testify/require"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -469,7 +469,8 @@ func otelComponentMappingSpec(condExpression settings.OtelBooleanExpression, var
 				},
 			},
 		},
-		Vars: varMappings,
+		InputSignals: []settings.OtelInputSignal{settings.TRACES},
+		Vars:         varMappings,
 	}
 }
 
@@ -493,6 +494,7 @@ func otelRelationMappingSpec() *harness.OtelRelationMappingSpec {
 			TargetId: strExpr(`${spanAttributes["server.address"]}`),
 			TypeName: strExpr("http-request"),
 		},
+		InputSignals: []settings.OtelInputSignal{settings.TRACES},
 	}
 }
 

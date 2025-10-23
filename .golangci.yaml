@@ -45,7 +45,7 @@ linters:
       - third_party$
       - builtin$
       - examples$
-      - connector/tracetotopoconnector/generated/
+      - connector/topologyconnector/generated/
       - extension/settingsproviderextension/generated/
   settings:
     gomoddirectives:

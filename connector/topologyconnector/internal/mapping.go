@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"strings"
 
-	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
-	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/metrics"
+	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
+	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 )
 
@@ -93,9 +93,13 @@ func (me *Mapper) MapComponent(
 	if mapping.Output.Required != nil {
 		processTags(mapping.Output.Required.Tags, false)
 	}
-	tagsList := make([]string, 0, len(tags))
-	for key, value := range tags {
-		tagsList = append(tagsList, key+":"+value)
+
+	var tagsList []string
+	if len(tags) > 0 {
+		tagsList = make([]string, 0, len(tags))
+		for key, value := range tags {
+			tagsList = append(tagsList, key+":"+value)
+		}
 	}
 
 	result := topostreamv1.TopologyStreamComponent{

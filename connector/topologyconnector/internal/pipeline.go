@@ -7,10 +7,11 @@ import (
 	"math"
 	"time"
 
-	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
-	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/metrics"
+	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
+	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
@@ -40,8 +41,9 @@ func ConvertSpanToTopologyStreamMessage(
 	var componentMappingStart, relationMappingStart time.Time
 	var componentMappingDuration, relationMappingDuration time.Duration
 
-	iterateSpans(trace, func(expressionEvalContext *ExpressionEvalContext, span *ptrace.Span) {
+	iterateSpans(trace, func(expressionEvalContext *ExpressionEvalContext, timestamp pcommon.Timestamp) {
 		componentMappingStart = time.Now()
+
 		for _, componentMapping := range componentMappings {
 			currentComponentMapping := componentMapping
 			component, errs := convertToComponent(eval, mapper, expressionEvalContext, &currentComponentMapping)
@@ -49,7 +51,7 @@ func ConvertSpanToTopologyStreamMessage(
 				result = append(result, *outputToMessageWithKey(
 					component,
 					componentMapping,
-					span,
+					timestamp,
 					collectionTimestampMs,
 					func() []*topostreamv1.TopologyStreamComponent {
 						return []*topostreamv1.TopologyStreamComponent{component}
@@ -61,11 +63,17 @@ func ConvertSpanToTopologyStreamMessage(
 				components++
 			}
 			if errs != nil {
-				result = append(result, *errorsToMessageWithKey(&errs, componentMapping, span, collectionTimestampMs))
+				result = append(result, *errorsToMessageWithKey(&errs, componentMapping, timestamp, collectionTimestampMs))
 				componentErrs++
 			}
 		}
 		componentMappingDuration = time.Since(componentMappingStart)
+
+		metricsRecorder.RecordMappingDuration(
+			ctx, componentMappingDuration,
+			attribute.String("phase", "spans_to_topology"),
+			attribute.String("target", "components"),
+		)
 
 		relationMappingStart = time.Now()
 		for _, relationMapping := range relationMappings {
@@ -75,7 +83,7 @@ func ConvertSpanToTopologyStreamMessage(
 				result = append(result, *outputToMessageWithKey(
 					relation,
 					relationMapping,
-					span,
+					timestamp,
 					collectionTimestampMs,
 					func() []*topostreamv1.TopologyStreamComponent {
 						return nil
@@ -87,48 +95,158 @@ func ConvertSpanToTopologyStreamMessage(
 				relations++
 			}
 			if errs != nil {
-				result = append(result, *errorsToMessageWithKey(&errs, relationMapping, span, collectionTimestampMs))
+				result = append(result, *errorsToMessageWithKey(&errs, relationMapping, timestamp, collectionTimestampMs))
 				relationErrs++
 			}
 		}
 		relationMappingDuration = time.Since(relationMappingStart)
+
+		metricsRecorder.RecordMappingDuration(
+			ctx, relationMappingDuration,
+			attribute.String("phase", "spans_to_topology"),
+			attribute.String("target", "relations"),
+		)
 	})
 
 	// Record metrics
-	metricsRecorder.IncSpansProcessed(ctx, int64(trace.SpanCount()))
+	metricsRecorder.IncInputsProcessed(ctx, int64(trace.SpanCount()), settings.TRACES)
 	if components > 0 {
-		metricsRecorder.IncMappingsProduced(
+		metricsRecorder.IncTopologyProduced(
 			ctx, int64(components),
-			settings.SettingTypeOtelComponentMapping, attribute.String("input_signal", "spans"),
+			settings.SettingTypeOtelComponentMapping, settings.TRACES,
 		)
 	}
 	if relations > 0 {
-		metricsRecorder.IncMappingsProduced(
+		metricsRecorder.IncTopologyProduced(
 			ctx, int64(components),
-			settings.SettingTypeOtelRelationMapping, attribute.String("input_signal", "spans"),
+			settings.SettingTypeOtelRelationMapping, settings.TRACES,
 		)
 	}
 	if componentErrs > 0 {
-		metricsRecorder.IncMappingErrors(ctx, int64(componentErrs), settings.SettingTypeOtelComponentMapping)
+		metricsRecorder.IncMappingErrors(ctx, int64(componentErrs), settings.SettingTypeOtelComponentMapping, settings.TRACES)
 	}
 	if relationErrs > 0 {
-		metricsRecorder.IncMappingErrors(ctx, int64(relationErrs), settings.SettingTypeOtelRelationMapping)
+		metricsRecorder.IncMappingErrors(ctx, int64(relationErrs), settings.SettingTypeOtelRelationMapping, settings.TRACES)
 	}
-	metricsRecorder.RecordMappingDuration(
-		ctx, componentMappingDuration,
-		attribute.String("phase", "convert_span_to_topology_stream_message"),
-		attribute.String("target", "components"),
-		attribute.Int("mapping_count", len(componentMappings)),
-	)
-	metricsRecorder.RecordMappingDuration(
-		ctx, relationMappingDuration,
-		attribute.String("phase", "convert_span_to_topology_stream_message"),
-		attribute.String("target", "relations"),
-		attribute.Int("mapping_count", len(relationMappings)),
-	)
 
 	logger.Debug(
 		"Converted spans to topology stream messages",
+		zap.Int("components", components),
+		zap.Int("relations", relations),
+		zap.Int("componentErrs", componentErrs),
+		zap.Int("relationErrors", relationErrs),
+	)
+
+	return result
+}
+
+func ConvertMetricsToTopologyStreamMessage(
+	ctx context.Context,
+	logger *zap.Logger,
+	eval ExpressionEvaluator,
+	mapper *Mapper,
+	metricData pmetric.Metrics,
+	componentMappings []settings.OtelComponentMapping,
+	relationMappings []settings.OtelRelationMapping,
+	collectionTimestampMs int64,
+	metricsRecorder metrics.ConnectorMetricsRecorder,
+) []MessageWithKey {
+	result := make([]MessageWithKey, 0)
+	var components, relations, componentErrs, relationErrs int
+	var componentMappingStart, relationMappingStart time.Time
+	var componentMappingDuration, relationMappingDuration time.Duration
+	metricsDatapointCount := int64(0)
+
+	iterateMetrics(metricData, func(expressionEvalContext *ExpressionEvalContext, timestamp pcommon.Timestamp) {
+		metricsDatapointCount++
+		componentMappingStart = time.Now()
+		for _, componentMapping := range componentMappings {
+			currentComponentMapping := componentMapping
+			component, errs := convertToComponent(eval, mapper, expressionEvalContext, &currentComponentMapping)
+			if component != nil {
+				result = append(result, *outputToMessageWithKey(
+					component,
+					componentMapping,
+					timestamp,
+					collectionTimestampMs,
+					func() []*topostreamv1.TopologyStreamComponent {
+						return []*topostreamv1.TopologyStreamComponent{component}
+					},
+					func() []*topostreamv1.TopologyStreamRelation {
+						return nil
+					}),
+				)
+				components++
+			}
+			if errs != nil {
+				result = append(result, *errorsToMessageWithKey(&errs, componentMapping, timestamp, collectionTimestampMs))
+				componentErrs++
+			}
+		}
+		componentMappingDuration = time.Since(componentMappingStart)
+		metricsRecorder.RecordMappingDuration(
+			ctx, componentMappingDuration,
+			attribute.String("phase", "metrics_to_topology"),
+			attribute.String("target", "components"),
+		)
+
+		relationMappingStart = time.Now()
+		for _, relationMapping := range relationMappings {
+			currentRelationMapping := relationMapping
+			relation, errs := convertToRelation(eval, mapper, expressionEvalContext, &currentRelationMapping)
+			if relation != nil {
+				result = append(result, *outputToMessageWithKey(
+					relation,
+					relationMapping,
+					timestamp,
+					collectionTimestampMs,
+					func() []*topostreamv1.TopologyStreamComponent {
+						return nil
+					},
+					func() []*topostreamv1.TopologyStreamRelation {
+						return []*topostreamv1.TopologyStreamRelation{relation}
+					}),
+				)
+				relations++
+			}
+			if errs != nil {
+				result = append(result, *errorsToMessageWithKey(&errs, relationMapping, timestamp, collectionTimestampMs))
+				relationErrs++
+			}
+		}
+		relationMappingDuration = time.Since(relationMappingStart)
+		metricsRecorder.RecordMappingDuration(
+			ctx, relationMappingDuration,
+			attribute.String("phase", "metrics_to_topology"),
+			attribute.String("target", "relations"),
+		)
+	})
+
+	// Record metrics
+	metricsRecorder.IncInputsProcessed(ctx, metricsDatapointCount, settings.METRICS)
+
+	if components > 0 {
+		metricsRecorder.IncTopologyProduced(
+			ctx, int64(components),
+			settings.SettingTypeOtelComponentMapping, settings.METRICS,
+		)
+	}
+	if relations > 0 {
+		metricsRecorder.IncTopologyProduced(
+			ctx, int64(components),
+			settings.SettingTypeOtelRelationMapping, settings.METRICS,
+		)
+	}
+	if componentErrs > 0 {
+		metricsRecorder.IncMappingErrors(ctx, int64(componentErrs),
+			settings.SettingTypeOtelComponentMapping, settings.METRICS)
+	}
+	if relationErrs > 0 {
+		metricsRecorder.IncMappingErrors(ctx, int64(relationErrs), settings.SettingTypeOtelRelationMapping, settings.METRICS)
+	}
+
+	logger.Debug(
+		"Converted metrics to topology stream messages",
 		zap.Int("components", components),
 		zap.Int("relations", relations),
 		zap.Int("componentErrs", componentErrs),
@@ -161,10 +279,12 @@ func ConvertMappingRemovalsToTopologyStreamMessage(
 	}
 
 	if componentMappingsRemoved > 0 {
-		metricsRecorder.IncMappingsRemoved(ctx, int64(componentMappingsRemoved), settings.SettingTypeOtelComponentMapping)
+		metricsRecorder.IncMappingsRemoved(ctx, int64(componentMappingsRemoved),
+			settings.SettingTypeOtelComponentMapping)
 	}
 	if relationMappingsRemoved > 0 {
-		metricsRecorder.IncMappingsRemoved(ctx, int64(relationMappingsRemoved), settings.SettingTypeOtelRelationMapping)
+		metricsRecorder.IncMappingsRemoved(ctx, int64(relationMappingsRemoved),
+			settings.SettingTypeOtelRelationMapping)
 	}
 
 	logger.Debug(
@@ -221,7 +341,7 @@ func convertToRelation(
 	return nil, nil
 }
 
-type mappingHandler func(expressionEvalContext *ExpressionEvalContext, span *ptrace.Span)
+type mappingHandler func(expressionEvalContext *ExpressionEvalContext, timestamp pcommon.Timestamp)
 
 func iterateSpans(trace ptrace.Traces, handler mappingHandler) {
 	resourceSpans := trace.ResourceSpans()
@@ -236,7 +356,59 @@ func iterateSpans(trace ptrace.Traces, handler mappingHandler) {
 			for k := 0; k < spans.Len(); k++ {
 				span := spans.At(k)
 				spanAttributes := span.Attributes().AsRaw()
-				handler(NewEvalContext(spanAttributes, scopeAttributes, resourceAttributes), &span)
+				handler(NewSpanEvalContext(spanAttributes, scopeAttributes, resourceAttributes), span.EndTimestamp())
+			}
+		}
+	}
+}
+
+func iterateMetrics(metrics pmetric.Metrics, handler mappingHandler) {
+	resourceMetrics := metrics.ResourceMetrics()
+	for i := 0; i < resourceMetrics.Len(); i++ {
+		rs := resourceMetrics.At(i)
+		resourceAttributes := rs.Resource().Attributes().AsRaw()
+		scopeMetrics := rs.ScopeMetrics()
+		for j := 0; j < scopeMetrics.Len(); j++ {
+			sm := scopeMetrics.At(j)
+			scopeAttributes := sm.Scope().Attributes().AsRaw()
+			metrics := sm.Metrics()
+			for k := 0; k < metrics.Len(); k++ {
+				metric := metrics.At(k)
+
+				switch metric.Type() {
+				case pmetric.MetricTypeEmpty:
+					continue
+				case pmetric.MetricTypeGauge:
+					for l := metric.Gauge().DataPoints().Len() - 1; l >= 0; l-- {
+						datapoint := metric.Gauge().DataPoints().At(l)
+						handler(NewMetricEvalContext(datapoint.Attributes().AsRaw(), scopeAttributes, resourceAttributes),
+							datapoint.Timestamp())
+					}
+				case pmetric.MetricTypeSum:
+					for l := metric.Sum().DataPoints().Len() - 1; l >= 0; l-- {
+						datapoint := metric.Sum().DataPoints().At(l)
+						handler(NewMetricEvalContext(datapoint.Attributes().AsRaw(), scopeAttributes, resourceAttributes),
+							datapoint.Timestamp())
+					}
+				case pmetric.MetricTypeHistogram:
+					for l := metric.Histogram().DataPoints().Len() - 1; l >= 0; l-- {
+						datapoint := metric.Histogram().DataPoints().At(l)
+						handler(NewMetricEvalContext(datapoint.Attributes().AsRaw(), scopeAttributes, resourceAttributes),
+							datapoint.Timestamp())
+					}
+				case pmetric.MetricTypeExponentialHistogram:
+					for l := metric.ExponentialHistogram().DataPoints().Len() - 1; l >= 0; l-- {
+						datapoint := metric.ExponentialHistogram().DataPoints().At(l)
+						handler(NewMetricEvalContext(datapoint.Attributes().AsRaw(), scopeAttributes, resourceAttributes),
+							datapoint.Timestamp())
+					}
+				case pmetric.MetricTypeSummary:
+					for l := metric.Summary().DataPoints().Len() - 1; l >= 0; l-- {
+						datapoint := metric.Summary().DataPoints().At(l)
+						handler(NewMetricEvalContext(datapoint.Attributes().AsRaw(), scopeAttributes, resourceAttributes),
+							datapoint.Timestamp())
+					}
+				}
 			}
 		}
 	}
@@ -245,7 +417,7 @@ func iterateSpans(trace ptrace.Traces, handler mappingHandler) {
 func errorsToMessageWithKey(
 	errs *[]error,
 	mapping settings.SettingExtension,
-	span *ptrace.Span,
+	timestamp pcommon.Timestamp,
 	collectionTimestampMs int64,
 ) *MessageWithKey {
 	streamErrors := make([]*topostreamv1.TopoStreamError, len(*errs))
@@ -262,7 +434,7 @@ func errorsToMessageWithKey(
 		},
 		Message: &topostreamv1.TopologyStreamMessage{
 			CollectionTimestamp: collectionTimestampMs,
-			SubmittedTimestamp:  convertTimestampToInt64(span.EndTimestamp()),
+			SubmittedTimestamp:  convertTimestampToInt64(timestamp),
 			Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 				TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
 					ExpiryIntervalMs: mapping.GetExpireAfterMs(),
@@ -276,12 +448,12 @@ func errorsToMessageWithKey(
 func outputToMessageWithKey(
 	output topostreamv1.ComponentOrRelation,
 	mapping settings.SettingExtension,
-	span *ptrace.Span,
+	timestamp pcommon.Timestamp,
 	collectionTimestampMs int64,
 	toComponents func() []*topostreamv1.TopologyStreamComponent,
 	toRelations func() []*topostreamv1.TopologyStreamRelation,
 ) *MessageWithKey {
-	submittedTimestamp := convertTimestampToInt64(span.EndTimestamp())
+	submittedTimestamp := convertTimestampToInt64(timestamp)
 	return &MessageWithKey{
 		Key: &topostreamv1.TopologyStreamMessageKey{
 			Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,

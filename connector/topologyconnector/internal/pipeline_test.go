@@ -11,11 +11,12 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 
-	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/generated/topostream/topo_stream.v1"
+	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
@@ -42,11 +43,12 @@ func boolExpr(s string) settings.OtelBooleanExpression {
 
 type noopMetrics struct{}
 
-func (n *noopMetrics) IncSpansProcessed(_ context.Context, _ int64) {}
-func (n *noopMetrics) IncMappingsProduced(_ context.Context, _ int64, _ settings.SettingType, _ ...attribute.KeyValue) {
+func (n *noopMetrics) IncInputsProcessed(_ context.Context, _ int64, _ settings.OtelInputSignal) {}
+func (n *noopMetrics) IncTopologyProduced(_ context.Context, _ int64, _ settings.SettingType, _ settings.OtelInputSignal) {
 }
 func (n *noopMetrics) IncMappingsRemoved(_ context.Context, _ int64, _ settings.SettingType) {}
-func (n *noopMetrics) IncMappingErrors(_ context.Context, _ int64, _ settings.SettingType)   {}
+func (n *noopMetrics) IncMappingErrors(_ context.Context, _ int64, _ settings.SettingType, _ settings.OtelInputSignal) {
+}
 func (n *noopMetrics) RecordMappingDuration(_ context.Context, _ time.Duration, _ ...attribute.KeyValue) {
 }
 
@@ -56,29 +58,32 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 	submittedTime := int64(1756851083000)
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()
-	rs.Resource().Attributes().PutStr("service.name", "checkout-service")
-	rs.Resource().Attributes().PutStr("service.instance.id", "627cc493")
-	rs.Resource().Attributes().PutStr("service.namespace", "shop")
-	rs.Resource().Attributes().PutStr("service.version", "1.2.3")
-	rs.Resource().Attributes().PutStr("host.name", "ip-10-1-2-3.ec2.internal")
-	rs.Resource().Attributes().PutStr("os.type", "linux")
-	rs.Resource().Attributes().PutStr("process.pid", "12345")
+	_ = rs.Resource().Attributes().FromRaw(map[string]any{
+		"service.name":        "checkout-service",
+		"service.instance.id": "627cc493",
+		"service.namespace":   "shop",
+		"service.version":     "1.2.3",
+		"host.name":           "ip-10-1-2-3.ec2.internal",
+		"os.type":             "linux",
+		"process.pid":         "12345",
+		"cloud.provider":      "aws",
+		"k8s.pod.name":        "checkout-service-8675309",
+	})
 	_ = rs.Resource().Attributes().PutEmptySlice("process.command_args").FromRaw([]any{"ls", "-la", "/home"})
-	rs.Resource().Attributes().PutStr("cloud.provider", "aws")
-	rs.Resource().Attributes().PutStr("k8s.pod.name", "checkout-service-8675309")
 	ss := rs.ScopeSpans().AppendEmpty()
-	ss.Scope().Attributes().PutStr("otel.scope.name", "io.opentelemetry.instrumentation.http")
-	ss.Scope().Attributes().PutStr("otel.scope.version", "1.17.0")
+	_ = ss.Scope().Attributes().FromRaw(map[string]any{"otel.scope.name": "io.opentelemetry.instrumentation.http", "otel.scope.version": "1.17.0"})
 	span := ss.Spans().AppendEmpty()
 	//nolint:gosec
 	span.SetEndTimestamp(pcommon.Timestamp(submittedTime))
-	span.Attributes().PutStr("http.method", "GET")
-	span.Attributes().PutStr("http.status_code", "200")
-	span.Attributes().PutStr("db.system", "postgresql")
-	span.Attributes().PutStr("db.statement", "SELECT * FROM users WHERE id = 123")
-	span.Attributes().PutStr("net.peer.name", "api.example.com")
-	span.Attributes().PutStr("user.id", "123")
-	span.Attributes().PutStr("service.name", "web-service")
+	_ = span.Attributes().FromRaw(map[string]any{
+		"http.method":      "GET",
+		"http.status_code": "200",
+		"db.system":        "postgresql",
+		"db.statement":     "SELECT * FROM users WHERE id = 123",
+		"net.peer.name":    "api.example.com",
+		"user.id":          "123",
+		"service.name":     "web-service",
+	})
 
 	//nolint:dupl,govet
 	tests := []struct {
@@ -505,9 +510,9 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 				collectionTimestampMs,
 				metrics,
 			)
-			unify(&result)
+			unifyMessages(&result)
 			//nolint:gosec
-			unify(&tt.expected)
+			unifyMessages(&tt.expected)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -569,30 +574,31 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 	t.Run("Convert a trace with two span to multiple components and relations", func(t *testing.T) {
 		traceWithSpans := ptrace.NewTraces()
 		rsWithSpans := traceWithSpans.ResourceSpans().AppendEmpty()
-		rsWithSpans.Resource().Attributes().PutStr("service.name", "checkout-service")
-		rsWithSpans.Resource().Attributes().PutStr("service.instance.id", "627cc493")
-		rsWithSpans.Resource().Attributes().PutStr("service.namespace", "shop")
-		rsWithSpans.Resource().Attributes().PutStr("service.version", "1.2.3")
-		rsWithSpans.Resource().Attributes().PutStr("host.name", "ip-10-1-2-3.ec2.internal")
-		rsWithSpans.Resource().Attributes().PutStr("os.type", "linux")
-		rsWithSpans.Resource().Attributes().PutStr("process.pid", "12345")
-		rsWithSpans.Resource().Attributes().PutStr("cloud.provider", "aws")
-		rsWithSpans.Resource().Attributes().PutStr("k8s.pod.name", "checkout-service-8675309")
+		_ = rsWithSpans.Resource().Attributes().FromRaw(map[string]any{
+			"service.name":        "checkout-service",
+			"service.instance.id": "627cc493",
+			"service.namespace":   "shop",
+			"service.version":     "1.2.3",
+			"host.name":           "ip-10-1-2-3.ec2.internal",
+			"os.type":             "linux",
+			"process.pid":         "12345",
+			"cloud.provider":      "aws",
+			"k8s.pod.name":        "checkout-service-8675309",
+		})
 		ssWithSpans := rsWithSpans.ScopeSpans().AppendEmpty()
-		ssWithSpans.Scope().Attributes().PutStr("otel.scope.name", "io.opentelemetry.instrumentation.http")
-		ssWithSpans.Scope().Attributes().PutStr("otel.scope.version", "1.17.0")
+		_ = ssWithSpans.Scope().Attributes().FromRaw(map[string]any{"otel.scope.name": "io.opentelemetry.instrumentation.http", "otel.scope.version": "1.17.0"})
 		span1 := ssWithSpans.Spans().AppendEmpty()
 		//nolint:gosec
 		span1.SetEndTimestamp(pcommon.Timestamp(submittedTime))
-		span1.Attributes().PutStr("http.method", "GET")
-		span1.Attributes().PutStr("http.status_code", "200")
-		span1.Attributes().PutStr("service.name", "web-service")
+		_ = span1.Attributes().FromRaw(map[string]any{
+			"http.method":      "GET",
+			"http.status_code": "200",
+			"service.name":     "web-service",
+		})
 		span2 := ssWithSpans.Spans().AppendEmpty()
 		//nolint:gosec
 		span2.SetEndTimestamp(pcommon.Timestamp(submittedTime))
-		span2.Attributes().PutStr("http.method", "GET")
-		span2.Attributes().PutStr("http.status_code", "200")
-		span2.Attributes().PutStr("service.name", "payment-service")
+		_ = span2.Attributes().FromRaw(map[string]any{"http.method": "GET", "http.status_code": "200", "service.name": "payment-service"})
 
 		ctx := context.Background()
 		metrics := &noopMetrics{}
@@ -694,6 +700,382 @@ func TestPipeline_ConvertMappingRemovalsToTopologyStreamMessage(t *testing.T) {
 	}
 }
 
+func TestPipeline_ConvertMetricsToTopologyStreamMessage_MultipleComponents(t *testing.T) {
+	collectionTimestampMs := time.Now().UnixMilli()
+	submittedTime := int64(1756851083000)
+
+	metrics := func() pmetric.Metrics {
+		metrics := pmetric.NewMetrics()
+		rs := metrics.ResourceMetrics().AppendEmpty()
+		_ = rs.Resource().Attributes().FromRaw(map[string]any{
+			"service.name":        "api-gateway",
+			"service.instance.id": "instance-1",
+			"service.namespace":   "default",
+		})
+		ss := rs.ScopeMetrics().AppendEmpty()
+		_ = ss.Scope().Attributes().FromRaw(map[string]any{"otel.scope.name": "http"})
+		m := ss.Metrics().AppendEmpty()
+		m.SetName("http.server.request_count")
+		sum := m.SetEmptySum()
+
+		// Datapoint 1
+		dp1 := sum.DataPoints().AppendEmpty()
+		//nolint:gosec
+		dp1.SetTimestamp(pcommon.Timestamp(submittedTime))
+		_ = dp1.Attributes().FromRaw(map[string]any{
+			"http.method":      "GET",
+			"http.route":       "/users",
+			"http.status_code": "200",
+		})
+
+		// Datapoint 2
+		dp2 := sum.DataPoints().AppendEmpty()
+		//nolint:gosec
+		dp2.SetTimestamp(pcommon.Timestamp(submittedTime))
+		_ = dp2.Attributes().FromRaw(map[string]any{
+			"http.method":      "POST",
+			"http.route":       "/products",
+			"http.status_code": "201",
+		})
+		return metrics
+	}()
+	componentMappings := []settings.OtelComponentMapping{
+		{
+			Id:            "mapping-multi-dp-comp",
+			ExpireAfterMs: 60000,
+			Conditions: []settings.OtelConditionMapping{
+				{Action: settings.CREATE, Expression: boolExpr(`resourceAttributes["service.name"] == "api-gateway"`)},
+			},
+			Identifier: "urn:otel-component-mapping:api-route",
+			Output: settings.OtelComponentMappingOutput{
+				Identifier: strExpr(`api-gateway-${metricAttributes["http.route"]}`),
+				Name:       strExpr(`API Route: ${metricAttributes["http.route"]}`),
+				TypeName:   strExpr(`api-route`),
+				DomainName: strExpr(`${resourceAttributes["service.namespace"]}`),
+				LayerName:  strExpr("frontend"),
+				Required: &settings.OtelComponentMappingFieldMapping{
+					Tags: &[]settings.OtelTagMapping{
+						{
+							Source: anyExpr(`${metricAttributes["http.method"]}`),
+							Target: "http_method",
+						},
+					},
+				},
+			},
+		},
+	}
+	relationMappings := []settings.OtelRelationMapping{}
+	expected := []MessageWithKey{
+		{
+			Key: &topo_stream_v1.TopologyStreamMessageKey{
+				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+				DataSource: "urn:otel-component-mapping:api-route",
+				ShardId:    stableShardID("api-gateway-/products", ShardCount),
+			},
+			Message: &topo_stream_v1.TopologyStreamMessage{
+				CollectionTimestamp: collectionTimestampMs,
+				SubmittedTimestamp:  submittedTime,
+				Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
+					TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
+						ExpiryIntervalMs: 60000,
+						Components: []*topo_stream_v1.TopologyStreamComponent{
+							{
+								ExternalId:  "api-gateway-/products",
+								Identifiers: []string{"api-gateway-/products"},
+								Name:        "API Route: /products",
+								TypeName:    "api-route",
+								DomainName:  "default",
+								LayerName:   "frontend",
+								Tags:        []string{"http_method:POST"},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Key: &topo_stream_v1.TopologyStreamMessageKey{
+				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+				DataSource: "urn:otel-component-mapping:api-route",
+				ShardId:    stableShardID("api-gateway-/users", ShardCount),
+			},
+			Message: &topo_stream_v1.TopologyStreamMessage{
+				CollectionTimestamp: collectionTimestampMs,
+				SubmittedTimestamp:  submittedTime,
+				Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
+					TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
+						ExpiryIntervalMs: 60000,
+						Components: []*topo_stream_v1.TopologyStreamComponent{
+							{
+								ExternalId:  "api-gateway-/users",
+								Identifiers: []string{"api-gateway-/users"},
+								Name:        "API Route: /users",
+								TypeName:    "api-route",
+								DomainName:  "default",
+								LayerName:   "frontend",
+								Tags:        []string{"http_method:GET"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	mapper := NewMapper(context.Background(), makeMeteredCacheSettings(100, 30*time.Second), makeMeteredCacheSettings(100, 30*time.Second))
+	ctx := context.Background()
+	metricsReporter := &noopMetrics{}
+	eval, _ := NewCELEvaluator(ctx, makeMeteredCacheSettings(100, 30*time.Second))
+	result := ConvertMetricsToTopologyStreamMessage(
+		ctx,
+		zaptest.NewLogger(t),
+		eval,
+		mapper,
+		metrics,
+		componentMappings,
+		relationMappings,
+		collectionTimestampMs,
+		metricsReporter,
+	)
+	// Unify to handle unpredictable map and slice ordering
+	unifyMessages(&result)
+	unifyMessages(&expected)
+	assert.Equal(t, expected, result)
+}
+
+func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
+
+	collectionTimestampMs := time.Now().UnixMilli()
+	submittedTime := int64(1756851083000)
+
+	newTestMetrics := func(addMetric func(m pmetric.Metric)) pmetric.Metrics {
+		metrics := pmetric.NewMetrics()
+		rm := metrics.ResourceMetrics().AppendEmpty()
+		_ = rm.Resource().Attributes().FromRaw(map[string]any{
+			"service.name":        "checkout-service",
+			"service.instance.id": "627cc493",
+			"service.namespace":   "shop",
+			"k8s.pod.name":        "checkout-service-8675309",
+		})
+		sm := rm.ScopeMetrics().AppendEmpty()
+		_ = sm.Scope().Attributes().FromRaw(map[string]any{"otel.scope.name": "io.opentelemetry.instrumentation.http"})
+		m := sm.Metrics().AppendEmpty()
+		addMetric(m)
+		return metrics
+	}
+
+	tests := []struct {
+		name    string
+		metrics pmetric.Metrics
+	}{
+		{name: "sumMetrics",
+			metrics: newTestMetrics(func(m pmetric.Metric) {
+				m.SetName("http.server.duration")
+				sum := m.SetEmptySum()
+				dp := sum.DataPoints().AppendEmpty()
+				//nolint:gosec
+				dp.SetTimestamp(pcommon.Timestamp(submittedTime))
+				_ = dp.Attributes().FromRaw(map[string]any{
+					"http.method":      "GET",
+					"http.status_code": "200",
+					"net.peer.name":    "api.example.com",
+					"service.name":     "web-service"}) // This is a destination service
+			})}, {
+			name: "gaugeMetrics",
+			metrics: newTestMetrics(func(m pmetric.Metric) {
+				m.SetName("http.server.active_requests")
+				gauge := m.SetEmptyGauge()
+				dp := gauge.DataPoints().AppendEmpty()
+				//nolint:gosec
+				dp.SetTimestamp(pcommon.Timestamp(submittedTime))
+				dp.SetIntValue(10)
+				_ = dp.Attributes().FromRaw(map[string]any{
+					"http.method":      "GET",
+					"http.status_code": "200",
+					"net.peer.name":    "api.example.com",
+					"service.name":     "web-service"})
+			})},
+		{
+			name: "histogramMetrics",
+			metrics: newTestMetrics(func(m pmetric.Metric) {
+				m.SetName("http.server.duration.histogram")
+				histogram := m.SetEmptyHistogram()
+				dp := histogram.DataPoints().AppendEmpty()
+				//nolint:gosec
+				dp.SetTimestamp(pcommon.Timestamp(submittedTime))
+				dp.SetCount(2)
+				dp.SetSum(10)
+				dp.BucketCounts().FromRaw([]uint64{1, 1})
+				dp.ExplicitBounds().FromRaw([]float64{10})
+				_ = dp.Attributes().FromRaw(map[string]any{
+					"http.method":      "GET",
+					"http.status_code": "200",
+					"net.peer.name":    "api.example.com",
+					"service.name":     "web-service"})
+			})}, {
+			name: "exponentialHistogramMetrics",
+
+			metrics: newTestMetrics(func(m pmetric.Metric) {
+				m.SetName("http.server.duration.exp_histogram")
+				expHistogram := m.SetEmptyExponentialHistogram()
+				dp := expHistogram.DataPoints().AppendEmpty()
+				//nolint:gosec
+				dp.SetTimestamp(pcommon.Timestamp(submittedTime))
+				dp.SetCount(2)
+				dp.SetSum(10)
+				dp.SetScale(1)
+				dp.Positive().SetOffset(0)
+				dp.Positive().BucketCounts().FromRaw([]uint64{1, 1})
+				_ = dp.Attributes().FromRaw(map[string]any{
+					"http.method":      "GET",
+					"http.status_code": "200",
+					"net.peer.name":    "api.example.com",
+					"service.name":     "web-service"})
+			})}, {
+			name: "summaryMetrics",
+			metrics: newTestMetrics(func(m pmetric.Metric) {
+				m.SetName("http.server.duration.summary")
+				summary := m.SetEmptySummary()
+				dp := summary.DataPoints().AppendEmpty()
+				//nolint:gosec
+				dp.SetTimestamp(pcommon.Timestamp(submittedTime))
+				dp.SetCount(2)
+				dp.SetSum(10)
+				qv := dp.QuantileValues().AppendEmpty()
+				qv.SetQuantile(0.9)
+				qv.SetValue(5)
+				qv = dp.QuantileValues().AppendEmpty()
+				qv.SetQuantile(0.99)
+				qv.SetValue(8)
+				_ = dp.Attributes().FromRaw(map[string]any{
+					"http.method":      "GET",
+					"http.status_code": "200",
+					"net.peer.name":    "api.example.com",
+					"service.name":     "web-service"})
+			}),
+		},
+	}
+
+	componentMappings := []settings.OtelComponentMapping{
+		{
+			Id:            "mapping1a",
+			ExpireAfterMs: 60000,
+			Conditions: []settings.OtelConditionMapping{
+				{Action: settings.CREATE, Expression: boolExpr(`resourceAttributes["service.instance.id"] == "627cc493"`)},
+			},
+			Identifier: "urn:otel-component-mapping:service",
+			Output: settings.OtelComponentMappingOutput{
+				Identifier:     strExpr(`${resourceAttributes["service.instance.id"]}`),
+				Name:           strExpr(`${resourceAttributes["service.name"]}`),
+				TypeName:       strExpr(`service-instance`),
+				TypeIdentifier: ptr(strExpr(`service_instance_id`)),
+				DomainName:     strExpr(`${resourceAttributes["service.namespace"]}`),
+				LayerName:      strExpr(`${metricAttributes["net.peer.name"]}`),
+				Required: &settings.OtelComponentMappingFieldMapping{
+					AdditionalIdentifiers: &[]settings.OtelStringExpression{
+						{Expression: `${resourceAttributes["k8s.pod.name"]}`},
+					},
+				},
+			},
+		},
+	}
+	relationMappings := []settings.OtelRelationMapping{
+		{
+			Id:            "mapping1b",
+			Identifier:    "urn:otel-relation-mapping:synchronous",
+			ExpireAfterMs: 300000,
+			Conditions: []settings.OtelConditionMapping{
+				{Action: settings.CREATE, Expression: boolExpr(`metricAttributes["http.method"] == "GET"`)},
+			},
+			Output: settings.OtelRelationMappingOutput{
+				SourceId: strExpr(`${resourceAttributes["service.name"]}`),
+				TargetId: strExpr(`${metricAttributes["service.name"]}`),
+				TypeName: strExpr("http-request"),
+			},
+		},
+	}
+	expected := []MessageWithKey{
+		{
+			Key: &topo_stream_v1.TopologyStreamMessageKey{
+				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+				DataSource: "urn:otel-component-mapping:service",
+				ShardId:    "0",
+			},
+			Message: &topo_stream_v1.TopologyStreamMessage{
+				CollectionTimestamp: collectionTimestampMs,
+				SubmittedTimestamp:  submittedTime,
+				Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
+					TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
+						ExpiryIntervalMs: 60000,
+						Components: []*topo_stream_v1.TopologyStreamComponent{
+							{
+								ExternalId:     "627cc493",
+								Identifiers:    []string{"627cc493", "checkout-service-8675309"},
+								Name:           "checkout-service",
+								TypeName:       "service-instance",
+								TypeIdentifier: ptr("service_instance_id"),
+								DomainName:     "shop",
+								LayerName:      "api.example.com",
+								Tags:           nil,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Key: &topo_stream_v1.TopologyStreamMessageKey{
+				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+				DataSource: "urn:otel-relation-mapping:synchronous",
+				ShardId:    "2",
+			},
+			Message: &topo_stream_v1.TopologyStreamMessage{
+				CollectionTimestamp: collectionTimestampMs,
+				SubmittedTimestamp:  submittedTime,
+				Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
+					TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
+						ExpiryIntervalMs: 300000,
+						Relations: []*topo_stream_v1.TopologyStreamRelation{
+							{
+								ExternalId:       "checkout-service-web-service",
+								SourceIdentifier: "checkout-service",
+								TargetIdentifier: "web-service",
+								Name:             "",
+								TypeName:         "http-request",
+								TypeIdentifier:   nil,
+								Tags:             nil,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	mapper := NewMapper(context.Background(), makeMeteredCacheSettings(100, 30*time.Second), makeMeteredCacheSettings(100, 30*time.Second))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			metricsReporter := &noopMetrics{}
+			eval, _ := NewCELEvaluator(ctx, makeMeteredCacheSettings(100, 30*time.Second))
+			result := ConvertMetricsToTopologyStreamMessage(
+				ctx,
+				zaptest.NewLogger(t),
+				eval,
+				mapper,
+				tt.metrics,
+				componentMappings,
+				relationMappings,
+				collectionTimestampMs,
+				metricsReporter,
+			)
+			unifyMessages(&result)
+			unifyMessages(&expected)
+			assert.Equal(t, expected, result)
+		})
+	}
+}
+
 func createSimpleComponentMapping(id string) settings.OtelComponentMapping {
 	return settings.OtelComponentMapping{
 		Id:            id,
@@ -728,11 +1110,20 @@ func createSimpleRelationMapping(id string) settings.OtelRelationMapping {
 	}
 }
 
-func unify(data *[]MessageWithKey) {
+func unifyMessages(data *[]MessageWithKey) {
 	for _, message := range *data {
-		//nolint:forcetypeassert
-		for _, component := range message.Message.Payload.(*topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData).TopologyStreamRepeatElementsData.Components {
-			sort.Strings(component.Tags)
+		if pl := message.Message.GetTopologyStreamRepeatElementsData(); pl != nil {
+			for _, component := range pl.Components {
+				if component != nil {
+					sort.Strings(component.Tags)
+					sort.Strings(component.Identifiers)
+				}
+			}
+			for _, relation := range pl.Relations {
+				if relation != nil && relation.Name == "" {
+					relation.Name = "" // Ensure empty is not nil for comparison
+				}
+			}
 		}
 	}
 }

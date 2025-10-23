@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector/metrics"
+	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/types/ref"
@@ -37,6 +37,7 @@ type ExpressionEvaluator interface {
 
 type ExpressionEvalContext struct {
 	SpanAttributes     map[string]any
+	MetricAttributes   map[string]any
 	ScopeAttributes    map[string]any
 	ResourceAttributes map[string]any
 	Vars               map[string]any
@@ -76,10 +77,22 @@ func (e *CelEvaluationError) Error() string {
 	return fmt.Sprintf(e.format, e.arguments...)
 }
 
-func NewEvalContext(spanAttributes map[string]any, scopeAttributes map[string]any,
-	resourceAttributes map[string]any) *ExpressionEvalContext {
+func NewSpanEvalContext(spanAttributes map[string]any,
+	scopeAttributes map[string]any, resourceAttributes map[string]any) *ExpressionEvalContext {
 	return &ExpressionEvalContext{
 		SpanAttributes:     spanAttributes,
+		MetricAttributes:   nil,
+		ScopeAttributes:    scopeAttributes,
+		ResourceAttributes: resourceAttributes,
+		Vars:               nil,
+	}
+}
+
+func NewMetricEvalContext(metricAttributes map[string]any,
+	scopeAttributes map[string]any, resourceAttributes map[string]any) *ExpressionEvalContext {
+	return &ExpressionEvalContext{
+		SpanAttributes:     nil,
+		MetricAttributes:   metricAttributes,
 		ScopeAttributes:    scopeAttributes,
 		ResourceAttributes: resourceAttributes,
 		Vars:               nil,
@@ -89,6 +102,7 @@ func NewEvalContext(spanAttributes map[string]any, scopeAttributes map[string]an
 func (ec *ExpressionEvalContext) CloneWithVariables(vars map[string]any) *ExpressionEvalContext {
 	return &ExpressionEvalContext{
 		SpanAttributes:     ec.SpanAttributes,
+		MetricAttributes:   ec.MetricAttributes,
 		ScopeAttributes:    ec.ScopeAttributes,
 		ResourceAttributes: ec.ResourceAttributes,
 		Vars:               vars,
@@ -98,6 +112,7 @@ func (ec *ExpressionEvalContext) CloneWithVariables(vars map[string]any) *Expres
 func NewCELEvaluator(ctx context.Context, cacheSettings metrics.MeteredCacheSettings) (*CelEvaluator, error) {
 	env, err := cel.NewEnv(
 		cel.Variable("spanAttributes", cel.MapType(cel.StringType, cel.DynType)),
+		cel.Variable("metricAttributes", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("scopeAttributes", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("resourceAttributes", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("vars", cel.MapType(cel.StringType, cel.DynType)),
@@ -345,10 +360,19 @@ func validateExpectedType(ast *cel.Ast, expectedType expressionType, expression 
 // evaluateProgram executes a compiled CEL program with the given context.
 func (e *CelEvaluator) evaluateProgram(prog cel.Program, ctx *ExpressionEvalContext) (interface{}, error) {
 	runtimeVars := map[string]interface{}{
-		"spanAttributes":     ctx.SpanAttributes,
 		"scopeAttributes":    ctx.ScopeAttributes,
 		"resourceAttributes": ctx.ResourceAttributes,
 		"vars":               ctx.Vars,
+	}
+
+	// To get the best error messages the metricAttributes/spanAttributes should not be set at all
+	// if they are not defined
+	if ctx.MetricAttributes != nil {
+		runtimeVars["metricAttributes"] = ctx.MetricAttributes
+	}
+
+	if ctx.SpanAttributes != nil {
+		runtimeVars["spanAttributes"] = ctx.SpanAttributes
 	}
 
 	result, _, err := prog.Eval(runtimeVars)

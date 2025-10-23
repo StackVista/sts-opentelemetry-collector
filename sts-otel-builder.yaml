@@ -7,8 +7,8 @@ connectors:
   - gomod: go.opentelemetry.io/collector/connector/forwardconnector v0.100.0
   - gomod: github.com/stackvista/sts-opentelemetry-collector/connector/stsservicegraphconnector v0.0.0
     path: ./connector/stsservicegraphconnector
-  - gomod: github.com/stackvista/sts-opentelemetry-collector/connector/tracetotopoconnector v0.0.0
-    path: ./connector/tracetotopoconnector
+  - gomod: github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector v0.0.0
+    path: ./connector/topologyconnector
 
 exporters:
   - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.100.0
