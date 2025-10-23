@@ -15,7 +15,6 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
-	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )
@@ -125,10 +124,9 @@ func (p *connectorImpl) ConsumeMetrics(ctx context.Context, metrics pmetric.Metr
 	duration := time.Since(start)
 	p.publishMessagesAsLogs(ctx, messagesWithKeys)
 
-	p.metricsRecorder.RecordMappingDuration(
+	p.metricsRecorder.RecordRequestDuration(
 		ctx, duration,
-		attribute.String("phase", "consume_metrics"),
-		attribute.String("target", "spans"),
+		settings.METRICS,
 	)
 
 	return nil
@@ -155,10 +153,9 @@ func (p *connectorImpl) ConsumeTraces(ctx context.Context, traceData ptrace.Trac
 
 	p.publishMessagesAsLogs(ctx, messages)
 
-	p.metricsRecorder.RecordMappingDuration(
+	p.metricsRecorder.RecordRequestDuration(
 		ctx, duration,
-		attribute.String("phase", "consume_traces"),
-		attribute.String("target", "spans"),
+		settings.TRACES,
 	)
 
 	return nil

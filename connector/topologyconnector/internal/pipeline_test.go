@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
-	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 
@@ -49,7 +48,15 @@ func (n *noopMetrics) IncTopologyProduced(_ context.Context, _ int64, _ settings
 func (n *noopMetrics) IncMappingsRemoved(_ context.Context, _ int64, _ settings.SettingType) {}
 func (n *noopMetrics) IncMappingErrors(_ context.Context, _ int64, _ settings.SettingType, _ settings.OtelInputSignal) {
 }
-func (n *noopMetrics) RecordMappingDuration(_ context.Context, _ time.Duration, _ ...attribute.KeyValue) {
+func (n *noopMetrics) RecordMappingDuration(
+	_ context.Context,
+	_ time.Duration,
+	_ settings.OtelInputSignal,
+	_ settings.SettingType,
+	_ string,
+) {
+}
+func (n *noopMetrics) RecordRequestDuration(_ context.Context, _ time.Duration, _ settings.OtelInputSignal) {
 }
 
 func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
