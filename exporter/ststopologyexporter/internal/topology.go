@@ -413,8 +413,8 @@ func (c *ComponentData) withScope(attrs *pcommon.Map) *ComponentData {
 	if ok {
 		c.Tags["cluster-name"] = clusterName.AsString()
 		namespaceName, nok := attrs.Get("k8s.namespace.name")
-		c.Tags["namespace"] = namespaceName.AsString()
 		if nok {
+			c.Tags["namespace"] = namespaceName.AsString()
 			c.Tags["k8s-scope"] = fmt.Sprintf("%s/%s", clusterName.AsString(), namespaceName.AsString())
 		}
 	}
