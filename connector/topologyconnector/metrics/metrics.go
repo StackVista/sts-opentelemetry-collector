@@ -24,7 +24,7 @@ type ConnectorMetricsRecorder interface {
 type ConnectorMetrics struct {
 	// Counters
 	inputsProcessed metric.Int64Counter
-	mappingsTotal   metric.Int64Counter
+	topologyTotal   metric.Int64Counter
 	mappingsRemoved metric.Int64Counter
 	errorsTotal     metric.Int64Counter
 
@@ -61,7 +61,7 @@ func NewConnectorMetrics(typeName string, telemetrySettings component.TelemetryS
 
 	return &ConnectorMetrics{
 		inputsProcessed: inputsProcessed,
-		mappingsTotal:   topologyTotal,
+		topologyTotal:   topologyTotal,
 		mappingsRemoved: mappingsRemoved,
 		errorsTotal:     errorsTotal,
 		mappingDuration: mappingDuration,
@@ -92,7 +92,7 @@ func (pm *ConnectorMetrics) IncTopologyProduced(
 	settingType settings.SettingType,
 	signal settings.OtelInputSignal,
 ) {
-	pm.mappingsTotal.Add(ctx, n, metric.WithAttributeSet(topologyAttributes(settingType, signal)))
+	pm.topologyTotal.Add(ctx, n, metric.WithAttributeSet(topologyAttributes(settingType, signal)))
 }
 
 func (pm *ConnectorMetrics) IncMappingsRemoved(ctx context.Context, n int64, settingType settings.SettingType) {
