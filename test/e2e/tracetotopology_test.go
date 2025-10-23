@@ -469,7 +469,8 @@ func otelComponentMappingSpec(condExpression settings.OtelBooleanExpression, var
 				},
 			},
 		},
-		Vars: varMappings,
+		InputSignals: []settings.OtelInputSignal{settings.TRACES},
+		Vars:         varMappings,
 	}
 }
 
@@ -493,6 +494,7 @@ func otelRelationMappingSpec() *harness.OtelRelationMappingSpec {
 			TargetId: strExpr(`${spanAttributes["server.address"]}`),
 			TypeName: strExpr("http-request"),
 		},
+		InputSignals: []settings.OtelInputSignal{settings.TRACES},
 	}
 }
 

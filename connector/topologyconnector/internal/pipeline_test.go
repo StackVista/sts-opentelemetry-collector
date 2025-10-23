@@ -720,6 +720,7 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage_MultipleComponents(t *te
 
 		// Datapoint 1
 		dp1 := sum.DataPoints().AppendEmpty()
+		//nolint:gosec
 		dp1.SetTimestamp(pcommon.Timestamp(submittedTime))
 		_ = dp1.Attributes().FromRaw(map[string]any{
 			"http.method":      "GET",
@@ -729,6 +730,7 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage_MultipleComponents(t *te
 
 		// Datapoint 2
 		dp2 := sum.DataPoints().AppendEmpty()
+		//nolint:gosec
 		dp2.SetTimestamp(pcommon.Timestamp(submittedTime))
 		_ = dp2.Attributes().FromRaw(map[string]any{
 			"http.method":      "POST",
@@ -871,6 +873,7 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 				m.SetName("http.server.duration")
 				sum := m.SetEmptySum()
 				dp := sum.DataPoints().AppendEmpty()
+				//nolint:gosec
 				dp.SetTimestamp(pcommon.Timestamp(submittedTime))
 				_ = dp.Attributes().FromRaw(map[string]any{
 					"http.method":      "GET",
@@ -883,6 +886,7 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 				m.SetName("http.server.active_requests")
 				gauge := m.SetEmptyGauge()
 				dp := gauge.DataPoints().AppendEmpty()
+				//nolint:gosec
 				dp.SetTimestamp(pcommon.Timestamp(submittedTime))
 				dp.SetIntValue(10)
 				_ = dp.Attributes().FromRaw(map[string]any{
@@ -897,6 +901,7 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 				m.SetName("http.server.duration.histogram")
 				histogram := m.SetEmptyHistogram()
 				dp := histogram.DataPoints().AppendEmpty()
+				//nolint:gosec
 				dp.SetTimestamp(pcommon.Timestamp(submittedTime))
 				dp.SetCount(2)
 				dp.SetSum(10)
@@ -914,6 +919,7 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 				m.SetName("http.server.duration.exp_histogram")
 				expHistogram := m.SetEmptyExponentialHistogram()
 				dp := expHistogram.DataPoints().AppendEmpty()
+				//nolint:gosec
 				dp.SetTimestamp(pcommon.Timestamp(submittedTime))
 				dp.SetCount(2)
 				dp.SetSum(10)
@@ -931,6 +937,7 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 				m.SetName("http.server.duration.summary")
 				summary := m.SetEmptySummary()
 				dp := summary.DataPoints().AppendEmpty()
+				//nolint:gosec
 				dp.SetTimestamp(pcommon.Timestamp(submittedTime))
 				dp.SetCount(2)
 				dp.SetSum(10)
