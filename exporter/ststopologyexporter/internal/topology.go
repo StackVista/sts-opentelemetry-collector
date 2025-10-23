@@ -187,8 +187,6 @@ func (c *ComponentsCollection) addKubernetesRelation(attrs *pcommon.Map, instanc
 		newComponentData().
 			withNameFromAttr(attrs, "k8s.pod.name").
 			withScope(attrs).
-			withTagValue("cluster-name", reqAttrs["k8s.cluster.name"]).
-			withTagValue("namespace", reqAttrs["k8s.namespace.name"]).
 			withIdentifier(fmt.Sprintf(
 				"urn:kubernetes:/%s:%s:pod/%s",
 				reqAttrs["k8s.cluster.name"],
@@ -411,9 +409,12 @@ func (c *ComponentData) withTagPrefix(attrs *pcommon.Map, prefix string) *Compon
 
 func (c *ComponentData) withScope(attrs *pcommon.Map) *ComponentData {
 	clusterName, ok := attrs.Get("k8s.cluster.name")
+
 	if ok {
+		c.Tags["cluster-name"] = clusterName.AsString()
 		namespaceName, nok := attrs.Get("k8s.namespace.name")
 		if nok {
+			c.Tags["namespace"] = namespaceName.AsString()
 			c.Tags["k8s-scope"] = fmt.Sprintf("%s/%s", clusterName.AsString(), namespaceName.AsString())
 		}
 	}
