@@ -17,7 +17,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
-	"go.opentelemetry.io/collector/config/configtelemetry"
 	"go.opentelemetry.io/collector/connector/connectortest"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/consumer/consumertest"
@@ -25,10 +24,10 @@ import (
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
-	semconv "go.opentelemetry.io/collector/semconv/v1.25.0"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata/metricdatatest"
+	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"go.uber.org/zap/zaptest"
 )
 
@@ -38,7 +37,7 @@ func TestConnectorStart(t *testing.T) {
 	cfg, ok := factory.CreateDefaultConfig().(*servicegraphconnector.Config)
 	assert.True(t, ok)
 
-	procCreationParams := connectortest.NewNopCreateSettings()
+	procCreationParams := connectortest.NewNopSettings(servicegraphconnector.NewFactory().Type())
 	traceConnector, err := factory.CreateTracesToMetrics(context.Background(), procCreationParams, cfg, consumertest.NewNop())
 	require.NoError(t, err)
 
@@ -63,8 +62,7 @@ func TestConnectorShutdown(t *testing.T) {
 	next := new(consumertest.MetricsSink)
 	set := componenttest.NewNopTelemetrySettings()
 	set.Logger = zaptest.NewLogger(t)
-	p := servicegraphconnector.NewConnector(set, cfg)
-	p.SetMetricsConsumer(next)
+	p := servicegraphconnector.NewConnector(set, cfg, next)
 	err := p.Shutdown(context.Background())
 
 	// Verify
@@ -80,8 +78,7 @@ func TestConnectorConsume(t *testing.T) {
 
 	set := componenttest.NewNopTelemetrySettings()
 	set.Logger = zaptest.NewLogger(t)
-	conn := servicegraphconnector.NewConnector(set, cfg)
-	conn.SetMetricsConsumer(newMockMetricsExporter())
+	conn := servicegraphconnector.NewConnector(set, cfg, newMockMetricsExporter())
 
 	assert.NoError(t, conn.Start(context.Background(), componenttest.NewNopHost()))
 
@@ -183,7 +180,7 @@ func buildSampleTrace(t *testing.T, attrValue string) ptrace.Traces {
 	traces := ptrace.NewTraces()
 
 	resourceSpans := traces.ResourceSpans().AppendEmpty()
-	resourceSpans.Resource().Attributes().PutStr(semconv.AttributeServiceName, "some-service")
+	resourceSpans.Resource().Attributes().PutStr(string(semconv.ServiceNameKey), "some-service")
 
 	scopeSpans := resourceSpans.ScopeSpans().AppendEmpty()
 
@@ -216,22 +213,6 @@ func buildSampleTrace(t *testing.T, attrValue string) ptrace.Traces {
 	serverSpan.SetEndTimestamp(pcommon.NewTimestampFromTime(tEnd))
 
 	return traces
-}
-
-type mockHost struct {
-	component.Host
-	exps map[component.DataType]map[component.ID]component.Component
-}
-
-func newMockHost(exps map[component.DataType]map[component.ID]component.Component) component.Host {
-	return &mockHost{
-		Host: componenttest.NewNopHost(),
-		exps: exps,
-	}
-}
-
-func (m *mockHost) GetExporters() map[component.DataType]map[component.ID]component.Component {
-	return m.exps
 }
 
 var _ exporter.Metrics = (*mockMetricsExporter)(nil)
@@ -305,15 +286,9 @@ func TestCorrectForExpiredEdges(t *testing.T) {
 
 	set := componenttest.NewNopTelemetrySettings()
 	set.Logger = zaptest.NewLogger(t)
-	p := servicegraphconnector.NewConnector(set, cfg)
+	p := servicegraphconnector.NewConnector(set, cfg, mockMetricsExporter)
 
-	mHost := newMockHost(map[component.DataType]map[component.ID]component.Component{
-		component.DataTypeMetrics: {
-			component.MustNewID("mock"): mockMetricsExporter,
-		},
-	})
-
-	assert.NoError(t, p.Start(context.Background(), mHost))
+	assert.NoError(t, p.Start(context.Background(), componenttest.NewNopHost()))
 
 	td := ptrace.NewTraces()
 	for i := 0; i < testSize; i++ {
@@ -382,15 +357,8 @@ func TestStaleSeriesCleanup(t *testing.T) {
 
 	set := componenttest.NewNopTelemetrySettings()
 	set.Logger = zaptest.NewLogger(t)
-	p := servicegraphconnector.NewConnector(set, cfg)
-
-	mHost := newMockHost(map[component.DataType]map[component.ID]component.Component{
-		component.DataTypeMetrics: {
-			component.MustNewID("mock"): mockMetricsExporter,
-		},
-	})
-
-	assert.NoError(t, p.Start(context.Background(), mHost))
+	p := servicegraphconnector.NewConnector(set, cfg, mockMetricsExporter)
+	assert.NoError(t, p.Start(context.Background(), componenttest.NewNopHost()))
 
 	// ConsumeTraces
 	td := buildSampleTrace(t, "first")
@@ -427,15 +395,8 @@ func TestMapsAreConsistentDuringCleanup(t *testing.T) {
 
 	set := componenttest.NewNopTelemetrySettings()
 	set.Logger = zaptest.NewLogger(t)
-	p := servicegraphconnector.NewConnector(set, cfg)
-
-	mHost := newMockHost(map[component.DataType]map[component.ID]component.Component{
-		component.DataTypeMetrics: {
-			component.MustNewID("mock"): mockMetricsExporter,
-		},
-	})
-
-	assert.NoError(t, p.Start(context.Background(), mHost))
+	p := servicegraphconnector.NewConnector(set, cfg, mockMetricsExporter)
+	assert.NoError(t, p.Start(context.Background(), componenttest.NewNopHost()))
 
 	// ConsumeTraces
 	td := buildSampleTrace(t, "first")
@@ -481,8 +442,6 @@ func TestMapsAreConsistentDuringCleanup(t *testing.T) {
 
 func setupTelemetry(reader *sdkmetric.ManualReader) component.TelemetrySettings {
 	settings := componenttest.NewNopTelemetrySettings()
-	settings.MetricsLevel = configtelemetry.LevelNormal
-
 	settings.MeterProvider = sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
 	return settings
 }
@@ -501,15 +460,8 @@ func TestValidateOwnTelemetry(t *testing.T) {
 
 	reader := sdkmetric.NewManualReader()
 	set := setupTelemetry(reader)
-	p := servicegraphconnector.NewConnector(set, cfg)
-
-	mHost := newMockHost(map[component.DataType]map[component.ID]component.Component{
-		component.DataTypeMetrics: {
-			component.MustNewID("mock"): mockMetricsExporter,
-		},
-	})
-
-	assert.NoError(t, p.Start(context.Background(), mHost))
+	p := servicegraphconnector.NewConnector(set, cfg, mockMetricsExporter)
+	assert.NoError(t, p.Start(context.Background(), componenttest.NewNopHost()))
 
 	// ConsumeTraces
 	td := buildSampleTrace(t, "first")

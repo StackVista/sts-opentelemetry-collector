@@ -80,7 +80,7 @@ func setupTest(t *testing.T) *testContext {
 		ReadTimeout:    5 * time.Second,
 		RequiredAcks:   "all",
 	}
-	set := exporter.CreateSettings{
+	set := exporter.Settings{
 		TelemetrySettings: componenttest.NewNopTelemetrySettings(),
 	}
 	exp, err := stskafkaexporter.NewKafkaExporter(cfg, set)

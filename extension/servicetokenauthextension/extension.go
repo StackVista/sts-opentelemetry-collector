@@ -12,7 +12,8 @@ import (
 	stsauth "github.com/stackvista/sts-opentelemetry-collector/common/auth"
 	"go.opentelemetry.io/collector/client"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/extension/auth"
+	"go.opentelemetry.io/collector/extension"
+	"go.opentelemetry.io/collector/extension/extensionauth"
 )
 
 var (
@@ -24,7 +25,7 @@ var (
 	tokenRegex = regexp.MustCompile(`(\w+) (.*)$`)
 )
 
-type extensionContext struct {
+type serviceTokenAuthServer struct {
 	config     *Config
 	httpClient http.Client
 	// we have two caches one for invalid keys, it maps auth key to nothing now but in the future
@@ -39,44 +40,43 @@ type extensionContext struct {
 	invalidKeysCache *expirable.LRU[string, error]
 }
 
-func NewServerAuthExtension(cfg *Config) (auth.Server, error) {
-	exCtx := extensionContext{
+func NewServiceTokenAuth(cfg *Config) (extension.Extension, error) {
+	return &serviceTokenAuthServer{
 		config:           cfg,
 		validKeysCache:   expirable.NewLRU[string, string](cfg.Cache.ValidSize, nil, cfg.Cache.ValidTTL),
 		invalidKeysCache: expirable.NewLRU[string, error](cfg.Cache.InvalidSize, nil, 0),
-	}
-	return auth.NewServer(
-		auth.WithServerStart(exCtx.serverStart),
-		auth.WithServerAuthenticate(exCtx.authenticate),
-	), nil
+	}, nil
 }
 
-func (exCtx *extensionContext) serverStart(context.Context, component.Host) error {
-	httpClient := http.Client{
+func (s *serviceTokenAuthServer) Start(_ context.Context, _ component.Host) error {
+	s.httpClient = http.Client{
 		Timeout: 5 * time.Second,
 	}
-
-	exCtx.httpClient = httpClient
-
 	return nil
 }
 
-func (exCtx *extensionContext) authenticate(ctx context.Context, headers map[string][]string) (context.Context, error) {
+func (s *serviceTokenAuthServer) Shutdown(_ context.Context) error {
+	return nil
+}
+
+func (s *serviceTokenAuthServer) Authenticate(
+	ctx context.Context,
+	headers map[string][]string,
+) (context.Context, error) {
 	authorizationHeader := getAuthHeader(headers)
 	if authorizationHeader == "" {
 		return ctx, ErrNoAuth
 	}
 
-	// checks schema
 	matches := tokenRegex.FindStringSubmatch(authorizationHeader)
 	if len(matches) != 3 {
 		return ctx, ErrForbidden
 	}
-	if matches[1] != exCtx.config.Schema {
+	if matches[1] != s.config.Schema {
 		return ctx, ErrForbidden
 	}
 
-	err := checkAuthorizationHeaderUseCache(matches[2], exCtx)
+	err := s.checkAuthorizationHeaderUseCache(matches[2])
 	if err != nil {
 		return ctx, err
 	}
@@ -88,7 +88,6 @@ func (exCtx *extensionContext) authenticate(ctx context.Context, headers map[str
 	return client.NewContext(ctx, cl), nil
 }
 
-// Extract value of "Authorization" header, empty string - the header is missing.
 func getAuthHeader(headers map[string][]string) string {
 	authHeaders := [2]string{"authorization", "Authorization"}
 
@@ -103,41 +102,30 @@ func getAuthHeader(headers map[string][]string) string {
 	return ""
 }
 
-// Check if a ServiceToken is inside caches otherwise use a remote server to authorize it
-func checkAuthorizationHeaderUseCache(authorizationHeader string, exCtx *extensionContext) error {
-	// check if the key is stored in "validKeysCache" cache, so we know the Key is valid.
-	_, ok := exCtx.validKeysCache.Get(authorizationHeader)
+func (s *serviceTokenAuthServer) checkAuthorizationHeaderUseCache(authorizationHeader string) error {
+	_, ok := s.validKeysCache.Get(authorizationHeader)
 	if ok {
 		return nil
 	}
 
-	// check if the key is stored in "invalidKeysCache" cache, so we know the Key is invalid, reject it immediately
-	er, ok := exCtx.invalidKeysCache.Get(authorizationHeader)
+	er, ok := s.invalidKeysCache.Get(authorizationHeader)
 	if ok {
 		return er
 	}
 
-	// otherwise use a remote server to authorize the key
-	return checkAuthorizationHeader(authorizationHeader, exCtx)
+	return s.checkAuthorizationHeader(authorizationHeader)
 }
 
-type AuthorizeRequestBody struct {
-	APIKey string `json:"apiKey"`
-}
-
-// Authorizes an API Key or Service Token (value of Authorization header) with the remote authorization server.
-// The function stores the result (valid keys but also non-transient errors) in the cache.
-func checkAuthorizationHeader(token string, exCtx *extensionContext) error {
+func (s *serviceTokenAuthServer) checkAuthorizationHeader(token string) error {
 	headerSample := token[max(0, len(token)-4):]
 	log.Printf("Sending authorization request for ...%s\n", headerSample)
 
-	req, err := http.NewRequest(http.MethodGet, exCtx.config.Endpoint.URL, nil)
+	req, err := http.NewRequest(http.MethodGet, s.config.Endpoint.URL, nil)
 	if err != nil {
 		log.Print("Can't create authorization request ", err)
 		return ErrInternal
 	}
 
-	// Add the token to the header
 	req.Header.Add("sts-api-key", token)
 
 	res, err := http.DefaultClient.Do(req)
@@ -148,14 +136,16 @@ func checkAuthorizationHeader(token string, exCtx *extensionContext) error {
 
 	log.Printf("Result for ...%s: %d\n", headerSample, res.StatusCode)
 	if res.StatusCode == 403 {
-		exCtx.invalidKeysCache.Add(token, ErrForbidden)
+		s.invalidKeysCache.Add(token, ErrForbidden)
 		return ErrForbidden
 	}
 
 	if res.StatusCode >= 200 && res.StatusCode < 300 {
-		exCtx.validKeysCache.Add(token, "") // In future we can store tenant ID in the cache
+		s.validKeysCache.Add(token, "")
 		return nil
 	}
 
 	return ErrInternal
 }
+
+var _ extensionauth.Server = (*serviceTokenAuthServer)(nil)

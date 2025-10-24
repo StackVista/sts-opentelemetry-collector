@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
-	conventions "go.opentelemetry.io/collector/semconv/v1.18.0"
+	conventions "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"go.uber.org/zap/zaptest"
 )
 
@@ -112,7 +112,7 @@ func simpleTraces(count int) ptrace.Traces {
 		s.SetSpanID([8]byte{byte(i + 1)})
 		s.SetStartTimestamp(pcommon.NewTimestampFromTime(time.Now()))
 		s.SetEndTimestamp(pcommon.NewTimestampFromTime(time.Now()))
-		s.Attributes().PutStr(conventions.AttributeServiceName, "v")
+		s.Attributes().PutStr(string(conventions.ServiceNameKey), "v")
 		if i == 0 {
 			firstSpan = s
 		} else {

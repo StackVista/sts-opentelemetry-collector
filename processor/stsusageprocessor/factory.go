@@ -7,6 +7,7 @@ package stsusageprocessor // import "github.com/stackvista/sts-opentelemetry-col
 
 import (
 	"context"
+
 	"github.com/stackvista/sts-opentelemetry-collector/processor/stsusageprocessor/internal/metadata"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/otel/metric"
@@ -38,7 +39,7 @@ func createDefaultConfig() component.Config {
 
 func createTracesProcessor(
 	ctx context.Context,
-	set processor.CreateSettings,
+	set processor.Settings,
 	cfg component.Config,
 	nextConsumer consumer.Traces,
 ) (processor.Traces, error) {
@@ -50,7 +51,7 @@ func createTracesProcessor(
 	)
 
 	proc := &stsUsageProcessor{logger: set.Logger, sizer: &ptrace.ProtoMarshaler{}, tracesBytes: tracesBytesCounter}
-	return processorhelper.NewTracesProcessor(
+	return processorhelper.NewTraces(
 		ctx,
 		set,
 		cfg,
@@ -61,12 +62,12 @@ func createTracesProcessor(
 
 func createMetricsProcessor(
 	ctx context.Context,
-	set processor.CreateSettings,
+	set processor.Settings,
 	cfg component.Config,
 	nextConsumer consumer.Metrics,
 ) (processor.Metrics, error) {
 	proc := &stsUsageProcessor{logger: set.Logger}
-	return processorhelper.NewMetricsProcessor(
+	return processorhelper.NewMetrics(
 		ctx,
 		set,
 		cfg,
@@ -77,12 +78,12 @@ func createMetricsProcessor(
 
 func createLogsProcessor(
 	ctx context.Context,
-	set processor.CreateSettings,
+	set processor.Settings,
 	cfg component.Config,
 	nextConsumer consumer.Logs,
 ) (processor.Logs, error) {
 	proc := &stsUsageProcessor{logger: set.Logger}
-	return processorhelper.NewLogsProcessor(
+	return processorhelper.NewLogs(
 		ctx,
 		set,
 		cfg,

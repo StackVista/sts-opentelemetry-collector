@@ -102,5 +102,6 @@ To upgrade the Go version and dependencies across all modules in the workspace, 
     ```shell
     ./scripts/upgrade_dependencies.sh
     ```
+    Finally, make sure to update the versions in sts-otel-builder.yaml to use the latest released collector dependencies.
 
 These scripts will iterate through all `go.mod` files, update them, and ensure consistency across the workspace.

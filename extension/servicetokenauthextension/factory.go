@@ -17,13 +17,13 @@ var (
 func NewFactory() extension.Factory {
 	return extension.NewFactory(
 		Type,
-		CreateDefaultConfig,
+		createDefaultConfig,
 		CreateExtension,
 		component.StabilityLevelAlpha,
 	)
 }
 
-func CreateDefaultConfig() component.Config {
+func createDefaultConfig() component.Config {
 	return &Config{
 		Cache: &CacheSettings{
 			ValidSize:   100,
@@ -34,11 +34,11 @@ func CreateDefaultConfig() component.Config {
 	}
 }
 
-func CreateExtension(_ context.Context, _ extension.CreateSettings, cfg component.Config) (extension.Extension, error) {
+func CreateExtension(_ context.Context, _ extension.Settings, cfg component.Config) (extension.Extension, error) {
 	config, ok := cfg.(*Config)
 	if !ok {
 		return nil, errors.New("error casting the configuration")
 	}
 
-	return NewServerAuthExtension(config)
+	return NewServiceTokenAuth(config)
 }
