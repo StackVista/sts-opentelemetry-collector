@@ -9,6 +9,7 @@ import (
 	"time"
 
 	servicegraphconnector "github.com/stackvista/sts-opentelemetry-collector/connector/stsservicegraphconnector"
+	"github.com/stackvista/sts-opentelemetry-collector/connector/stsservicegraphconnector/internal/metadata"
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/connector/connectortest"
 	"go.opentelemetry.io/collector/consumer/consumertest"
@@ -39,7 +40,7 @@ func TestNewConnector(t *testing.T) {
 			// Prepare
 			factory := servicegraphconnector.NewFactory()
 
-			creationParams := connectortest.NewNopCreateSettings()
+			creationParams := connectortest.NewNopSettings(metadata.Type)
 			cfg, ok := factory.CreateDefaultConfig().(*servicegraphconnector.Config)
 			assert.True(t, ok)
 

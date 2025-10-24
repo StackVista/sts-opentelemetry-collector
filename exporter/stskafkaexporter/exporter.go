@@ -33,7 +33,7 @@ type KafkaExporter struct {
 	adminClient *kadm.Client
 }
 
-func NewKafkaExporter(cfg Config, set exporter.CreateSettings) (*KafkaExporter, error) {
+func NewKafkaExporter(cfg Config, set exporter.Settings) (*KafkaExporter, error) {
 	clientID := fmt.Sprintf("stskafkaexporter-%s", uuid.New().String())
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(cfg.Brokers...),

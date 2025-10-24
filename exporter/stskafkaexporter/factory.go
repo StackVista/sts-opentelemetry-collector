@@ -3,11 +3,12 @@ package stskafkaexporter
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configretry"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
-	"time"
 )
 
 var (
@@ -17,7 +18,7 @@ var (
 // Factory wraps the otel exporter.Factory but allows constructor injection for testing.
 type Factory struct {
 	exporter.Factory
-	NewExporterFn func(Config, exporter.CreateSettings) (InternalExporterComponent, error)
+	NewExporterFn func(Config, exporter.Settings) (InternalExporterComponent, error)
 }
 
 // NewFactory creates a new Kafka exporter factory.
@@ -33,16 +34,16 @@ func NewFactory() *Factory {
 	return f
 }
 
-func KafkaExporterConstructor(c Config, set exporter.CreateSettings) (InternalExporterComponent, error) {
+func KafkaExporterConstructor(c Config, set exporter.Settings) (InternalExporterComponent, error) {
 	return NewKafkaExporter(c, set) // returns KafkaExporter, which satisfies the interface
 }
 
 func CreateDefaultConfig() component.Config {
-	queueSettings := exporterhelper.NewDefaultQueueSettings()
+	queueSettings := exporterhelper.NewDefaultQueueConfig()
 	queueSettings.NumConsumers = 1
 
 	return &Config{
-		TimeoutSettings: exporterhelper.NewDefaultTimeoutSettings(),
+		TimeoutSettings: exporterhelper.NewDefaultTimeoutConfig(),
 		BackOffConfig:   configretry.NewDefaultBackOffConfig(),
 		QueueSettings:   queueSettings,
 
@@ -57,7 +58,7 @@ func CreateDefaultConfig() component.Config {
 // CreateLogsExporter creates a new Kafka exporter for logs.
 func (f *Factory) CreateLogsExporter(
 	ctx context.Context,
-	set exporter.CreateSettings,
+	set exporter.Settings,
 	cfg component.Config,
 ) (exporter.Logs, error) {
 	typedCfg, ok := cfg.(*Config)
@@ -70,7 +71,7 @@ func (f *Factory) CreateLogsExporter(
 		return nil, fmt.Errorf("cannot configure kafka logs exp: %w", err)
 	}
 
-	return exporterhelper.NewLogsExporter(
+	return exporterhelper.NewLogs(
 		ctx,
 		set,
 		cfg,

@@ -48,7 +48,7 @@ func createDefaultConfig() component.Config {
 
 func createTracesToLogsConnector(
 	ctx context.Context,
-	params connector.CreateSettings,
+	params connector.Settings,
 	cfg component.Config,
 	nextConsumer consumer.Logs,
 ) (connector.Traces, error) {
@@ -69,7 +69,7 @@ func createTracesToLogsConnector(
 
 func createMetricsToLogsConnector(
 	ctx context.Context,
-	params connector.CreateSettings,
+	params connector.Settings,
 	cfg component.Config,
 	nextConsumer consumer.Logs,
 ) (connector.Metrics, error) {

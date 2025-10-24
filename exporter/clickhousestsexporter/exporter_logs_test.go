@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
-	conventions "go.opentelemetry.io/collector/semconv/v1.18.0"
+	conventions "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"go.uber.org/zap/zaptest"
 )
 
@@ -155,7 +155,7 @@ func simpleLogs(count int) plog.Logs {
 	for i := 0; i < count; i++ {
 		r := sl.LogRecords().AppendEmpty()
 		r.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
-		r.Attributes().PutStr(conventions.AttributeServiceName, "v")
+		r.Attributes().PutStr(string(conventions.ServiceNameKey), "v")
 	}
 	return logs
 }

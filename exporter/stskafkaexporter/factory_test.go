@@ -2,6 +2,7 @@ package stskafkaexporter_test
 
 import (
 	"context"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
@@ -9,10 +10,11 @@ import (
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exportertest"
 
-	"github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter"
-	"go.opentelemetry.io/collector/pdata/plog"
 	"testing"
 	"time"
+
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter"
+	"go.opentelemetry.io/collector/pdata/plog"
 )
 
 type mockKafkaExporter struct {
@@ -46,13 +48,13 @@ func TestFactory_CreateExporter(t *testing.T) {
 	mockExp := &mockKafkaExporter{}
 	f := stskafkaexporter.NewFactory()
 
-	f.NewExporterFn = func(_ stskafkaexporter.Config, _ exporter.CreateSettings) (stskafkaexporter.InternalExporterComponent, error) {
+	f.NewExporterFn = func(_ stskafkaexporter.Config, _ exporter.Settings) (stskafkaexporter.InternalExporterComponent, error) {
 		return mockExp, nil
 	}
 
 	cfg := f.CreateDefaultConfig()
 
-	exp, err := f.CreateLogsExporter(context.Background(), exportertest.NewNopCreateSettings(), cfg)
+	exp, err := f.CreateLogsExporter(context.Background(), exportertest.NewNopSettings(stskafkaexporter.Type), cfg)
 	require.NoError(t, err)
 	require.NotNil(t, exp)
 

@@ -157,10 +157,10 @@ func simpleTrace() ptrace.Traces {
 
 func newTestExporter(t *testing.T, url string) *ststopologyexporter.TopologyExporter {
 	exporter, err := ststopologyexporter.NewTopologyExporter(zaptest.NewLogger(t), &ststopologyexporter.Config{
-		TimeoutSettings: exporterhelper.TimeoutSettings{
+		TimeoutSettings: exporterhelper.TimeoutConfig{
 			Timeout: 15 * time.Millisecond,
 		},
-		QueueSettings: exporterhelper.NewDefaultQueueSettings(),
+		QueueSettings: exporterhelper.NewDefaultQueueConfig(),
 		Endpoint:      url,
 	})
 	require.NoError(t, err)

@@ -12,6 +12,7 @@ import (
 )
 
 func TestCreateDefaultConfig(t *testing.T) {
+	factory := servicetokenauthextension.NewFactory()
 	expected := &servicetokenauthextension.Config{
 		Cache: &servicetokenauthextension.CacheSettings{
 			ValidSize:   100,
@@ -20,8 +21,8 @@ func TestCreateDefaultConfig(t *testing.T) {
 		},
 		Schema: "StackState",
 	}
-	actual := servicetokenauthextension.CreateDefaultConfig()
-	assert.Equal(t, expected, servicetokenauthextension.CreateDefaultConfig())
+	actual := factory.CreateDefaultConfig()
+	assert.Equal(t, expected, actual)
 	assert.NoError(t, componenttest.CheckConfigStruct(actual))
 }
 
@@ -38,7 +39,7 @@ func TestCreateExtension_ValidConfig(t *testing.T) {
 		Schema: "StackState",
 	}
 
-	ext, err := servicetokenauthextension.CreateExtension(context.Background(), extensiontest.NewNopCreateSettings(), cfg)
+	ext, err := servicetokenauthextension.CreateExtension(context.Background(), extensiontest.NewNopSettings(servicetokenauthextension.Type), cfg)
 	assert.NoError(t, err)
 	assert.NotNil(t, ext)
 }

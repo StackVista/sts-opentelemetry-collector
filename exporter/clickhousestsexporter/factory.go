@@ -31,11 +31,11 @@ func NewFactory() exporter.Factory {
 }
 
 func CreateDefaultConfig() component.Config {
-	queueSettings := exporterhelper.NewDefaultQueueSettings()
+	queueSettings := exporterhelper.NewDefaultQueueConfig()
 	queueSettings.NumConsumers = 1
 
 	return &Config{
-		TimeoutSettings:      exporterhelper.NewDefaultTimeoutSettings(),
+		TimeoutSettings:      exporterhelper.NewDefaultTimeoutConfig(),
 		QueueSettings:        queueSettings,
 		BackOffConfig:        configretry.NewDefaultBackOffConfig(),
 		ConnectionParams:     map[string]string{},
@@ -54,7 +54,7 @@ func CreateDefaultConfig() component.Config {
 // Logs are directly insert into clickhouse.
 func createLogsExporter(
 	ctx context.Context,
-	set exporter.CreateSettings,
+	set exporter.Settings,
 	cfg component.Config,
 ) (exporter.Logs, error) {
 	c, ok := cfg.(*Config)
@@ -67,7 +67,7 @@ func createLogsExporter(
 		return nil, fmt.Errorf("cannot configure clickhouse logs exporter: %w", err)
 	}
 
-	return exporterhelper.NewLogsExporter(
+	return exporterhelper.NewLogs(
 		ctx,
 		set,
 		cfg,
@@ -84,7 +84,7 @@ func createLogsExporter(
 // Traces are directly insert into clickhouse.
 func createTracesExporter(
 	ctx context.Context,
-	set exporter.CreateSettings,
+	set exporter.Settings,
 	cfg component.Config,
 ) (exporter.Traces, error) {
 	c, ok := cfg.(*Config)
@@ -97,7 +97,7 @@ func createTracesExporter(
 		return nil, fmt.Errorf("cannot configure clickhouse traces exporter: %w", err)
 	}
 
-	return exporterhelper.NewTracesExporter(
+	return exporterhelper.NewTraces(
 		ctx,
 		set,
 		cfg,
@@ -112,7 +112,7 @@ func createTracesExporter(
 
 func createMetricExporter(
 	ctx context.Context,
-	set exporter.CreateSettings,
+	set exporter.Settings,
 	cfg component.Config,
 ) (exporter.Metrics, error) {
 	c, ok := cfg.(*Config)
@@ -125,7 +125,7 @@ func createMetricExporter(
 		return nil, fmt.Errorf("cannot configure clickhouse metrics exporter: %w", err)
 	}
 
-	return exporterhelper.NewMetricsExporter(
+	return exporterhelper.NewMetrics(
 		ctx,
 		set,
 		cfg,
