@@ -92,8 +92,7 @@ func mapComponents(
 	expressionEvalContext *ExpressionEvalContext,
 	timestamp pcommon.Timestamp,
 	signal settings.OtelInputSignal,
-	// new components and errors are appended to this slice:
-	mappingResult []MessageWithKey,
+	mappingResult []MessageWithKey, // new components and errors are appended to this slice
 ) []MessageWithKey {
 	var components, componentErrs int
 	var componentMappingStart time.Time
@@ -147,7 +146,8 @@ func mapComponents(
 			settings.SettingTypeOtelComponentMapping, signal)
 	}
 	logger.Debug(
-		"Converted metrics to topology stream messages",
+		"Converted signal to topology stream messages",
+		zap.String("signal", string(signal)),
 		zap.Int("components", components),
 		zap.Int("componentErrs", componentErrs),
 	)
@@ -165,8 +165,7 @@ func mapRelation(
 	expressionEvalContext *ExpressionEvalContext,
 	timestamp pcommon.Timestamp,
 	signal settings.OtelInputSignal,
-	// new components and errors are appended to this slice:
-	mappingResult []MessageWithKey,
+	mappingResult []MessageWithKey, // new components and errors are appended to this slice
 ) []MessageWithKey {
 	var relations, relationErrs int
 	var relationMappingStart time.Time
@@ -220,9 +219,10 @@ func mapRelation(
 	}
 
 	logger.Debug(
-		"Converted metrics to topology stream messages",
+		"Converted signal to topology stream messages",
+		zap.String("signal", string(signal)),
 		zap.Int("relations", relations),
-		zap.Int("relationErrors", relationErrs),
+		zap.Int("relationErrs", relationErrs),
 	)
 
 	return mappingResult
