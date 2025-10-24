@@ -214,8 +214,18 @@ func mapRelation(
 		)
 	}
 
+	var allErrors []string
 	if relationErrs > 0 {
 		metricsRecorder.IncMappingErrors(ctx, int64(relationErrs), settings.SettingTypeOtelRelationMapping, signal)
+
+		for _, m := range mappingResult {
+			if repeatData, ok := m.Message.GetPayload().(*topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData); ok {
+				for _, err := range repeatData.TopologyStreamRepeatElementsData.Errors {
+					// Assuming TopoStreamError has a Message or similar field
+					allErrors = append(allErrors, err.GetMessage())
+				}
+			}
+		}
 	}
 
 	logger.Debug(
@@ -223,6 +233,7 @@ func mapRelation(
 		zap.String("signal", string(signal)),
 		zap.Int("relations", relations),
 		zap.Int("relationErrs", relationErrs),
+		zap.Strings("mappingErrors", allErrors),
 	)
 
 	return mappingResult
