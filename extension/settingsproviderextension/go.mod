@@ -1,6 +1,6 @@
 module github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension
 
-go 1.21.13
+go 1.25.3
 
 require (
 	github.com/google/uuid v1.6.0

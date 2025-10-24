@@ -1,6 +1,6 @@
 module github.com/stackvista/sts-opentelemetry-collector/exporter/ststopologyexporter
 
-go 1.21.6
+go 1.25.3
 
 require (
 	go.opentelemetry.io/collector/component v0.100.0
@@ -34,7 +34,7 @@ require (
 	go.opentelemetry.io/collector/config/configretry v0.100.0 // indirect
 	go.opentelemetry.io/collector/config/configtelemetry v0.100.0 // indirect
 	go.opentelemetry.io/collector/confmap v0.100.0 // indirect
-	go.opentelemetry.io/collector/consumer v0.100.0 // indirect
+	go.opentelemetry.io/collector/consumer v0.100.0
 	go.opentelemetry.io/collector/extension v0.100.0 // indirect
 	go.opentelemetry.io/collector/pdata v1.7.0
 	go.opentelemetry.io/otel v1.26.0 // indirect
