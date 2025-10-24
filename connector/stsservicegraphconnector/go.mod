@@ -1,6 +1,6 @@
 module github.com/stackvista/sts-opentelemetry-collector/connector/stsservicegraphconnector
 
-go 1.21.0
+go 1.25.3
 
 require (
 	github.com/stretchr/testify v1.9.0

@@ -85,6 +85,7 @@ github.com/prometheus/common v0.53.0/go.mod h1:BrxBKv3FWBIGXw89Mg1AeBq7FSyRzXWI3
 github.com/prometheus/procfs v0.14.0 h1:Lw4VdGGoKEZilJsayHf0B+9YgLGREba2C6xr+Fdfq6s=
 github.com/prometheus/procfs v0.14.0/go.mod h1:XL+Iwz8k8ZabyZfMFHPiilCniixqQarAy5Mu67pHlNQ=
 github.com/rogpeppe/go-internal v1.11.0 h1:cWPaGQEPrBb5/AsnsZesgZZ9yb1OQ+GOISoDNXVBh4M=
+github.com/rogpeppe/go-internal v1.11.0/go.mod h1:ddIwULY96R17DhadqLgMfk9H9tvdUzkipdSkR5nkCZA=
 github.com/segmentio/asm v1.2.0 h1:9BQrFxC+YOHJlTlHGkTrFWf59nbL3XnCoFLTwDCI7ys=
 github.com/segmentio/asm v1.2.0/go.mod h1:BqMnlJP91P8d+4ibuonYZw9mfnzI9HfxselHZr5aAcs=
 github.com/shopspring/decimal v1.4.0 h1:bxl37RwXBklmTi0C79JfXCEBD1cqqHt0bbgBAGFp81k=
@@ -123,6 +124,7 @@ go.opentelemetry.io/collector/extension v0.100.0/go.mod h1:B7jsEl6HAZB79NU41AdoM
 go.opentelemetry.io/collector/pdata v1.7.0 h1:/WNsBbE6KM3TTPUb9v/5B7IDqnDkgf8GyFhVJJqu7II=
 go.opentelemetry.io/collector/pdata v1.7.0/go.mod h1:ehCBBA5GoFrMZkwyZAKGY/lAVSgZf6rzUt3p9mddmPU=
 go.opentelemetry.io/collector/pdata/testdata v0.100.0 h1:pliojioiAv+CuLNTK+8tnCD2UgiJbKX9q8bDnpHkV1U=
+go.opentelemetry.io/collector/pdata/testdata v0.100.0/go.mod h1:01BHOXvXaQaLLt5J34S093u3e+j//RhbfmEujpFJ/ME=
 go.opentelemetry.io/collector/receiver v0.100.0 h1:RFeOVhS7o39G562w0H0hqfh1o2QvK71ViHQuWnnfglI=
 go.opentelemetry.io/collector/receiver v0.100.0/go.mod h1:Qo3xkorbUy0VXHh7WxMQyphIWiqxI3ZOG0O4YqQ2mCE=
 go.opentelemetry.io/collector/semconv v0.100.0 h1:QArUvWcbmsMjM4PV0zngUHRizZeUXibsPBWjDuNJXAs=
