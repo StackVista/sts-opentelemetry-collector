@@ -13,7 +13,6 @@ import (
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
-	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
 )
 
@@ -37,106 +36,18 @@ func ConvertSpanToTopologyStreamMessage(
 	metricsRecorder metrics.ConnectorMetricsRecorder,
 ) []MessageWithKey {
 	result := make([]MessageWithKey, 0)
-	var components, relations, componentErrs, relationErrs int
-	var componentMappingStart, relationMappingStart time.Time
-	var componentMappingDuration, relationMappingDuration time.Duration
 
 	iterateSpans(trace, func(expressionEvalContext *ExpressionEvalContext, timestamp pcommon.Timestamp) {
-		componentMappingStart = time.Now()
-
-		for _, componentMapping := range componentMappings {
-			currentComponentMapping := componentMapping
-			component, errs := convertToComponent(eval, mapper, expressionEvalContext, &currentComponentMapping)
-			if component != nil {
-				result = append(result, *outputToMessageWithKey(
-					component,
-					componentMapping,
-					timestamp,
-					collectionTimestampMs,
-					func() []*topostreamv1.TopologyStreamComponent {
-						return []*topostreamv1.TopologyStreamComponent{component}
-					},
-					func() []*topostreamv1.TopologyStreamRelation {
-						return nil
-					}),
-				)
-				components++
-			}
-			if errs != nil {
-				result = append(result, *errorsToMessageWithKey(&errs, componentMapping, timestamp, collectionTimestampMs))
-				componentErrs++
-			}
-		}
-		componentMappingDuration = time.Since(componentMappingStart)
-
-		metricsRecorder.RecordMappingDuration(
-			ctx, componentMappingDuration,
-			attribute.String("phase", "spans_to_topology"),
-			attribute.String("target", "components"),
+		result = mapComponents(ctx, logger, eval, mapper, componentMappings, collectionTimestampMs,
+			metricsRecorder, expressionEvalContext, timestamp, settings.TRACES, result,
 		)
-
-		relationMappingStart = time.Now()
-		for _, relationMapping := range relationMappings {
-			currentRelationMapping := relationMapping
-			relation, errs := convertToRelation(eval, mapper, expressionEvalContext, &currentRelationMapping)
-			if relation != nil {
-				result = append(result, *outputToMessageWithKey(
-					relation,
-					relationMapping,
-					timestamp,
-					collectionTimestampMs,
-					func() []*topostreamv1.TopologyStreamComponent {
-						return nil
-					},
-					func() []*topostreamv1.TopologyStreamRelation {
-						return []*topostreamv1.TopologyStreamRelation{relation}
-					}),
-				)
-				relations++
-			}
-			if errs != nil {
-				result = append(result, *errorsToMessageWithKey(&errs, relationMapping, timestamp, collectionTimestampMs))
-				relationErrs++
-			}
-		}
-		relationMappingDuration = time.Since(relationMappingStart)
-
-		metricsRecorder.RecordMappingDuration(
-			ctx, relationMappingDuration,
-			attribute.String("phase", "spans_to_topology"),
-			attribute.String("target", "relations"),
+		result = mapRelation(ctx, logger, eval, mapper, relationMappings, collectionTimestampMs,
+			metricsRecorder, expressionEvalContext, timestamp, settings.TRACES, result,
 		)
 	})
 
 	// Record metrics
 	metricsRecorder.IncInputsProcessed(ctx, int64(trace.SpanCount()), settings.TRACES)
-	if components > 0 {
-		metricsRecorder.IncTopologyProduced(
-			ctx, int64(components),
-			settings.SettingTypeOtelComponentMapping, settings.TRACES,
-		)
-	}
-	if relations > 0 {
-		metricsRecorder.IncTopologyProduced(
-			ctx, int64(components),
-			settings.SettingTypeOtelRelationMapping, settings.TRACES,
-		)
-	}
-	if componentErrs > 0 {
-		metricsRecorder.IncMappingErrors(ctx, int64(componentErrs), settings.SettingTypeOtelComponentMapping, settings.TRACES)
-	}
-	if relationErrs > 0 {
-		metricsRecorder.IncMappingErrors(ctx, int64(relationErrs), settings.SettingTypeOtelRelationMapping, settings.TRACES)
-	}
-
-	logger.Debug(
-		"Converted spans to topology stream messages",
-		zap.Int("components", components),
-		zap.Int("relations", relations),
-		zap.Int("componentErrs", componentErrs),
-		zap.Int("relationErrors", relationErrs),
-	)
-
 	return result
 }
 
@@ -152,108 +63,169 @@ func ConvertMetricsToTopologyStreamMessage(
 	metricsRecorder metrics.ConnectorMetricsRecorder,
 ) []MessageWithKey {
 	result := make([]MessageWithKey, 0)
-	var components, relations, componentErrs, relationErrs int
-	var componentMappingStart, relationMappingStart time.Time
-	var componentMappingDuration, relationMappingDuration time.Duration
 	metricsDatapointCount := int64(0)
 
 	iterateMetrics(metricData, func(expressionEvalContext *ExpressionEvalContext, timestamp pcommon.Timestamp) {
 		metricsDatapointCount++
-		componentMappingStart = time.Now()
-		for _, componentMapping := range componentMappings {
-			currentComponentMapping := componentMapping
-			component, errs := convertToComponent(eval, mapper, expressionEvalContext, &currentComponentMapping)
-			if component != nil {
-				result = append(result, *outputToMessageWithKey(
-					component,
-					componentMapping,
-					timestamp,
-					collectionTimestampMs,
-					func() []*topostreamv1.TopologyStreamComponent {
-						return []*topostreamv1.TopologyStreamComponent{component}
-					},
-					func() []*topostreamv1.TopologyStreamRelation {
-						return nil
-					}),
-				)
-				components++
-			}
-			if errs != nil {
-				result = append(result, *errorsToMessageWithKey(&errs, componentMapping, timestamp, collectionTimestampMs))
-				componentErrs++
-			}
-		}
-		componentMappingDuration = time.Since(componentMappingStart)
-		metricsRecorder.RecordMappingDuration(
-			ctx, componentMappingDuration,
-			attribute.String("phase", "metrics_to_topology"),
-			attribute.String("target", "components"),
+		result = mapComponents(ctx, logger, eval, mapper, componentMappings, collectionTimestampMs,
+			metricsRecorder, expressionEvalContext, timestamp, settings.METRICS, result,
 		)
-
-		relationMappingStart = time.Now()
-		for _, relationMapping := range relationMappings {
-			currentRelationMapping := relationMapping
-			relation, errs := convertToRelation(eval, mapper, expressionEvalContext, &currentRelationMapping)
-			if relation != nil {
-				result = append(result, *outputToMessageWithKey(
-					relation,
-					relationMapping,
-					timestamp,
-					collectionTimestampMs,
-					func() []*topostreamv1.TopologyStreamComponent {
-						return nil
-					},
-					func() []*topostreamv1.TopologyStreamRelation {
-						return []*topostreamv1.TopologyStreamRelation{relation}
-					}),
-				)
-				relations++
-			}
-			if errs != nil {
-				result = append(result, *errorsToMessageWithKey(&errs, relationMapping, timestamp, collectionTimestampMs))
-				relationErrs++
-			}
-		}
-		relationMappingDuration = time.Since(relationMappingStart)
-		metricsRecorder.RecordMappingDuration(
-			ctx, relationMappingDuration,
-			attribute.String("phase", "metrics_to_topology"),
-			attribute.String("target", "relations"),
+		result = mapRelation(ctx, logger, eval, mapper, relationMappings, collectionTimestampMs,
+			metricsRecorder, expressionEvalContext, timestamp, settings.METRICS, result,
 		)
 	})
 
 	// Record metrics
 	metricsRecorder.IncInputsProcessed(ctx, metricsDatapointCount, settings.METRICS)
 
+	return result
+}
+
+func mapComponents(
+	ctx context.Context,
+	logger *zap.Logger,
+	eval ExpressionEvaluator,
+	mapper *Mapper,
+	componentMappings []settings.OtelComponentMapping,
+	collectionTimestampMs int64,
+	metricsRecorder metrics.ConnectorMetricsRecorder,
+	expressionEvalContext *ExpressionEvalContext,
+	timestamp pcommon.Timestamp,
+	signal settings.OtelInputSignal,
+	// new components and errors are appended to this slice:
+	mappingResult []MessageWithKey,
+) []MessageWithKey {
+	var components, componentErrs int
+	var componentMappingStart time.Time
+	var componentMappingDuration time.Duration
+
+	for _, componentMapping := range componentMappings {
+		componentMappingStart = time.Now()
+		currentComponentMapping := componentMapping
+
+		component, errs := convertToComponent(eval, mapper, expressionEvalContext, &currentComponentMapping)
+		if component != nil {
+			mappingResult = append(mappingResult, *outputToMessageWithKey(
+				component,
+				componentMapping,
+				timestamp,
+				collectionTimestampMs,
+				func() []*topostreamv1.TopologyStreamComponent {
+					return []*topostreamv1.TopologyStreamComponent{component}
+				},
+				func() []*topostreamv1.TopologyStreamRelation {
+					return nil
+				}),
+			)
+
+			components++
+		}
+		if errs != nil {
+			mappingResult = append(mappingResult,
+				*errorsToMessageWithKey(&errs, componentMapping, timestamp, collectionTimestampMs),
+			)
+			componentErrs++
+		}
+		componentMappingDuration = time.Since(componentMappingStart)
+		metricsRecorder.RecordMappingDuration(
+			ctx,
+			componentMappingDuration,
+			signal,
+			settings.SettingTypeOtelComponentMapping,
+			componentMapping.Identifier,
+		)
+	}
+
 	if components > 0 {
 		metricsRecorder.IncTopologyProduced(
 			ctx, int64(components),
-			settings.SettingTypeOtelComponentMapping, settings.METRICS,
-		)
-	}
-	if relations > 0 {
-		metricsRecorder.IncTopologyProduced(
-			ctx, int64(components),
-			settings.SettingTypeOtelRelationMapping, settings.METRICS,
+			settings.SettingTypeOtelComponentMapping, signal,
 		)
 	}
 	if componentErrs > 0 {
 		metricsRecorder.IncMappingErrors(ctx, int64(componentErrs),
-			settings.SettingTypeOtelComponentMapping, settings.METRICS)
+			settings.SettingTypeOtelComponentMapping, signal)
 	}
+	logger.Debug(
+		"Converted metrics to topology stream messages",
+		zap.Int("components", components),
+		zap.Int("componentErrs", componentErrs),
+	)
+	return mappingResult
+}
+
+func mapRelation(
+	ctx context.Context,
+	logger *zap.Logger,
+	eval ExpressionEvaluator,
+	mapper *Mapper,
+	relationMappings []settings.OtelRelationMapping,
+	collectionTimestampMs int64,
+	metricsRecorder metrics.ConnectorMetricsRecorder,
+	expressionEvalContext *ExpressionEvalContext,
+	timestamp pcommon.Timestamp,
+	signal settings.OtelInputSignal,
+	// new components and errors are appended to this slice:
+	mappingResult []MessageWithKey,
+) []MessageWithKey {
+	var relations, relationErrs int
+	var relationMappingStart time.Time
+	var relationMappingDuration time.Duration
+
+	for _, relationMapping := range relationMappings {
+		relationMappingStart = time.Now()
+		currentRelationMapping := relationMapping
+
+		relation, errs := convertToRelation(eval, mapper, expressionEvalContext, &currentRelationMapping)
+		if relation != nil {
+			mappingResult = append(mappingResult, *outputToMessageWithKey(
+				relation,
+				relationMapping,
+				timestamp,
+				collectionTimestampMs,
+				func() []*topostreamv1.TopologyStreamComponent {
+					return nil
+				},
+				func() []*topostreamv1.TopologyStreamRelation {
+					return []*topostreamv1.TopologyStreamRelation{relation}
+				}),
+			)
+			relations++
+		}
+		if errs != nil {
+			mappingResult = append(mappingResult,
+				*errorsToMessageWithKey(&errs, relationMapping, timestamp, collectionTimestampMs),
+			)
+			relationErrs++
+		}
+		relationMappingDuration = time.Since(relationMappingStart)
+		metricsRecorder.RecordMappingDuration(
+			ctx,
+			relationMappingDuration,
+			signal,
+			settings.SettingTypeOtelRelationMapping,
+			relationMapping.Identifier,
+		)
+	}
+
+	if relations > 0 {
+		metricsRecorder.IncTopologyProduced(
+			ctx, int64(relations),
+			settings.SettingTypeOtelRelationMapping, signal,
+		)
+	}
+
 	if relationErrs > 0 {
-		metricsRecorder.IncMappingErrors(ctx, int64(relationErrs), settings.SettingTypeOtelRelationMapping, settings.METRICS)
+		metricsRecorder.IncMappingErrors(ctx, int64(relationErrs), settings.SettingTypeOtelRelationMapping, signal)
 	}
 
 	logger.Debug(
 		"Converted metrics to topology stream messages",
-		zap.Int("components", components),
 		zap.Int("relations", relations),
-		zap.Int("componentErrs", componentErrs),
 		zap.Int("relationErrors", relationErrs),
 	)
 
-	return result
+	return mappingResult
 }
 
 func ConvertMappingRemovalsToTopologyStreamMessage(

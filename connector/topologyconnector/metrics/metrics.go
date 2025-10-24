@@ -16,7 +16,14 @@ type ConnectorMetricsRecorder interface {
 
 	IncTopologyProduced(ctx context.Context, n int64, settingType settings.SettingType, signal settings.OtelInputSignal)
 	IncMappingErrors(ctx context.Context, n int64, settingType settings.SettingType, signal settings.OtelInputSignal)
-	RecordMappingDuration(ctx context.Context, d time.Duration, labels ...attribute.KeyValue)
+	RecordMappingDuration(
+		ctx context.Context,
+		d time.Duration,
+		signal settings.OtelInputSignal,
+		settingType settings.SettingType,
+		mappingIdentifier string,
+	)
+	RecordRequestDuration(ctx context.Context, d time.Duration, signal settings.OtelInputSignal)
 
 	IncMappingsRemoved(ctx context.Context, n int64, settingType settings.SettingType)
 }
@@ -29,7 +36,8 @@ type ConnectorMetrics struct {
 	errorsTotal     metric.Int64Counter
 
 	// Histograms
-	mappingDuration metric.Float64Histogram
+	mappingDuration           metric.Float64Histogram
+	requestProcessingDuration metric.Float64Histogram
 }
 
 // NewConnectorMetrics registers all metric instruments for this connector.
@@ -55,16 +63,21 @@ func NewConnectorMetrics(typeName string, telemetrySettings component.TelemetryS
 	)
 	mappingDuration, _ := meter.Float64Histogram(
 		name("mapping_duration_seconds"),
-		metric.WithDescription("Time spent converting spans to topology stream messages"),
+		metric.WithDescription("Time spent mapping a single input to topology"),
 		metric.WithUnit("s"),
 	)
-
+	requestProcessingDuration, _ := meter.Float64Histogram(
+		name("request_processing_duration_seconds"),
+		metric.WithDescription("Total time spent processing a single input signal request"),
+		metric.WithUnit("s"),
+	)
 	return &ConnectorMetrics{
-		inputsProcessed: inputsProcessed,
-		topologyTotal:   topologyTotal,
-		mappingsRemoved: mappingsRemoved,
-		errorsTotal:     errorsTotal,
-		mappingDuration: mappingDuration,
+		inputsProcessed:           inputsProcessed,
+		topologyTotal:             topologyTotal,
+		mappingsRemoved:           mappingsRemoved,
+		errorsTotal:               errorsTotal,
+		mappingDuration:           mappingDuration,
+		requestProcessingDuration: requestProcessingDuration,
 	}
 }
 
@@ -77,9 +90,28 @@ func newMetricNameForType(typeName string) func(string) string {
 func (pm *ConnectorMetrics) RecordMappingDuration(
 	ctx context.Context,
 	d time.Duration,
-	attrs ...attribute.KeyValue,
+	signal settings.OtelInputSignal,
+	settingType settings.SettingType,
+	mappingIdentifier string,
 ) {
-	pm.mappingDuration.Record(ctx, d.Seconds(), metric.WithAttributes(attrs...))
+
+	pm.mappingDuration.Record(ctx, d.Seconds(), metric.WithAttributeSet(
+		attribute.NewSet(
+			typeAttribute(settingType),
+			attribute.String("signal", string(signal)),
+			attribute.String("mapping", mappingIdentifier),
+		)))
+}
+
+func (pm *ConnectorMetrics) RecordRequestDuration(
+	ctx context.Context,
+	d time.Duration,
+	signal settings.OtelInputSignal,
+) {
+
+	pm.requestProcessingDuration.Record(ctx, d.Seconds(), metric.WithAttributeSet(
+		attribute.NewSet(attribute.String("signal", string(signal))),
+	))
 }
 
 func (pm *ConnectorMetrics) IncInputsProcessed(ctx context.Context, n int64, signal settings.OtelInputSignal) {
@@ -97,7 +129,7 @@ func (pm *ConnectorMetrics) IncTopologyProduced(
 
 func (pm *ConnectorMetrics) IncMappingsRemoved(ctx context.Context, n int64, settingType settings.SettingType) {
 	pm.mappingsRemoved.Add(ctx, n, metric.WithAttributeSet(
-		attribute.NewSet(attribute.String("setting_type", string(settingType))),
+		attribute.NewSet(typeAttribute(settingType)),
 	))
 }
 
@@ -108,6 +140,17 @@ func (pm *ConnectorMetrics) IncMappingErrors(ctx context.Context, n int64, setti
 
 func topologyAttributes(settingType settings.SettingType, signal settings.OtelInputSignal) attribute.Set {
 	return attribute.NewSet(
-		attribute.String("setting_type", string(settingType)),
+		typeAttribute(settingType),
 		attribute.String("signal", string(signal)))
+}
+
+func typeAttribute(settingType settings.SettingType) attribute.KeyValue {
+	switch settingType {
+	case settings.SettingTypeOtelComponentMapping:
+		return attribute.String("type", "component")
+	case settings.SettingTypeOtelRelationMapping:
+		return attribute.String("type", "relation")
+	default:
+		return attribute.String("type", string(settingType))
+	}
 }
