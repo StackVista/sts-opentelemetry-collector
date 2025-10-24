@@ -55,7 +55,8 @@ func newSnapshotStop(settingType stsSettingsModel.SettingType, snapshotID string
 func newSettingsEnvelope(
 	settingType stsSettingsModel.SettingType,
 	setting stsSettingsModel.Setting,
-	settingID, snapshotID string,
+	settingID,
+	snapshotID string,
 ) (string, []byte, error) {
 	env := stsSettingsModel.SettingsEnvelope{
 		Id:      snapshotID,
