@@ -39,10 +39,10 @@ func ConvertSpanToTopologyStreamMessage(
 
 	iterateSpans(trace, func(expressionEvalContext *ExpressionEvalContext, timestamp pcommon.Timestamp) {
 		result = mapComponents(ctx, logger, eval, mapper, componentMappings, collectionTimestampMs,
-			metricsRecorder, expressionEvalContext, timestamp, settings.METRICS, result,
+			metricsRecorder, expressionEvalContext, timestamp, settings.TRACES, result,
 		)
 		result = mapRelation(ctx, logger, eval, mapper, relationMappings, collectionTimestampMs,
-			metricsRecorder, expressionEvalContext, timestamp, settings.METRICS, result,
+			metricsRecorder, expressionEvalContext, timestamp, settings.TRACES, result,
 		)
 	})
 
