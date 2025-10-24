@@ -176,7 +176,7 @@ func NewConnector(set component.TelemetrySettings, config component.Config, next
 	}
 }
 
-func (s *ServiceGraphConnector) Start(_ context.Context, host component.Host) error {
+func (s *ServiceGraphConnector) Start(_ context.Context, _ component.Host) error {
 	s.store = store.NewStore(s.config.Store.TTL, s.config.Store.MaxItems, s.onComplete, s.onExpire, s.onReschedule)
 
 	go s.metricFlushLoop(s.config.MetricsFlushInterval)

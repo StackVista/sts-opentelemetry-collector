@@ -31,6 +31,7 @@ func TestExtension_NoHeader(t *testing.T) {
 		})
 	require.NoError(t, err)
 	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
+	//nolint:forcetypeassert
 	_, err = ext.(auth.Server).Authenticate(context.Background(), map[string][]string{})
 	assert.Equal(t, servicetokenauthextension.ErrNoAuth, err)
 }
@@ -49,6 +50,7 @@ func TestExtension_AuthServerUnavailable(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
+	//nolint:forcetypeassert
 	_, err = ext.(auth.Server).Authenticate(context.Background(), map[string][]string{"authorization": {"StackState key"}})
 	assert.Equal(t, servicetokenauthextension.ErrAuthServerUnavailable, err)
 }
@@ -77,6 +79,7 @@ func TestExtension_InvalidKey(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
+	//nolint:forcetypeassert
 	_, err = ext.(auth.Server).Authenticate(context.Background(), map[string][]string{"authorization": {"StackState key"}})
 	assert.Equal(t, servicetokenauthextension.ErrForbidden, err)
 }
@@ -105,6 +108,7 @@ func TestExtension_Authorized(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
+	//nolint:forcetypeassert
 	_, err = ext.(auth.Server).Authenticate(context.Background(), map[string][]string{"authorization": {"StackState key"}})
 	require.NoError(t, err)
 }
@@ -132,12 +136,15 @@ func TestExtension_WrongSchema(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
+	//nolint:forcetypeassert
 	_, err = ext.(auth.Server).Authenticate(context.Background(), map[string][]string{"authorization": {"StackState_wrong key"}})
 	assert.Equal(t, servicetokenauthextension.ErrForbidden, err)
 
+	//nolint:forcetypeassert
 	_, err = ext.(auth.Server).Authenticate(context.Background(), map[string][]string{"authorization": {"key"}})
 	assert.Equal(t, servicetokenauthextension.ErrForbidden, err)
 
+	//nolint:forcetypeassert
 	_, err = ext.(auth.Server).Authenticate(context.Background(), map[string][]string{"authorization": {"StackState"}})
 	assert.Equal(t, servicetokenauthextension.ErrForbidden, err)
 }
@@ -167,6 +174,7 @@ func TestExtension_AuthorizedWithCamelcaseHeader(t *testing.T) {
 		})
 	require.NoError(t, err)
 	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
+	//nolint:forcetypeassert
 	_, err = ext.(auth.Server).Authenticate(context.Background(), map[string][]string{"Authorization": {"StackState key"}})
 	require.NoError(t, err)
 }
@@ -202,12 +210,15 @@ func TestExtension_ValidKeysShouldBeCached(t *testing.T) {
 		})
 	require.NoError(t, err)
 	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
+	//nolint:forcetypeassert
 	_, err = ext.(auth.Server).Authenticate(context.Background(), map[string][]string{"Authorization": {"StackState key"}})
 	require.NoError(t, err)
 	// it should be loaded from the cache, it is the same cache as in the previous request
+	//nolint:forcetypeassert
 	_, err = ext.(auth.Server).Authenticate(context.Background(), map[string][]string{"Authorization": {"StackState key"}})
 	require.NoError(t, err)
 	// send one more request, but with a different key, it shouldn't hit the cache
+	//nolint:forcetypeassert
 	_, err = ext.(auth.Server).Authenticate(context.Background(), map[string][]string{"authorization": {"StackState key_new"}})
 	assert.Equal(t, servicetokenauthextension.ErrForbidden, err)
 }
@@ -242,12 +253,16 @@ func TestExtension_InvalidKeyShouldBeCached(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
 	// server is broken and returns 503, it shouldn't be cached
+	//nolint:forcetypeassert
 	_, err = ext.(auth.Server).Authenticate(context.Background(), map[string][]string{"Authorization": {"StackState invalid_key"}})
 	assert.Equal(t, servicetokenauthextension.ErrInternal, err)
 	// The server is fixed so the response should be cached
+
+	//nolint:forcetypeassert
 	_, err = ext.(auth.Server).Authenticate(context.Background(), map[string][]string{"Authorization": {"StackState invalid_key"}})
 	assert.Equal(t, servicetokenauthextension.ErrForbidden, err)
 	// the previous request is cached so it shouldn't hit the server
+	//nolint:forcetypeassert
 	_, err = ext.(auth.Server).Authenticate(context.Background(), map[string][]string{"authorization": {"StackState invalid_key"}})
 	assert.Equal(t, servicetokenauthextension.ErrForbidden, err)
 }
