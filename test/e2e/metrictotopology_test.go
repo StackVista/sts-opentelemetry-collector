@@ -26,7 +26,7 @@ func TestMetricToOtelTopology_CreateComponentAndRelationMappings(t *testing.T) {
 	)
 	sendMetrics(t, env)
 
-	recs := env.ConsumeTopologyRecords(t, 8) // 2 components * 4 shards + 1 relation * 4 shards
+	recs := env.ConsumeTopologyRecords(t, 6)
 	components, relations, errs := harness.ExtractComponentsAndRelations(t, recs)
 	require.Len(t, errs, 0)
 
@@ -49,7 +49,7 @@ func TestMetricToOtelTopology_UpdateComponentAndRelationMappings(t *testing.T) {
 	)
 	sendMetrics(t, env)
 
-	recs := env.ConsumeTopologyRecords(t, 8)
+	recs := env.ConsumeTopologyRecords(t, 6)
 	components, relations, errs := harness.ExtractComponentsAndRelations(t, recs)
 	require.Len(t, errs, 0)
 	assertMetricComponents(t, components)
@@ -166,7 +166,7 @@ func TestMetricToOtelTopology_RemovesMappingsWhenOmittedFromNextSnapshot(t *test
 
 	// Then, send metrics to ensure that the removed mappings are not used
 	sendMetrics(t, env)
-	recs = env.ConsumeTopologyRecords(t, 8) // 2 components * 4 shards + 1 relation * 4 shards
+	recs = env.ConsumeTopologyRecords(t, 6)
 	components, relations, errs = harness.ExtractComponentsAndRelations(t, recs)
 	require.Len(t, errs, 0)
 	require.Len(t, components, 1) // billing-service

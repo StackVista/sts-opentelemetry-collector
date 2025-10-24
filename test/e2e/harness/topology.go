@@ -40,6 +40,7 @@ type TopologyTestEnv struct {
 
 func SetupTopologyTest(t *testing.T, numCollectors int) *TopologyTestEnv {
 	t.Helper()
+	logger := zaptest.NewLogger(t)
 
 	// Create a timeout context for the whole test
 	ctx, cancel := context.WithTimeout(context.Background(), testLevelTimeout)
@@ -62,9 +63,6 @@ func SetupTopologyTest(t *testing.T, numCollectors int) *TopologyTestEnv {
 
 	collectors := StartCollectors(ctx, t, cfg)
 
-	logger := zaptest.NewLogger(t)
-	logger.Info("Test setup complete")
-
 	consumer, err := NewTopologyConsumer(
 		kafkaInstance.HostAddr, topologyTopic, fmt.Sprintf("topology-consumer-%s", uuid.NewString()), logger,
 	)
@@ -74,6 +72,8 @@ func SetupTopologyTest(t *testing.T, numCollectors int) *TopologyTestEnv {
 		cancel()
 		consumer.Close()
 	}
+
+	logger.Info("Test setup complete")
 
 	return &TopologyTestEnv{
 		Ctx:    ctx,
