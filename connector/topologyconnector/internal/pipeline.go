@@ -325,11 +325,14 @@ func iterateSpans(trace ptrace.Traces, handler mappingHandler) {
 			ss := scopeSpans.At(j)
 			scopeAttributes := ss.Scope().Attributes().AsRaw()
 			spans := ss.Spans()
-			for k := 0; k < spans.Len(); k++ {
-				span := spans.At(k)
-				spanAttributes := span.Attributes().AsRaw()
-				handler(NewSpanEvalContext(spanAttributes, scopeAttributes, resourceAttributes), span.EndTimestamp())
+			if spans.Len() > 0 {
+				handler(NewSpanEvalContext(spans.At(0).Attributes().AsRaw(), scopeAttributes, resourceAttributes), spans.At(0).EndTimestamp())
 			}
+			//for k := 0; k < spans.Len(); k++ {
+			//	span := spans.At(k)
+			//	spanAttributes := span.Attributes().AsRaw()
+			//	handler(NewSpanEvalContext(spanAttributes, scopeAttributes, resourceAttributes), span.EndTimestamp())
+			//}
 		}
 	}
 }
