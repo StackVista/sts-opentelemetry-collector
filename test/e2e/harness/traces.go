@@ -8,7 +8,6 @@ import (
 
 	semconv "go.opentelemetry.io/collector/semconv/v1.25.0"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdkTrace "go.opentelemetry.io/otel/sdk/trace"
@@ -131,7 +130,7 @@ func BuildAndSendTrace(ctx context.Context, logger *zap.Logger, endpoint string,
 // It returns the trace.Span it created (without ending it).
 func createSpanRecursive(ctx context.Context, tracer trace.Tracer, spanSpec SpanSpec) trace.Span {
 	spanCtx, span := tracer.Start(ctx, spanSpec.Name)
-	setSpanAttributes(span, spanSpec.Attributes)
+	span.SetAttributes(convertToAttributesFromInterface(spanSpec.Attributes)...)
 
 	// Recursively create/start all inline children
 	for _, childSpec := range spanSpec.Children {
@@ -144,33 +143,4 @@ func createSpanRecursive(ctx context.Context, tracer trace.Tracer, spanSpec Span
 
 	// Return the parent span (it will be ended by the main function)
 	return span
-}
-
-// setSpanAttributes is a helper to apply attributes from the spec to a span
-func setSpanAttributes(span trace.Span, attrs map[string]interface{}) {
-	for k, v := range attrs {
-		switch val := v.(type) {
-		case string:
-			span.SetAttributes(attribute.String(k, val))
-		case int:
-			span.SetAttributes(attribute.Int(k, val))
-		case int64:
-			span.SetAttributes(attribute.Int64(k, val))
-		case float64:
-			span.SetAttributes(attribute.Float64(k, val))
-		case bool:
-			span.SetAttributes(attribute.Bool(k, val))
-		default:
-			span.SetAttributes(attribute.String(k, fmt.Sprintf("%v", val)))
-		}
-	}
-}
-
-// helper to convert map[string]string to []attribute.KeyValue
-func convertToAttributes(attrs map[string]string) []attribute.KeyValue {
-	out := make([]attribute.KeyValue, 0, len(attrs))
-	for k, v := range attrs {
-		out = append(out, attribute.String(k, v))
-	}
-	return out
 }

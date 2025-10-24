@@ -30,6 +30,9 @@ service:
     traces:
       receivers: [otlp]
       exporters: [topology, debug] # so we can see spans exported
+    metrics:
+      receivers: [otlp]
+      exporters: [topology, debug]
     logs:
       receivers: [topology]
       exporters: [sts_kafka_exporter]
