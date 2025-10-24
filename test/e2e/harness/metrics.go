@@ -79,7 +79,7 @@ func BuildAndSendMetrics(ctx context.Context, logger *zap.Logger, endpoint strin
 		}
 	}
 
-	exp.Export(ctx, &metricdata.ResourceMetrics{
+	exportErr := exp.Export(ctx, &metricdata.ResourceMetrics{
 		Resource: res,
 		ScopeMetrics: []metricdata.ScopeMetrics{
 			{
@@ -91,6 +91,10 @@ func BuildAndSendMetrics(ctx context.Context, logger *zap.Logger, endpoint strin
 			},
 		},
 	})
+
+	if exportErr != nil {
+		return fmt.Errorf("failed to export metrics: %w", exportErr)
+	}
 
 	logger.Info("Metrics exported")
 	return nil
