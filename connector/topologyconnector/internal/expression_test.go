@@ -174,6 +174,11 @@ func TestEvalStringExpression(t *testing.T) {
 			expected: "ns-cart-service-test-cart-end",
 		},
 		{
+			name:     "interpolation at start and end of expression",
+			expr:     `${vars.namespace}/${resourceAttributes["service.name"]}`,
+			expected: "test/cart-service",
+		},
+		{
 			name:     "another complex expression",
 			expr:     `${resourceAttributes["service.name"].matches(R'cart-.*') ? ( spanAttributes["http.status_code"] < 400 ? 'good-cart' : 'bad-cart' ) : 'not-cart'}`,
 			expected: "good-cart",

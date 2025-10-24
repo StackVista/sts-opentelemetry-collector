@@ -55,7 +55,7 @@ func classifyExpression(expr string) (classification, error) {
 	switch {
 	case withoutInterpolation(expr):
 		return kindStringLiteral, nil
-	case strings.HasPrefix(expr, "${") && strings.HasSuffix(expr, "}"):
+	case strings.HasPrefix(expr, "${") && strings.Count(expr, "${") <= 1 && strings.HasSuffix(expr, "}"):
 		if err := validateInterpolation(expr); err != nil {
 			return kindInvalid, err
 		}

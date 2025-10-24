@@ -5,6 +5,10 @@ package kafka_test
 import (
 	"context"
 	"fmt"
+	"log"
+	"testing"
+	"time"
+
 	"github.com/google/uuid"
 	stsSettingsKafka "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/provider/kafka"
 	"github.com/stretchr/testify/assert"
@@ -12,9 +16,6 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.uber.org/zap/zaptest"
-	"log"
-	"testing"
-	"time"
 
 	stsSettings "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
@@ -257,10 +258,6 @@ func createProducerClient(t *testing.T, brokers []string) *kgo.Client {
 		kgo.RetryBackoffFn(func(tries int) time.Duration {
 			return time.Duration(tries) * 100 * time.Millisecond
 		}),
-
-		// Timeout configurations
-		kgo.ProduceRequestTimeout(10 * time.Second),
-		kgo.RequestTimeoutOverhead(2 * time.Second),
 	}
 
 	client, err := kgo.NewClient(opts...)
