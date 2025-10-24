@@ -85,3 +85,22 @@ Run inside `golang` container
 go install github.com/open-telemetry/opentelemetry-collector-contrib/tracegen@latest
 tracegen --otlp-endpoint localhost:4317 --otlp-insecure --traces 1
 ```
+
+## Upgrade Go Modules
+
+To upgrade the Go version and dependencies across all modules in the workspace, follow these steps:
+
+1.  **Upgrade Go Version:**
+    Run the `upgrade_go_version.sh` script with the desired new Go version as an argument.
+    ```shell
+    ./scripts/upgrade_go_version.sh <new_go_version>
+    ```
+    Replace `<new_go_version>` with the target Go version (e.g., `1.21`).
+
+2.  **Upgrade Dependencies and Synchronize:**
+    Run the `upgrade_dependencies.sh` script to update all module dependencies and synchronize the `go.work` file.
+    ```shell
+    ./scripts/upgrade_dependencies.sh
+    ```
+
+These scripts will iterate through all `go.mod` files, update them, and ensure consistency across the workspace.
