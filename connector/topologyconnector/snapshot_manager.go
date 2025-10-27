@@ -164,11 +164,21 @@ func (s *SnapshotManager) Update(
 	}
 }
 
-func flattenMappings[T stsSettingsModel.SettingExtension](m map[stsSettingsModel.OtelInputSignal][]T) []T {
+func flattenMappings[T stsSettingsModel.SettingExtension](mappingsBySignal map[stsSettingsModel.OtelInputSignal][]T) []T {
+	seen := make(map[string]struct{})
 	var all []T
-	for _, v := range m {
-		all = append(all, v...)
+
+	for _, mappings := range mappingsBySignal {
+		for _, mapping := range mappings {
+			id := mapping.GetIdentifier()
+			if _, exists := seen[id]; exists {
+				continue
+			}
+			seen[id] = struct{}{}
+			all = append(all, mapping)
+		}
 	}
+
 	return all
 }
 
