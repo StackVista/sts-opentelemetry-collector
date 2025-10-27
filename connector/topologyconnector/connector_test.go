@@ -10,6 +10,7 @@ import (
 
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/internal"
+	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter"
 	stsSettingsApi "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
@@ -22,7 +23,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
-	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
@@ -65,22 +66,68 @@ func extractMessageWithKey(t *testing.T, lr plog.LogRecord) *MessageWithKey {
 	return &MessageWithKey{Key: &key, Message: &msg}
 }
 
-func TestConnectorStart(t *testing.T) {
-	logConsumer := &consumertest.LogsSink{}
+type connectorTestEnv struct {
+	// nolint:containedctx
+	ctx          context.Context
+	logsConsumer *consumertest.LogsSink // we want the test interface
+	connector    *connectorImpl
+}
 
+func newConnectorEnv(t *testing.T, signal settings.OtelInputSignal) *connectorTestEnv {
+	t.Helper()
+
+	ctx := context.Background()
+	logsConsumer := &consumertest.LogsSink{}
+	logger := zaptest.NewLogger(t)
+
+	snapshotManager := NewSnapshotManager(logger, []settings.OtelInputSignal{settings.TRACES, settings.METRICS})
+	celEvaluator, _ := internal.NewCELEvaluator(
+		ctx,
+		metrics.MeteredCacheSettings{
+			Name:          "expression_cache",
+			EnableMetrics: false,
+		},
+	)
+	mapper := internal.NewMapper(
+		ctx,
+		metrics.MeteredCacheSettings{
+			Name:          "tag_regex_cache",
+			EnableMetrics: false,
+		},
+		metrics.MeteredCacheSettings{
+			Name:          "tag_template_cache",
+			EnableMetrics: false,
+		},
+	)
+
+	conn := newConnector(
+		ctx,
+		Config{},
+		logger,
+		componenttest.NewNopTelemetrySettings(),
+		logsConsumer,
+		snapshotManager,
+		celEvaluator,
+		mapper,
+		signal,
+	)
+
+	return &connectorTestEnv{
+		ctx:          ctx,
+		logsConsumer: logsConsumer,
+		connector:    conn,
+	}
+}
+
+func TestConnectorStart(t *testing.T) {
 	t.Run("return an error if not found settings provider", func(t *testing.T) {
-		connector, err := newConnector(
-			context.Background(), Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer, settings.TRACES,
-		)
-		require.NoError(t, err)
-		err = connector.Start(context.Background(), componenttest.NewNopHost())
+		connectorEnv := newConnectorEnv(t, settings.TRACES)
+		err := connectorEnv.connector.Start(connectorEnv.ctx, componenttest.NewNopHost())
 		require.ErrorContains(t, err, "sts_settings_provider extension not found")
 	})
 
 	t.Run("start with initial mappings and observe changes", func(t *testing.T) {
-		connector, _ := newConnector(
-			context.Background(), Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer, settings.TRACES,
-		)
+		connectorEnv := newConnectorEnv(t, settings.TRACES)
 		provider := NewMockStsSettingsProvider(
 			[]settings.OtelComponentMapping{
 				createSimpleTraceComponentMapping("mapping1"),
@@ -94,9 +141,9 @@ func TestConnectorStart(t *testing.T) {
 			component.MustNewID(stsSettingsApi.Type.String()): provider,
 		}
 		host := &mockHost{ext: extensions}
-		err := connector.Start(context.Background(), host)
+		err := connectorEnv.connector.Start(connectorEnv.ctx, host)
 		require.NoError(t, err)
-		componentMappings, relationMappings := connector.snapshotManager.Current()
+		componentMappings, relationMappings := connectorEnv.connector.snapshotManager.Current(settings.TRACES)
 		assert.Len(t, componentMappings, 1)
 		assert.Len(t, relationMappings, 2)
 
@@ -108,21 +155,19 @@ func TestConnectorStart(t *testing.T) {
 		provider.RelationMappings = []settings.OtelRelationMapping{
 			createSimpleTraceRelationMapping("mapping4"),
 		}
-		componentMappings, relationMappings = connector.snapshotManager.Current()
+		componentMappings, relationMappings = connectorEnv.connector.snapshotManager.Current(settings.TRACES)
 		assert.Len(t, componentMappings, 1)
 		assert.Len(t, relationMappings, 2)
 
 		provider.SettingUpdatesCh <- stsSettingsEvents.UpdateSettingsEvent{}
 		time.Sleep(100 * time.Millisecond) // wait for snapshot manager to update
-		componentMappings, relationMappings = connector.snapshotManager.Current()
+		componentMappings, relationMappings = connectorEnv.connector.snapshotManager.Current(settings.TRACES)
 		assert.Len(t, componentMappings, 3)
 		assert.Len(t, relationMappings, 1)
 	})
 
 	t.Run("emits removal messages when mappings are deleted", func(t *testing.T) {
-		ctx := context.Background()
-		logConsumer := &consumertest.LogsSink{}
-		connector, _ := newConnector(ctx, Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer, settings.TRACES)
+		connectorEnv := newConnectorEnv(t, settings.TRACES)
 
 		provider := NewMockStsSettingsProvider(
 			[]settings.OtelComponentMapping{
@@ -136,10 +181,10 @@ func TestConnectorStart(t *testing.T) {
 			component.MustNewID(stsSettingsApi.Type.String()): provider,
 		}
 		host := &mockHost{ext: extensions}
-		require.NoError(t, connector.Start(ctx, host))
+		require.NoError(t, connectorEnv.connector.Start(connectorEnv.ctx, host))
 
 		// Verify initial state has mappings
-		componentMappings, relationMappings := connector.snapshotManager.Current()
+		componentMappings, relationMappings := connectorEnv.connector.snapshotManager.Current(settings.TRACES)
 		require.Len(t, componentMappings, 1)
 		require.Len(t, relationMappings, 1)
 
@@ -152,10 +197,10 @@ func TestConnectorStart(t *testing.T) {
 
 		// Wait for async update to propagate and removal logs to be emitted
 		require.Eventually(t, func() bool {
-			return logConsumer.LogRecordCount() >= expectedLogRecordsCount
+			return connectorEnv.logsConsumer.LogRecordCount() >= expectedLogRecordsCount
 		}, 2*time.Second, 100*time.Millisecond)
 
-		allLogs := logConsumer.AllLogs()
+		allLogs := connectorEnv.logsConsumer.AllLogs()
 		require.NotEmpty(t, allLogs)
 
 		// Extract all log records
@@ -179,8 +224,7 @@ func TestConnectorStart(t *testing.T) {
 }
 
 func TestConnectorConsumeTraces(t *testing.T) {
-	logConsumer := &consumertest.LogsSink{}
-	connector, _ := newConnector(context.Background(), Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer, settings.TRACES)
+	connectorEnv := newConnectorEnv(t, settings.TRACES)
 	provider := NewMockStsSettingsProvider(
 		[]settings.OtelComponentMapping{
 			createSimpleTraceComponentMapping("mapping1"),
@@ -194,11 +238,11 @@ func TestConnectorConsumeTraces(t *testing.T) {
 		component.MustNewID(stsSettingsApi.Type.String()): provider,
 	}
 	host := &mockHost{ext: extensions}
-	err := connector.Start(context.Background(), host)
+	err := connectorEnv.connector.Start(connectorEnv.ctx, host)
 	require.NoError(t, err)
 
 	t.Run("skip spans which don't match to conditions", func(t *testing.T) {
-		logConsumer.Reset()
+		connectorEnv.logsConsumer.Reset()
 		submittedTime := uint64(1756851083000)
 		traces := ptrace.NewTraces()
 		rs := traces.ResourceSpans().AppendEmpty()
@@ -227,17 +271,17 @@ func TestConnectorConsumeTraces(t *testing.T) {
 			"service.name":     "web-service",
 		})
 
-		assert.Equal(t, 0, logConsumer.LogRecordCount())
+		assert.Equal(t, 0, connectorEnv.logsConsumer.LogRecordCount())
 
-		err := connector.ConsumeTraces(context.Background(), traces)
+		err := connectorEnv.connector.ConsumeTraces(connectorEnv.ctx, traces)
 		require.NoError(t, err)
 
-		assert.Equal(t, 0, logConsumer.LogRecordCount()) // all conditions doesn't match so it is empty
-		assert.Empty(t, logConsumer.AllLogs())
+		assert.Equal(t, 0, connectorEnv.logsConsumer.LogRecordCount()) // all conditions doesn't match so it is empty
+		assert.Empty(t, connectorEnv.logsConsumer.AllLogs())
 	})
 
 	t.Run("start with initial mappings and observe changes", func(t *testing.T) {
-		logConsumer.Reset()
+		connectorEnv.logsConsumer.Reset()
 		submittedTime := uint64(1756851083000)
 		traces := ptrace.NewTraces()
 		rs := traces.ResourceSpans().AppendEmpty()
@@ -266,12 +310,12 @@ func TestConnectorConsumeTraces(t *testing.T) {
 			"service.name":     "web-service",
 		})
 
-		assert.Equal(t, 0, logConsumer.LogRecordCount())
+		assert.Equal(t, 0, connectorEnv.logsConsumer.LogRecordCount())
 
-		err = connector.ConsumeTraces(context.Background(), traces)
+		err = connectorEnv.connector.ConsumeTraces(connectorEnv.ctx, traces)
 		require.NoError(t, err)
 
-		actualLogs := logConsumer.AllLogs()
+		actualLogs := connectorEnv.logsConsumer.AllLogs()
 		require.Len(t, actualLogs, 1)
 		messages := extractMessagesWithKey(t, actualLogs[0])
 		require.Len(t, messages, 2)
@@ -320,8 +364,7 @@ func TestConnectorConsumeTraces(t *testing.T) {
 
 // TODO: Add tests that trace mappings are excluded for metrics connector and vice versa
 func TestConnectorConsumeMetrics(t *testing.T) {
-	logConsumer := &consumertest.LogsSink{}
-	connector, _ := newConnector(context.Background(), Config{}, zap.NewNop(), componenttest.NewNopTelemetrySettings(), logConsumer, settings.METRICS)
+	connectorEnv := newConnectorEnv(t, settings.METRICS)
 
 	provider := NewMockStsSettingsProvider(
 		[]settings.OtelComponentMapping{
@@ -335,11 +378,11 @@ func TestConnectorConsumeMetrics(t *testing.T) {
 		component.MustNewID(stsSettingsApi.Type.String()): provider,
 	}
 	host := &mockHost{ext: extensions}
-	err := connector.Start(context.Background(), host)
+	err := connectorEnv.connector.Start(connectorEnv.ctx, host)
 	require.NoError(t, err)
 
 	t.Run("skip metrics which don't match to conditions", func(t *testing.T) {
-		logConsumer.Reset()
+		connectorEnv.logsConsumer.Reset()
 		submittedTime := uint64(1756851083000)
 		metrics := pmetric.NewMetrics()
 		rm := metrics.ResourceMetrics().AppendEmpty()
@@ -360,17 +403,17 @@ func TestConnectorConsumeMetrics(t *testing.T) {
 			"service.name":     "web-service",
 		})
 
-		assert.Equal(t, 0, logConsumer.LogRecordCount())
+		assert.Equal(t, 0, connectorEnv.logsConsumer.LogRecordCount())
 
-		err := connector.ConsumeMetrics(context.Background(), metrics)
+		err := connectorEnv.connector.ConsumeMetrics(connectorEnv.ctx, metrics)
 		require.NoError(t, err)
 
-		assert.Equal(t, 0, logConsumer.LogRecordCount()) // all conditions doesn't match so it is empty
-		assert.Empty(t, logConsumer.AllLogs())
+		assert.Equal(t, 0, connectorEnv.logsConsumer.LogRecordCount()) // all conditions doesn't match so it is empty
+		assert.Empty(t, connectorEnv.logsConsumer.AllLogs())
 	})
 
 	t.Run("start with initial mappings and observe changes", func(t *testing.T) {
-		logConsumer.Reset()
+		connectorEnv.logsConsumer.Reset()
 		submittedTime := uint64(1756851083000)
 		metrics := pmetric.NewMetrics()
 		rm := metrics.ResourceMetrics().AppendEmpty()
@@ -391,12 +434,12 @@ func TestConnectorConsumeMetrics(t *testing.T) {
 			"service.name":     "web-service",
 		})
 
-		assert.Equal(t, 0, logConsumer.LogRecordCount())
+		assert.Equal(t, 0, connectorEnv.logsConsumer.LogRecordCount())
 
-		err = connector.ConsumeMetrics(context.Background(), metrics)
+		err = connectorEnv.connector.ConsumeMetrics(connectorEnv.ctx, metrics)
 		require.NoError(t, err)
 
-		actualLogs := logConsumer.AllLogs()
+		actualLogs := connectorEnv.logsConsumer.AllLogs()
 		require.Len(t, actualLogs, 1)
 		messages := extractMessagesWithKey(t, actualLogs[0])
 		require.Len(t, messages, 2)
@@ -443,17 +486,10 @@ func TestConnectorConsumeMetrics(t *testing.T) {
 }
 
 func TestPublishTopologyMessagesAsLogs(t *testing.T) {
-	ctx := context.Background()
-	logConsumer := &consumertest.LogsSink{}
-	logger := zap.NewNop()
-
-	conn := &connectorImpl{
-		logger:       logger,
-		logsConsumer: logConsumer,
-	}
+	connectorEnv := newConnectorEnv(t, settings.METRICS)
 
 	t.Run("publishes valid messages", func(t *testing.T) {
-		logConsumer.Reset()
+		connectorEnv.logsConsumer.Reset()
 		key := &topostreamv1.TopologyStreamMessageKey{
 			Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 			DataSource: "urn:test:component",
@@ -467,14 +503,14 @@ func TestPublishTopologyMessagesAsLogs(t *testing.T) {
 			},
 		}
 
-		conn.publishMessagesAsLogs(ctx, []internal.MessageWithKey{{
+		connectorEnv.connector.publishMessagesAsLogs(connectorEnv.ctx, []internal.MessageWithKey{{
 			Key:     key,
 			Message: message,
 		}})
 
-		require.Equal(t, 1, logConsumer.LogRecordCount())
+		require.Equal(t, 1, connectorEnv.logsConsumer.LogRecordCount())
 
-		allLogs := logConsumer.AllLogs()
+		allLogs := connectorEnv.logsConsumer.AllLogs()
 		require.Len(t, allLogs, 1)
 		scopeLogs := allLogs[0].ResourceLogs().At(0).ScopeLogs().At(0)
 		require.Equal(t, 1, scopeLogs.LogRecords().Len())
@@ -488,11 +524,11 @@ func TestPublishTopologyMessagesAsLogs(t *testing.T) {
 	})
 
 	t.Run("handles empty messages gracefully", func(t *testing.T) {
-		logConsumer.Reset()
-		conn.publishMessagesAsLogs(ctx, nil)
-		assert.Equal(t, 0, logConsumer.LogRecordCount())
-		conn.publishMessagesAsLogs(ctx, []internal.MessageWithKey{})
-		assert.Equal(t, 0, logConsumer.LogRecordCount())
+		connectorEnv.logsConsumer.Reset()
+		connectorEnv.connector.publishMessagesAsLogs(connectorEnv.ctx, nil)
+		assert.Equal(t, 0, connectorEnv.logsConsumer.LogRecordCount())
+		connectorEnv.connector.publishMessagesAsLogs(connectorEnv.ctx, []internal.MessageWithKey{})
+		assert.Equal(t, 0, connectorEnv.logsConsumer.LogRecordCount())
 	})
 }
 
