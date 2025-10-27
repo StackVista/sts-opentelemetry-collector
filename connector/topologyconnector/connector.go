@@ -32,29 +32,17 @@ type connectorImpl struct {
 }
 
 func newConnector(
-	ctx context.Context,
+	_ context.Context,
 	cfg Config,
 	logger *zap.Logger,
 	telemetrySettings component.TelemetrySettings,
 	nextConsumer consumer.Logs,
+	snapshotManager *SnapshotManager,
+	eval *internal.CelEvaluator,
+	mapper *internal.Mapper,
 	supportedSignal settings.OtelInputSignal,
-) (*connectorImpl, error) {
+) *connectorImpl {
 	logger.Info("Building topology connector")
-	eval, err := internal.NewCELEvaluator(
-		ctx, cfg.ExpressionCacheSettings.ToMetered("cel_expression_cache", telemetrySettings),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	mapper := internal.NewMapper(
-		ctx,
-		cfg.TagRegexCacheSettings.ToMetered("tag_regex_cache", telemetrySettings),
-		cfg.TagRegexCacheSettings.ToMetered("tag_template_cache", telemetrySettings),
-	)
-	snapshotManager := NewSnapshotManager(logger, supportedSignal)
-	metricsRecorder := metrics.NewConnectorMetrics(Type.String(), telemetrySettings)
-
 	return &connectorImpl{
 		cfg:             &cfg,
 		logger:          logger,
@@ -62,9 +50,9 @@ func newConnector(
 		eval:            eval,
 		mapper:          mapper,
 		snapshotManager: snapshotManager,
-		metricsRecorder: metricsRecorder,
+		metricsRecorder: metrics.NewConnectorMetrics(Type.String(), telemetrySettings),
 		supportedSignal: supportedSignal,
-	}, nil
+	}
 }
 
 func (p *connectorImpl) Start(ctx context.Context, host component.Host) error {
@@ -107,7 +95,7 @@ func (p *connectorImpl) ConsumeMetrics(ctx context.Context, metrics pmetric.Metr
 	start := time.Now()
 
 	collectionTimestampMs := time.Now().UnixMilli()
-	componentMappings, relationMappings := p.snapshotManager.Current()
+	componentMappings, relationMappings := p.snapshotManager.Current(p.supportedSignal)
 
 	messagesWithKeys := internal.ConvertMetricsToTopologyStreamMessage(
 		ctx,
@@ -136,7 +124,7 @@ func (p *connectorImpl) ConsumeTraces(ctx context.Context, traceData ptrace.Trac
 	start := time.Now()
 	collectionTimestampMs := start.UnixMilli()
 
-	componentMappings, relationMappings := p.snapshotManager.Current()
+	componentMappings, relationMappings := p.snapshotManager.Current(p.supportedSignal)
 	messages := internal.ConvertSpanToTopologyStreamMessage(
 		ctx,
 		p.logger,

@@ -20,6 +20,7 @@ type SettingExtension interface {
 	GetId() string
 	GetIdentifier() string
 	GetExpireAfterMs() int64
+	GetInputSignals() []OtelInputSignal
 }
 
 func (m OtelComponentMapping) GetId() string {
@@ -34,6 +35,10 @@ func (m OtelComponentMapping) GetExpireAfterMs() int64 {
 	return m.ExpireAfterMs
 }
 
+func (m OtelComponentMapping) GetInputSignals() []OtelInputSignal {
+	return m.InputSignals
+}
+
 func (m OtelRelationMapping) GetId() string {
 	return m.Id
 }
@@ -44,6 +49,10 @@ func (m OtelRelationMapping) GetIdentifier() string {
 
 func (m OtelRelationMapping) GetExpireAfterMs() int64 {
 	return m.ExpireAfterMs
+}
+
+func (m OtelRelationMapping) GetInputSignals() []OtelInputSignal {
+	return m.InputSignals
 }
 
 func GetSettingType[T any]() (SettingType, error) {

@@ -3,26 +3,68 @@ package topologyconnector
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/internal"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/connector"
 	"go.opentelemetry.io/collector/consumer"
+	"go.uber.org/zap"
 )
 
 //nolint:gochecknoglobals
 var (
-	Type = component.MustNewType("topology")
+	Type          = component.MustNewType("topology")
+	globalFactory = &connectorFactory{}
 )
+
+type connectorFactory struct {
+	celEvaluator    *internal.CelEvaluator
+	mapper          *internal.Mapper
+	snapshotManager *SnapshotManager
+	init            sync.Once
+}
+
+func (f *connectorFactory) initSharedState(
+	ctx context.Context,
+	logger *zap.Logger,
+	telemetrySettings component.TelemetrySettings,
+	connectorCfg *Config,
+) error {
+	var err error
+	f.init.Do(func() {
+		eval, e := internal.NewCELEvaluator(
+			ctx, connectorCfg.ExpressionCacheSettings.ToMetered("cel_expression_cache", telemetrySettings),
+		)
+		if e != nil {
+			err = e
+			return
+		}
+
+		mapper := internal.NewMapper(
+			ctx,
+			connectorCfg.TagRegexCacheSettings.ToMetered("tag_regex_cache", telemetrySettings),
+			connectorCfg.TagTemplateCacheSettings.ToMetered("tag_template_cache", telemetrySettings),
+		)
+
+		snapshotManager := NewSnapshotManager(logger, []settings.OtelInputSignal{settings.TRACES, settings.METRICS})
+
+		f.celEvaluator = eval
+		f.mapper = mapper
+		f.snapshotManager = snapshotManager
+	})
+	return err
+}
 
 // NewFactory returns a ConnectorFactory.
 func NewFactory() connector.Factory {
 	return connector.NewFactory(
 		Type,
 		createDefaultConfig,
-		connector.WithTracesToLogs(createTracesToLogsConnector, component.StabilityLevelAlpha),
-		connector.WithMetricsToLogs(createMetricsToLogsConnector, component.StabilityLevelAlpha),
+		connector.WithTracesToLogs(globalFactory.createTracesToLogsConnector, component.StabilityLevelAlpha),
+		connector.WithMetricsToLogs(globalFactory.createMetricsToLogsConnector, component.StabilityLevelAlpha),
 	)
 }
 
@@ -46,7 +88,7 @@ func createDefaultConfig() component.Config {
 	}
 }
 
-func createTracesToLogsConnector(
+func (f *connectorFactory) createTracesToLogsConnector(
 	ctx context.Context,
 	params connector.CreateSettings,
 	cfg component.Config,
@@ -57,17 +99,24 @@ func createTracesToLogsConnector(
 		return nil, fmt.Errorf("invalid config type: %T", cfg)
 	}
 
+	if err := f.initSharedState(ctx, params.Logger, params.TelemetrySettings, typedCfg); err != nil {
+		return nil, err
+	}
+
 	return newConnector(
 		ctx,
 		*typedCfg,
 		params.Logger,
 		params.TelemetrySettings,
 		nextConsumer,
+		f.snapshotManager,
+		f.celEvaluator,
+		f.mapper,
 		settings.TRACES,
-	)
+	), nil
 }
 
-func createMetricsToLogsConnector(
+func (f *connectorFactory) createMetricsToLogsConnector(
 	ctx context.Context,
 	params connector.CreateSettings,
 	cfg component.Config,
@@ -78,12 +127,19 @@ func createMetricsToLogsConnector(
 		return nil, fmt.Errorf("invalid config type: %T", cfg)
 	}
 
+	if err := f.initSharedState(ctx, params.Logger, params.TelemetrySettings, typedCfg); err != nil {
+		return nil, err
+	}
+
 	return newConnector(
 		ctx,
 		*typedCfg,
 		params.Logger,
 		params.TelemetrySettings,
 		nextConsumer,
+		f.snapshotManager,
+		f.celEvaluator,
+		f.mapper,
 		settings.METRICS,
-	)
+	), nil
 }
