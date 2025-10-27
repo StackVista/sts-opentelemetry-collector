@@ -164,7 +164,9 @@ func (s *SnapshotManager) Update(
 	}
 }
 
-func flattenMappings[T stsSettingsModel.SettingExtension](mappingsBySignal map[stsSettingsModel.OtelInputSignal][]T) []T {
+func flattenMappings[T stsSettingsModel.SettingExtension](
+	mappingsBySignal map[stsSettingsModel.OtelInputSignal][]T,
+) []T {
 	seen := make(map[string]struct{})
 	var all []T
 
