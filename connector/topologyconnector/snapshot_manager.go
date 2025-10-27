@@ -25,9 +25,13 @@ type SnapshotManager struct {
 
 	componentMappings map[stsSettingsModel.OtelInputSignal][]stsSettingsModel.OtelComponentMapping
 	relationMappings  map[stsSettingsModel.OtelInputSignal][]stsSettingsModel.OtelRelationMapping
+
+	// lifecycle safety
+	started  bool
+	refCount int // how many connectors are currently using this instance
 }
 
-type onRemovals = func(
+type onRemovalsFunc = func(
 	ctx context.Context,
 	componentMappings []stsSettingsModel.OtelComponentMapping,
 	relationMappings []stsSettingsModel.OtelRelationMapping,
@@ -45,43 +49,75 @@ func NewSnapshotManager(logger *zap.Logger, supportedSignals []stsSettingsModel.
 func (s *SnapshotManager) Start(
 	ctx context.Context,
 	settingsProvider stsSettingsApi.StsSettingsProvider,
-	onRemovals onRemovals,
+	onRemovals onRemovalsFunc,
 ) error {
+	s.mu.Lock()
+
+	s.refCount++
+	if s.started {
+		s.logger.Debug("SnapshotManager already started, skipping re-init")
+		s.mu.Unlock()
+		return nil
+	}
+
+	s.logger.Info("SnapshotManager subscribed to setting updates")
 	settingUpdatesCh, err := settingsProvider.RegisterForUpdates(
 		stsSettingsModel.SettingTypeOtelComponentMapping,
 		stsSettingsModel.SettingTypeOtelRelationMapping,
 	)
 	if err != nil {
+		s.mu.Unlock()
 		return err
 	}
 
-	s.logger.Info("SnapshotManager subscribed to setting updates")
 	s.stopped = make(chan struct{})
-	ctx, cancel := context.WithCancel(ctx)
+	ctxWithCancel, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
+	s.started = true
+	s.mu.Unlock()
 
 	go func() {
 		defer close(s.stopped)
 		for {
 			select {
-			case <-ctx.Done():
+			case <-ctxWithCancel.Done():
 				return
 			case <-settingUpdatesCh:
 				s.logger.Info("Settings update received, updating mapping snapshots")
-				s.GetAndUpdateSettingSnapshots(ctx, settingsProvider, onRemovals)
+				s.GetAndUpdateSettingSnapshots(ctxWithCancel, settingsProvider, onRemovals)
 			}
 		}
 	}()
 
 	// Initial load
-	s.GetAndUpdateSettingSnapshots(ctx, settingsProvider, onRemovals)
+	s.GetAndUpdateSettingSnapshots(ctxWithCancel, settingsProvider, onRemovals)
 	return nil
+}
+
+func (s *SnapshotManager) Stop() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.refCount > 0 {
+		s.refCount--
+	}
+
+	if s.refCount == 0 && s.started {
+		s.logger.Info("Stopping SnapshotManager (no more active connectors)")
+		if s.cancel != nil {
+			s.cancel()
+		}
+		if s.stopped != nil {
+			<-s.stopped
+		}
+		s.started = false
+	}
 }
 
 func (s *SnapshotManager) GetAndUpdateSettingSnapshots(
 	ctx context.Context,
 	provider stsSettingsApi.StsSettingsProvider,
-	onRemovals onRemovals,
+	onRemovals onRemovalsFunc,
 ) {
 	newComponentMappings, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelComponentMapping](provider)
 	if err != nil {
@@ -98,36 +134,42 @@ func (s *SnapshotManager) GetAndUpdateSettingSnapshots(
 	s.Update(ctx, newComponentMappings, newRelationMappings, onRemovals)
 }
 
-// Update Filter mappings for the selected input signal and trigger onRemovals
+// Update Filter mappings for the selected input signal and trigger onRemovalsFunc
 // when mappings have been removed
 func (s *SnapshotManager) Update(
 	ctx context.Context,
 	newComponentMappings []stsSettingsModel.OtelComponentMapping,
 	newRelationMappings []stsSettingsModel.OtelRelationMapping,
-	onRemovals onRemovals,
+	onRemovals onRemovalsFunc,
 ) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	for _, signal := range s.supportedSignals {
-		applicableComponents := filterForSignal(newComponentMappings, signal)
-		applicableRelations := filterForSignal(newRelationMappings, signal)
+	prevComponents := flattenMappings(s.componentMappings)
+	prevRelations := flattenMappings(s.relationMappings)
 
-		prevComponents := s.componentMappings[signal]
-		prevRelations := s.relationMappings[signal]
-
-		change := SnapshotChange{
-			RemovedComponentMappings: DiffSettings(prevComponents, applicableComponents),
-			RemovedRelationMappings:  DiffSettings(prevRelations, applicableRelations),
-		}
-
-		s.componentMappings[signal] = applicableComponents
-		s.relationMappings[signal] = applicableRelations
-
-		if len(change.RemovedComponentMappings) > 0 || len(change.RemovedRelationMappings) > 0 {
-			onRemovals(ctx, change.RemovedComponentMappings, change.RemovedRelationMappings)
-		}
+	change := SnapshotChange{
+		RemovedComponentMappings: DiffSettings(prevComponents, newComponentMappings),
+		RemovedRelationMappings:  DiffSettings(prevRelations, newRelationMappings),
 	}
+
+	// Then still update per-signal internal views for Current()
+	for _, signal := range s.supportedSignals {
+		s.componentMappings[signal] = filterForSignal(newComponentMappings, signal)
+		s.relationMappings[signal] = filterForSignal(newRelationMappings, signal)
+	}
+
+	if len(change.RemovedComponentMappings) > 0 || len(change.RemovedRelationMappings) > 0 {
+		onRemovals(ctx, change.RemovedComponentMappings, change.RemovedRelationMappings)
+	}
+}
+
+func flattenMappings[T stsSettingsModel.SettingExtension](m map[stsSettingsModel.OtelInputSignal][]T) []T {
+	var all []T
+	for _, v := range m {
+		all = append(all, v...)
+	}
+	return all
 }
 
 func filterForSignal[T stsSettingsModel.SettingExtension](mappings []T, signal stsSettingsModel.OtelInputSignal) []T {
@@ -149,16 +191,6 @@ func (s *SnapshotManager) Current(
 	comps := append([]stsSettingsModel.OtelComponentMapping(nil), s.componentMappings[signal]...)
 	rels := append([]stsSettingsModel.OtelRelationMapping(nil), s.relationMappings[signal]...)
 	return comps, rels
-}
-
-func (s *SnapshotManager) Stop() {
-	if s.cancel != nil {
-		s.cancel()
-	}
-	if s.stopped != nil {
-		<-s.stopped
-	}
-
 }
 
 // DiffSettings returns all settings that exist in `primary` but not in `comparison`.
