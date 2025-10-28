@@ -387,6 +387,7 @@ func (s *ServiceGraphConnector) onComplete(e *store.Edge, logp float64) {
 		zap.String("server_service", e.ServerService),
 		zap.String("connection_type", string(e.ConnectionType)),
 		zap.Stringer("trace_id", e.TraceID),
+		zap.Any("dimensions", e.Dimensions),
 	)
 	s.aggregateMetricsForEdge(e, logp)
 }
@@ -398,6 +399,7 @@ func (s *ServiceGraphConnector) onExpire(e *store.Edge) {
 		zap.String("server_service", e.ServerService),
 		zap.String("connection_type", string(e.ConnectionType)),
 		zap.Stringer("trace_id", e.TraceID),
+		zap.Any("dimensions", e.Dimensions),
 	)
 
 	s.statExpiredEdges.Add(context.Background(), 1)
@@ -410,6 +412,7 @@ func (s *ServiceGraphConnector) onReschedule(e *store.Edge) {
 		zap.String("server_service", e.ServerService),
 		zap.String("connection_type", string(e.ConnectionType)),
 		zap.Stringer("trace_id", e.TraceID),
+		zap.Any("dimensions", e.Dimensions),
 	)
 	s.statRescheduledEdges.Add(context.Background(), 1)
 }
