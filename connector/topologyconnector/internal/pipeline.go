@@ -215,14 +215,19 @@ func mapRelation(
 	}
 
 	var allErrors []string
+	uniqueErrors := make(map[string]struct{}) // acts as a set
+
 	if relationErrs > 0 {
 		metricsRecorder.IncMappingErrors(ctx, int64(relationErrs), settings.SettingTypeOtelRelationMapping, signal)
 
 		for _, m := range mappingResult {
 			if repeatData, ok := m.Message.GetPayload().(*topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData); ok {
 				for _, err := range repeatData.TopologyStreamRepeatElementsData.Errors {
-					// Assuming TopoStreamError has a Message or similar field
-					allErrors = append(allErrors, err.GetMessage())
+					msg := err.GetMessage()
+					if _, exists := uniqueErrors[msg]; !exists {
+						uniqueErrors[msg] = struct{}{}
+						allErrors = append(allErrors, msg)
+					}
 				}
 			}
 		}
