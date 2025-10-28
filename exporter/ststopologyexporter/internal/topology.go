@@ -241,6 +241,16 @@ func (c *ComponentsCollection) AddConnection(attrs *pcommon.Map) bool {
 	peerService, hasPeer := attrs.Get("client_peer.service")
 	var targetID string
 
+	/*
+			{"kind": "connector", "name": "stsservicegraph", "exporter_in_pipeline": "traces", "receiver_in_pipeline": "metrics", "client_service": "", "server_service": "accountingservice", "connection_type": "messaging_system", "trace_id": "331fe8fc25e77bb94b2e10bb66b03010",
+			"dimensions": {"server_service.instance.id":"f4c93a4a-dc15-41af-b4b7-b65a26ba8169","server_service.namespace":"opentelemetry-demo-demo-dev","server_sts_api_key":"2f34998d-973b-4998-9f0b-08f52c1ebb75"}}
+
+
+		 {"kind": "connector", "name": "stsservicegraph", "exporter_in_pipeline": "traces", "receiver_in_pipeline": "metrics", "client_service": "checkoutservice", "server_service": "accountingservice", "connection_type": "messaging_system", "trace_id": "d123d0edf2c98b028820ab577c3db00d",
+		"dimensions": {"client_peer.service":"kafka","client_service.instance.id":"7643512b-275c-43cb-9ae4-4c53acea33bb","client_service.namespace":"opentelemetry-demo-demo-dev","client_sts_api_key":"2f34998d-973b-4998-9f0b-08f52c1ebb75","server_service.instance.id":"f4c93a4a-dc15-41af-b4b7-b65a26ba8169",
+		"server_service.namespace":"opentelemetry-demo-demo-dev","server_sts_api_key":"2f34998d-973b-4998-9f0b-08f52c1ebb75"}}
+	*/
+
 	switch connectionType {
 	case ConnectionTypeDatabase:
 		if hasPeer {

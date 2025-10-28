@@ -65,7 +65,7 @@ func ConvertMetricsToTopologyStreamMessage(
 	result := make([]MessageWithKey, 0)
 	metricsDatapointCount := int64(0)
 
-	iterateMetrics(metricData, func(expressionEvalContext *ExpressionEvalContext, timestamp pcommon.Timestamp) {
+	iterateMetrics(logger, metricData, func(expressionEvalContext *ExpressionEvalContext, timestamp pcommon.Timestamp) {
 		metricsDatapointCount++
 		result = mapComponents(ctx, logger, eval, mapper, componentMappings, collectionTimestampMs,
 			metricsRecorder, expressionEvalContext, timestamp, settings.METRICS, result,
@@ -348,7 +348,7 @@ func iterateSpans(trace ptrace.Traces, handler mappingHandler) {
 	}
 }
 
-func iterateMetrics(metrics pmetric.Metrics, handler mappingHandler) {
+func iterateMetrics(logger *zap.Logger, metrics pmetric.Metrics, handler mappingHandler) {
 	resourceMetrics := metrics.ResourceMetrics()
 	for i := 0; i < resourceMetrics.Len(); i++ {
 		rs := resourceMetrics.At(i)
@@ -373,6 +373,7 @@ func iterateMetrics(metrics pmetric.Metrics, handler mappingHandler) {
 				case pmetric.MetricTypeSum:
 					for l := metric.Sum().DataPoints().Len() - 1; l >= 0; l-- {
 						datapoint := metric.Sum().DataPoints().At(l)
+						logger.Debug("Sum", zap.Any("datapoints", datapoint.Attributes().AsRaw()))
 						handler(NewMetricEvalContext(datapoint.Attributes().AsRaw(), scopeAttributes, resourceAttributes),
 							datapoint.Timestamp())
 					}
