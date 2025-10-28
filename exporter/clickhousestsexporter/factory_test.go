@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter"
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter/internal/metadata"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component/componenttest"
@@ -26,8 +27,8 @@ func TestFactory_CreateLogsExporter(t *testing.T) {
 	cfg := withDefaultConfig(func(cfg *clickhousestsexporter.Config) {
 		cfg.Endpoint = defaultEndpoint
 	})
-	params := exportertest.NewNopCreateSettings()
-	exporter, err := factory.CreateLogsExporter(context.Background(), params, cfg)
+	params := exportertest.NewNopSettings(metadata.Type)
+	exporter, err := factory.CreateLogs(context.Background(), params, cfg)
 	require.NoError(t, err)
 	require.NotNil(t, exporter)
 
@@ -39,8 +40,8 @@ func TestFactory_CreateTracesExporter(t *testing.T) {
 	cfg := withDefaultConfig(func(cfg *clickhousestsexporter.Config) {
 		cfg.Endpoint = defaultEndpoint
 	})
-	params := exportertest.NewNopCreateSettings()
-	exporter, err := factory.CreateTracesExporter(context.Background(), params, cfg)
+	params := exportertest.NewNopSettings(metadata.Type)
+	exporter, err := factory.CreateTraces(context.Background(), params, cfg)
 	require.NoError(t, err)
 	require.NotNil(t, exporter)
 
@@ -52,8 +53,8 @@ func TestFactory_CreateMetricsExporter(t *testing.T) {
 	cfg := withDefaultConfig(func(cfg *clickhousestsexporter.Config) {
 		cfg.Endpoint = defaultEndpoint
 	})
-	params := exportertest.NewNopCreateSettings()
-	exporter, err := factory.CreateMetricsExporter(context.Background(), params, cfg)
+	params := exportertest.NewNopSettings(metadata.Type)
+	exporter, err := factory.CreateMetrics(context.Background(), params, cfg)
 	require.NoError(t, err)
 	require.NotNil(t, exporter)
 

@@ -18,7 +18,6 @@ import (
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
-	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
@@ -96,10 +95,6 @@ func (s *ServiceGraphConnector) GetReqTotal() map[string]int64 {
 	return s.reqTotal
 }
 
-func (s *ServiceGraphConnector) SetMetricsConsumer(consumer consumer.Metrics) {
-	s.metricsConsumer = consumer
-}
-
 func (s *ServiceGraphConnector) SetExpire(t time.Time) {
 	s.store.Expire(t)
 }
@@ -115,7 +110,7 @@ func customMetricName(name string) string {
 	return "connector/" + metadata.Type.String() + "/" + name
 }
 
-func NewConnector(set component.TelemetrySettings, config component.Config) *ServiceGraphConnector {
+func NewConnector(set component.TelemetrySettings, config component.Config, nextConsumer consumer.Metrics) *ServiceGraphConnector {
 	pConfig, ok := config.(*Config)
 
 	if !ok {
@@ -159,6 +154,7 @@ func NewConnector(set component.TelemetrySettings, config component.Config) *Ser
 	)
 
 	return &ServiceGraphConnector{
+		metricsConsumer:                      nextConsumer,
 		config:                               pConfig,
 		logger:                               set.Logger,
 		startTime:                            time.Now(),
@@ -180,34 +176,8 @@ func NewConnector(set component.TelemetrySettings, config component.Config) *Ser
 	}
 }
 
-type getExporters interface {
-	GetExporters() map[component.DataType]map[component.ID]component.Component
-}
-
-func (s *ServiceGraphConnector) Start(_ context.Context, host component.Host) error {
+func (s *ServiceGraphConnector) Start(_ context.Context, _ component.Host) error {
 	s.store = store.NewStore(s.config.Store.TTL, s.config.Store.MaxItems, s.onComplete, s.onExpire, s.onReschedule)
-
-	if s.metricsConsumer == nil {
-		ge, ok := host.(getExporters)
-		if !ok {
-			return fmt.Errorf("unable to get exporters")
-		}
-		exporters := ge.GetExporters()
-
-		// The available list of exporters come from any configured metrics pipelines' exporters.
-		for k, exp := range exporters[component.DataTypeMetrics] {
-			metricsExp, ok := exp.(exporter.Metrics)
-			if k.String() == s.config.MetricsExporter && ok {
-				s.metricsConsumer = metricsExp
-				break
-			}
-		}
-
-		if s.metricsConsumer == nil {
-			return fmt.Errorf("failed to find metrics exporter: %s",
-				s.config.MetricsExporter)
-		}
-	}
 
 	go s.metricFlushLoop(s.config.MetricsFlushInterval)
 

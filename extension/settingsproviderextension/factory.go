@@ -34,7 +34,7 @@ func CreateDefaultConfig() component.Config {
 
 func CreateExtension(
 	ctx context.Context,
-	set extension.CreateSettings,
+	set extension.Settings,
 	cfg component.Config,
 ) (extension.Extension, error) {
 	topoCfg, ok := cfg.(*stsSettingsConfig.Config)

@@ -7,8 +7,9 @@ import (
 )
 
 type Config struct {
-	exporterhelper.TimeoutSettings `mapstructure:",squash"` // squash ensures fields correctly decoded in embedded struct.
-	exporterhelper.QueueSettings   `mapstructure:"sending_queue"`
+	// squash ensures fields correctly decoded in embedded struct.
+	TimeoutSettings exporterhelper.TimeoutConfig    `mapstructure:",squash"`
+	QueueSettings   exporterhelper.QueueBatchConfig `mapstructure:"sending_queue"`
 
 	Endpoint string `mapstructure:"endpoint"`
 }

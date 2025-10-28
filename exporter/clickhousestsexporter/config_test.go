@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/collector/config/configopaque"
 	"go.opentelemetry.io/collector/config/configretry"
 	"go.opentelemetry.io/collector/confmap/confmaptest"
+	"go.opentelemetry.io/collector/confmap/xconfmap"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter"
@@ -57,7 +58,7 @@ func TestLoadConfig(t *testing.T) {
 				TracesTableName:    "otel_traces",
 				MetricsTableName:   "otel_metrics",
 				ResourcesTableName: "otel_resources",
-				TimeoutSettings: exporterhelper.TimeoutSettings{
+				TimeoutSettings: exporterhelper.TimeoutConfig{
 					Timeout: 5 * time.Second,
 				},
 				BackOffConfig: configretry.BackOffConfig{
@@ -69,12 +70,13 @@ func TestLoadConfig(t *testing.T) {
 					Multiplier:          backoff.DefaultMultiplier,
 				},
 				ConnectionParams: map[string]string{},
-				QueueSettings: exporterhelper.QueueSettings{
-					Enabled:      true,
-					NumConsumers: 1,
-					QueueSize:    100,
-					StorageID:    &storageID,
-				},
+				QueueSettings: func() exporterhelper.QueueBatchConfig {
+					queue := exporterhelper.NewDefaultQueueConfig()
+					queue.NumConsumers = 1
+					queue.QueueSize = 100
+					queue.StorageID = &storageID
+					return queue
+				}(),
 				CreateResourcesTable: true,
 				CreateTracesTable:    true,
 			},
@@ -88,9 +90,9 @@ func TestLoadConfig(t *testing.T) {
 
 			sub, err := cm.Sub(tt.id.String())
 			require.NoError(t, err)
-			require.NoError(t, component.UnmarshalConfig(sub, cfg))
+			require.NoError(t, sub.Unmarshal(cfg))
 
-			assert.NoError(t, component.ValidateConfig(cfg))
+			assert.NoError(t, xconfmap.Validate(cfg))
 			assert.Equal(t, tt.expected, cfg)
 		})
 	}

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stackvista/sts-opentelemetry-collector/processor/stsusageprocessor"
+	"github.com/stackvista/sts-opentelemetry-collector/processor/stsusageprocessor/internal/metadata"
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/consumer/consumertest"
@@ -25,11 +26,11 @@ func TestCreateProcessor(t *testing.T) {
 	factory := stsusageprocessor.NewFactory()
 	cfg := &stsusageprocessor.Config{}
 
-	tp, err := factory.CreateTracesProcessor(context.Background(), processortest.NewNopCreateSettings(), cfg, consumertest.NewNop())
+	tp, err := factory.CreateTraces(context.Background(), processortest.NewNopSettings(metadata.Type), cfg, consumertest.NewNop())
 	assert.NoError(t, err)
 	assert.NotNil(t, tp)
 
-	mp, err := factory.CreateMetricsProcessor(context.Background(), processortest.NewNopCreateSettings(), cfg, consumertest.NewNop())
+	mp, err := factory.CreateMetrics(context.Background(), processortest.NewNopSettings(metadata.Type), cfg, consumertest.NewNop())
 	assert.NoError(t, err)
 	assert.NotNil(t, mp)
 }

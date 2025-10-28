@@ -90,7 +90,7 @@ func createDefaultConfig() component.Config {
 
 func (f *connectorFactory) createTracesToLogsConnector(
 	ctx context.Context,
-	params connector.CreateSettings,
+	params connector.Settings,
 	cfg component.Config,
 	nextConsumer consumer.Logs,
 ) (connector.Traces, error) {
@@ -118,7 +118,7 @@ func (f *connectorFactory) createTracesToLogsConnector(
 
 func (f *connectorFactory) createMetricsToLogsConnector(
 	ctx context.Context,
-	params connector.CreateSettings,
+	params connector.Settings,
 	cfg component.Config,
 	nextConsumer consumer.Logs,
 ) (connector.Metrics, error) {

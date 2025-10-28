@@ -3,16 +3,17 @@ package stskafkaexporter
 import (
 	"errors"
 	"fmt"
+	"time"
+
 	"go.opentelemetry.io/collector/config/configretry"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
-	"time"
 )
 
 type Config struct {
 	// squash ensures fields are correctly decoded in embedded struct.
-	exporterhelper.TimeoutSettings `mapstructure:",squash"`
-	exporterhelper.QueueSettings   `mapstructure:"sending_queue"`
-	configretry.BackOffConfig      `mapstructure:"retry_on_failure"`
+	TimeoutSettings           exporterhelper.TimeoutConfig    `mapstructure:",squash"`
+	QueueSettings             exporterhelper.QueueBatchConfig `mapstructure:"sending_queue"`
+	configretry.BackOffConfig `mapstructure:"retry_on_failure"`
 
 	Brokers []string `mapstructure:"brokers"`
 	Topic   string   `mapstructure:"topic"`

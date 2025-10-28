@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/testdata"
 
 	"github.com/stackvista/sts-opentelemetry-collector/processor/stsusageprocessor"
+	"github.com/stackvista/sts-opentelemetry-collector/processor/stsusageprocessor/internal/metadata"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/consumer/consumertest"
@@ -38,7 +39,7 @@ func TestResourceProcessorAttributesUpsert(t *testing.T) {
 			ttn := new(consumertest.TracesSink)
 
 			factory := stsusageprocessor.NewFactory()
-			rtp, err := factory.CreateTracesProcessor(context.Background(), processortest.NewNopCreateSettings(), tt.config, ttn)
+			rtp, err := factory.CreateTraces(context.Background(), processortest.NewNopSettings(metadata.Type), tt.config, ttn)
 			require.NoError(t, err)
 			assert.True(t, rtp.Capabilities().MutatesData)
 

@@ -29,10 +29,10 @@ func NewFactory() exporter.Factory {
 
 func createDefaultConfig() component.Config {
 	return &Config{
-		TimeoutSettings: exporterhelper.TimeoutSettings{
+		TimeoutSettings: exporterhelper.TimeoutConfig{
 			Timeout: 15 * time.Second,
 		},
-		QueueSettings: exporterhelper.NewDefaultQueueSettings(),
+		QueueSettings: exporterhelper.NewDefaultQueueConfig(),
 		Endpoint:      "none",
 	}
 }
@@ -40,7 +40,7 @@ func createDefaultConfig() component.Config {
 var _ exporter.CreateMetricsFunc = createMetricsExporter // compile-time check
 func createMetricsExporter(
 	ctx context.Context,
-	settings exporter.CreateSettings,
+	settings exporter.Settings,
 	cfg component.Config,
 ) (exporter.Metrics, error) {
 	exp, err := NewTopologyExporter(settings.Logger, cfg)
@@ -52,7 +52,7 @@ func createMetricsExporter(
 		return nil, errors.New("unable to cast config")
 	}
 
-	return exporterhelper.NewMetricsExporter(
+	return exporterhelper.NewMetrics(
 		ctx,
 		settings,
 		cfg,
@@ -67,7 +67,7 @@ func createMetricsExporter(
 // Traces are directly insert into clickhouse.
 func createTracesExporter(
 	ctx context.Context,
-	set exporter.CreateSettings,
+	set exporter.Settings,
 	cfg component.Config,
 ) (exporter.Traces, error) {
 	c, ok := cfg.(*Config)
@@ -79,7 +79,7 @@ func createTracesExporter(
 		return nil, fmt.Errorf("cannot configure clickhouse traces exporter: %w", err)
 	}
 
-	return exporterhelper.NewTracesExporter(
+	return exporterhelper.NewTraces(
 		ctx,
 		set,
 		cfg,

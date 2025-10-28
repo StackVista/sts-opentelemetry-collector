@@ -6,7 +6,7 @@ package servicegraphconnector // import "github.com/open-telemetry/opentelemetry
 
 import (
 	"go.opentelemetry.io/collector/pdata/pcommon"
-	semconv "go.opentelemetry.io/collector/semconv/v1.9.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 )
 
 func findAttributeValue(key string, attributes ...pcommon.Map) (string, bool) {
@@ -19,5 +19,5 @@ func findAttributeValue(key string, attributes ...pcommon.Map) (string, bool) {
 }
 
 func findServiceName(attributes pcommon.Map) (string, bool) {
-	return findAttributeValue(semconv.AttributeServiceName, attributes)
+	return findAttributeValue(string(semconv.ServiceNameKey), attributes)
 }

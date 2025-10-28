@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/processor/stsusageprocessor/internal/metadata"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
@@ -33,27 +34,27 @@ func TestComponentLifecycle(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		createFn func(ctx context.Context, set processor.CreateSettings, cfg component.Config) (component.Component, error)
+		createFn func(ctx context.Context, set processor.Settings, cfg component.Config) (component.Component, error)
 	}{
 
 		{
 			name: "logs",
-			createFn: func(ctx context.Context, set processor.CreateSettings, cfg component.Config) (component.Component, error) {
-				return factory.CreateLogsProcessor(ctx, set, cfg, consumertest.NewNop())
+			createFn: func(ctx context.Context, set processor.Settings, cfg component.Config) (component.Component, error) {
+				return factory.CreateLogs(ctx, set, cfg, consumertest.NewNop())
 			},
 		},
 
 		{
 			name: "metrics",
-			createFn: func(ctx context.Context, set processor.CreateSettings, cfg component.Config) (component.Component, error) {
-				return factory.CreateMetricsProcessor(ctx, set, cfg, consumertest.NewNop())
+			createFn: func(ctx context.Context, set processor.Settings, cfg component.Config) (component.Component, error) {
+				return factory.CreateMetrics(ctx, set, cfg, consumertest.NewNop())
 			},
 		},
 
 		{
 			name: "traces",
-			createFn: func(ctx context.Context, set processor.CreateSettings, cfg component.Config) (component.Component, error) {
-				return factory.CreateTracesProcessor(ctx, set, cfg, consumertest.NewNop())
+			createFn: func(ctx context.Context, set processor.Settings, cfg component.Config) (component.Component, error) {
+				return factory.CreateTraces(ctx, set, cfg, consumertest.NewNop())
 			},
 		},
 	}
@@ -67,13 +68,13 @@ func TestComponentLifecycle(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name+"-shutdown", func(t *testing.T) {
-			c, err := tt.createFn(context.Background(), processortest.NewNopCreateSettings(), cfg)
+			c, err := tt.createFn(context.Background(), processortest.NewNopSettings(metadata.Type), cfg)
 			require.NoError(t, err)
 			err = c.Shutdown(context.Background())
 			require.NoError(t, err)
 		})
 		t.Run(tt.name+"-lifecycle", func(t *testing.T) {
-			c, err := tt.createFn(context.Background(), processortest.NewNopCreateSettings(), cfg)
+			c, err := tt.createFn(context.Background(), processortest.NewNopSettings(metadata.Type), cfg)
 			require.NoError(t, err)
 			host := componenttest.NewNopHost()
 			err = c.Start(context.Background(), host)
