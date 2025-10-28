@@ -6,7 +6,6 @@ require (
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/collector/component v1.44.0
 	go.opentelemetry.io/collector/component/componenttest v0.138.0
-	go.opentelemetry.io/collector/config/configtelemetry v0.138.0
 	go.opentelemetry.io/collector/confmap v1.44.0
 	go.opentelemetry.io/collector/connector v0.138.0
 	go.opentelemetry.io/collector/connector/connectortest v0.138.0
@@ -67,6 +66,7 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/collector/component/componentstatus v0.138.0 // indirect
+	go.opentelemetry.io/collector/config/configtelemetry v0.138.0 // indirect
 	go.opentelemetry.io/collector/confmap/provider/envprovider v1.44.0 // indirect
 	go.opentelemetry.io/collector/confmap/provider/fileprovider v1.44.0 // indirect
 	go.opentelemetry.io/collector/confmap/provider/httpprovider v1.44.0 // indirect

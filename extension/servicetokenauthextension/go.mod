@@ -10,6 +10,7 @@ require (
 	go.opentelemetry.io/collector/component v1.44.0
 	go.opentelemetry.io/collector/component/componenttest v0.138.0
 	go.opentelemetry.io/collector/confmap v1.44.0
+	go.opentelemetry.io/collector/confmap/xconfmap v0.138.0
 	go.opentelemetry.io/collector/extension v1.44.0
 	go.opentelemetry.io/collector/extension/extensionauth v1.44.0
 	go.opentelemetry.io/collector/extension/extensiontest v0.138.0
