@@ -8,14 +8,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
+	"google.golang.org/protobuf/testing/protocmp"
 
-	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
+	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
@@ -81,7 +83,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 	_ = ss.Scope().Attributes().FromRaw(map[string]any{"otel.scope.name": "io.opentelemetry.instrumentation.http", "otel.scope.version": "1.17.0"})
 	span := ss.Spans().AppendEmpty()
 	//nolint:gosec
-	span.SetEndTimestamp(pcommon.Timestamp(submittedTime))
+	span.SetEndTimestamp(pcommon.Timestamp(int64(1756851083000)))
 	_ = span.Attributes().FromRaw(map[string]any{
 		"http.method":      "GET",
 		"http.status_code": "200",
@@ -105,8 +107,18 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 				{
 					Id:            "mapping1a",
 					ExpireAfterMs: 60000,
-					Conditions: []settings.OtelConditionMapping{
-						{Action: settings.CREATE, Expression: boolExpr(`vars.instanceId == "627cc493"`)},
+					Input: settings.OtelInput{
+						Signal: settings.OtelInputSignalList{
+							settings.TRACES,
+						},
+						Resource: settings.OtelInputResource{
+							Condition: boolExpr(`resourceAttributes["service.instance.id"] == "627cc493"`),
+							Action:    settings.CONTINUE,
+							Scope: &settings.OtelInputScope{
+								Condition: boolExpr(`true`),
+								Action:    settings.CREATE,
+							},
+						},
 					},
 					Identifier: "urn:otel-component-mapping:service",
 					Output: settings.OtelComponentMappingOutput{
@@ -162,8 +174,22 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 					Id:            "mapping1b",
 					Identifier:    "urn:otel-relation-mapping:synchronous",
 					ExpireAfterMs: 300000,
-					Conditions: []settings.OtelConditionMapping{
-						{Action: settings.CREATE, Expression: boolExpr(`spanAttributes["http.method"] == "GET"`)},
+					Input: settings.OtelInput{
+						Signal: settings.OtelInputSignalList{
+							settings.TRACES,
+						},
+						Resource: settings.OtelInputResource{
+							Condition: boolExpr(`true`),
+							Action:    settings.CONTINUE,
+							Scope: &settings.OtelInputScope{
+								Condition: boolExpr(`true`),
+								Action:    settings.CONTINUE,
+								Span: &settings.OtelInputSpan{
+									Condition: boolExpr(`spanAttributes["http.method"] == "GET"`),
+									Action:    settings.CREATE,
+								},
+							},
+						},
 					},
 					Output: settings.OtelRelationMappingOutput{
 						SourceId: strExpr(`${resourceAttributes["service.name"]}`),
@@ -174,18 +200,18 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			},
 			expected: []MessageWithKey{
 				{
-					Key: &topo_stream_v1.TopologyStreamMessageKey{
-						Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+					Key: &topostreamv1.TopologyStreamMessageKey{
+						Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 						DataSource: "urn:otel-component-mapping:service",
 						ShardId:    "0",
 					},
-					Message: &topo_stream_v1.TopologyStreamMessage{
+					Message: &topostreamv1.TopologyStreamMessage{
 						CollectionTimestamp: collectionTimestampMs,
-						SubmittedTimestamp:  submittedTime,
-						Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
-							TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
+						SubmittedTimestamp:  time.Now().UnixMilli(),
+						Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
+							TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
 								ExpiryIntervalMs: 60000,
-								Components: []*topo_stream_v1.TopologyStreamComponent{
+								Components: []*topostreamv1.TopologyStreamComponent{
 									{
 										ExternalId:       "627cc493",
 										Identifiers:      []string{"627cc493", "urn:process:12345", "checkout-service-8675309"},
@@ -207,18 +233,18 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 					},
 				},
 				{
-					Key: &topo_stream_v1.TopologyStreamMessageKey{
-						Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+					Key: &topostreamv1.TopologyStreamMessageKey{
+						Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 						DataSource: "urn:otel-relation-mapping:synchronous",
 						ShardId:    "2",
 					},
-					Message: &topo_stream_v1.TopologyStreamMessage{
+					Message: &topostreamv1.TopologyStreamMessage{
 						CollectionTimestamp: collectionTimestampMs,
-						SubmittedTimestamp:  submittedTime,
-						Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
-							TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
+						SubmittedTimestamp:  time.Now().UnixMilli(),
+						Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
+							TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
 								ExpiryIntervalMs: 300000,
-								Relations: []*topo_stream_v1.TopologyStreamRelation{
+								Relations: []*topostreamv1.TopologyStreamRelation{
 									{
 										ExternalId:       "checkout-service-web-service",
 										SourceIdentifier: "checkout-service",
@@ -236,12 +262,18 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			},
 		},
 		{
-			name: "Reject components with unmatched conditions",
+			name: "Reject (not create) components with unmatched conditions",
 			componentMappings: []settings.OtelComponentMapping{
 				{
 					Id: "mapping2",
-					Conditions: []settings.OtelConditionMapping{
-						{Action: settings.REJECT, Expression: boolExpr(`vars.instanceId == "627cc493"`)},
+					Input: settings.OtelInput{
+						Signal: settings.OtelInputSignalList{
+							settings.TRACES,
+						},
+						Resource: settings.OtelInputResource{
+							Condition: boolExpr(`resourceAttributes["service.instance.id"] != "627cc493"`),
+							Action:    settings.CREATE,
+						},
 					},
 					Output: settings.OtelComponentMappingOutput{
 						Identifier:     strExpr("${vars.instanceId}"),
@@ -291,8 +323,22 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			},
 			relationMappings: []settings.OtelRelationMapping{
 				{
-					Conditions: []settings.OtelConditionMapping{
-						{Action: settings.REJECT, Expression: boolExpr(`spanAttributes["http.method"] == "WRONG"`)},
+					Input: settings.OtelInput{
+						Signal: settings.OtelInputSignalList{
+							settings.TRACES,
+						},
+						Resource: settings.OtelInputResource{
+							Condition: boolExpr(`true`),
+							Action:    settings.CONTINUE,
+							Scope: &settings.OtelInputScope{
+								Condition: boolExpr(`true`),
+								Action:    settings.CONTINUE,
+								Span: &settings.OtelInputSpan{
+									Condition: boolExpr(`spanAttributes["http.method"] == "WRONG"`),
+									Action:    settings.CREATE,
+								},
+							},
+						},
 					},
 					Output: settings.OtelRelationMappingOutput{
 						SourceId: strExpr(`${resourceAttributes["service.name"]}`),
@@ -309,8 +355,14 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 				{
 					Id:         "mapping3a",
 					Identifier: "urn:otel-component-mapping:service",
-					Conditions: []settings.OtelConditionMapping{
-						{Action: settings.CREATE, Expression: boolExpr(`vars.instanceId == "627cc493"`)},
+					Input: settings.OtelInput{
+						Signal: settings.OtelInputSignalList{
+							settings.TRACES,
+						},
+						Resource: settings.OtelInputResource{
+							Condition: boolExpr(`resourceAttributes["service.instance.id"] == "627cc493"`),
+							Action:    settings.CREATE,
+						},
 					},
 					Output: settings.OtelComponentMappingOutput{
 						Identifier:     strExpr("${vars.instanceId}"),
@@ -363,8 +415,22 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 				{
 					Id:         "mapping3b",
 					Identifier: "urn:otel-relation-mapping:synchronous",
-					Conditions: []settings.OtelConditionMapping{
-						{Action: settings.CREATE, Expression: boolExpr(`spanAttributes["http.method"] == "GET"`)},
+					Input: settings.OtelInput{
+						Signal: settings.OtelInputSignalList{
+							settings.TRACES,
+						},
+						Resource: settings.OtelInputResource{
+							Condition: boolExpr(`true`),
+							Action:    settings.CONTINUE,
+							Scope: &settings.OtelInputScope{
+								Condition: boolExpr(`true`),
+								Action:    settings.CONTINUE,
+								Span: &settings.OtelInputSpan{
+									Condition: boolExpr(`spanAttributes["http.method"] == "GET"`),
+									Action:    settings.CREATE,
+								},
+							},
+						},
 					},
 					Output: settings.OtelRelationMappingOutput{
 						SourceId: strExpr(`${resourceAttributes["not-existing-attr"]}`),
@@ -375,18 +441,18 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			},
 			expected: []MessageWithKey{
 				{
-					Key: &topo_stream_v1.TopologyStreamMessageKey{
-						Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+					Key: &topostreamv1.TopologyStreamMessageKey{
+						Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 						DataSource: "urn:otel-component-mapping:service",
 						ShardId:    "unknown",
 					},
-					Message: &topo_stream_v1.TopologyStreamMessage{
+					Message: &topostreamv1.TopologyStreamMessage{
 						CollectionTimestamp: collectionTimestampMs,
-						SubmittedTimestamp:  submittedTime,
-						Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
-							TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
+						SubmittedTimestamp:  time.Now().UnixMilli(),
+						Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
+							TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
 								ExpiryIntervalMs: 0,
-								Errors: []*topo_stream_v1.TopoStreamError{
+								Errors: []*topostreamv1.TopoStreamError{
 									{Message: "name: no such key: not-existing-attr"},
 								},
 							},
@@ -394,18 +460,18 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 					},
 				},
 				{
-					Key: &topo_stream_v1.TopologyStreamMessageKey{
-						Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+					Key: &topostreamv1.TopologyStreamMessageKey{
+						Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 						DataSource: "urn:otel-relation-mapping:synchronous",
 						ShardId:    "unknown",
 					},
-					Message: &topo_stream_v1.TopologyStreamMessage{
+					Message: &topostreamv1.TopologyStreamMessage{
 						CollectionTimestamp: collectionTimestampMs,
-						SubmittedTimestamp:  submittedTime,
-						Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
-							TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
+						SubmittedTimestamp:  time.Now().UnixMilli(),
+						Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
+							TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
 								ExpiryIntervalMs: 0,
-								Errors: []*topo_stream_v1.TopoStreamError{
+								Errors: []*topostreamv1.TopoStreamError{
 									{Message: "sourceId: no such key: not-existing-attr"},
 								},
 							},
@@ -420,8 +486,14 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 				{
 					Id:            "mapping1a",
 					ExpireAfterMs: 60000,
-					Conditions: []settings.OtelConditionMapping{
-						{Action: settings.CREATE, Expression: boolExpr(`vars.isInstanceId`)},
+					Input: settings.OtelInput{
+						Signal: settings.OtelInputSignalList{
+							settings.TRACES,
+						},
+						Resource: settings.OtelInputResource{
+							Condition: boolExpr(`resourceAttributes["service.instance.id"] == "627cc493"`),
+							Action:    settings.CREATE,
+						},
 					},
 					Identifier: "urn:otel-component-mapping:service",
 					Output: settings.OtelComponentMappingOutput{
@@ -465,18 +537,18 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			},
 			expected: []MessageWithKey{
 				{
-					Key: &topo_stream_v1.TopologyStreamMessageKey{
-						Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+					Key: &topostreamv1.TopologyStreamMessageKey{
+						Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 						DataSource: "urn:otel-component-mapping:service",
 						ShardId:    "0",
 					},
-					Message: &topo_stream_v1.TopologyStreamMessage{
+					Message: &topostreamv1.TopologyStreamMessage{
 						CollectionTimestamp: collectionTimestampMs,
-						SubmittedTimestamp:  submittedTime,
-						Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
-							TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
+						SubmittedTimestamp:  time.Now().UnixMilli(),
+						Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
+							TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
 								ExpiryIntervalMs: 60000,
-								Components: []*topo_stream_v1.TopologyStreamComponent{
+								Components: []*topostreamv1.TopologyStreamComponent{
 									{
 										ExternalId:       "627cc493",
 										Identifiers:      []string{"627cc493", "checkout-service-8675309"},
@@ -517,9 +589,9 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 				collectionTimestampMs,
 				metrics,
 			)
-			unifyMessages(&result)
+			unifyMessages(t, &result)
 			//nolint:gosec
-			unifyMessages(&tt.expected)
+			unifyMessages(t, &tt.expected)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -548,29 +620,29 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			collectionTimestampMs,
 			metrics,
 		)
-		actualKeys := make([]topo_stream_v1.TopologyStreamMessageKey, 0)
+		actualKeys := make([]topostreamv1.TopologyStreamMessageKey, 0)
 		for _, message := range result {
 			//nolint:govet
 			actualKeys = append(actualKeys, *message.Key)
 		}
-		expectedKeys := []topo_stream_v1.TopologyStreamMessageKey{
+		expectedKeys := []topostreamv1.TopologyStreamMessageKey{
 			{
-				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+				Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 				DataSource: "urn:otel-component-mapping:cm1",
 				ShardId:    "0",
 			},
 			{
-				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+				Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 				DataSource: "urn:otel-component-mapping:cm2",
 				ShardId:    "0",
 			},
 			{
-				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+				Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 				DataSource: "urn:otel-relation-mapping:rm1",
 				ShardId:    "2",
 			},
 			{
-				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+				Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 				DataSource: "urn:otel-relation-mapping:rm2",
 				ShardId:    "2",
 			},
@@ -628,29 +700,29 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			collectionTimestampMs,
 			metrics,
 		)
-		actualKeys := make([]topo_stream_v1.TopologyStreamMessageKey, 0)
+		actualKeys := make([]topostreamv1.TopologyStreamMessageKey, 0)
 		for _, message := range result {
 			//nolint:govet
 			actualKeys = append(actualKeys, *message.Key)
 		}
-		expectedKeys := []topo_stream_v1.TopologyStreamMessageKey{
+		expectedKeys := []topostreamv1.TopologyStreamMessageKey{
 			{
-				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+				Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 				DataSource: "urn:otel-component-mapping:cm1",
 				ShardId:    "0",
 			},
 			{
-				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+				Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+				DataSource: "urn:otel-component-mapping:cm1",
+				ShardId:    "0",
+			},
+			{
+				Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 				DataSource: "urn:otel-relation-mapping:rm1",
 				ShardId:    "2",
 			},
 			{
-				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
-				DataSource: "urn:otel-component-mapping:cm1",
-				ShardId:    "0",
-			},
-			{
-				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+				Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 				DataSource: "urn:otel-relation-mapping:rm1",
 				ShardId:    "2",
 			},
@@ -684,7 +756,7 @@ func TestPipeline_ConvertMappingRemovalsToTopologyStreamMessage(t *testing.T) {
 		assert.NotNil(t, msg.Key)
 		assert.NotNil(t, msg.Message)
 
-		assert.Equal(t, topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL, msg.Key.Owner)
+		assert.Equal(t, topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL, msg.Key.Owner)
 		assert.Contains(t, msg.Key.DataSource, "mapping")
 
 		// Validate the payload type
@@ -746,24 +818,43 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage_MultipleComponents(t *te
 		})
 		return metrics
 	}()
+
 	componentMappings := []settings.OtelComponentMapping{
 		{
 			Id:            "mapping-multi-dp-comp",
 			ExpireAfterMs: 60000,
-			Conditions: []settings.OtelConditionMapping{
-				{Action: settings.CREATE, Expression: boolExpr(`resourceAttributes["service.name"] == "api-gateway"`)},
+			Input: settings.OtelInput{
+				Signal: settings.OtelInputSignalList{
+					settings.TRACES,
+				},
+				Resource: settings.OtelInputResource{
+					Condition: boolExpr(`resourceAttributes["service.name"] == "api-gateway"`),
+					Action:    settings.CONTINUE,
+					Scope: &settings.OtelInputScope{
+						Condition: boolExpr(`true`),
+						Action:    settings.CONTINUE,
+						Metric: &settings.OtelInputMetric{
+							Condition: boolExpr(`true`),
+							Action:    settings.CONTINUE,
+							Datapoint: &settings.OtelInputDatapoint{
+								Condition: boolExpr(`true`),
+								Action:    settings.CREATE,
+							},
+						},
+					},
+				},
 			},
 			Identifier: "urn:otel-component-mapping:api-route",
 			Output: settings.OtelComponentMappingOutput{
-				Identifier: strExpr(`api-gateway-${metricAttributes["http.route"]}`),
-				Name:       strExpr(`API Route: ${metricAttributes["http.route"]}`),
+				Identifier: strExpr(`api-gateway-${datapointAttributes["http.route"]}`),
+				Name:       strExpr(`API Route: ${datapointAttributes["http.route"]}`),
 				TypeName:   strExpr(`api-route`),
 				DomainName: strExpr(`${resourceAttributes["service.namespace"]}`),
 				LayerName:  strExpr("frontend"),
 				Required: &settings.OtelComponentMappingFieldMapping{
 					Tags: &[]settings.OtelTagMapping{
 						{
-							Source: anyExpr(`${metricAttributes["http.method"]}`),
+							Source: anyExpr(`${datapointAttributes["http.method"]}`),
 							Target: "http_method",
 						},
 					},
@@ -774,18 +865,18 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage_MultipleComponents(t *te
 	relationMappings := []settings.OtelRelationMapping{}
 	expected := []MessageWithKey{
 		{
-			Key: &topo_stream_v1.TopologyStreamMessageKey{
-				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+			Key: &topostreamv1.TopologyStreamMessageKey{
+				Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 				DataSource: "urn:otel-component-mapping:api-route",
 				ShardId:    stableShardID("api-gateway-/products", ShardCount),
 			},
-			Message: &topo_stream_v1.TopologyStreamMessage{
+			Message: &topostreamv1.TopologyStreamMessage{
 				CollectionTimestamp: collectionTimestampMs,
-				SubmittedTimestamp:  submittedTime,
-				Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
-					TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
+				SubmittedTimestamp:  time.Now().UnixMilli(),
+				Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
+					TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
 						ExpiryIntervalMs: 60000,
-						Components: []*topo_stream_v1.TopologyStreamComponent{
+						Components: []*topostreamv1.TopologyStreamComponent{
 							{
 								ExternalId:  "api-gateway-/products",
 								Identifiers: []string{"api-gateway-/products"},
@@ -801,18 +892,18 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage_MultipleComponents(t *te
 			},
 		},
 		{
-			Key: &topo_stream_v1.TopologyStreamMessageKey{
-				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+			Key: &topostreamv1.TopologyStreamMessageKey{
+				Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 				DataSource: "urn:otel-component-mapping:api-route",
 				ShardId:    stableShardID("api-gateway-/users", ShardCount),
 			},
-			Message: &topo_stream_v1.TopologyStreamMessage{
+			Message: &topostreamv1.TopologyStreamMessage{
 				CollectionTimestamp: collectionTimestampMs,
-				SubmittedTimestamp:  submittedTime,
-				Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
-					TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
+				SubmittedTimestamp:  time.Now().UnixMilli(),
+				Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
+					TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
 						ExpiryIntervalMs: 60000,
-						Components: []*topo_stream_v1.TopologyStreamComponent{
+						Components: []*topostreamv1.TopologyStreamComponent{
 							{
 								ExternalId:  "api-gateway-/users",
 								Identifiers: []string{"api-gateway-/users"},
@@ -845,8 +936,8 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage_MultipleComponents(t *te
 		metricsReporter,
 	)
 	// Unify to handle unpredictable map and slice ordering
-	unifyMessages(&result)
-	unifyMessages(&expected)
+	unifyMessages(t, &result)
+	unifyMessages(t, &expected)
 	assert.Equal(t, expected, result)
 }
 
@@ -967,8 +1058,26 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 		{
 			Id:            "mapping1a",
 			ExpireAfterMs: 60000,
-			Conditions: []settings.OtelConditionMapping{
-				{Action: settings.CREATE, Expression: boolExpr(`resourceAttributes["service.instance.id"] == "627cc493"`)},
+			Input: settings.OtelInput{
+				Signal: settings.OtelInputSignalList{
+					settings.METRICS,
+				},
+				Resource: settings.OtelInputResource{
+					Condition: boolExpr(`resourceAttributes["service.instance.id"] == "627cc493"`),
+					Action:    settings.CONTINUE,
+					Scope: &settings.OtelInputScope{
+						Condition: boolExpr(`true`),
+						Action:    settings.CONTINUE,
+						Metric: &settings.OtelInputMetric{
+							Condition: boolExpr(`true`),
+							Action:    settings.CONTINUE,
+							Datapoint: &settings.OtelInputDatapoint{
+								Condition: boolExpr(`true`),
+								Action:    settings.CREATE,
+							},
+						},
+					},
+				},
 			},
 			Identifier: "urn:otel-component-mapping:service",
 			Output: settings.OtelComponentMappingOutput{
@@ -977,7 +1086,7 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 				TypeName:       strExpr(`service-instance`),
 				TypeIdentifier: ptr(strExpr(`service_instance_id`)),
 				DomainName:     strExpr(`${resourceAttributes["service.namespace"]}`),
-				LayerName:      strExpr(`${metricAttributes["net.peer.name"]}`),
+				LayerName:      strExpr(`${datapointAttributes["net.peer.name"]}`),
 				Required: &settings.OtelComponentMappingFieldMapping{
 					AdditionalIdentifiers: &[]settings.OtelStringExpression{
 						{Expression: `${resourceAttributes["k8s.pod.name"]}`},
@@ -991,30 +1100,48 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 			Id:            "mapping1b",
 			Identifier:    "urn:otel-relation-mapping:synchronous",
 			ExpireAfterMs: 300000,
-			Conditions: []settings.OtelConditionMapping{
-				{Action: settings.CREATE, Expression: boolExpr(`metricAttributes["http.method"] == "GET"`)},
+			Input: settings.OtelInput{
+				Signal: settings.OtelInputSignalList{
+					settings.METRICS,
+				},
+				Resource: settings.OtelInputResource{
+					Condition: boolExpr(`true`),
+					Action:    settings.CONTINUE,
+					Scope: &settings.OtelInputScope{
+						Condition: boolExpr(`true`),
+						Action:    settings.CONTINUE,
+						Metric: &settings.OtelInputMetric{
+							Condition: boolExpr(`true`),
+							Action:    settings.CONTINUE,
+							Datapoint: &settings.OtelInputDatapoint{
+								Condition: boolExpr(`datapointAttributes["http.method"] == "GET"`),
+								Action:    settings.CREATE,
+							},
+						},
+					},
+				},
 			},
 			Output: settings.OtelRelationMappingOutput{
 				SourceId: strExpr(`${resourceAttributes["service.name"]}`),
-				TargetId: strExpr(`${metricAttributes["service.name"]}`),
+				TargetId: strExpr(`${datapointAttributes["service.name"]}`),
 				TypeName: strExpr("http-request"),
 			},
 		},
 	}
 	expected := []MessageWithKey{
 		{
-			Key: &topo_stream_v1.TopologyStreamMessageKey{
-				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+			Key: &topostreamv1.TopologyStreamMessageKey{
+				Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 				DataSource: "urn:otel-component-mapping:service",
 				ShardId:    "0",
 			},
-			Message: &topo_stream_v1.TopologyStreamMessage{
+			Message: &topostreamv1.TopologyStreamMessage{
 				CollectionTimestamp: collectionTimestampMs,
-				SubmittedTimestamp:  submittedTime,
-				Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
-					TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
+				SubmittedTimestamp:  time.Now().UnixMilli(),
+				Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
+					TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
 						ExpiryIntervalMs: 60000,
-						Components: []*topo_stream_v1.TopologyStreamComponent{
+						Components: []*topostreamv1.TopologyStreamComponent{
 							{
 								ExternalId:     "627cc493",
 								Identifiers:    []string{"627cc493", "checkout-service-8675309"},
@@ -1031,18 +1158,18 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 			},
 		},
 		{
-			Key: &topo_stream_v1.TopologyStreamMessageKey{
-				Owner:      topo_stream_v1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
+			Key: &topostreamv1.TopologyStreamMessageKey{
+				Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 				DataSource: "urn:otel-relation-mapping:synchronous",
 				ShardId:    "2",
 			},
-			Message: &topo_stream_v1.TopologyStreamMessage{
+			Message: &topostreamv1.TopologyStreamMessage{
 				CollectionTimestamp: collectionTimestampMs,
-				SubmittedTimestamp:  submittedTime,
-				Payload: &topo_stream_v1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
-					TopologyStreamRepeatElementsData: &topo_stream_v1.TopologyStreamRepeatElementsData{
+				SubmittedTimestamp:  time.Now().UnixMilli(),
+				Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
+					TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
 						ExpiryIntervalMs: 300000,
-						Relations: []*topo_stream_v1.TopologyStreamRelation{
+						Relations: []*topostreamv1.TopologyStreamRelation{
 							{
 								ExternalId:       "checkout-service-web-service",
 								SourceIdentifier: "checkout-service",
@@ -1059,6 +1186,7 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 		},
 	}
 
+	unifyMessages(t, &expected) // only need to do this once
 	mapper := NewMapper(context.Background(), makeMeteredCacheSettings(100, 30*time.Second), makeMeteredCacheSettings(100, 30*time.Second))
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1076,9 +1204,11 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 				collectionTimestampMs,
 				metricsReporter,
 			)
-			unifyMessages(&result)
-			unifyMessages(&expected)
-			assert.Equal(t, expected, result)
+			unifyMessages(t, &result)
+			diff := cmp.Diff(expected, result, protocmp.Transform())
+			if diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
 		})
 	}
 }
@@ -1088,8 +1218,22 @@ func createSimpleComponentMapping(id string) settings.OtelComponentMapping {
 		Id:            id,
 		Identifier:    fmt.Sprintf("urn:otel-component-mapping:%s", id),
 		ExpireAfterMs: 60000,
-		Conditions: []settings.OtelConditionMapping{
-			{Action: settings.CREATE, Expression: boolExpr(`spanAttributes["http.method"] == "GET"`)},
+		Input: settings.OtelInput{
+			Signal: settings.OtelInputSignalList{
+				settings.TRACES,
+			},
+			Resource: settings.OtelInputResource{
+				Condition: boolExpr(`true`),
+				Action:    settings.CONTINUE,
+				Scope: &settings.OtelInputScope{
+					Condition: boolExpr(`true`),
+					Action:    settings.CONTINUE,
+					Span: &settings.OtelInputSpan{
+						Condition: boolExpr(`spanAttributes["http.method"] == "GET"`),
+						Action:    settings.CREATE,
+					},
+				},
+			},
 		},
 		Output: settings.OtelComponentMappingOutput{
 			Identifier: strExpr("${resourceAttributes[\"service.instance.id\"]}"),
@@ -1106,8 +1250,22 @@ func createSimpleRelationMapping(id string) settings.OtelRelationMapping {
 		Id:            id,
 		Identifier:    fmt.Sprintf("urn:otel-relation-mapping:%s", id),
 		ExpireAfterMs: 300000,
-		Conditions: []settings.OtelConditionMapping{
-			{Action: settings.CREATE, Expression: boolExpr(`spanAttributes["http.method"] == "GET"`)},
+		Input: settings.OtelInput{
+			Signal: settings.OtelInputSignalList{
+				settings.TRACES,
+			},
+			Resource: settings.OtelInputResource{
+				Condition: boolExpr(`true`),
+				Action:    settings.CONTINUE,
+				Scope: &settings.OtelInputScope{
+					Condition: boolExpr(`true`),
+					Action:    settings.CONTINUE,
+					Span: &settings.OtelInputSpan{
+						Condition: boolExpr(`spanAttributes["http.method"] == "GET"`),
+						Action:    settings.CREATE,
+					},
+				},
+			},
 		},
 		Output: settings.OtelRelationMappingOutput{
 			SourceId: strExpr(`${resourceAttributes["service.name"]}`),
@@ -1117,9 +1275,16 @@ func createSimpleRelationMapping(id string) settings.OtelRelationMapping {
 	}
 }
 
-func unifyMessages(data *[]MessageWithKey) {
+func unifyMessages(t *testing.T, data *[]MessageWithKey) {
+	t.Helper()
+
 	for _, message := range *data {
 		if pl := message.Message.GetTopologyStreamRepeatElementsData(); pl != nil {
+			if message.Message != nil && message.Message.SubmittedTimestamp == 0 {
+				t.Errorf("expected SubmittedTimestamp to be set for message: %+v", message)
+			}
+			message.Message.SubmittedTimestamp = 0
+
 			for _, component := range pl.Components {
 				if component != nil {
 					sort.Strings(component.Tags)

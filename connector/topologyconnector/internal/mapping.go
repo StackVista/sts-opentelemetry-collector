@@ -13,12 +13,7 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 )
 
-var (
-	placeholderRegex = regexp.MustCompile(`\$\{(\d+)\}`)
-)
-
-func init() {
-}
+var placeholderRegex = regexp.MustCompile(`\$\{(\d+)\}`)
 
 type Mapper struct {
 	regexCache    *metrics.MeteredCache[string, *regexp.Regexp]
@@ -42,16 +37,16 @@ func (me *Mapper) MapComponent(
 	expressionEvaluator ExpressionEvaluator,
 	expressionEvalCtx *ExpressionEvalContext,
 ) (*topostreamv1.TopologyStreamComponent, []error) {
-	errors := make([]error, 0)
+	errsToReturn := make([]error, 0)
 
 	evalStr := func(expr settings.OtelStringExpression, field string) string {
 		val, err := expressionEvaluator.EvalStringExpression(expr, expressionEvalCtx)
-		errors = joinError(errors, err, field, false)
+		errsToReturn = joinError(errsToReturn, err, field, false)
 		return val
 	}
 	evalOptStr := func(expr *settings.OtelStringExpression, field string) *string {
 		val, err := expressionEvaluator.EvalOptionalStringExpression(expr, expressionEvalCtx)
-		errors = joinError(errors, err, field, true)
+		errsToReturn = joinError(errsToReturn, err, field, true)
 		return val
 	}
 
@@ -83,7 +78,7 @@ func (me *Mapper) MapComponent(
 			tags[k] = v
 		}
 		for _, err := range errs {
-			errors = joinError(errors, err, "tags", optional)
+			errsToReturn = joinError(errsToReturn, err, "tags", optional)
 		}
 	}
 
@@ -116,8 +111,8 @@ func (me *Mapper) MapComponent(
 		StatusData:         nil,
 		Tags:               tagsList,
 	}
-	if len(errors) > 0 {
-		return nil, errors
+	if len(errsToReturn) > 0 {
+		return nil, errsToReturn
 	}
 	return &result, nil
 }

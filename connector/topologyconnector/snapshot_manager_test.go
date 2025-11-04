@@ -16,11 +16,11 @@ import (
 )
 
 func componentMapping(id string, signals ...stsSettingsApi.OtelInputSignal) stsSettingsApi.OtelComponentMapping {
-	return stsSettingsApi.OtelComponentMapping{Identifier: id, InputSignals: signals}
+	return stsSettingsApi.OtelComponentMapping{Identifier: id, Input: stsSettingsApi.OtelInput{Signal: signals}}
 }
 
 func relationMapping(id string, signals ...stsSettingsApi.OtelInputSignal) stsSettingsApi.OtelRelationMapping {
-	return stsSettingsApi.OtelRelationMapping{Identifier: id, InputSignals: signals}
+	return stsSettingsApi.OtelRelationMapping{Identifier: id, Input: stsSettingsApi.OtelInput{Signal: signals}}
 }
 
 func TestSnapshotManager_StartStopLifecycle(t *testing.T) {
