@@ -793,6 +793,8 @@ type OtelComponentMappingOutput struct {
 
 // OtelInput Combines input signals and conditional resource/scope/metric/span mappings.
 type OtelInput struct {
+	// Resource Defines the conditional mapping at the resource level.
+	// If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
 	Resource OtelInputResource   `json:"resource"`
 	Signal   OtelInputSignalList `json:"signal"`
 }
@@ -800,40 +802,56 @@ type OtelInput struct {
 // OtelInputConditionAction defines model for OtelInputConditionAction.
 type OtelInputConditionAction string
 
-// OtelInputDatapoint defines model for OtelInputDatapoint.
+// OtelInputDatapoint Defines conditional mapping at the resource -> scope -> metric -> datapoint level.
+// If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
 type OtelInputDatapoint struct {
-	Action OtelInputConditionAction `json:"action"`
+	Action *OtelInputConditionAction `json:"action,omitempty"`
 
 	// Condition A Cel expression that must return a boolean
-	Condition OtelBooleanExpression `json:"condition"`
+	Condition *OtelBooleanExpression `json:"condition,omitempty"`
 }
 
-// OtelInputMetric defines model for OtelInputMetric.
+// OtelInputMetric Defines conditional mapping at the resource -> scope -> metric level.
+// If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
 type OtelInputMetric struct {
-	Action OtelInputConditionAction `json:"action"`
+	Action *OtelInputConditionAction `json:"action,omitempty"`
 
 	// Condition A Cel expression that must return a boolean
-	Condition OtelBooleanExpression `json:"condition"`
-	Datapoint *OtelInputDatapoint   `json:"datapoint,omitempty"`
+	Condition *OtelBooleanExpression `json:"condition,omitempty"`
+
+	// Datapoint Defines conditional mapping at the resource -> scope -> metric -> datapoint level.
+	// If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
+	Datapoint *OtelInputDatapoint `json:"datapoint,omitempty"`
 }
 
-// OtelInputResource defines model for OtelInputResource.
+// OtelInputResource Defines the conditional mapping at the resource level.
+// If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
 type OtelInputResource struct {
-	Action OtelInputConditionAction `json:"action"`
+	Action *OtelInputConditionAction `json:"action,omitempty"`
 
 	// Condition A Cel expression that must return a boolean
-	Condition OtelBooleanExpression `json:"condition"`
-	Scope     *OtelInputScope       `json:"scope,omitempty"`
+	Condition *OtelBooleanExpression `json:"condition,omitempty"`
+
+	// Scope Defines conditional mapping at the resource -> scope level.
+	// If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
+	Scope *OtelInputScope `json:"scope,omitempty"`
 }
 
-// OtelInputScope defines model for OtelInputScope.
+// OtelInputScope Defines conditional mapping at the resource -> scope level.
+// If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
 type OtelInputScope struct {
-	Action OtelInputConditionAction `json:"action"`
+	Action *OtelInputConditionAction `json:"action,omitempty"`
 
 	// Condition A Cel expression that must return a boolean
-	Condition OtelBooleanExpression `json:"condition"`
-	Metric    *OtelInputMetric      `json:"metric,omitempty"`
-	Span      *OtelInputSpan        `json:"span,omitempty"`
+	Condition *OtelBooleanExpression `json:"condition,omitempty"`
+
+	// Metric Defines conditional mapping at the resource -> scope -> metric level.
+	// If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
+	Metric *OtelInputMetric `json:"metric,omitempty"`
+
+	// Span Defines conditional mapping at the resource -> scope -> span level.
+	// If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
+	Span *OtelInputSpan `json:"span,omitempty"`
 }
 
 // OtelInputSignal Signals exported by OpenTelemetry, which can be used as an input for an OTel topology mapping.
@@ -849,12 +867,13 @@ type OtelInputSignal string
 // OtelInputSignalList defines model for OtelInputSignalList.
 type OtelInputSignalList = []OtelInputSignal
 
-// OtelInputSpan defines model for OtelInputSpan.
+// OtelInputSpan Defines conditional mapping at the resource -> scope -> span level.
+// If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
 type OtelInputSpan struct {
-	Action OtelInputConditionAction `json:"action"`
+	Action *OtelInputConditionAction `json:"action,omitempty"`
 
 	// Condition A Cel expression that must return a boolean
-	Condition OtelBooleanExpression `json:"condition"`
+	Condition *OtelBooleanExpression `json:"condition,omitempty"`
 }
 
 // OtelMapping defines model for OtelMapping.

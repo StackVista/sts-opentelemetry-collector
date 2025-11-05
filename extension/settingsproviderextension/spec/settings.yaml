@@ -1076,6 +1076,9 @@ components:
 
     OtelInputResource:
       type: object
+      description: |-
+        Defines the conditional mapping at the resource level.
+        If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
       properties:
         condition:
           $ref: "#/components/schemas/OtelBooleanExpression"
@@ -1083,12 +1086,12 @@ components:
           $ref: "#/components/schemas/OtelInputConditionAction"
         scope:
           $ref: "#/components/schemas/OtelInputScope"
-      required:
-        - condition
-        - action
 
     OtelInputScope:
       type: object
+      description: |-
+        Defines conditional mapping at the resource -> scope level.
+        If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
       properties:
         condition:
           $ref: "#/components/schemas/OtelBooleanExpression"
@@ -1098,12 +1101,12 @@ components:
           $ref: "#/components/schemas/OtelInputMetric"
         span:
           $ref: "#/components/schemas/OtelInputSpan"
-      required:
-        - condition
-        - action
 
     OtelInputMetric:
       type: object
+      description: |-
+        Defines conditional mapping at the resource -> scope -> metric level.
+        If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
       properties:
         condition:
           $ref: "#/components/schemas/OtelBooleanExpression"
@@ -1111,31 +1114,28 @@ components:
           $ref: "#/components/schemas/OtelInputConditionAction"
         datapoint:
           $ref: "#/components/schemas/OtelInputDatapoint"
-      required:
-        - condition
-        - action
 
     OtelInputDatapoint:
       type: object
+      description: |-
+        Defines conditional mapping at the resource -> scope -> metric -> datapoint level.
+        If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
       properties:
         condition:
           $ref: "#/components/schemas/OtelBooleanExpression"
         action:
           $ref: "#/components/schemas/OtelInputConditionAction"
-      required:
-        - condition
-        - action
 
     OtelInputSpan:
       type: object
+      description: |-
+        Defines conditional mapping at the resource -> scope -> span level.
+        If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
       properties:
         condition:
           $ref: "#/components/schemas/OtelBooleanExpression"
         action:
           $ref: "#/components/schemas/OtelInputConditionAction"
-      required:
-        - condition
-        - action
 
     OtelComponentMappingOutput:
       type: object

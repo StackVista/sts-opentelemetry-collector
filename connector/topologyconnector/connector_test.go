@@ -611,6 +611,8 @@ func boolExpr(s string) settings.OtelBooleanExpression {
 	}
 }
 
+func ptr[T any](v T) *T { return &v }
+
 func createSimpleTraceComponentMapping(id string) settings.OtelComponentMapping {
 	return settings.OtelComponentMapping{
 		Id:            id,
@@ -621,14 +623,10 @@ func createSimpleTraceComponentMapping(id string) settings.OtelComponentMapping 
 				settings.TRACES,
 			},
 			Resource: settings.OtelInputResource{
-				Condition: boolExpr(`true`),
-				Action:    settings.CONTINUE,
 				Scope: &settings.OtelInputScope{
-					Condition: boolExpr(`true`),
-					Action:    settings.CONTINUE,
 					Span: &settings.OtelInputSpan{
-						Condition: boolExpr(`spanAttributes["http.method"] == "GET"`),
-						Action:    settings.CREATE,
+						Condition: ptr(boolExpr(`spanAttributes["http.method"] == "GET"`)),
+						Action:    ptr(settings.CREATE),
 					},
 				},
 			},
@@ -661,14 +659,10 @@ func createSimpleTraceRelationMapping(id string) settings.OtelRelationMapping {
 				settings.TRACES,
 			},
 			Resource: settings.OtelInputResource{
-				Condition: boolExpr(`true`),
-				Action:    settings.CONTINUE,
 				Scope: &settings.OtelInputScope{
-					Condition: boolExpr(`true`),
-					Action:    settings.CONTINUE,
 					Span: &settings.OtelInputSpan{
-						Condition: boolExpr(`spanAttributes["http.status_code"] == "200"`),
-						Action:    settings.CREATE,
+						Condition: ptr(boolExpr(`spanAttributes["http.status_code"] == "200"`)),
+						Action:    ptr(settings.CREATE),
 					},
 				},
 			},
@@ -691,17 +685,11 @@ func createSimpleMetricComponentMapping(id string) settings.OtelComponentMapping
 				settings.METRICS,
 			},
 			Resource: settings.OtelInputResource{
-				Condition: boolExpr(`true`),
-				Action:    settings.CONTINUE,
 				Scope: &settings.OtelInputScope{
-					Condition: boolExpr(`true`),
-					Action:    settings.CONTINUE,
 					Metric: &settings.OtelInputMetric{
-						Condition: boolExpr(`true`),
-						Action:    settings.CONTINUE,
 						Datapoint: &settings.OtelInputDatapoint{
-							Condition: boolExpr(`datapointAttributes["http.method"] == "GET"`),
-							Action:    settings.CREATE,
+							Condition: ptr(boolExpr(`datapointAttributes["http.method"] == "GET"`)),
+							Action:    ptr(settings.CREATE),
 						},
 					},
 				},
@@ -735,17 +723,11 @@ func createSimpleMetricRelationMapping(id string) settings.OtelRelationMapping {
 				settings.METRICS,
 			},
 			Resource: settings.OtelInputResource{
-				Condition: boolExpr(`true`),
-				Action:    settings.CONTINUE,
 				Scope: &settings.OtelInputScope{
-					Condition: boolExpr(`true`),
-					Action:    settings.CONTINUE,
 					Metric: &settings.OtelInputMetric{
-						Condition: boolExpr(`true`),
-						Action:    settings.CONTINUE,
 						Datapoint: &settings.OtelInputDatapoint{
-							Condition: boolExpr(`datapointAttributes["http.status_code"] == "200"`),
-							Action:    settings.CREATE,
+							Condition: ptr(boolExpr(`datapointAttributes["http.status_code"] == "200"`)),
+							Action:    ptr(settings.CREATE),
 						},
 					},
 				},

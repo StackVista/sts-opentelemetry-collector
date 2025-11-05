@@ -17,42 +17,56 @@ type MappingHandler[T settings.SettingExtension] struct {
 func (h *MappingHandler[T]) HandleVisitLevel(
 	ctx context.Context,
 	evalCtx *ExpressionEvalContext,
-	action settings.OtelInputConditionAction,
-	condition settings.OtelBooleanExpression,
+	action *settings.OtelInputConditionAction,
+	condition *settings.OtelBooleanExpression,
 ) VisitResult {
-	ok, err := h.mappingCtx.BaseCtx.Evaluator.EvalBooleanExpression(condition, evalCtx)
-	if err != nil {
-		return VisitSkip
-	}
-
+	ok, act := h.evaluateAndMaybeExecute(ctx, evalCtx, action, condition)
 	if !ok {
 		return VisitSkip
 	}
-
-	switch action {
-	case settings.CONTINUE:
+	if act == settings.CONTINUE {
 		return VisitContinue
-	case settings.CREATE:
-		h.mappingCtx.ExecuteMapping(ctx, evalCtx)
 	}
-
 	return VisitSkip
 }
 
+// HandleTerminalVisit doesn't return a VisitResult
 func (h *MappingHandler[T]) HandleTerminalVisit(
 	ctx context.Context,
 	evalCtx *ExpressionEvalContext,
-	action settings.OtelInputConditionAction,
-	condition settings.OtelBooleanExpression,
+	action *settings.OtelInputConditionAction,
+	condition *settings.OtelBooleanExpression,
 ) {
-	ok, err := h.mappingCtx.BaseCtx.Evaluator.EvalBooleanExpression(condition, evalCtx)
-	if err != nil {
-		return
+	h.evaluateAndMaybeExecute(ctx, evalCtx, action, condition)
+}
+
+func (h *MappingHandler[T]) evaluateAndMaybeExecute(
+	ctx context.Context,
+	evalCtx *ExpressionEvalContext,
+	action *settings.OtelInputConditionAction,
+	condition *settings.OtelBooleanExpression,
+) (ok bool, act settings.OtelInputConditionAction) {
+	// Default behavior: if action is nil, treat as CONTINUE
+	act = settings.CONTINUE
+	if action != nil {
+		act = *action
 	}
 
-	if ok && action == settings.CREATE {
+	// Default behavior: if condition is nil, treat as true
+	ok = true
+	if condition != nil {
+		var err error
+		ok, err = h.mappingCtx.BaseCtx.Evaluator.EvalBooleanExpression(*condition, evalCtx)
+		if err != nil {
+			return false, act
+		}
+	}
+
+	if ok && act == settings.CREATE {
 		h.mappingCtx.ExecuteMapping(ctx, evalCtx)
 	}
+
+	return ok, act
 }
 
 // ExecuteMapping evaluates and executes a mapping of type T.

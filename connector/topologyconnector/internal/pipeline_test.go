@@ -112,11 +112,9 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							settings.TRACES,
 						},
 						Resource: settings.OtelInputResource{
-							Condition: boolExpr(`resourceAttributes["service.instance.id"] == "627cc493"`),
-							Action:    settings.CONTINUE,
+							Condition: ptr(boolExpr(`resourceAttributes["service.instance.id"] == "627cc493"`)),
 							Scope: &settings.OtelInputScope{
-								Condition: boolExpr(`true`),
-								Action:    settings.CREATE,
+								Action: ptr(settings.CREATE),
 							},
 						},
 					},
@@ -179,14 +177,10 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							settings.TRACES,
 						},
 						Resource: settings.OtelInputResource{
-							Condition: boolExpr(`true`),
-							Action:    settings.CONTINUE,
 							Scope: &settings.OtelInputScope{
-								Condition: boolExpr(`true`),
-								Action:    settings.CONTINUE,
 								Span: &settings.OtelInputSpan{
-									Condition: boolExpr(`spanAttributes["http.method"] == "GET"`),
-									Action:    settings.CREATE,
+									Condition: ptr(boolExpr(`spanAttributes["http.method"] == "GET"`)),
+									Action:    ptr(settings.CREATE),
 								},
 							},
 						},
@@ -271,8 +265,8 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							settings.TRACES,
 						},
 						Resource: settings.OtelInputResource{
-							Condition: boolExpr(`resourceAttributes["service.instance.id"] != "627cc493"`),
-							Action:    settings.CREATE,
+							Condition: ptr(boolExpr(`resourceAttributes["service.instance.id"] != "627cc493"`)),
+							Action:    ptr(settings.CREATE),
 						},
 					},
 					Output: settings.OtelComponentMappingOutput{
@@ -328,14 +322,10 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							settings.TRACES,
 						},
 						Resource: settings.OtelInputResource{
-							Condition: boolExpr(`true`),
-							Action:    settings.CONTINUE,
 							Scope: &settings.OtelInputScope{
-								Condition: boolExpr(`true`),
-								Action:    settings.CONTINUE,
 								Span: &settings.OtelInputSpan{
-									Condition: boolExpr(`spanAttributes["http.method"] == "WRONG"`),
-									Action:    settings.CREATE,
+									Condition: ptr(boolExpr(`spanAttributes["http.method"] == "WRONG"`)),
+									Action:    ptr(settings.CREATE),
 								},
 							},
 						},
@@ -360,8 +350,8 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							settings.TRACES,
 						},
 						Resource: settings.OtelInputResource{
-							Condition: boolExpr(`resourceAttributes["service.instance.id"] == "627cc493"`),
-							Action:    settings.CREATE,
+							Condition: ptr(boolExpr(`resourceAttributes["service.instance.id"] == "627cc493"`)),
+							Action:    ptr(settings.CREATE),
 						},
 					},
 					Output: settings.OtelComponentMappingOutput{
@@ -420,14 +410,10 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							settings.TRACES,
 						},
 						Resource: settings.OtelInputResource{
-							Condition: boolExpr(`true`),
-							Action:    settings.CONTINUE,
 							Scope: &settings.OtelInputScope{
-								Condition: boolExpr(`true`),
-								Action:    settings.CONTINUE,
 								Span: &settings.OtelInputSpan{
-									Condition: boolExpr(`spanAttributes["http.method"] == "GET"`),
-									Action:    settings.CREATE,
+									Condition: ptr(boolExpr(`spanAttributes["http.method"] == "GET"`)),
+									Action:    ptr(settings.CREATE),
 								},
 							},
 						},
@@ -491,8 +477,8 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							settings.TRACES,
 						},
 						Resource: settings.OtelInputResource{
-							Condition: boolExpr(`resourceAttributes["service.instance.id"] == "627cc493"`),
-							Action:    settings.CREATE,
+							Condition: ptr(boolExpr(`resourceAttributes["service.instance.id"] == "627cc493"`)),
+							Action:    ptr(settings.CREATE),
 						},
 					},
 					Identifier: "urn:otel-component-mapping:service",
@@ -828,17 +814,11 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage_MultipleComponents(t *te
 					settings.TRACES,
 				},
 				Resource: settings.OtelInputResource{
-					Condition: boolExpr(`resourceAttributes["service.name"] == "api-gateway"`),
-					Action:    settings.CONTINUE,
+					Condition: ptr(boolExpr(`resourceAttributes["service.name"] == "api-gateway"`)),
 					Scope: &settings.OtelInputScope{
-						Condition: boolExpr(`true`),
-						Action:    settings.CONTINUE,
 						Metric: &settings.OtelInputMetric{
-							Condition: boolExpr(`true`),
-							Action:    settings.CONTINUE,
 							Datapoint: &settings.OtelInputDatapoint{
-								Condition: boolExpr(`true`),
-								Action:    settings.CREATE,
+								Action: ptr(settings.CREATE),
 							},
 						},
 					},
@@ -1063,17 +1043,11 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 					settings.METRICS,
 				},
 				Resource: settings.OtelInputResource{
-					Condition: boolExpr(`resourceAttributes["service.instance.id"] == "627cc493"`),
-					Action:    settings.CONTINUE,
+					Condition: ptr(boolExpr(`resourceAttributes["service.instance.id"] == "627cc493"`)),
 					Scope: &settings.OtelInputScope{
-						Condition: boolExpr(`true`),
-						Action:    settings.CONTINUE,
 						Metric: &settings.OtelInputMetric{
-							Condition: boolExpr(`true`),
-							Action:    settings.CONTINUE,
 							Datapoint: &settings.OtelInputDatapoint{
-								Condition: boolExpr(`true`),
-								Action:    settings.CREATE,
+								Action: ptr(settings.CREATE),
 							},
 						},
 					},
@@ -1105,17 +1079,11 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 					settings.METRICS,
 				},
 				Resource: settings.OtelInputResource{
-					Condition: boolExpr(`true`),
-					Action:    settings.CONTINUE,
 					Scope: &settings.OtelInputScope{
-						Condition: boolExpr(`true`),
-						Action:    settings.CONTINUE,
 						Metric: &settings.OtelInputMetric{
-							Condition: boolExpr(`true`),
-							Action:    settings.CONTINUE,
 							Datapoint: &settings.OtelInputDatapoint{
-								Condition: boolExpr(`datapointAttributes["http.method"] == "GET"`),
-								Action:    settings.CREATE,
+								Condition: ptr(boolExpr(`datapointAttributes["http.method"] == "GET"`)),
+								Action:    ptr(settings.CREATE),
 							},
 						},
 					},
@@ -1223,14 +1191,10 @@ func createSimpleComponentMapping(id string) settings.OtelComponentMapping {
 				settings.TRACES,
 			},
 			Resource: settings.OtelInputResource{
-				Condition: boolExpr(`true`),
-				Action:    settings.CONTINUE,
 				Scope: &settings.OtelInputScope{
-					Condition: boolExpr(`true`),
-					Action:    settings.CONTINUE,
 					Span: &settings.OtelInputSpan{
-						Condition: boolExpr(`spanAttributes["http.method"] == "GET"`),
-						Action:    settings.CREATE,
+						Condition: ptr(boolExpr(`spanAttributes["http.method"] == "GET"`)),
+						Action:    ptr(settings.CREATE),
 					},
 				},
 			},
@@ -1255,14 +1219,10 @@ func createSimpleRelationMapping(id string) settings.OtelRelationMapping {
 				settings.TRACES,
 			},
 			Resource: settings.OtelInputResource{
-				Condition: boolExpr(`true`),
-				Action:    settings.CONTINUE,
 				Scope: &settings.OtelInputScope{
-					Condition: boolExpr(`true`),
-					Action:    settings.CONTINUE,
 					Span: &settings.OtelInputSpan{
-						Condition: boolExpr(`spanAttributes["http.method"] == "GET"`),
-						Action:    settings.CREATE,
+						Condition: ptr(boolExpr(`spanAttributes["http.method"] == "GET"`)),
+						Action:    ptr(settings.CREATE),
 					},
 				},
 			},
