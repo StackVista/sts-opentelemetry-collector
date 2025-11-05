@@ -2,7 +2,6 @@ package internal
 
 import (
 	"context"
-	"fmt"
 
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
@@ -23,39 +22,20 @@ func ConvertSpanToTopologyStreamMessage(
 	collectionTimestampMs int64,
 	metricsRecorder metrics.ConnectorMetricsRecorder,
 ) []MessageWithKey {
-	result := make([]MessageWithKey, 0)
-
 	traceTraverser := NewTracesTraverser(traceData)
-	baseCtx := BaseContext{
-		Signal:              settings.TRACES,
-		Mapper:              mapper,
-		Evaluator:           eval,
-		CollectionTimestamp: collectionTimestampMs,
-		MetricsRecorder:     metricsRecorder,
-		Results:             &result,
-	}
 
-	for _, componentMapping := range componentMappings {
-		mappingCtx := &MappingContext[settings.OtelComponentMapping]{
-			BaseCtx: baseCtx,
-			Mapping: componentMapping,
-		}
-		v := NewGenericMappingVisitor(mappingCtx)
-		traceTraverser.Traverse(ctx, v)
-	}
-
-	for _, relationMapping := range relationMappings {
-		mappingCtx := &MappingContext[settings.OtelRelationMapping]{
-			BaseCtx: baseCtx,
-			Mapping: relationMapping,
-		}
-		v := NewGenericMappingVisitor(mappingCtx)
-		traceTraverser.Traverse(ctx, v)
-	}
-
-	logResultSummary(logger, result, settings.SettingTypeOtelComponentMapping, settings.TRACES)
-
-	return result
+	return convertSignalDataToTopologyStreamMessage(
+		ctx,
+		logger,
+		traceTraverser,
+		settings.TRACES,
+		eval,
+		mapper,
+		componentMappings,
+		relationMappings,
+		collectionTimestampMs,
+		metricsRecorder,
+	)
 }
 
 func ConvertMetricsToTopologyStreamMessage(
@@ -69,11 +49,38 @@ func ConvertMetricsToTopologyStreamMessage(
 	collectionTimestampMs int64,
 	metricsRecorder metrics.ConnectorMetricsRecorder,
 ) []MessageWithKey {
+	metricsTraverser := NewMetricsTraverser(metricData)
+
+	return convertSignalDataToTopologyStreamMessage(
+		ctx,
+		logger,
+		metricsTraverser,
+		settings.METRICS,
+		eval,
+		mapper,
+		componentMappings,
+		relationMappings,
+		collectionTimestampMs,
+		metricsRecorder,
+	)
+}
+
+func convertSignalDataToTopologyStreamMessage(
+	ctx context.Context,
+	logger *zap.Logger,
+	traverser SignalTraverser,
+	signal settings.OtelInputSignal,
+	eval ExpressionEvaluator,
+	mapper *Mapper,
+	componentMappings []settings.OtelComponentMapping,
+	relationMappings []settings.OtelRelationMapping,
+	collectionTimestampMs int64,
+	metricsRecorder metrics.ConnectorMetricsRecorder,
+) []MessageWithKey {
 	result := make([]MessageWithKey, 0)
 
-	metricsTraverser := NewMetricsTraverser(metricData)
 	baseCtx := BaseContext{
-		Signal:              settings.METRICS,
+		Signal:              signal,
 		Mapper:              mapper,
 		Evaluator:           eval,
 		CollectionTimestamp: collectionTimestampMs,
@@ -87,7 +94,7 @@ func ConvertMetricsToTopologyStreamMessage(
 			Mapping: componentMapping,
 		}
 		v := NewGenericMappingVisitor(mappingCtx)
-		metricsTraverser.Traverse(ctx, v)
+		traverser.Traverse(ctx, v)
 	}
 
 	for _, relationMapping := range relationMappings {
@@ -96,10 +103,10 @@ func ConvertMetricsToTopologyStreamMessage(
 			Mapping: relationMapping,
 		}
 		v := NewGenericMappingVisitor(mappingCtx)
-		metricsTraverser.Traverse(ctx, v)
+		traverser.Traverse(ctx, v)
 	}
 
-	logResultSummary(logger, result, settings.SettingTypeOtelComponentMapping, settings.TRACES)
+	logResultSummary(logger, result, signal)
 
 	return result
 }
@@ -107,14 +114,14 @@ func ConvertMetricsToTopologyStreamMessage(
 func logResultSummary(
 	logger *zap.Logger,
 	results []MessageWithKey,
-	settingType settings.SettingType,
 	signal settings.OtelInputSignal,
 ) {
 	if !logger.Core().Enabled(zap.DebugLevel) {
 		return
 	}
 
-	mappingsOutput := 0
+	components := 0
+	relations := 0
 	mappingErrs := 0
 
 	for _, result := range results {
@@ -127,21 +134,17 @@ func logResultSummary(
 
 		data := repeatData.TopologyStreamRepeatElementsData
 
-		switch settingType {
-		case settings.SettingTypeOtelComponentMapping:
-			mappingsOutput += len(data.Components)
-		case settings.SettingTypeOtelRelationMapping:
-			mappingsOutput += len(data.Relations)
-		}
-
+		components += len(data.Components)
+		relations += len(data.Relations)
 		mappingErrs += len(data.Errors)
 	}
 
 	logger.Debug(
 		"Converted signal to topology stream messages",
 		zap.String("signal", string(signal)),
-		zap.Int(string(settingType), mappingsOutput),
-		zap.Int(fmt.Sprintf("%sErrs", string(settingType)), mappingErrs),
+		zap.Int("components", components),
+		zap.Int("relations", relations),
+		zap.Int("mappingErrs", mappingErrs),
 	)
 }
 

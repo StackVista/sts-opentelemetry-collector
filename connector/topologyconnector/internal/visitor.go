@@ -50,7 +50,7 @@ func NewGenericMappingVisitor[T settings.SettingExtension](
 	mappingCtx *MappingContext[T],
 ) *GenericMappingVisitor[T] {
 	return &GenericMappingVisitor[T]{
-		handler:    &MappingHandler[T]{mappingCtx},
+		handler:    NewMappingHandler[T](mappingCtx),
 		mappingCtx: mappingCtx,
 	}
 }

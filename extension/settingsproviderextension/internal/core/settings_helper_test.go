@@ -2,9 +2,10 @@
 package core
 
 import (
+	"testing"
+
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestSettingsHelper_GetSettingId(t *testing.T) {
@@ -95,6 +96,15 @@ func newOtelComponentMapping(id string) stsSettingsModel.OtelComponentMapping {
 		CreatedTimeStamp: 2,
 		Shard:            0,
 		Type:             "OtelComponentMapping",
+		Input: stsSettingsModel.OtelInput{
+			Signal: stsSettingsModel.OtelInputSignalList{
+				stsSettingsModel.TRACES,
+			},
+			Resource: stsSettingsModel.OtelInputResource{
+				Action:    ptr(stsSettingsModel.CREATE),
+				Condition: ptr(stsSettingsModel.OtelBooleanExpression{Expression: "${input.attributes['service.name'] == 'test'}"}),
+			},
+		},
 		Output: stsSettingsModel.OtelComponentMappingOutput{
 			DomainIdentifier: newOtelStringExpression("host"),
 			DomainName:       *newOtelStringExpression("domain"),
@@ -102,14 +112,6 @@ func newOtelComponentMapping(id string) stsSettingsModel.OtelComponentMapping {
 			LayerName:        *newOtelStringExpression("Infrastructure"),
 			Name:             *newOtelStringExpression("${input.attributes['service.name']}"),
 			TypeName:         *newOtelStringExpression("host-component-type"),
-		},
-		Conditions: []stsSettingsModel.OtelConditionMapping{
-			{
-				Action: stsSettingsModel.CREATE,
-				Expression: stsSettingsModel.OtelBooleanExpression{
-					Expression: "${input.attributes['service.name'] == 'test'}",
-				},
-			},
 		},
 	}
 }
@@ -144,3 +146,5 @@ func newOtelStringExpression(expr string) *stsSettingsModel.OtelStringExpression
 		Expression: expr,
 	}
 }
+
+func ptr[T any](v T) *T { return &v }

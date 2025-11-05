@@ -28,6 +28,25 @@ type ConnectorMetricsRecorder interface {
 	IncMappingsRemoved(ctx context.Context, n int64, settingType settings.SettingType)
 }
 
+type NoopConnectorMetricsRecorder struct{}
+
+func (n *NoopConnectorMetricsRecorder) IncInputsProcessed(_ context.Context, _ int64, _ settings.OtelInputSignal) {
+}
+func (n *NoopConnectorMetricsRecorder) IncTopologyProduced(
+	_ context.Context, _ int64, _ settings.SettingType, _ settings.OtelInputSignal) {
+}
+func (n *NoopConnectorMetricsRecorder) IncMappingErrors(
+	_ context.Context, _ int64, _ settings.SettingType, _ settings.OtelInputSignal) {
+}
+func (n *NoopConnectorMetricsRecorder) RecordMappingDuration(
+	_ context.Context, _ time.Duration, _ settings.OtelInputSignal, _ settings.SettingType, _ string) {
+}
+func (n *NoopConnectorMetricsRecorder) RecordRequestDuration(
+	_ context.Context, _ time.Duration, _ settings.OtelInputSignal) {
+}
+func (n *NoopConnectorMetricsRecorder) IncMappingsRemoved(_ context.Context, _ int64, _ settings.SettingType) {
+}
+
 type ConnectorMetrics struct {
 	// Counters
 	inputsProcessed metric.Int64Counter

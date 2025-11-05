@@ -11,7 +11,19 @@ import (
 
 // MappingHandler evaluates mapping conditions and triggers mapping execution.
 type MappingHandler[T settings.SettingExtension] struct {
-	mappingCtx *MappingContext[T]
+	MappingCtx *MappingContext[T]
+
+	// ExecFunc is called to execute the mapping.
+	// In production, points to MappingCtx.ExecuteMapping.
+	// In tests, it can be overridden to record calls.
+	ExecFunc func(ctx context.Context, evalCtx *ExpressionEvalContext)
+}
+
+// NewMappingHandler creates a new handler. In production, ExecFunc defaults to MappingCtx.ExecuteMapping
+func NewMappingHandler[T settings.SettingExtension](ctx *MappingContext[T]) *MappingHandler[T] {
+	h := &MappingHandler[T]{MappingCtx: ctx}
+	h.ExecFunc = ctx.ExecuteMapping
+	return h
 }
 
 func (h *MappingHandler[T]) HandleVisitLevel(
@@ -45,42 +57,30 @@ func (h *MappingHandler[T]) evaluateAndMaybeExecute(
 	evalCtx *ExpressionEvalContext,
 	action *settings.OtelInputConditionAction,
 	condition *settings.OtelBooleanExpression,
-) (ok bool, act settings.OtelInputConditionAction) {
-	// Default behavior: if action is nil, treat as CONTINUE
-	act = settings.CONTINUE
+) (bool, settings.OtelInputConditionAction) {
+	// Default: CONTINUE if action not provided
+	act := settings.CONTINUE
 	if action != nil {
 		act = *action
 	}
 
-	// Default behavior: if condition is nil, treat as true
-	ok = true
+	// Default: true if condition not provided
+	ok := true
 	if condition != nil {
 		var err error
-		ok, err = h.mappingCtx.BaseCtx.Evaluator.EvalBooleanExpression(*condition, evalCtx)
+		ok, err = h.MappingCtx.BaseCtx.Evaluator.EvalBooleanExpression(*condition, evalCtx)
 		if err != nil {
-			return false, act
+			// If evaluation fails, treat as condition not met and never execute
+			ok = false
 		}
 	}
 
+	// Execute mapping only if condition is true and action is CREATE
 	if ok && act == settings.CREATE {
-		h.mappingCtx.ExecuteMapping(ctx, evalCtx)
+		h.ExecFunc(ctx, evalCtx)
 	}
 
 	return ok, act
-}
-
-// ExecuteMapping evaluates and executes a mapping of type T.
-func (v *MappingContext[T]) ExecuteMapping(
-	ctx context.Context,
-	evalCtx *ExpressionEvalContext,
-) {
-	switch mapping := any(v.Mapping).(type) {
-	case settings.OtelComponentMapping:
-		v.handleComponent(ctx, evalCtx, mapping)
-	case settings.OtelRelationMapping:
-		v.handleRelation(ctx, evalCtx, mapping)
-	default:
-	}
 }
 
 // BaseContext contains shared dependencies used by all mapping contexts.
@@ -97,6 +97,20 @@ type BaseContext struct {
 type MappingContext[T settings.SettingExtension] struct {
 	BaseCtx BaseContext
 	Mapping T
+}
+
+// ExecuteMapping evaluates and executes a mapping of type T.
+func (v *MappingContext[T]) ExecuteMapping(
+	ctx context.Context,
+	evalCtx *ExpressionEvalContext,
+) {
+	switch mapping := any(v.Mapping).(type) {
+	case settings.OtelComponentMapping:
+		v.handleComponent(ctx, evalCtx, mapping)
+	case settings.OtelRelationMapping:
+		v.handleRelation(ctx, evalCtx, mapping)
+	default:
+	}
 }
 
 func (v *MappingContext[T]) handleComponent(

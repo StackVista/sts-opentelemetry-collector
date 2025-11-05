@@ -128,11 +128,10 @@ type OtelComponentMappingSpec struct {
 	MappingID         string
 	MappingIdentifier string
 	Name              string
-	Conditions        []stsSettingsModel.OtelConditionMapping
+	Input             stsSettingsModel.OtelInput
 	Output            stsSettingsModel.OtelComponentMappingOutput
 	Vars              []stsSettingsModel.OtelVariableMapping
 	ExpireAfterMs     int64
-	InputSignals      []stsSettingsModel.OtelInputSignal
 }
 
 func (s OtelComponentMappingSnapshot) Type() stsSettingsModel.SettingType {
@@ -150,11 +149,10 @@ func (s OtelComponentMappingSnapshot) Records(topic string) ([]*kgo.Record, erro
 				Id:               mapping.MappingID,
 				Identifier:       mapping.MappingIdentifier,
 				Name:             mapping.Name,
-				Conditions:       mapping.Conditions,
+				Input:            mapping.Input,
 				Output:           mapping.Output,
 				Shard:            0,
 				Type:             stsSettingsModel.OtelComponentMappingTypeOtelComponentMapping,
-				InputSignals:     mapping.InputSignals,
 			}
 			if len(mapping.Vars) > 0 {
 				component.Vars = &mapping.Vars
@@ -179,11 +177,10 @@ type OtelRelationMappingSnapshot struct {
 type OtelRelationMappingSpec struct {
 	MappingID         string
 	MappingIdentifier string
-	Conditions        []stsSettingsModel.OtelConditionMapping
+	Input             stsSettingsModel.OtelInput
 	Output            stsSettingsModel.OtelRelationMappingOutput
 	Vars              []stsSettingsModel.OtelVariableMapping
 	ExpireAfterMs     int64
-	InputSignals      []stsSettingsModel.OtelInputSignal
 }
 
 func (s OtelRelationMappingSnapshot) Type() stsSettingsModel.SettingType {
@@ -200,11 +197,10 @@ func (s OtelRelationMappingSnapshot) Records(topic string) ([]*kgo.Record, error
 				ExpireAfterMs:    mapping.ExpireAfterMs,
 				Id:               mapping.MappingID,
 				Identifier:       mapping.MappingIdentifier,
-				Conditions:       mapping.Conditions,
+				Input:            mapping.Input,
 				Output:           mapping.Output,
 				Shard:            0,
 				Type:             stsSettingsModel.OtelRelationMappingTypeOtelRelationMapping,
-				InputSignals:     mapping.InputSignals,
 			}
 
 			if len(mapping.Vars) > 0 {

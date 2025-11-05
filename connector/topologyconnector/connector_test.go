@@ -298,7 +298,7 @@ func TestConnectorConsumeTraces(t *testing.T) {
 		ss := rs.ScopeSpans().AppendEmpty()
 		_ = ss.Scope().Attributes().FromRaw(map[string]any{"otel.scope.name": "io.opentelemetry.instrumentation.http", "otel.scope.version": "1.17.0"})
 		span := ss.Spans().AppendEmpty()
-		span.SetEndTimestamp(pcommon.Timestamp(time.Now().UnixMilli()))
+		span.SetEndTimestamp(pcommon.NewTimestampFromTime(time.Now()))
 		_ = span.Attributes().FromRaw(map[string]any{
 			"http.method":      "GET",
 			"http.status_code": "200",
@@ -427,7 +427,7 @@ func TestConnectorConsumeMetrics(t *testing.T) {
 		m.SetName("http.server.duration")
 		sum := m.SetEmptySum()
 		dp := sum.DataPoints().AppendEmpty()
-		dp.SetTimestamp(pcommon.Timestamp(time.Now().UnixMilli()))
+		dp.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
 		_ = dp.Attributes().FromRaw(map[string]any{
 			"http.method":      "GET",
 			"http.status_code": "200",
