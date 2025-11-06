@@ -53,7 +53,7 @@ func makeHandler(t *testing.T, eval *mockEvaluator) (*internal.MappingHandler[se
 	}
 
 	handler := internal.NewMappingHandler(mockMappingCtx)
-	handler.ExecFunc = func(_ context.Context, _ *internal.ExpressionEvalContext) {
+	handler.ExecuteMappingFunc = func(_ context.Context, _ *internal.ExpressionEvalContext) {
 		executed = true
 	}
 

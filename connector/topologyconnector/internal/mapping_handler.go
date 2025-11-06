@@ -13,16 +13,16 @@ import (
 type MappingHandler[T settings.SettingExtension] struct {
 	MappingCtx *MappingContext[T]
 
-	// ExecFunc is called to execute the mapping.
+	// ExecuteMappingFunc is called to execute the mapping.
 	// In production, points to MappingCtx.ExecuteMapping.
 	// In tests, it can be overridden to record calls.
-	ExecFunc func(ctx context.Context, evalCtx *ExpressionEvalContext)
+	ExecuteMappingFunc func(ctx context.Context, evalCtx *ExpressionEvalContext)
 }
 
-// NewMappingHandler creates a new handler. In production, ExecFunc defaults to MappingCtx.ExecuteMapping
+// NewMappingHandler creates a new handler. In production, ExecuteMappingFunc defaults to MappingCtx.ExecuteMapping
 func NewMappingHandler[T settings.SettingExtension](ctx *MappingContext[T]) *MappingHandler[T] {
 	h := &MappingHandler[T]{MappingCtx: ctx}
-	h.ExecFunc = ctx.ExecuteMapping
+	h.ExecuteMappingFunc = ctx.ExecuteMapping
 	return h
 }
 
@@ -32,14 +32,27 @@ func (h *MappingHandler[T]) HandleVisitLevel(
 	action *settings.OtelInputConditionAction,
 	condition *settings.OtelBooleanExpression,
 ) VisitResult {
-	ok, act := h.evaluateAndMaybeExecute(ctx, evalCtx, action, condition)
+	ok := h.evaluateCondition(evalCtx, condition)
+
 	if !ok {
 		return VisitSkip
 	}
-	if act == settings.CONTINUE {
-		return VisitContinue
+
+	// Default: CONTINUE if action not provided
+	act := settings.CONTINUE
+	if action != nil {
+		act = *action
 	}
-	return VisitSkip
+
+	switch act {
+	case settings.CREATE:
+		h.ExecuteMappingFunc(ctx, evalCtx)
+		return VisitSkip
+	case settings.CONTINUE:
+		return VisitContinue
+	default:
+		return VisitSkip
+	}
 }
 
 // HandleTerminalVisit doesn't return a VisitResult
@@ -49,38 +62,35 @@ func (h *MappingHandler[T]) HandleTerminalVisit(
 	action *settings.OtelInputConditionAction,
 	condition *settings.OtelBooleanExpression,
 ) {
-	h.evaluateAndMaybeExecute(ctx, evalCtx, action, condition)
-}
+	ok := h.evaluateCondition(evalCtx, condition)
 
-func (h *MappingHandler[T]) evaluateAndMaybeExecute(
-	ctx context.Context,
-	evalCtx *ExpressionEvalContext,
-	action *settings.OtelInputConditionAction,
-	condition *settings.OtelBooleanExpression,
-) (bool, settings.OtelInputConditionAction) {
 	// Default: CONTINUE if action not provided
 	act := settings.CONTINUE
 	if action != nil {
 		act = *action
 	}
 
-	// Default: true if condition not provided
-	ok := true
-	if condition != nil {
-		var err error
-		ok, err = h.MappingCtx.BaseCtx.Evaluator.EvalBooleanExpression(*condition, evalCtx)
-		if err != nil {
-			// If evaluation fails, treat as condition not met and never execute
-			ok = false
-		}
-	}
-
-	// Execute mapping only if condition is true and action is CREATE
 	if ok && act == settings.CREATE {
-		h.ExecFunc(ctx, evalCtx)
+		h.ExecuteMappingFunc(ctx, evalCtx)
+	}
+}
+
+// evaluateCondition checks a condition safely with defaults.
+func (h *MappingHandler[T]) evaluateCondition(
+	evalCtx *ExpressionEvalContext,
+	condition *settings.OtelBooleanExpression,
+) bool {
+	// Default: true if condition not provided
+	if condition == nil {
+		return true
 	}
 
-	return ok, act
+	ok, err := h.MappingCtx.BaseCtx.Evaluator.EvalBooleanExpression(*condition, evalCtx)
+	if err != nil {
+		// On evaluation error, treat the condition as false
+		return false
+	}
+	return ok
 }
 
 // BaseContext contains shared dependencies used by all mapping contexts.

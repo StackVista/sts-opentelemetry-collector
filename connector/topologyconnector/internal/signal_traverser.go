@@ -64,21 +64,21 @@ func NewMetricsTraverser(metrics pmetric.Metrics) *MetricsTraverser {
 	}
 }
 
-func (t *MetricsTraverser) resourceAttrs(i int, rm pmetric.ResourceMetricsSlice) map[string]any {
-	if cached, ok := t.resourceAttrCache.Load(i); ok {
+func (t *MetricsTraverser) resourceAttrs(resourceIdx int, rm pmetric.ResourceMetricsSlice) map[string]any {
+	if cached, ok := t.resourceAttrCache.Load(resourceIdx); ok {
 		return cached
 	}
-	m := rm.At(i).Resource().Attributes().AsRaw()
-	t.resourceAttrCache.Store(i, m)
+	m := rm.At(resourceIdx).Resource().Attributes().AsRaw()
+	t.resourceAttrCache.Store(resourceIdx, m)
 	return m
 }
 
-func (t *MetricsTraverser) scopeAttrs(i, j int, sm pmetric.ScopeMetricsSlice) map[string]any {
-	key := [2]int{i, j}
+func (t *MetricsTraverser) scopeAttrs(resourceIdx, scopeIdx int, sm pmetric.ScopeMetricsSlice) map[string]any {
+	key := [2]int{resourceIdx, scopeIdx}
 	if cached, ok := t.scopeAttrCache.Load(key); ok {
 		return cached
 	}
-	scope := sm.At(j).Scope()
+	scope := sm.At(scopeIdx).Scope()
 	attrs := scope.Attributes().AsRaw()
 
 	// TEMPORARY: Enrich scope attributes with name and version
@@ -92,8 +92,8 @@ func (t *MetricsTraverser) scopeAttrs(i, j int, sm pmetric.ScopeMetricsSlice) ma
 	return attrs
 }
 
-func (t *MetricsTraverser) metricAttrs(i, j, k int, m pmetric.Metric) map[string]any {
-	key := [3]int{i, j, k}
+func (t *MetricsTraverser) metricAttrs(resourceIdx, scopeIdx, metricIdx int, m pmetric.Metric) map[string]any {
+	key := [3]int{resourceIdx, scopeIdx, metricIdx}
 	if cached, ok := t.metricAttrCache.Load(key); ok {
 		return cached
 	}
@@ -110,8 +110,10 @@ type attrProvider interface {
 	Attributes() pcommon.Map
 }
 
-func (t *MetricsTraverser) datapointAttrs(i, j, k, l int, dp attrProvider) map[string]any {
-	key := [4]int{i, j, k, l}
+func (t *MetricsTraverser) datapointAttrs(
+	resourceIdx, scopeIdx, metricIdx, datapointIdx int, dp attrProvider,
+) map[string]any {
+	key := [4]int{resourceIdx, scopeIdx, metricIdx, datapointIdx}
 	if cached, ok := t.dpAttrCache.Load(key); ok {
 		return cached
 	}
@@ -122,9 +124,9 @@ func (t *MetricsTraverser) datapointAttrs(i, j, k, l int, dp attrProvider) map[s
 
 func (t *MetricsTraverser) Traverse(ctx context.Context, mappingVisitor MappingVisitor) {
 	rmSlice := t.metrics.ResourceMetrics()
-	for i := 0; i < rmSlice.Len(); i++ {
-		resourceAttrs := t.resourceAttrs(i, rmSlice)
-		rm := rmSlice.At(i)
+	for resourceIdx := 0; resourceIdx < rmSlice.Len(); resourceIdx++ {
+		resourceAttrs := t.resourceAttrs(resourceIdx, rmSlice)
+		rm := rmSlice.At(resourceIdx)
 
 		resourceCtx := NewMetricEvalContext(nil, nil, nil, resourceAttrs)
 		if mappingVisitor.VisitResource(ctx, resourceCtx) == VisitSkip {
@@ -132,9 +134,9 @@ func (t *MetricsTraverser) Traverse(ctx context.Context, mappingVisitor MappingV
 		}
 
 		smSlice := rm.ScopeMetrics()
-		for j := 0; j < smSlice.Len(); j++ {
-			scopeAttrs := t.scopeAttrs(i, j, smSlice)
-			sm := smSlice.At(j)
+		for scopeIdx := 0; scopeIdx < smSlice.Len(); scopeIdx++ {
+			scopeAttrs := t.scopeAttrs(resourceIdx, scopeIdx, smSlice)
+			sm := smSlice.At(scopeIdx)
 
 			scopeCtx := NewMetricEvalContext(nil, nil, scopeAttrs, resourceAttrs)
 			if mappingVisitor.VisitScope(ctx, scopeCtx) == VisitSkip {
@@ -142,9 +144,9 @@ func (t *MetricsTraverser) Traverse(ctx context.Context, mappingVisitor MappingV
 			}
 
 			msSlice := sm.Metrics()
-			for k := 0; k < msSlice.Len(); k++ {
-				m := msSlice.At(k)
-				metricAttrs := t.metricAttrs(i, j, k, m)
+			for metricIdx := 0; metricIdx < msSlice.Len(); metricIdx++ {
+				m := msSlice.At(metricIdx)
+				metricAttrs := t.metricAttrs(resourceIdx, scopeIdx, metricIdx, m)
 
 				if mappingVisitor.VisitMetric(
 					ctx, NewMetricEvalContext(nil, metricAttrs, scopeAttrs, resourceAttrs)) == VisitSkip {
@@ -156,41 +158,41 @@ func (t *MetricsTraverser) Traverse(ctx context.Context, mappingVisitor MappingV
 					continue
 				case pmetric.MetricTypeGauge:
 					dps := m.Gauge().DataPoints()
-					for l := dps.Len() - 1; l >= 0; l-- {
-						dp := dps.At(l)
-						dpAttrs := t.datapointAttrs(i, j, k, l, dp)
+					for datapointIdx := dps.Len() - 1; datapointIdx >= 0; datapointIdx-- {
+						dp := dps.At(datapointIdx)
+						dpAttrs := t.datapointAttrs(resourceIdx, scopeIdx, metricIdx, datapointIdx, dp)
 						dpCtx := NewMetricEvalContext(dpAttrs, metricAttrs, scopeAttrs, resourceAttrs)
 						mappingVisitor.VisitDatapoint(ctx, dpCtx)
 					}
 				case pmetric.MetricTypeSum:
 					dps := m.Sum().DataPoints()
-					for l := dps.Len() - 1; l >= 0; l-- {
-						dp := dps.At(l)
-						dpAttrs := t.datapointAttrs(i, j, k, l, dp)
+					for datapointIdx := dps.Len() - 1; datapointIdx >= 0; datapointIdx-- {
+						dp := dps.At(datapointIdx)
+						dpAttrs := t.datapointAttrs(resourceIdx, scopeIdx, metricIdx, datapointIdx, dp)
 						dpCtx := NewMetricEvalContext(dpAttrs, metricAttrs, scopeAttrs, resourceAttrs)
 						mappingVisitor.VisitDatapoint(ctx, dpCtx)
 					}
 				case pmetric.MetricTypeHistogram:
 					dps := m.Histogram().DataPoints()
-					for l := dps.Len() - 1; l >= 0; l-- {
-						dp := dps.At(l)
-						dpAttrs := t.datapointAttrs(i, j, k, l, dp)
+					for datapointIdx := dps.Len() - 1; datapointIdx >= 0; datapointIdx-- {
+						dp := dps.At(datapointIdx)
+						dpAttrs := t.datapointAttrs(resourceIdx, scopeIdx, metricIdx, datapointIdx, dp)
 						dpCtx := NewMetricEvalContext(dpAttrs, metricAttrs, scopeAttrs, resourceAttrs)
 						mappingVisitor.VisitDatapoint(ctx, dpCtx)
 					}
 				case pmetric.MetricTypeExponentialHistogram:
 					dps := m.ExponentialHistogram().DataPoints()
-					for l := dps.Len() - 1; l >= 0; l-- {
-						dp := dps.At(l)
-						dpAttrs := t.datapointAttrs(i, j, k, l, dp)
+					for datapointIdx := dps.Len() - 1; datapointIdx >= 0; datapointIdx-- {
+						dp := dps.At(datapointIdx)
+						dpAttrs := t.datapointAttrs(resourceIdx, scopeIdx, metricIdx, datapointIdx, dp)
 						dpCtx := NewMetricEvalContext(dpAttrs, metricAttrs, scopeAttrs, resourceAttrs)
 						mappingVisitor.VisitDatapoint(ctx, dpCtx)
 					}
 				case pmetric.MetricTypeSummary:
 					dps := m.Summary().DataPoints()
-					for l := dps.Len() - 1; l >= 0; l-- {
-						dp := dps.At(l)
-						dpAttrs := t.datapointAttrs(i, j, k, l, dp)
+					for datapointIdx := dps.Len() - 1; datapointIdx >= 0; datapointIdx-- {
+						dp := dps.At(datapointIdx)
+						dpAttrs := t.datapointAttrs(resourceIdx, scopeIdx, metricIdx, datapointIdx, dp)
 						dpCtx := NewMetricEvalContext(dpAttrs, metricAttrs, scopeAttrs, resourceAttrs)
 						mappingVisitor.VisitDatapoint(ctx, dpCtx)
 					}
@@ -228,40 +230,40 @@ func NewTracesTraverser(traces ptrace.Traces) *TracesTraverser {
 	}
 }
 
-func (t *TracesTraverser) resourceAttrs(i int, resources ptrace.ResourceSpansSlice) map[string]any {
-	if cached, ok := t.resourceAttrCache.Load(i); ok {
+func (t *TracesTraverser) resourceAttrs(resourceIdx int, resources ptrace.ResourceSpansSlice) map[string]any {
+	if cached, ok := t.resourceAttrCache.Load(resourceIdx); ok {
 		return cached
 	}
-	m := resources.At(i).Resource().Attributes().AsRaw()
-	t.resourceAttrCache.Store(i, m)
+	m := resources.At(resourceIdx).Resource().Attributes().AsRaw()
+	t.resourceAttrCache.Store(resourceIdx, m)
 	return m
 }
 
-func (t *TracesTraverser) scopeAttrs(i, j int, scopes ptrace.ScopeSpansSlice) map[string]any {
-	key := [2]int{i, j}
+func (t *TracesTraverser) scopeAttrs(resourceIdx, scopeIdx int, scopes ptrace.ScopeSpansSlice) map[string]any {
+	key := [2]int{resourceIdx, scopeIdx}
 	if cached, ok := t.scopeAttrCache.Load(key); ok {
 		return cached
 	}
-	m := scopes.At(j).Scope().Attributes().AsRaw()
+	m := scopes.At(scopeIdx).Scope().Attributes().AsRaw()
 	t.scopeAttrCache.Store(key, m)
 	return m
 }
 
-func (t *TracesTraverser) spanAttrs(i, j, k int, spans ptrace.SpanSlice) map[string]any {
-	key := [3]int{i, j, k}
+func (t *TracesTraverser) spanAttrs(resourceIdx, scopeIdx, spanIdx int, spans ptrace.SpanSlice) map[string]any {
+	key := [3]int{resourceIdx, scopeIdx, spanIdx}
 	if cached, ok := t.spanAttrCache.Load(key); ok {
 		return cached
 	}
-	m := spans.At(k).Attributes().AsRaw()
+	m := spans.At(spanIdx).Attributes().AsRaw()
 	t.spanAttrCache.Store(key, m)
 	return m
 }
 
 func (t *TracesTraverser) Traverse(ctx context.Context, mappingVisitor MappingVisitor) {
 	resourceSpans := t.traces.ResourceSpans()
-	for i := 0; i < resourceSpans.Len(); i++ {
-		rs := resourceSpans.At(i)
-		resourceAttrs := t.resourceAttrs(i, resourceSpans)
+	for resourceIdx := 0; resourceIdx < resourceSpans.Len(); resourceIdx++ {
+		rs := resourceSpans.At(resourceIdx)
+		resourceAttrs := t.resourceAttrs(resourceIdx, resourceSpans)
 		resourceCtx := NewSpanEvalContext(nil, nil, resourceAttrs)
 
 		if mappingVisitor.VisitResource(ctx, resourceCtx) == VisitSkip {
@@ -269,17 +271,17 @@ func (t *TracesTraverser) Traverse(ctx context.Context, mappingVisitor MappingVi
 		}
 
 		scopeSpans := rs.ScopeSpans()
-		for j := 0; j < scopeSpans.Len(); j++ {
-			ss := scopeSpans.At(j)
-			scopeAttrs := t.scopeAttrs(i, j, scopeSpans)
+		for scopeIdx := 0; scopeIdx < scopeSpans.Len(); scopeIdx++ {
+			ss := scopeSpans.At(scopeIdx)
+			scopeAttrs := t.scopeAttrs(resourceIdx, scopeIdx, scopeSpans)
 			scopeCtx := NewSpanEvalContext(nil, scopeAttrs, resourceAttrs)
 			if mappingVisitor.VisitScope(ctx, scopeCtx) == VisitSkip {
 				continue
 			}
 
 			spans := ss.Spans()
-			for k := 0; k < spans.Len(); k++ {
-				spanAttrs := t.spanAttrs(i, j, k, spans)
+			for spanIdx := 0; spanIdx < spans.Len(); spanIdx++ {
+				spanAttrs := t.spanAttrs(resourceIdx, scopeIdx, spanIdx, spans)
 				spanCtx := NewSpanEvalContext(spanAttrs, scopeAttrs, resourceAttrs)
 				mappingVisitor.VisitSpan(ctx, spanCtx)
 			}
