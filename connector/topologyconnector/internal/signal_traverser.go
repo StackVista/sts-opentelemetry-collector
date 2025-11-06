@@ -9,6 +9,27 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
+// ------------------------------------------------
+// Typed wrapper for attribute "cache"
+// ------------------------------------------------
+
+type attrCache[K comparable] struct {
+	m sync.Map // map[K]map[string]any
+}
+
+func (a *attrCache[K]) Load(key K) (map[string]any, bool) {
+	v, ok := a.m.Load(key)
+	if !ok {
+		return nil, false
+	}
+	cached, ok := v.(map[string]any)
+	return cached, ok
+}
+
+func (a *attrCache[K]) Store(key K, m map[string]any) {
+	a.m.Store(key, m)
+}
+
 // ------------------------
 // Metric traversal
 // ------------------------
@@ -22,15 +43,15 @@ import (
 //	metrics           - the raw pmetric.Metrics to traverse
 //	resourceAttrCache  - caches resource-level attributes by resourceIndex
 //	scopeAttrCache     - caches scope-level attributes by [resourceIndex, scopeIndex]
-//	metricMetaCache    - caches metric-level metadata by [resourceIndex, scopeIndex, metricIndex]
+//	metricAttrCache    - caches metric-level metadata by [resourceIndex, scopeIndex, metricIndex]
 //	dpAttrCache        - caches datapoint-level attributes by [resourceIndex, scopeIndex, metricIndex, datapointIndex]
 type MetricsTraverser struct {
 	metrics pmetric.Metrics
 
-	resourceAttrCache sync.Map // map[int]map[string]any
-	scopeAttrCache    sync.Map // map[[2]int]map[string]any
-	metricMetaCache   sync.Map // map[[3]int]map[string]any
-	dpAttrCache       sync.Map // map[[4]int]map[string]any
+	resourceAttrCache attrCache[int]    // map[int]map[string]any
+	scopeAttrCache    attrCache[[2]int] // map[[2]int]map[string]any
+	metricAttrCache   attrCache[[3]int] // map[[3]int]map[string]any
+	dpAttrCache       attrCache[[4]int] // map[[4]int]map[string]any
 }
 
 type SignalTraverser interface {
@@ -44,10 +65,8 @@ func NewMetricsTraverser(metrics pmetric.Metrics) *MetricsTraverser {
 }
 
 func (t *MetricsTraverser) resourceAttrs(i int, rm pmetric.ResourceMetricsSlice) map[string]any {
-	if v, ok := t.resourceAttrCache.Load(i); ok {
-		if cached, typeOk := v.(map[string]any); typeOk {
-			return cached
-		}
+	if cached, ok := t.resourceAttrCache.Load(i); ok {
+		return cached
 	}
 	m := rm.At(i).Resource().Attributes().AsRaw()
 	t.resourceAttrCache.Store(i, m)
@@ -56,30 +75,35 @@ func (t *MetricsTraverser) resourceAttrs(i int, rm pmetric.ResourceMetricsSlice)
 
 func (t *MetricsTraverser) scopeAttrs(i, j int, sm pmetric.ScopeMetricsSlice) map[string]any {
 	key := [2]int{i, j}
-	if v, ok := t.scopeAttrCache.Load(key); ok {
-		if cached, typeOk := v.(map[string]any); typeOk {
-			return cached
-		}
+	if cached, ok := t.scopeAttrCache.Load(key); ok {
+		return cached
 	}
-	m := sm.At(j).Scope().Attributes().AsRaw()
-	t.scopeAttrCache.Store(key, m)
-	return m
+	scope := sm.At(j).Scope()
+	attrs := scope.Attributes().AsRaw()
+
+	// TEMPORARY: Enrich scope attributes with name and version
+	if attrs == nil {
+		attrs = make(map[string]any)
+	}
+	attrs["name"] = scope.Name()
+	attrs["version"] = scope.Version()
+
+	t.scopeAttrCache.Store(key, attrs)
+	return attrs
 }
 
 func (t *MetricsTraverser) metricAttrs(i, j, k int, m pmetric.Metric) map[string]any {
 	key := [3]int{i, j, k}
-	if v, ok := t.metricMetaCache.Load(key); ok {
-		if cached, typeOk := v.(map[string]any); typeOk {
-			return cached
-		}
+	if cached, ok := t.metricAttrCache.Load(key); ok {
+		return cached
 	}
-	meta := map[string]any{
+	attrs := map[string]any{
 		"name":        m.Name(),
 		"unit":        m.Unit(),
 		"description": m.Description(),
 	}
-	t.metricMetaCache.Store(key, meta)
-	return meta
+	t.metricAttrCache.Store(key, attrs)
+	return attrs
 }
 
 type attrProvider interface {
@@ -88,10 +112,8 @@ type attrProvider interface {
 
 func (t *MetricsTraverser) datapointAttrs(i, j, k, l int, dp attrProvider) map[string]any {
 	key := [4]int{i, j, k, l}
-	if v, ok := t.dpAttrCache.Load(key); ok {
-		if cached, typeOk := v.(map[string]any); typeOk {
-			return cached
-		}
+	if cached, ok := t.dpAttrCache.Load(key); ok {
+		return cached
 	}
 	m := dp.Attributes().AsRaw()
 	t.dpAttrCache.Store(key, m)
@@ -195,9 +217,9 @@ func (t *MetricsTraverser) Traverse(ctx context.Context, mappingVisitor MappingV
 type TracesTraverser struct {
 	traces ptrace.Traces
 
-	resourceAttrCache sync.Map // map[int]map[string]any
-	scopeAttrCache    sync.Map // map[[2]int]map[string]any
-	spanAttrCache     sync.Map // map[[3]int]map[string]any
+	resourceAttrCache attrCache[int]    // map[int]map[string]any
+	scopeAttrCache    attrCache[[2]int] // map[[2]int]map[string]any
+	spanAttrCache     attrCache[[3]int] // map[[3]int]map[string]any
 }
 
 func NewTracesTraverser(traces ptrace.Traces) *TracesTraverser {
@@ -207,10 +229,8 @@ func NewTracesTraverser(traces ptrace.Traces) *TracesTraverser {
 }
 
 func (t *TracesTraverser) resourceAttrs(i int, resources ptrace.ResourceSpansSlice) map[string]any {
-	if v, ok := t.resourceAttrCache.Load(i); ok {
-		if cached, typeOk := v.(map[string]any); typeOk {
-			return cached
-		}
+	if cached, ok := t.resourceAttrCache.Load(i); ok {
+		return cached
 	}
 	m := resources.At(i).Resource().Attributes().AsRaw()
 	t.resourceAttrCache.Store(i, m)
@@ -219,10 +239,8 @@ func (t *TracesTraverser) resourceAttrs(i int, resources ptrace.ResourceSpansSli
 
 func (t *TracesTraverser) scopeAttrs(i, j int, scopes ptrace.ScopeSpansSlice) map[string]any {
 	key := [2]int{i, j}
-	if v, ok := t.scopeAttrCache.Load(key); ok {
-		if cached, typeOk := v.(map[string]any); typeOk {
-			return cached
-		}
+	if cached, ok := t.scopeAttrCache.Load(key); ok {
+		return cached
 	}
 	m := scopes.At(j).Scope().Attributes().AsRaw()
 	t.scopeAttrCache.Store(key, m)
@@ -231,10 +249,8 @@ func (t *TracesTraverser) scopeAttrs(i, j int, scopes ptrace.ScopeSpansSlice) ma
 
 func (t *TracesTraverser) spanAttrs(i, j, k int, spans ptrace.SpanSlice) map[string]any {
 	key := [3]int{i, j, k}
-	if v, ok := t.spanAttrCache.Load(key); ok {
-		if cached, typeOk := v.(map[string]any); typeOk {
-			return cached
-		}
+	if cached, ok := t.spanAttrCache.Load(key); ok {
+		return cached
 	}
 	m := spans.At(k).Attributes().AsRaw()
 	t.spanAttrCache.Store(key, m)
