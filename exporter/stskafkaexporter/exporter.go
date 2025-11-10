@@ -126,20 +126,45 @@ func (e *KafkaExporter) checkTopicExists(ctx context.Context) error {
 	return nil
 }
 
+// ExportData exports OpenTelemetry logs to Kafka.
+// Returns an error only on fatal produce failures; retries are handled by exporterhelper.
 func (e *KafkaExporter) ExportData(ctx context.Context, ld plog.Logs) error {
-	// Note: retry handling is left to exporterhelper - only return error on fatal produce errors.
+	records, err := e.buildKafkaRecords(ld)
 
-	// For acked modes (leader/all), we bound the total export duration
-	// to avoid hanging indefinitely on produce acknowledgments.
-	deadlineCtx, cancel := context.WithTimeout(ctx, e.cfg.ProduceTimeout)
-	defer cancel()
+	if len(records) == 0 {
+		e.logger.Debug("no Kafka records to export")
+		return nil
+	}
 
+	if err != nil {
+		e.logger.Warn("failed to build some Kafka records; partial logs dropped", zap.Error(err))
+	}
+
+	return e.produceRecords(ctx, records)
+}
+
+// produceRecords sends records to Kafka based on the configured acknowledgment mode.
+func (e *KafkaExporter) produceRecords(ctx context.Context, records []*kgo.Record) error {
+	e.logger.Debug(fmt.Sprintf("producing Kafka records with acks=%s", e.cfg.RequiredAcks),
+		zap.Int("recordCount", len(records)))
+
+	if e.cfg.RequiredAcks == AcksNone {
+		return e.produceFireAndForget(records)
+	}
+
+	return e.produceWithAcks(ctx, records)
+}
+
+// buildKafkaRecords transforms OpenTelemetry logs into Kafka records.
+func (e *KafkaExporter) buildKafkaRecords(ld plog.Logs) ([]*kgo.Record, error) {
 	var records []*kgo.Record
+
 	err := iterateLogRecords(ld, func(lr plog.LogRecord) error {
 		key, err := extractMessageKey(lr.Attributes())
 		if err != nil {
 			return err
 		}
+
 		value, err := e.extractMessageValue(lr)
 		if err != nil {
 			return err
@@ -153,35 +178,29 @@ func (e *KafkaExporter) ExportData(ctx context.Context, ld plog.Logs) error {
 		return nil
 	})
 
-	if len(records) == 0 {
-		e.logger.Debug("no Kafka records to export")
-		return nil
+	return records, err
+}
+
+// produceFireAndForget sends records without waiting for acknowledgments (acks=none).
+// Uses context.Background() to prevent premature cancellation of async operations.
+func (e *KafkaExporter) produceFireAndForget(records []*kgo.Record) error {
+	for _, rec := range records {
+		e.client.Produce(context.Background(), rec, func(_ *kgo.Record, err error) {
+			if err != nil {
+				e.logger.Warn("kafka async produce failed (acks=none)", zap.Error(err))
+			}
+		})
 	}
 
-	if err != nil {
-		e.logger.Warn("failed to build one or more Kafka records; some logs dropped", zap.Error(err))
-	}
+	return nil
+}
 
-	// For acks=none: we intentionally avoid wrapping it with a timeout because no acknowledgments
-	// are expected from Kafka. Using a deadline here could prematurely cancel
-	// async produce calls before they even leave the process, resulting in
-	// misleading "context canceled" warnings.
-	if e.cfg.RequiredAcks == AcksNone {
-		e.logger.Debug("producing Kafka records with acks=none",
-			zap.Int("recordCount", len(records)))
+// produceWithAcks sends records and waits for acknowledgments (acks=leader/all).
+// Bounded by ProduceTimeout to prevent indefinite hangs.
+func (e *KafkaExporter) produceWithAcks(ctx context.Context, records []*kgo.Record) error {
+	deadlineCtx, cancel := context.WithTimeout(ctx, e.cfg.ProduceTimeout)
+	defer cancel()
 
-		for _, rec := range records {
-			// Use context.Background() so produce calls aren't canceled when ExportData returns.
-			e.client.Produce(context.Background(), rec, func(_ *kgo.Record, err error) {
-				if err != nil {
-					e.logger.Warn("kafka async produce failed (acks=none)", zap.Error(err))
-				}
-			})
-		}
-		return nil
-	}
-
-	// For acks=leader/all: async with error collection
 	return produceAndWait(deadlineCtx, e.client, e.logger, records)
 }
 
@@ -213,7 +232,7 @@ func iterateLogRecords(ld plog.Logs, fn func(lr plog.LogRecord) error) error {
 func extractMessageKey(attrs pcommon.Map) ([]byte, error) {
 	key, ok := attrs.Get(KafkaMessageKey)
 	if !ok {
-		return nil, fmt.Errorf("extract message key: missing %s attribute", KafkaMessageKey)
+		return nil, fmt.Errorf("missing required attribute: %s", KafkaMessageKey)
 	}
 
 	return append([]byte(nil), key.Bytes().AsRaw()...), nil
@@ -227,15 +246,14 @@ func (e *KafkaExporter) extractMessageValue(lr plog.LogRecord) ([]byte, error) {
 	if body.Type() == pcommon.ValueTypeBytes {
 		return append([]byte(nil), body.Bytes().AsRaw()...), nil
 	}
-	return nil, errors.New("extract message value: unsupported log record body type")
+	return nil, errors.New("unsupported log record body type (expected bytes)")
 }
 
 // produceAndWait sends all records asynchronously and waits for completion.
+// Collects and returns the first error encountered.
 func produceAndWait(ctx context.Context, client *kgo.Client, logger *zap.Logger, records []*kgo.Record) error {
-	var (
-		wg    sync.WaitGroup
-		errCh = make(chan error, len(records))
-	)
+	var wg sync.WaitGroup
+	errCh := make(chan error, len(records))
 
 	for _, rec := range records {
 		wg.Add(1)
@@ -250,14 +268,11 @@ func produceAndWait(ctx context.Context, client *kgo.Client, logger *zap.Logger,
 	wg.Wait()
 	close(errCh)
 
-	var firstErr error
-	for err := range errCh {
-		if firstErr == nil {
-			firstErr = err
-		}
-	}
+	// Return the first error encountered
+	firstErr := <-errCh
 	if firstErr != nil {
 		logger.Warn("one or more Kafka produce operations failed", zap.Error(firstErr))
 	}
+
 	return firstErr
 }
