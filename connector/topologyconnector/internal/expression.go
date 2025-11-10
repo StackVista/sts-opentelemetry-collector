@@ -36,11 +36,12 @@ type ExpressionEvaluator interface {
 }
 
 type ExpressionEvalContext struct {
-	SpanAttributes     map[string]any
-	MetricAttributes   map[string]any
-	ScopeAttributes    map[string]any
-	ResourceAttributes map[string]any
-	Vars               map[string]any
+	SpanAttributes      map[string]any
+	DatapointAttributes map[string]any
+	MetricAttributes    map[string]any
+	ScopeAttributes     map[string]any
+	ResourceAttributes  map[string]any
+	Vars                map[string]any
 }
 
 type CelEvaluator struct {
@@ -77,35 +78,40 @@ func (e *CelEvaluationError) Error() string {
 	return fmt.Sprintf(e.format, e.arguments...)
 }
 
-func NewSpanEvalContext(spanAttributes map[string]any,
-	scopeAttributes map[string]any, resourceAttributes map[string]any) *ExpressionEvalContext {
+func NewSpanEvalContext(
+	spanAttributes, scopeAttributes, resourceAttributes map[string]any,
+) *ExpressionEvalContext {
 	return &ExpressionEvalContext{
-		SpanAttributes:     spanAttributes,
-		MetricAttributes:   nil,
-		ScopeAttributes:    scopeAttributes,
-		ResourceAttributes: resourceAttributes,
-		Vars:               nil,
+		SpanAttributes:      spanAttributes,
+		DatapointAttributes: nil,
+		MetricAttributes:    nil,
+		ScopeAttributes:     scopeAttributes,
+		ResourceAttributes:  resourceAttributes,
+		Vars:                nil,
 	}
 }
 
-func NewMetricEvalContext(metricAttributes map[string]any,
-	scopeAttributes map[string]any, resourceAttributes map[string]any) *ExpressionEvalContext {
+func NewMetricEvalContext(
+	datapointAttributes, metricAttributes, scopeAttributes, resourceAttributes map[string]any,
+) *ExpressionEvalContext {
 	return &ExpressionEvalContext{
-		SpanAttributes:     nil,
-		MetricAttributes:   metricAttributes,
-		ScopeAttributes:    scopeAttributes,
-		ResourceAttributes: resourceAttributes,
-		Vars:               nil,
+		SpanAttributes:      nil,
+		DatapointAttributes: datapointAttributes,
+		MetricAttributes:    metricAttributes,
+		ScopeAttributes:     scopeAttributes,
+		ResourceAttributes:  resourceAttributes,
+		Vars:                nil,
 	}
 }
 
 func (ec *ExpressionEvalContext) CloneWithVariables(vars map[string]any) *ExpressionEvalContext {
 	return &ExpressionEvalContext{
-		SpanAttributes:     ec.SpanAttributes,
-		MetricAttributes:   ec.MetricAttributes,
-		ScopeAttributes:    ec.ScopeAttributes,
-		ResourceAttributes: ec.ResourceAttributes,
-		Vars:               vars,
+		SpanAttributes:      ec.SpanAttributes,
+		MetricAttributes:    ec.MetricAttributes,
+		DatapointAttributes: ec.DatapointAttributes,
+		ScopeAttributes:     ec.ScopeAttributes,
+		ResourceAttributes:  ec.ResourceAttributes,
+		Vars:                vars,
 	}
 }
 
@@ -113,6 +119,7 @@ func NewCELEvaluator(ctx context.Context, cacheSettings metrics.MeteredCacheSett
 	env, err := cel.NewEnv(
 		cel.Variable("spanAttributes", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("metricAttributes", cel.MapType(cel.StringType, cel.DynType)),
+		cel.Variable("datapointAttributes", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("scopeAttributes", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("resourceAttributes", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("vars", cel.MapType(cel.StringType, cel.DynType)),
@@ -365,10 +372,14 @@ func (e *CelEvaluator) evaluateProgram(prog cel.Program, ctx *ExpressionEvalCont
 		"vars":               ctx.Vars,
 	}
 
-	// To get the best error messages the metricAttributes/spanAttributes should not be set at all
+	// To get the best error messages, the metricAttributes/datapointAttributes/spanAttributes should not be set at all
 	// if they are not defined
 	if ctx.MetricAttributes != nil {
 		runtimeVars["metricAttributes"] = ctx.MetricAttributes
+	}
+
+	if ctx.DatapointAttributes != nil {
+		runtimeVars["datapointAttributes"] = ctx.DatapointAttributes
 	}
 
 	if ctx.SpanAttributes != nil {

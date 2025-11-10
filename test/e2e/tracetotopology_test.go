@@ -298,7 +298,10 @@ func otelComponentMappingSnapshot(mappings ...*harness.OtelComponentMappingSpec)
 
 func otelComponentMappingSpecCheckoutService() *harness.OtelComponentMappingSpec {
 	return otelComponentMappingSpec(
-		harness.BoolExpr(`resourceAttributes["service.name"] == "checkout-service"`),
+		settings.OtelInputResource{
+			Action:    harness.Ptr(settings.CREATE),
+			Condition: harness.PtrBoolExpr(`resourceAttributes["service.name"] == "checkout-service"`),
+		},
 		settings.OtelVariableMapping{
 			Name: "name", Value: harness.AnyExpr(`${resourceAttributes["service.name"]}`),
 		},
@@ -310,7 +313,14 @@ func otelComponentMappingSpecCheckoutService() *harness.OtelComponentMappingSpec
 
 func otelComponentMappingSpecPeerService(peerService string) *harness.OtelComponentMappingSpec {
 	return otelComponentMappingSpec(
-		harness.BoolExpr(fmt.Sprintf(`spanAttributes["net.peer.name"] == "%s"`, peerService)),
+		settings.OtelInputResource{
+			Scope: &settings.OtelInputScope{
+				Span: &settings.OtelInputSpan{
+					Action:    harness.Ptr(settings.CREATE),
+					Condition: harness.PtrBoolExpr(fmt.Sprintf(`spanAttributes["net.peer.name"] == "%s"`, peerService)),
+				},
+			},
+		},
 		settings.OtelVariableMapping{
 			Name: "name", Value: harness.AnyExpr(`${"net.peer.name" in spanAttributes ? spanAttributes["net.peer.name"] : resourceAttributes["service.name"]}`),
 		},
@@ -320,14 +330,17 @@ func otelComponentMappingSpecPeerService(peerService string) *harness.OtelCompon
 	)
 }
 
-func otelComponentMappingSpec(condExpression settings.OtelBooleanExpression, varMappings ...settings.OtelVariableMapping) *harness.OtelComponentMappingSpec {
+func otelComponentMappingSpec(otelInputResource settings.OtelInputResource, varMappings ...settings.OtelVariableMapping) *harness.OtelComponentMappingSpec {
 	return &harness.OtelComponentMappingSpec{
 		MappingID:         "comp-mapping-1",
 		MappingIdentifier: "urn:comp-mapping-1",
 		Name:              "service mapping",
 		ExpireAfterMs:     60000,
-		Conditions: []settings.OtelConditionMapping{
-			{Action: settings.CREATE, Expression: condExpression},
+		Input: settings.OtelInput{
+			Signal: settings.OtelInputSignalList{
+				settings.TRACES,
+			},
+			Resource: otelInputResource,
 		},
 		Output: settings.OtelComponentMappingOutput{
 			Identifier: harness.StrExpr("${vars.instanceId}"),
@@ -347,8 +360,7 @@ func otelComponentMappingSpec(condExpression settings.OtelBooleanExpression, var
 				},
 			},
 		},
-		InputSignals: []settings.OtelInputSignal{settings.TRACES},
-		Vars:         varMappings,
+		Vars: varMappings,
 	}
 }
 
@@ -364,14 +376,23 @@ func otelRelationMappingSpec() *harness.OtelRelationMappingSpec {
 		MappingID:         "rel-mapping-1",
 		MappingIdentifier: "urn:rel-mapping-1",
 		ExpireAfterMs:     300000,
-		Conditions: []settings.OtelConditionMapping{
-			{Action: settings.CREATE, Expression: harness.BoolExpr(`"client.address" in spanAttributes && "server.address" in spanAttributes`)},
+		Input: settings.OtelInput{
+			Signal: settings.OtelInputSignalList{
+				settings.TRACES,
+			},
+			Resource: settings.OtelInputResource{
+				Scope: &settings.OtelInputScope{
+					Span: &settings.OtelInputSpan{
+						Action:    harness.Ptr(settings.CREATE),
+						Condition: harness.PtrBoolExpr(`"client.address" in spanAttributes && "server.address" in spanAttributes`),
+					},
+				},
+			},
 		},
 		Output: settings.OtelRelationMappingOutput{
 			SourceId: harness.StrExpr(`${spanAttributes["client.address"]}`),
 			TargetId: harness.StrExpr(`${spanAttributes["server.address"]}`),
 			TypeName: harness.StrExpr("http-request"),
 		},
-		InputSignals: []settings.OtelInputSignal{settings.TRACES},
 	}
 }

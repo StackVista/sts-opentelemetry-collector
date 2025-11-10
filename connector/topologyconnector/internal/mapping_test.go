@@ -11,13 +11,12 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"github.com/stretchr/testify/require"
 
-	topo_stream_v1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
+	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
 func TestMappingSpan_MapComponent(t *testing.T) {
-
 	spanEvalContext := &ExpressionEvalContext{
 		SpanAttributes: map[string]any{
 			"kind":     "licence",
@@ -40,7 +39,7 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 		mapping     *settings.OtelComponentMapping
 		evalContext *ExpressionEvalContext
 		vars        map[string]any
-		want        *topo_stream_v1.TopologyStreamComponent
+		want        *topostreamv1.TopologyStreamComponent
 		expectErr   []error
 	}{
 		{
@@ -89,7 +88,7 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 			vars: map[string]any{
 				"namespace": "payments_ns",
 			},
-			want: &topo_stream_v1.TopologyStreamComponent{
+			want: &topostreamv1.TopologyStreamComponent{
 				ExternalId:       "billing",
 				Identifiers:      []string{"billing"},
 				Name:             "billing",
@@ -116,7 +115,7 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 			},
 			evalContext: spanEvalContext,
 			vars:        map[string]any{},
-			want: &topo_stream_v1.TopologyStreamComponent{
+			want: &topostreamv1.TopologyStreamComponent{
 				ExternalId:  "billing",
 				Identifiers: []string{"billing"},
 				Name:        "billing",
@@ -210,7 +209,7 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 			vars: map[string]any{
 				"namespace": "payments_ns",
 			},
-			want: &topo_stream_v1.TopologyStreamComponent{
+			want: &topostreamv1.TopologyStreamComponent{
 				ExternalId:  "billing",
 				Identifiers: []string{"billing"},
 				Name:        "billing",
@@ -557,7 +556,7 @@ func TestMapping_MapRelation(t *testing.T) {
 		mapping     *settings.OtelRelationMapping
 		evalContext *ExpressionEvalContext
 		vars        map[string]any
-		want        *topo_stream_v1.TopologyStreamRelation
+		want        *topostreamv1.TopologyStreamRelation
 		expectErr   []error
 	}{
 		{
@@ -572,7 +571,7 @@ func TestMapping_MapRelation(t *testing.T) {
 			},
 			evalContext: spanEvalContext,
 			vars:        map[string]any{},
-			want: &topo_stream_v1.TopologyStreamRelation{
+			want: &topostreamv1.TopologyStreamRelation{
 				ExternalId:       "billing-database",
 				SourceIdentifier: "billing",
 				TargetIdentifier: "database",
@@ -595,7 +594,7 @@ func TestMapping_MapRelation(t *testing.T) {
 			},
 			evalContext: spanEvalContext,
 			vars:        map[string]any{},
-			want: &topo_stream_v1.TopologyStreamRelation{
+			want: &topostreamv1.TopologyStreamRelation{
 				ExternalId:       "billing-database",
 				SourceIdentifier: "billing",
 				TargetIdentifier: "database",

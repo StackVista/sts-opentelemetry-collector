@@ -282,7 +282,6 @@ func TestConnectorConsumeTraces(t *testing.T) {
 
 	t.Run("start with initial mappings and observe changes", func(t *testing.T) {
 		connectorEnv.logsConsumer.Reset()
-		submittedTime := uint64(1756851083000)
 		traces := ptrace.NewTraces()
 		rs := traces.ResourceSpans().AppendEmpty()
 		_ = rs.Resource().Attributes().FromRaw(map[string]any{
@@ -299,7 +298,7 @@ func TestConnectorConsumeTraces(t *testing.T) {
 		ss := rs.ScopeSpans().AppendEmpty()
 		_ = ss.Scope().Attributes().FromRaw(map[string]any{"otel.scope.name": "io.opentelemetry.instrumentation.http", "otel.scope.version": "1.17.0"})
 		span := ss.Spans().AppendEmpty()
-		span.SetEndTimestamp(pcommon.Timestamp(submittedTime))
+		span.SetEndTimestamp(pcommon.NewTimestampFromTime(time.Now()))
 		_ = span.Attributes().FromRaw(map[string]any{
 			"http.method":      "GET",
 			"http.status_code": "200",
@@ -334,7 +333,8 @@ func TestConnectorConsumeTraces(t *testing.T) {
 
 		// Assert Component Message
 		assert.Equal(t, "urn:otel-component-mapping:mapping1", componentMsg.Key.DataSource)
-		assert.Equal(t, int64(submittedTime), componentMsg.Message.SubmittedTimestamp)
+		assert.InDelta(t, time.Now().UnixMilli(), componentMsg.Message.SubmittedTimestamp, 1000,
+			"SubmittedTimestamp should be within 1 second of now")
 		compData := componentMsg.Message.GetTopologyStreamRepeatElementsData()
 		require.NotNil(t, compData)
 		assert.Equal(t, int64(60000), compData.ExpiryIntervalMs)
@@ -349,7 +349,8 @@ func TestConnectorConsumeTraces(t *testing.T) {
 
 		// Assert Relation Message
 		assert.Equal(t, "urn:otel-relation-mapping:mapping2", relationMsg.Key.DataSource)
-		assert.Equal(t, int64(submittedTime), relationMsg.Message.SubmittedTimestamp)
+		assert.InDelta(t, time.Now().UnixMilli(), componentMsg.Message.SubmittedTimestamp, 1000,
+			"SubmittedTimestamp should be within 1 second of now")
 		relData := relationMsg.Message.GetTopologyStreamRepeatElementsData()
 		require.NotNil(t, relData)
 		assert.Equal(t, int64(300000), relData.ExpiryIntervalMs)
@@ -414,7 +415,6 @@ func TestConnectorConsumeMetrics(t *testing.T) {
 
 	t.Run("start with initial mappings and observe changes", func(t *testing.T) {
 		connectorEnv.logsConsumer.Reset()
-		submittedTime := uint64(1756851083000)
 		metrics := pmetric.NewMetrics()
 		rm := metrics.ResourceMetrics().AppendEmpty()
 		_ = rm.Resource().Attributes().FromRaw(map[string]any{
@@ -427,7 +427,7 @@ func TestConnectorConsumeMetrics(t *testing.T) {
 		m.SetName("http.server.duration")
 		sum := m.SetEmptySum()
 		dp := sum.DataPoints().AppendEmpty()
-		dp.SetTimestamp(pcommon.Timestamp(submittedTime))
+		dp.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
 		_ = dp.Attributes().FromRaw(map[string]any{
 			"http.method":      "GET",
 			"http.status_code": "200",
@@ -458,7 +458,8 @@ func TestConnectorConsumeMetrics(t *testing.T) {
 
 		// Assert Component Message
 		assert.Equal(t, "urn:otel-component-mapping:mapping1", componentMsg.Key.DataSource)
-		assert.Equal(t, int64(submittedTime), componentMsg.Message.SubmittedTimestamp)
+		assert.InDelta(t, time.Now().UnixMilli(), componentMsg.Message.SubmittedTimestamp, 1000,
+			"SubmittedTimestamp should be within 1 second of now")
 		compData := componentMsg.Message.GetTopologyStreamRepeatElementsData()
 		require.NotNil(t, compData)
 		require.Len(t, compData.Components, 1)
@@ -473,7 +474,8 @@ func TestConnectorConsumeMetrics(t *testing.T) {
 
 		// Assert Relation Message
 		assert.Equal(t, "urn:otel-relation-mapping:mapping2", relationMsg.Key.DataSource)
-		assert.Equal(t, int64(submittedTime), relationMsg.Message.SubmittedTimestamp)
+		assert.InDelta(t, time.Now().UnixMilli(), componentMsg.Message.SubmittedTimestamp, 1000,
+			"SubmittedTimestamp should be within 1 second of now")
 		relData := relationMsg.Message.GetTopologyStreamRepeatElementsData()
 		require.NotNil(t, relData)
 		require.Len(t, relData.Relations, 1)
@@ -609,13 +611,25 @@ func boolExpr(s string) settings.OtelBooleanExpression {
 	}
 }
 
+func ptr[T any](v T) *T { return &v }
+
 func createSimpleTraceComponentMapping(id string) settings.OtelComponentMapping {
 	return settings.OtelComponentMapping{
 		Id:            id,
 		Identifier:    fmt.Sprintf("urn:otel-component-mapping:%s", id),
 		ExpireAfterMs: 60000,
-		Conditions: []settings.OtelConditionMapping{
-			{Action: settings.CREATE, Expression: boolExpr(`spanAttributes["http.method"] == "GET"`)},
+		Input: settings.OtelInput{
+			Signal: settings.OtelInputSignalList{
+				settings.TRACES,
+			},
+			Resource: settings.OtelInputResource{
+				Scope: &settings.OtelInputScope{
+					Span: &settings.OtelInputSpan{
+						Condition: ptr(boolExpr(`spanAttributes["http.method"] == "GET"`)),
+						Action:    ptr(settings.CREATE),
+					},
+				},
+			},
 		},
 		Output: settings.OtelComponentMappingOutput{
 			Identifier: strExpr("${resourceAttributes[\"service.instance.id\"]}"),
@@ -632,7 +646,6 @@ func createSimpleTraceComponentMapping(id string) settings.OtelComponentMapping 
 				},
 			},
 		},
-		InputSignals: []settings.OtelInputSignal{settings.TRACES},
 	}
 }
 
@@ -641,15 +654,24 @@ func createSimpleTraceRelationMapping(id string) settings.OtelRelationMapping {
 		Id:            id,
 		Identifier:    fmt.Sprintf("urn:otel-relation-mapping:%s", id),
 		ExpireAfterMs: 300000,
-		Conditions: []settings.OtelConditionMapping{
-			{Action: settings.CREATE, Expression: boolExpr(`spanAttributes["http.status_code"] == "200"`)},
+		Input: settings.OtelInput{
+			Signal: settings.OtelInputSignalList{
+				settings.TRACES,
+			},
+			Resource: settings.OtelInputResource{
+				Scope: &settings.OtelInputScope{
+					Span: &settings.OtelInputSpan{
+						Condition: ptr(boolExpr(`spanAttributes["http.status_code"] == "200"`)),
+						Action:    ptr(settings.CREATE),
+					},
+				},
+			},
 		},
 		Output: settings.OtelRelationMappingOutput{
 			SourceId: strExpr(`${resourceAttributes["service.name"]}`),
 			TargetId: strExpr(`${spanAttributes["service.name"]}`),
 			TypeName: strExpr("http-request"),
 		},
-		InputSignals: []settings.OtelInputSignal{settings.TRACES},
 	}
 }
 
@@ -658,8 +680,20 @@ func createSimpleMetricComponentMapping(id string) settings.OtelComponentMapping
 		Id:            id,
 		Identifier:    fmt.Sprintf("urn:otel-component-mapping:%s", id),
 		ExpireAfterMs: 60000,
-		Conditions: []settings.OtelConditionMapping{
-			{Action: settings.CREATE, Expression: boolExpr(`metricAttributes["http.method"] == "GET"`)},
+		Input: settings.OtelInput{
+			Signal: settings.OtelInputSignalList{
+				settings.METRICS,
+			},
+			Resource: settings.OtelInputResource{
+				Scope: &settings.OtelInputScope{
+					Metric: &settings.OtelInputMetric{
+						Datapoint: &settings.OtelInputDatapoint{
+							Condition: ptr(boolExpr(`datapointAttributes["http.method"] == "GET"`)),
+							Action:    ptr(settings.CREATE),
+						},
+					},
+				},
+			},
 		},
 		Output: settings.OtelComponentMappingOutput{
 			Identifier: strExpr("${resourceAttributes[\"service.instance.id\"]}"),
@@ -670,13 +704,12 @@ func createSimpleMetricComponentMapping(id string) settings.OtelComponentMapping
 			Required: &settings.OtelComponentMappingFieldMapping{
 				Tags: &[]settings.OtelTagMapping{
 					{
-						Source: anyExpr(`${metricAttributes["http.status_code"]}`),
+						Source: anyExpr(`${datapointAttributes["http.status_code"]}`),
 						Target: "status_code",
 					},
 				},
 			},
 		},
-		InputSignals: []settings.OtelInputSignal{settings.METRICS},
 	}
 }
 
@@ -685,14 +718,25 @@ func createSimpleMetricRelationMapping(id string) settings.OtelRelationMapping {
 		Id:            id,
 		Identifier:    fmt.Sprintf("urn:otel-relation-mapping:%s", id),
 		ExpireAfterMs: 300000,
-		Conditions: []settings.OtelConditionMapping{
-			{Action: settings.CREATE, Expression: boolExpr(`metricAttributes["http.status_code"] == "200"`)},
+		Input: settings.OtelInput{
+			Signal: settings.OtelInputSignalList{
+				settings.METRICS,
+			},
+			Resource: settings.OtelInputResource{
+				Scope: &settings.OtelInputScope{
+					Metric: &settings.OtelInputMetric{
+						Datapoint: &settings.OtelInputDatapoint{
+							Condition: ptr(boolExpr(`datapointAttributes["http.status_code"] == "200"`)),
+							Action:    ptr(settings.CREATE),
+						},
+					},
+				},
+			},
 		},
 		Output: settings.OtelRelationMappingOutput{
 			SourceId: strExpr(`${resourceAttributes["service.name"]}`),
-			TargetId: strExpr(`${metricAttributes["service.name"]}`),
+			TargetId: strExpr(`${datapointAttributes["service.name"]}`),
 			TypeName: strExpr("http-request"),
 		},
-		InputSignals: []settings.OtelInputSignal{settings.METRICS},
 	}
 }

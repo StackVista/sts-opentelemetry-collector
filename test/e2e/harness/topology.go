@@ -102,7 +102,7 @@ func (env *TopologyTestEnv) PublishSettingSnapshots(t *testing.T, snapshots ...T
 	PublishSettings(t, env.Logger, env.Kafka.Instance.HostAddr, env.Kafka.SettingsTopic, snapshots...)
 }
 
-// extractComponentsAndRelations extracts the components and relations from the topology (Kafka) records.
+// ExtractComponentsAndRelations extracts the components and relations from the topology (Kafka) records.
 // It does basic deduplication of components and relations based on external ID.
 // It returns a map of component external IDs to components, a map of relation external IDs to relations,
 // and a slice of TopoStreamError messages.
@@ -154,3 +154,9 @@ func BoolExpr(s string) settings.OtelBooleanExpression {
 		Expression: s,
 	}
 }
+
+func PtrBoolExpr(s string) *settings.OtelBooleanExpression {
+	return Ptr(BoolExpr(s))
+}
+
+func Ptr[T any](v T) *T { return &v }

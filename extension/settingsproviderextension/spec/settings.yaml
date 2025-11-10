@@ -1011,19 +1011,14 @@ components:
               type: string
             name:
               type: string
-            inputSignals:
-              $ref: '#/components/schemas/OtelInputSignalList'
+            input:
+              $ref: "#/components/schemas/OtelInput"
             output:
               $ref: "#/components/schemas/OtelComponentMappingOutput"
             vars:
               type: array
               items:
                 $ref: "#/components/schemas/OtelVariableMapping"
-            conditions:
-              type: array
-              items:
-                $ref: "#/components/schemas/OtelConditionMapping"
-              minItems: 1
             expireAfterMs:
               type: integer
               format: int64
@@ -1031,9 +1026,8 @@ components:
             - type
             - name
             - identifier
-            - inputSignals
+            - input
             - output
-            - conditions
             - expireAfterMs
 
     OtelRelationMapping:
@@ -1049,19 +1043,14 @@ components:
               type: string
             name:
               type: string
-            inputSignals:
-              $ref: '#/components/schemas/OtelInputSignalList'
+            input:
+              $ref: "#/components/schemas/OtelInput"
             output:
               $ref: "#/components/schemas/OtelRelationMappingOutput"
             vars:
               type: array
               items:
                 $ref: "#/components/schemas/OtelVariableMapping"
-            conditions:
-              type: array
-              items:
-                $ref: "#/components/schemas/OtelConditionMapping"
-              minItems: 1
             expireAfterMs:
               type: integer
               format: int64
@@ -1069,10 +1058,84 @@ components:
             - type
             - name
             - identifier
-            - inputSignals
+            - input
             - output
-            - conditions
             - expireAfterMs
+
+    OtelInput:
+      type: object
+      description: Combines input signals and conditional resource/scope/metric/span mappings.
+      properties:
+        signal:
+          $ref: "#/components/schemas/OtelInputSignalList"
+        resource:
+          $ref: "#/components/schemas/OtelInputResource"
+      required:
+        - signal
+        - resource
+
+    OtelInputResource:
+      type: object
+      description: |-
+        Defines the conditional mapping at the resource level.
+        If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
+      properties:
+        condition:
+          $ref: "#/components/schemas/OtelBooleanExpression"
+        action:
+          $ref: "#/components/schemas/OtelInputConditionAction"
+        scope:
+          $ref: "#/components/schemas/OtelInputScope"
+
+    OtelInputScope:
+      type: object
+      description: |-
+        Defines conditional mapping at the resource -> scope level.
+        If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
+      properties:
+        condition:
+          $ref: "#/components/schemas/OtelBooleanExpression"
+        action:
+          $ref: "#/components/schemas/OtelInputConditionAction"
+        metric:
+          $ref: "#/components/schemas/OtelInputMetric"
+        span:
+          $ref: "#/components/schemas/OtelInputSpan"
+
+    OtelInputMetric:
+      type: object
+      description: |-
+        Defines conditional mapping at the resource -> scope -> metric level.
+        If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
+      properties:
+        condition:
+          $ref: "#/components/schemas/OtelBooleanExpression"
+        action:
+          $ref: "#/components/schemas/OtelInputConditionAction"
+        datapoint:
+          $ref: "#/components/schemas/OtelInputDatapoint"
+
+    OtelInputDatapoint:
+      type: object
+      description: |-
+        Defines conditional mapping at the resource -> scope -> metric -> datapoint level.
+        If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
+      properties:
+        condition:
+          $ref: "#/components/schemas/OtelBooleanExpression"
+        action:
+          $ref: "#/components/schemas/OtelInputConditionAction"
+
+    OtelInputSpan:
+      type: object
+      description: |-
+        Defines conditional mapping at the resource -> scope -> span level.
+        If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
+      properties:
+        condition:
+          $ref: "#/components/schemas/OtelBooleanExpression"
+        action:
+          $ref: "#/components/schemas/OtelInputConditionAction"
 
     OtelComponentMappingOutput:
       type: object
@@ -1162,22 +1225,11 @@ components:
         - name
         - value
 
-    OtelConditionMapping:
-      type: object
-      properties:
-        expression:
-          $ref: "#/components/schemas/OtelBooleanExpression"
-        action:
-          $ref: "#/components/schemas/OtelConditionMappingAction"
-      required:
-        - expression
-        - action
-
-    OtelConditionMappingAction:
+    OtelInputConditionAction:
       type: string
       enum:
         - CREATE
-        - REJECT
+        - CONTINUE
 
     OtelInputSignal:
       type: string
@@ -1205,8 +1257,8 @@ components:
       description: |-
         An expression that must produce a string. It must be one of these formats:
           - A plain string, for example `"this is a plain string"`
-          - A string containing a CEL expression within curly braces `${}`, for example "a string with a cell expression: `${resourceAttributes['service.namespace']}"`
-        A string with only a cell expression is also valid as long as it is within a `${}` section, for example `"${resourceAttributes['service.namespace']}"`.
+          - A string containing a CEL expression within curly braces `${}`, for example "a string with a cel expression: `${resourceAttributes['service.namespace']}"`
+        A string with only a cel expression is also valid as long as it is within a `${}` section, for example `"${resourceAttributes['service.namespace']}"`.
       properties:
         expression:
           type: string
@@ -1227,7 +1279,7 @@ components:
 
     OtelBooleanExpression:
       type: object
-      description: A Cell expression that must return a boolean
+      description: A Cel expression that must return a boolean
       properties:
         expression:
           type: string
