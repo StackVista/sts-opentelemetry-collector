@@ -9,6 +9,12 @@ import (
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 )
 
+const (
+	AcksNone   = "none"
+	AcksLeader = "leader"
+	AcksAll    = "all"
+)
+
 type Config struct {
 	// squash ensures fields are correctly decoded in embedded struct.
 	TimeoutSettings           exporterhelper.TimeoutConfig    `mapstructure:",squash"`
@@ -44,7 +50,7 @@ func (cfg *Config) Validate() error {
 	}
 
 	switch cfg.RequiredAcks {
-	case "none", "leader", "all":
+	case AcksNone, AcksLeader, AcksAll:
 		// ok
 	default:
 		return fmt.Errorf("invalid 'required_acks' value: '%s' (must be one of: none, leader, all)", cfg.RequiredAcks)
