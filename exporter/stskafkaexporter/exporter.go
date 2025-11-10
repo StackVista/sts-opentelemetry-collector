@@ -127,7 +127,10 @@ func (e *KafkaExporter) checkTopicExists(ctx context.Context) error {
 }
 
 func (e *KafkaExporter) ExportData(ctx context.Context, ld plog.Logs) error {
-	// Retry handling is left to exporterhelper - only return on fatal produce errors.
+	// Note: retry handling is left to exporterhelper - only return error on fatal produce errors.
+
+	// For acked modes (leader/all), we bound the total export duration
+	// to avoid hanging indefinitely on produce acknowledgments.
 	deadlineCtx, cancel := context.WithTimeout(ctx, e.cfg.ProduceTimeout)
 	defer cancel()
 
@@ -159,12 +162,17 @@ func (e *KafkaExporter) ExportData(ctx context.Context, ld plog.Logs) error {
 		e.logger.Warn("failed to build one or more Kafka records; some logs dropped", zap.Error(err))
 	}
 
+	// For acks=none: we intentionally avoid wrapping it with a timeout because no acknowledgments
+	// are expected from Kafka. Using a deadline here could prematurely cancel
+	// async produce calls before they even leave the process, resulting in
+	// misleading "context canceled" warnings.
 	if e.cfg.RequiredAcks == AcksNone {
-		e.logger.Debug("producing Kafka records with acks=none (fire-and-forget mode)",
+		e.logger.Debug("producing Kafka records with acks=none",
 			zap.Int("recordCount", len(records)))
 
 		for _, rec := range records {
-			e.client.Produce(deadlineCtx, rec, func(_ *kgo.Record, err error) {
+			// Use context.Background() so produce calls aren't canceled when ExportData returns.
+			e.client.Produce(context.Background(), rec, func(_ *kgo.Record, err error) {
 				if err != nil {
 					e.logger.Warn("kafka async produce failed (acks=none)", zap.Error(err))
 				}
