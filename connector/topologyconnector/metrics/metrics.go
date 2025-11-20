@@ -12,8 +12,6 @@ import (
 )
 
 type ConnectorMetricsRecorder interface {
-	IncInputsProcessed(ctx context.Context, n int64, signal settings.OtelInputSignal)
-
 	IncTopologyProduced(ctx context.Context, n int64, settingType settings.SettingType, signal settings.OtelInputSignal)
 	IncMappingErrors(ctx context.Context, n int64, settingType settings.SettingType, signal settings.OtelInputSignal)
 	RecordMappingDuration(
@@ -30,8 +28,6 @@ type ConnectorMetricsRecorder interface {
 
 type NoopConnectorMetricsRecorder struct{}
 
-func (n *NoopConnectorMetricsRecorder) IncInputsProcessed(_ context.Context, _ int64, _ settings.OtelInputSignal) {
-}
 func (n *NoopConnectorMetricsRecorder) IncTopologyProduced(
 	_ context.Context, _ int64, _ settings.SettingType, _ settings.OtelInputSignal) {
 }
@@ -49,7 +45,6 @@ func (n *NoopConnectorMetricsRecorder) IncMappingsRemoved(_ context.Context, _ i
 
 type ConnectorMetrics struct {
 	// Counters
-	inputsProcessed metric.Int64Counter
 	topologyTotal   metric.Int64Counter
 	mappingsRemoved metric.Int64Counter
 	errorsTotal     metric.Int64Counter
@@ -64,10 +59,6 @@ func NewConnectorMetrics(typeName string, telemetrySettings component.TelemetryS
 	meter := telemetrySettings.MeterProvider.Meter(typeName)
 	name := newMetricNameForType(typeName)
 
-	inputsProcessed, _ := meter.Int64Counter(
-		name("inputs_processed_total"),
-		metric.WithDescription("Total number of spans processed by the connector"),
-	)
 	topologyTotal, _ := meter.Int64Counter(
 		name("topology_produced_total"),
 		metric.WithDescription("Total number of topology elements produced"),
@@ -91,7 +82,6 @@ func NewConnectorMetrics(typeName string, telemetrySettings component.TelemetryS
 		metric.WithUnit("s"),
 	)
 	return &ConnectorMetrics{
-		inputsProcessed:           inputsProcessed,
 		topologyTotal:             topologyTotal,
 		mappingsRemoved:           mappingsRemoved,
 		errorsTotal:               errorsTotal,
@@ -131,10 +121,6 @@ func (pm *ConnectorMetrics) RecordRequestDuration(
 	pm.requestProcessingDuration.Record(ctx, d.Seconds(), metric.WithAttributeSet(
 		attribute.NewSet(attribute.String("signal", string(signal))),
 	))
-}
-
-func (pm *ConnectorMetrics) IncInputsProcessed(ctx context.Context, n int64, signal settings.OtelInputSignal) {
-	pm.inputsProcessed.Add(ctx, n, metric.WithAttributeSet(attribute.NewSet(attribute.String("signal", string(signal)))))
 }
 
 func (pm *ConnectorMetrics) IncTopologyProduced(
