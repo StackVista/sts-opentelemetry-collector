@@ -19,8 +19,8 @@ func TestValidateInterpolation(t *testing.T) {
 
 		// Valid: single wrapped expression
 		{"wrapped-simple", "${foo}", ""},
-		{"wrapped-indexing-double-quotes", `${resourceAttributes["service.name"]}`, ""},
-		{"wrapped-indexing-single-quotes", `${resourceAttributes['service.name']}`, ""},
+		{"wrapped-indexing-double-quotes", `${resource.attributes["service.name"]}`, ""},
+		{"wrapped-indexing-single-quotes", `${resource.attributes['service.name']}`, ""},
 		{"wrapped-spaces-inside", `${   vars["env"]   }`, ""},
 
 		// Valid: interpolated with surrounding literals
@@ -129,18 +129,18 @@ func TestRewriteInterpolations(t *testing.T) {
 		},
 		{
 			name:   "no interpolation (expression remains unchanged)",
-			expr:   `resourceAttributes["service.name"]`,
-			result: `resourceAttributes["service.name"]`,
+			expr:   `resource.attributes["service.name"]`,
+			result: `resource.attributes["service.name"]`,
 		},
 		{
 			name:   "quoted with interpolation",
-			expr:   `"service-${resourceAttributes["env"]}"`,
-			result: `"service-"+(resourceAttributes["env"])`,
+			expr:   `"service-${resource.attributes["env"]}"`,
+			result: `"service-"+(resource.attributes["env"])`,
 		},
 		{
 			name:   "unquoted with interpolation",
-			expr:   `ns-${vars.ns}:svc-${resourceAttributes["service.name"]}`,
-			result: `"ns-"+(vars.ns)+":svc-"+(resourceAttributes["service.name"])`,
+			expr:   `ns-${vars.ns}:svc-${resource.attributes["service.name"]}`,
+			result: `"ns-"+(vars.ns)+":svc-"+(resource.attributes["service.name"])`,
 		},
 		{
 			name:   "adjacent interpolations",
@@ -149,8 +149,8 @@ func TestRewriteInterpolations(t *testing.T) {
 		},
 		{
 			name:   "Curly brace after interpolation",
-			expr:   `hello ${resourceAttributes["service.name"]}}`,
-			result: `"hello "+(resourceAttributes["service.name"])+"}"`,
+			expr:   `hello ${resource.attributes["service.name"]}}`,
+			result: `"hello "+(resource.attributes["service.name"])+"}"`,
 		},
 		{
 			name:   "support escaping ${ with $${ in literal part",

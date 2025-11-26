@@ -3,13 +3,12 @@ package internal
 import (
 	"context"
 	"fmt"
-
-	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
+	"strings"
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/google/cel-go/ext"
-
+	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 )
 
@@ -36,12 +35,12 @@ type ExpressionEvaluator interface {
 }
 
 type ExpressionEvalContext struct {
-	SpanAttributes      map[string]any
-	DatapointAttributes map[string]any
-	MetricAttributes    map[string]any
-	ScopeAttributes     map[string]any
-	ResourceAttributes  map[string]any
-	Vars                map[string]any
+	Span      *Span
+	Datapoint *Datapoint
+	Metric    *Metric
+	Scope     *Scope
+	Resource  *Resource
+	Vars      map[string]any
 }
 
 type CelEvaluator struct {
@@ -79,49 +78,49 @@ func (e *CelEvaluationError) Error() string {
 }
 
 func NewSpanEvalContext(
-	spanAttributes, scopeAttributes, resourceAttributes map[string]any,
+	span *Span, scope *Scope, resource *Resource,
 ) *ExpressionEvalContext {
 	return &ExpressionEvalContext{
-		SpanAttributes:      spanAttributes,
-		DatapointAttributes: nil,
-		MetricAttributes:    nil,
-		ScopeAttributes:     scopeAttributes,
-		ResourceAttributes:  resourceAttributes,
-		Vars:                nil,
+		Span:      span,
+		Datapoint: nil,
+		Metric:    nil,
+		Scope:     scope,
+		Resource:  resource,
+		Vars:      nil,
 	}
 }
 
 func NewMetricEvalContext(
-	datapointAttributes, metricAttributes, scopeAttributes, resourceAttributes map[string]any,
+	datapoint *Datapoint, metric *Metric, scope *Scope, resource *Resource,
 ) *ExpressionEvalContext {
 	return &ExpressionEvalContext{
-		SpanAttributes:      nil,
-		DatapointAttributes: datapointAttributes,
-		MetricAttributes:    metricAttributes,
-		ScopeAttributes:     scopeAttributes,
-		ResourceAttributes:  resourceAttributes,
-		Vars:                nil,
+		Span:      nil,
+		Datapoint: datapoint,
+		Metric:    metric,
+		Scope:     scope,
+		Resource:  resource,
+		Vars:      nil,
 	}
 }
 
 func (ec *ExpressionEvalContext) CloneWithVariables(vars map[string]any) *ExpressionEvalContext {
 	return &ExpressionEvalContext{
-		SpanAttributes:      ec.SpanAttributes,
-		MetricAttributes:    ec.MetricAttributes,
-		DatapointAttributes: ec.DatapointAttributes,
-		ScopeAttributes:     ec.ScopeAttributes,
-		ResourceAttributes:  ec.ResourceAttributes,
-		Vars:                vars,
+		Span:      ec.Span,
+		Metric:    ec.Metric,
+		Datapoint: ec.Datapoint,
+		Scope:     ec.Scope,
+		Resource:  ec.Resource,
+		Vars:      vars,
 	}
 }
 
 func NewCELEvaluator(ctx context.Context, cacheSettings metrics.MeteredCacheSettings) (*CelEvaluator, error) {
 	env, err := cel.NewEnv(
-		cel.Variable("spanAttributes", cel.MapType(cel.StringType, cel.DynType)),
-		cel.Variable("metricAttributes", cel.MapType(cel.StringType, cel.DynType)),
-		cel.Variable("datapointAttributes", cel.MapType(cel.StringType, cel.DynType)),
-		cel.Variable("scopeAttributes", cel.MapType(cel.StringType, cel.DynType)),
-		cel.Variable("resourceAttributes", cel.MapType(cel.StringType, cel.DynType)),
+		cel.Variable("span", cel.MapType(cel.StringType, cel.DynType)),
+		cel.Variable("datapoint", cel.MapType(cel.StringType, cel.DynType)),
+		cel.Variable("metric", cel.MapType(cel.StringType, cel.DynType)),
+		cel.Variable("scope", cel.MapType(cel.StringType, cel.DynType)),
+		cel.Variable("resource", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("vars", cel.MapType(cel.StringType, cel.DynType)),
 		ext.Strings(), // enables string manipulation functions
 	)
@@ -343,7 +342,13 @@ func validateExpectedType(ast *cel.Ast, expectedType expressionType, expression 
 	switch expectedType {
 	case StringType:
 		switch outputKind {
-		case cel.DynKind, cel.StringKind, cel.IntKind, cel.UintKind, cel.DoubleKind, cel.BoolKind:
+		case cel.DynKind:
+			// if a string type is expected, and the expression ends with attributes, it references a map, which
+			// means the expression is invalid.
+			if strings.HasSuffix(expression, "attributes}") {
+				return fmt.Errorf("expected string type, got: map(string, dyn), for expression '%v'", expression)
+			}
+		case cel.StringKind, cel.IntKind, cel.UintKind, cel.DoubleKind, cel.BoolKind:
 			// acceptable types that can be stringified
 		default:
 			if outputKind != cel.StringKind {
@@ -367,23 +372,26 @@ func validateExpectedType(ast *cel.Ast, expectedType expressionType, expression 
 // evaluateProgram executes a compiled CEL program with the given context.
 func (e *CelEvaluator) evaluateProgram(prog cel.Program, ctx *ExpressionEvalContext) (interface{}, error) {
 	runtimeVars := map[string]interface{}{
-		"scopeAttributes":    ctx.ScopeAttributes,
-		"resourceAttributes": ctx.ResourceAttributes,
-		"vars":               ctx.Vars,
+		"resource": ctx.Resource.ToMap(),
+		"vars":     ctx.Vars,
 	}
 
-	// To get the best error messages, the metricAttributes/datapointAttributes/spanAttributes should not be set at all
+	if ctx.Scope != nil {
+		runtimeVars["scope"] = ctx.Scope.ToMap()
+	}
+
+	// To get the best error messages, the metric/datapoint/span should not be set at all
 	// if they are not defined
-	if ctx.MetricAttributes != nil {
-		runtimeVars["metricAttributes"] = ctx.MetricAttributes
+	if ctx.Metric != nil {
+		runtimeVars["metric"] = ctx.Metric.ToMap()
 	}
 
-	if ctx.DatapointAttributes != nil {
-		runtimeVars["datapointAttributes"] = ctx.DatapointAttributes
+	if ctx.Datapoint != nil {
+		runtimeVars["datapoint"] = ctx.Datapoint.ToMap()
 	}
 
-	if ctx.SpanAttributes != nil {
-		runtimeVars["spanAttributes"] = ctx.SpanAttributes
+	if ctx.Span != nil {
+		runtimeVars["span"] = ctx.Span.ToMap()
 	}
 
 	result, _, err := prog.Eval(runtimeVars)
@@ -400,7 +408,7 @@ func stringify(result interface{}) (string, error) {
 		return v, nil
 	case fmt.Stringer:
 		return v.String(), nil
-	case int, int32, uint64, int64, float32, float64:
+	case int, int16, int32, uint64, int64, float32, float64:
 		return fmt.Sprint(v), nil
 	default:
 		return "", newCelEvaluationError("cannot convert '%T' to 'string'", result)

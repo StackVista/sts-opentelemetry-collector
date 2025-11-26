@@ -107,7 +107,7 @@ func TestMetricToOtelTopology_ErrorReturnedOnIncorrectMappingConfig(t *testing.T
 
 	component := otelComponentMappingSpecForService()
 	// modify base component mapping to have an invalid expression
-	component.Output.Name = harness.StrExpr(`${resourceAttributes}`) // a map reference where a string expression is required
+	component.Output.Name = harness.StrExpr(`${resource.attributes}`) // a map reference where a string expression is required
 	env.PublishSettingSnapshots(t, otelComponentMappingSnapshot(component))
 
 	sendMetrics(t, env)
@@ -121,7 +121,7 @@ func TestMetricToOtelTopology_ErrorReturnedOnIncorrectMappingConfig(t *testing.T
 	require.Contains(
 		t,
 		errs[0].Message, // all the errors should be the same
-		"expected string type, got: map(string, dyn), for expression '${resourceAttributes}'",
+		"expected string type, got: map(string, dyn), for expression '${resource.attributes}'",
 		"expected error on incorrect mapping config",
 	)
 }
@@ -242,14 +242,14 @@ func otelComponentMappingSpecForService() *harness.OtelComponentMappingSpec {
 			},
 			Resource: settings.OtelInputResource{
 				Action:    harness.Ptr(settings.CREATE),
-				Condition: harness.PtrBoolExpr(`'service.name' in resourceAttributes`),
+				Condition: harness.PtrBoolExpr(`'service.name' in resource.attributes`),
 			},
 		},
 		Output: settings.OtelComponentMappingOutput{
-			Identifier: harness.StrExpr(`urn:service:${resourceAttributes["service.name"]}`),
-			Name:       harness.StrExpr(`${resourceAttributes["service.name"]}`),
+			Identifier: harness.StrExpr(`urn:service:${resource.attributes["service.name"]}`),
+			Name:       harness.StrExpr(`${resource.attributes["service.name"]}`),
 			TypeName:   harness.StrExpr("service"),
-			DomainName: harness.StrExpr(`${resourceAttributes["service.namespace"]}`),
+			DomainName: harness.StrExpr(`${resource.attributes["service.namespace"]}`),
 			LayerName:  harness.StrExpr("backend"),
 		},
 	}
@@ -270,17 +270,17 @@ func otelComponentMappingSpecForQueue() *harness.OtelComponentMappingSpec {
 					Metric: &settings.OtelInputMetric{
 						Datapoint: &settings.OtelInputDatapoint{
 							Action:    harness.Ptr(settings.CREATE),
-							Condition: harness.PtrBoolExpr(`"queue.name" in datapointAttributes`),
+							Condition: harness.PtrBoolExpr(`"queue.name" in datapoint.attributes`),
 						},
 					},
 				},
 			},
 		},
 		Output: settings.OtelComponentMappingOutput{
-			Identifier: harness.StrExpr(`urn:queue:${resourceAttributes["service.name"]}:${datapointAttributes["queue.name"]}`),
-			Name:       harness.StrExpr(`${datapointAttributes["queue.name"]}`),
+			Identifier: harness.StrExpr(`urn:queue:${resource.attributes["service.name"]}:${datapoint.attributes["queue.name"]}`),
+			Name:       harness.StrExpr(`${datapoint.attributes["queue.name"]}`),
 			TypeName:   harness.StrExpr("queue"),
-			DomainName: harness.StrExpr(`${resourceAttributes["service.namespace"]}`),
+			DomainName: harness.StrExpr(`${resource.attributes["service.namespace"]}`),
 			LayerName:  harness.StrExpr("backend"),
 		},
 	}
@@ -300,15 +300,15 @@ func otelRelationMappingSpecForMetrics() *harness.OtelRelationMappingSpec {
 					Metric: &settings.OtelInputMetric{
 						Datapoint: &settings.OtelInputDatapoint{
 							Action:    harness.Ptr(settings.CREATE),
-							Condition: harness.PtrBoolExpr(`"client.service" in datapointAttributes && "server.service" in datapointAttributes`),
+							Condition: harness.PtrBoolExpr(`"client.service" in datapoint.attributes && "server.service" in datapoint.attributes`),
 						},
 					},
 				},
 			},
 		},
 		Output: settings.OtelRelationMappingOutput{
-			SourceId: harness.StrExpr(`urn:service:${datapointAttributes["client.service"]}`),
-			TargetId: harness.StrExpr(`urn:service:${datapointAttributes["server.service"]}`),
+			SourceId: harness.StrExpr(`urn:service:${datapoint.attributes["client.service"]}`),
+			TargetId: harness.StrExpr(`urn:service:${datapoint.attributes["server.service"]}`),
 			TypeName: harness.StrExpr("calls"),
 		},
 	}
