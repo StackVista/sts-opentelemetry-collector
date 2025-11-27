@@ -32,12 +32,12 @@ func makeContext(includeSpan bool, includeDatapoint bool) ExpressionEvalContext 
 	}
 
 	scopeAttributes := map[string]any{
-		"otel.scope.Name":    "io.opentelemetry.instrumentation.http",
+		"otel.scope.name":    "io.opentelemetry.instrumentation.http",
 		"otel.scope.Version": "1.2.3",
 	}
 
 	resourceAttributes := map[string]any{
-		"service.Name":   "cart-service",
+		"service.name":   "cart-service",
 		"cloud.provider": "aws",
 		"env":            "dev",
 		// slice attribute type
@@ -114,13 +114,18 @@ func TestEvalStringExpression(t *testing.T) {
 		},
 		{
 			name:     "support resource Attributes",
-			expr:     `${resource.attributes["service.Name"]}`,
+			expr:     `${resource.attributes["service.name"]}`,
 			expected: "cart-service",
 		},
 		{
 			name:     "support Attributes access (with single quotes)",
-			expr:     "${resource.attributes['service.Name']}",
+			expr:     "${resource.attributes['service.name']}",
 			expected: "cart-service",
+		},
+		{
+			name:     "support nested Attributes access",
+			expr:     "${resource.attributes.env}",
+			expected: "dev",
 		},
 		{
 			name:     "support span Attributes",
@@ -134,7 +139,7 @@ func TestEvalStringExpression(t *testing.T) {
 		},
 		{
 			name:     "support scope Attributes",
-			expr:     `${scope.attributes["otel.scope.Name"]}`,
+			expr:     `${scope.attributes["otel.scope.name"]}`,
 			expected: "io.opentelemetry.instrumentation.http",
 		},
 		{
@@ -174,27 +179,27 @@ func TestEvalStringExpression(t *testing.T) {
 		},
 		{
 			name:     "support string interpolation with resource Attributes",
-			expr:     `ns-${resource.attributes["service.Name"]}`,
+			expr:     `ns-${resource.attributes["service.name"]}`,
 			expected: "ns-cart-service",
 		},
 		{
 			name:     "multiple interpolations at once",
-			expr:     `ns-${resource.attributes["service.Name"]}-${vars.namespace}-${resource.attributes["service.Name"].matches(R'cart-.*') ? 'cart' : 'not-cart'}-end`,
+			expr:     `ns-${resource.attributes["service.name"]}-${vars.namespace}-${resource.attributes["service.name"].matches(R'cart-.*') ? 'cart' : 'not-cart'}-end`,
 			expected: "ns-cart-service-test-cart-end",
 		},
 		{
 			name:     "interpolation at start and end of expression",
-			expr:     `${vars.namespace}/${resource.attributes["service.Name"]}`,
+			expr:     `${vars.namespace}/${resource.attributes["service.name"]}`,
 			expected: "test/cart-service",
 		},
 		{
 			name:     "another complex expression",
-			expr:     `${resource.attributes["service.Name"].matches(R'cart-.*') ? ( span.attributes["http.status_code"] < 400 ? 'good-cart' : 'bad-cart' ) : 'not-cart'}`,
+			expr:     `${resource.attributes["service.name"].matches(R'cart-.*') ? ( span.attributes["http.status_code"] < 400 ? 'good-cart' : 'bad-cart' ) : 'not-cart'}`,
 			expected: "good-cart",
 		},
 		{
 			name:     "support key existence checks",
-			expr:     `${'service.Name' in resource.attributes ? 'yes' : 'no'}`,
+			expr:     `${'service.name' in resource.attributes ? 'yes' : 'no'}`,
 			expected: "yes",
 		},
 		{
@@ -370,7 +375,7 @@ func TestEvalMapExpression(t *testing.T) {
 			expr: settings.OtelAnyExpression{Expression: "${resource.attributes}"},
 			want: map[string]any{
 				"cloud.provider": "aws",
-				"service.Name":   "cart-service",
+				"service.name":   "cart-service",
 				"env":            "dev",
 				"deployment": map[string]any{
 					"env":    "prod",
@@ -383,7 +388,7 @@ func TestEvalMapExpression(t *testing.T) {
 			name: "pure map reference scope.attributes",
 			expr: settings.OtelAnyExpression{Expression: "${scope.attributes}"},
 			want: map[string]any{
-				"otel.scope.Name":    "io.opentelemetry.instrumentation.http",
+				"otel.scope.name":    "io.opentelemetry.instrumentation.http",
 				"otel.scope.Version": "1.2.3",
 			},
 		},
@@ -526,7 +531,7 @@ func TestEvalAnyExpression(t *testing.T) {
 		},
 		{
 			name:     "complex string interpolation",
-			expr:     `ns-${resource.attributes["service.Name"]}-${vars.namespace}`,
+			expr:     `ns-${resource.attributes["service.name"]}-${vars.namespace}`,
 			expected: "ns-cart-service-test",
 		},
 		{

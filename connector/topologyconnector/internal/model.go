@@ -26,7 +26,7 @@ func (r *Resource) ToMap() map[string]any {
 
 type Scope struct {
 	// not storing individuals fields on the struct as we don't need them (at the moment),
-	//so they'll just use unnecessary memory
+	// so they'll just use unnecessary memory
 
 	cachedMap map[string]any
 }

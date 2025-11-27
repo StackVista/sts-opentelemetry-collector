@@ -23,7 +23,14 @@ func (c *objectCache[K, V]) Load(key K) (V, bool) {
 		var zero V
 		return zero, false
 	}
-	return v.(V), true
+
+	val, ok := v.(V)
+	if !ok { // Should never happen unless the cache is misused
+		var zero V
+		return zero, false
+	}
+
+	return val, true
 }
 
 func (c *objectCache[K, V]) Store(key K, val V) {
