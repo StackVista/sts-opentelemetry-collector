@@ -9,5 +9,5 @@ docker build . -t sts-opentelemetry-collector:latest
 Or, you can invoke the tests with a variable that would build a new image before running the tests.
 
 ```shell
-REBUILD_COLLECTOR_IMAGE=1 go test -v ./tests/e2e/
+REBUILD_COLLECTOR_IMAGE=1 go test -v ./test/e2e/
 ```
