@@ -17,7 +17,7 @@ import (
 
 func TestMappingSpan_MapComponent(t *testing.T) {
 	spanEvalContext := &ExpressionEvalContext{
-		Span: NewSpan("name", map[string]any{
+		Span: NewSpan("name", "client", "ok", "", map[string]any{
 			"kind":     "licence",
 			"amount":   1000,
 			"priority": "urgent",
@@ -313,7 +313,7 @@ func TestResolveTagMappings(t *testing.T) {
 
 	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 	ctx := NewSpanEvalContext(
-		NewSpan("name", testSpan.Attributes().AsRaw()),
+		NewSpan("name", "client", "ok", "", testSpan.Attributes().AsRaw()),
 		NewScope("name", "version", testScope.Scope().Attributes().AsRaw()),
 		NewResource(testResource.Resource().Attributes().AsRaw()),
 	)
@@ -536,7 +536,7 @@ func TestResolveTagMappings(t *testing.T) {
 
 func TestMapping_MapRelation(t *testing.T) {
 	spanEvalContext := &ExpressionEvalContext{
-		Span: NewSpan("name", map[string]any{
+		Span: NewSpan("name", "client", "ok", "", map[string]any{
 			"kind":     "licence",
 			"amount":   1000,
 			"priority": "urgent",

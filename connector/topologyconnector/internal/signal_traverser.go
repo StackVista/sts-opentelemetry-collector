@@ -253,7 +253,13 @@ func (t *TracesTraverser) span(resourceIdx, scopeIdx, spanIdx int, spans ptrace.
 		return cached
 	}
 	span := spans.At(spanIdx)
-	s := NewSpan(span.Name(), span.Attributes().AsRaw())
+	s := NewSpan(
+		span.Name(),
+		span.Kind().String(),
+		span.Status().Code().String(),
+		span.Status().Message(),
+		span.Attributes().AsRaw(),
+	)
 	t.spans.Store(key, s)
 	return s
 }

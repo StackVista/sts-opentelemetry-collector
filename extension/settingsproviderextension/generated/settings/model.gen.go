@@ -861,7 +861,7 @@ type OtelInputScope struct {
 // Each signal enables access to a specific set of fields and attribute maps
 // coming from the corresponding OTel data pipeline level.
 //
-// Attributes available per signal:
+// Fields/attributes available per signal:
 //
 //   - **TRACES**
 //     Provides access to:
@@ -870,7 +870,7 @@ type OtelInputScope struct {
 //
 //   - `scope.name`, `scope.version`, `scope.attributes`
 //
-//   - `span.name`, `span.attributes`
+//   - `span.name`, `span.kind`, `span.statusMessage`, `span.statusCode`, `span.attributes`
 //
 //   - **METRICS**
 //     Provides access to:

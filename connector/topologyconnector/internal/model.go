@@ -52,11 +52,14 @@ type Span struct {
 	cachedMap map[string]any
 }
 
-func NewSpan(name string, attrs map[string]any) *Span {
+func NewSpan(name, kind, statusCode, statusMessage string, attrs map[string]any) *Span {
 	return &Span{
 		cachedMap: map[string]any{
-			"name":       name,
-			"attributes": attrs,
+			"name":          name,
+			"kind":          kind,
+			"statusCode":    statusCode,
+			"statusMessage": statusMessage,
+			"attributes":    attrs,
 		},
 	}
 }

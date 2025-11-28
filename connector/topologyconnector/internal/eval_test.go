@@ -207,7 +207,7 @@ func TestEvalVariables_withRealContext(t *testing.T) {
 	got, errs := EvalVariables(
 		fakeEval,
 		NewSpanEvalContext(
-			NewSpan("name", span.Attributes().AsRaw()),
+			NewSpan("name", "client", "ok", "", span.Attributes().AsRaw()),
 			NewScope("name", "version", scope.Scope().Attributes().AsRaw()),
 			NewResource(resource.Resource().Attributes().AsRaw()),
 		),

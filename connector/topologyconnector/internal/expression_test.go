@@ -61,7 +61,7 @@ func makeContext(includeSpan bool, includeDatapoint bool) ExpressionEvalContext 
 	}
 
 	if includeSpan {
-		evalCtx.Span = NewSpan("GET /checkout", spanAttributes)
+		evalCtx.Span = NewSpan("GET /checkout", "client", "ok", "", spanAttributes)
 	}
 
 	if includeDatapoint {
