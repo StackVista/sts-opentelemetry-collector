@@ -625,22 +625,22 @@ func createSimpleTraceComponentMapping(id string) settings.OtelComponentMapping 
 			Resource: settings.OtelInputResource{
 				Scope: &settings.OtelInputScope{
 					Span: &settings.OtelInputSpan{
-						Condition: ptr(boolExpr(`spanAttributes["http.method"] == "GET"`)),
+						Condition: ptr(boolExpr(`span.attributes["http.method"] == "GET"`)),
 						Action:    ptr(settings.CREATE),
 					},
 				},
 			},
 		},
 		Output: settings.OtelComponentMappingOutput{
-			Identifier: strExpr("${resourceAttributes[\"service.instance.id\"]}"),
-			Name:       strExpr(`${resourceAttributes["service.name"]}`),
+			Identifier: strExpr("${resource.attributes[\"service.instance.id\"]}"),
+			Name:       strExpr(`${resource.attributes["service.name"]}`),
 			TypeName:   strExpr("service-instance"),
-			DomainName: strExpr(`${resourceAttributes["service.namespace"]}`),
+			DomainName: strExpr(`${resource.attributes["service.namespace"]}`),
 			LayerName:  strExpr("backend"),
 			Required: &settings.OtelComponentMappingFieldMapping{
 				Tags: &[]settings.OtelTagMapping{
 					{
-						Source: anyExpr(`${spanAttributes["http.status_code"]}`),
+						Source: anyExpr(`${span.attributes["http.status_code"]}`),
 						Target: "status_code",
 					},
 				},
@@ -661,15 +661,15 @@ func createSimpleTraceRelationMapping(id string) settings.OtelRelationMapping {
 			Resource: settings.OtelInputResource{
 				Scope: &settings.OtelInputScope{
 					Span: &settings.OtelInputSpan{
-						Condition: ptr(boolExpr(`spanAttributes["http.status_code"] == "200"`)),
+						Condition: ptr(boolExpr(`span.attributes["http.status_code"] == "200"`)),
 						Action:    ptr(settings.CREATE),
 					},
 				},
 			},
 		},
 		Output: settings.OtelRelationMappingOutput{
-			SourceId: strExpr(`${resourceAttributes["service.name"]}`),
-			TargetId: strExpr(`${spanAttributes["service.name"]}`),
+			SourceId: strExpr(`${resource.attributes["service.name"]}`),
+			TargetId: strExpr(`${span.attributes["service.name"]}`),
 			TypeName: strExpr("http-request"),
 		},
 	}
@@ -688,7 +688,7 @@ func createSimpleMetricComponentMapping(id string) settings.OtelComponentMapping
 				Scope: &settings.OtelInputScope{
 					Metric: &settings.OtelInputMetric{
 						Datapoint: &settings.OtelInputDatapoint{
-							Condition: ptr(boolExpr(`datapointAttributes["http.method"] == "GET"`)),
+							Condition: ptr(boolExpr(`datapoint.attributes["http.method"] == "GET"`)),
 							Action:    ptr(settings.CREATE),
 						},
 					},
@@ -696,15 +696,15 @@ func createSimpleMetricComponentMapping(id string) settings.OtelComponentMapping
 			},
 		},
 		Output: settings.OtelComponentMappingOutput{
-			Identifier: strExpr("${resourceAttributes[\"service.instance.id\"]}"),
-			Name:       strExpr(`${resourceAttributes["service.name"]}`),
+			Identifier: strExpr("${resource.attributes[\"service.instance.id\"]}"),
+			Name:       strExpr(`${resource.attributes["service.name"]}`),
 			TypeName:   strExpr("service-instance"),
-			DomainName: strExpr(`${resourceAttributes["service.namespace"]}`),
+			DomainName: strExpr(`${resource.attributes["service.namespace"]}`),
 			LayerName:  strExpr("backend"),
 			Required: &settings.OtelComponentMappingFieldMapping{
 				Tags: &[]settings.OtelTagMapping{
 					{
-						Source: anyExpr(`${datapointAttributes["http.status_code"]}`),
+						Source: anyExpr(`${datapoint.attributes["http.status_code"]}`),
 						Target: "status_code",
 					},
 				},
@@ -726,7 +726,7 @@ func createSimpleMetricRelationMapping(id string) settings.OtelRelationMapping {
 				Scope: &settings.OtelInputScope{
 					Metric: &settings.OtelInputMetric{
 						Datapoint: &settings.OtelInputDatapoint{
-							Condition: ptr(boolExpr(`datapointAttributes["http.status_code"] == "200"`)),
+							Condition: ptr(boolExpr(`datapoint.attributes["http.status_code"] == "200"`)),
 							Action:    ptr(settings.CREATE),
 						},
 					},
@@ -734,8 +734,8 @@ func createSimpleMetricRelationMapping(id string) settings.OtelRelationMapping {
 			},
 		},
 		Output: settings.OtelRelationMappingOutput{
-			SourceId: strExpr(`${resourceAttributes["service.name"]}`),
-			TargetId: strExpr(`${datapointAttributes["service.name"]}`),
+			SourceId: strExpr(`${resource.attributes["service.name"]}`),
+			TargetId: strExpr(`${datapoint.attributes["service.name"]}`),
 			TypeName: strExpr("http-request"),
 		},
 	}

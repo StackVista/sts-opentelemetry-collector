@@ -204,7 +204,15 @@ func TestEvalVariables_withRealContext(t *testing.T) {
 	}
 
 	// Pass along constructed span, scope and resource to validate plumbing works as expected
-	got, errs := EvalVariables(fakeEval, NewSpanEvalContext(span.Attributes().AsRaw(), scope.Scope().Attributes().AsRaw(), resource.Resource().Attributes().AsRaw()), &vars)
+	got, errs := EvalVariables(
+		fakeEval,
+		NewSpanEvalContext(
+			NewSpan("name", "client", "ok", "", span.Attributes().AsRaw()),
+			NewScope("name", "version", scope.Scope().Attributes().AsRaw()),
+			NewResource(resource.Resource().Attributes().AsRaw()),
+		),
+		&vars,
+	)
 
 	require.Nil(t, errs)
 	require.Equal(t, map[string]any{

@@ -1,4 +1,5 @@
-package e2e_test
+//nolint:testpackage
+package e2e
 
 import (
 	"e2e/harness"

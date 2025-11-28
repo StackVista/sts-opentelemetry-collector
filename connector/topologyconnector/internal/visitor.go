@@ -14,7 +14,7 @@ const (
 )
 
 // MappingVisitor defines a visitor interface for traversing OpenTelemetry input data
-// (metrics, traces, and eventually logs) in a consistent way.
+// (metricData, traces, and eventually logs) in a consistent way.
 // Each Visit* method corresponds to a level in the OTEL data hierarchy, allowing
 // a mapping implementation to evaluate conditions and decide whether to:
 //
@@ -24,7 +24,7 @@ const (
 //
 // The visitor is applied by signal-specific traversers (e.g., MetricsTraverser, TracesTraverser)
 //
-// Visit* methods receive an ExpressionEvalContext containing the available attributes
+// Visit* methods receive an ExpressionEvalContext containing the available Attributes
 // for that level (resource, scope, metric/span, etc.) and can evaluate CEL conditions
 // to determine if a mapping applies.
 //

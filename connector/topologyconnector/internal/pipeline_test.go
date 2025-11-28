@@ -112,7 +112,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							settings.TRACES,
 						},
 						Resource: settings.OtelInputResource{
-							Condition: ptr(boolExpr(`resourceAttributes["service.instance.id"] == "627cc493"`)),
+							Condition: ptr(boolExpr(`resource.attributes["service.instance.id"] == "627cc493"`)),
 							Scope: &settings.OtelInputScope{
 								Action: ptr(settings.CREATE),
 							},
@@ -121,39 +121,39 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 					Identifier: "urn:otel-component-mapping:service",
 					Output: settings.OtelComponentMappingOutput{
 						Identifier:       strExpr("${vars.instanceId}"),
-						Name:             strExpr(`${resourceAttributes["service.name"]}`),
+						Name:             strExpr(`${resource.attributes["service.name"]}`),
 						TypeName:         strExpr(`service-instance`),
 						TypeIdentifier:   ptr(strExpr(`service_instance_id`)),
-						DomainName:       strExpr(`${resourceAttributes["service.namespace"]}`),
-						DomainIdentifier: ptr(strExpr(`${resourceAttributes["missing"]}`)), // Optional field, so no error on this
+						DomainName:       strExpr(`${resource.attributes["service.namespace"]}`),
+						DomainIdentifier: ptr(strExpr(`${resource.attributes["missing"]}`)), // Optional field, so no error on this
 						LayerName:        strExpr("backend"),
 						Required: &settings.OtelComponentMappingFieldMapping{
 							AdditionalIdentifiers: &[]settings.OtelStringExpression{
-								{Expression: `${resourceAttributes["k8s.pod.name"]}`},
+								{Expression: `${resource.attributes["k8s.pod.name"]}`},
 							},
 							Tags: &[]settings.OtelTagMapping{
 								{
-									Source: anyExpr(`${resourceAttributes["host.name"]}`),
+									Source: anyExpr(`${resource.attributes["host.name"]}`),
 									Target: "host",
 								},
 							},
 						},
 						Optional: &settings.OtelComponentMappingFieldMapping{
 							AdditionalIdentifiers: &[]settings.OtelStringExpression{
-								{Expression: `urn:process:${resourceAttributes["process.pid"]}`},
+								{Expression: `urn:process:${resource.attributes["process.pid"]}`},
 							},
 							Tags: &[]settings.OtelTagMapping{
 								{
-									Source: anyExpr(`${scopeAttributes["otel.scope.name"]}`),
+									Source: anyExpr(`${scope.attributes["otel.scope.name"]}`),
 									Target: "instrumentation-lib",
 								},
 								{
-									Source: anyExpr(`${scopeAttributes["otel.scope.version"]}`),
-									Target: "instrumentation-version",
+									Source: anyExpr(`${scope.attributes["otel.scope.version"]}`),
+									Target: "instrumentation-Version",
 								},
 								{
 									// this attribute doesn't exist expr the span but it is Optional tag so it ignored by mapping
-									Source: anyExpr(`${scopeAttributes["otel.scope.provider"]}`),
+									Source: anyExpr(`${scope.attributes["otel.scope.provider"]}`),
 									Target: "instrumentation-provider",
 								},
 							},
@@ -162,7 +162,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 					Vars: &[]settings.OtelVariableMapping{
 						{
 							Name:  "instanceId",
-							Value: anyExpr(`${resourceAttributes["service.instance.id"]}`),
+							Value: anyExpr(`${resource.attributes["service.instance.id"]}`),
 						},
 					},
 				},
@@ -179,15 +179,15 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 						Resource: settings.OtelInputResource{
 							Scope: &settings.OtelInputScope{
 								Span: &settings.OtelInputSpan{
-									Condition: ptr(boolExpr(`spanAttributes["http.method"] == "GET"`)),
+									Condition: ptr(boolExpr(`span.attributes["http.method"] == "GET"`)),
 									Action:    ptr(settings.CREATE),
 								},
 							},
 						},
 					},
 					Output: settings.OtelRelationMappingOutput{
-						SourceId: strExpr(`${resourceAttributes["service.name"]}`),
-						TargetId: strExpr(`${spanAttributes["service.name"]}`),
+						SourceId: strExpr(`${resource.attributes["service.name"]}`),
+						TargetId: strExpr(`${span.attributes["service.name"]}`),
 						TypeName: strExpr("http-request"),
 					},
 				},
@@ -217,7 +217,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 										LayerName:        "backend",
 										Tags: []string{
 											"instrumentation-lib:io.opentelemetry.instrumentation.http",
-											"instrumentation-version:1.17.0",
+											"instrumentation-Version:1.17.0",
 											"host:ip-10-1-2-3.ec2.internal",
 										},
 									},
@@ -265,43 +265,43 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							settings.TRACES,
 						},
 						Resource: settings.OtelInputResource{
-							Condition: ptr(boolExpr(`resourceAttributes["service.instance.id"] != "627cc493"`)),
+							Condition: ptr(boolExpr(`resource.attributes["service.instance.id"] != "627cc493"`)),
 							Action:    ptr(settings.CREATE),
 						},
 					},
 					Output: settings.OtelComponentMappingOutput{
 						Identifier:     strExpr("${vars.instanceId}"),
-						Name:           strExpr(`${resourceAttributes["service.name"]}`),
+						Name:           strExpr(`${resource.attributes["service.name"]}`),
 						TypeName:       strExpr(`service-instance`),
 						TypeIdentifier: ptr(strExpr(`service_instance_id`)),
-						DomainName:     strExpr(`${resourceAttributes["service.namespace"]}`),
+						DomainName:     strExpr(`${resource.attributes["service.namespace"]}`),
 						LayerName:      strExpr(`backend`),
 						Required: &settings.OtelComponentMappingFieldMapping{
 							AdditionalIdentifiers: &[]settings.OtelStringExpression{
-								{Expression: `${resourceAttributes["k8s.pod.name"]}`},
+								{Expression: `${resource.attributes["k8s.pod.name"]}`},
 							},
 							Tags: &[]settings.OtelTagMapping{
 								{
-									Source: anyExpr(`${resourceAttributes["host.name"]}`),
+									Source: anyExpr(`${resource.attributes["host.name"]}`),
 									Target: "host",
 								},
 							},
 						},
 						Optional: &settings.OtelComponentMappingFieldMapping{
 							AdditionalIdentifiers: &[]settings.OtelStringExpression{
-								{Expression: `${resourceAttributes["service.instance.id"]}`},
+								{Expression: `${resource.attributes["service.instance.id"]}`},
 							},
 							Tags: &[]settings.OtelTagMapping{
 								{
-									Source: anyExpr(`${scopeAttributes["otel.scope.name"]}`),
+									Source: anyExpr(`${scope.attributes["otel.scope.name"]}`),
 									Target: "instrumentation-lib",
 								},
 								{
-									Source: anyExpr(`${scopeAttributes["otel.scope.version"]}`),
-									Target: "instrumentation-version",
+									Source: anyExpr(`${scope.attributes["otel.scope.version"]}`),
+									Target: "instrumentation-Version",
 								},
 								{
-									Source: anyExpr(`${scopeAttributes["otel.scope.provider"]}`),
+									Source: anyExpr(`${scope.attributes["otel.scope.provider"]}`),
 									Target: "instrumentation-provider",
 								},
 							},
@@ -310,7 +310,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 					Vars: &[]settings.OtelVariableMapping{
 						{
 							Name:  "instanceId",
-							Value: anyExpr(`${resourceAttributes["service.instance.id"]}`),
+							Value: anyExpr(`${resource.attributes["service.instance.id"]}`),
 						},
 					},
 				},
@@ -324,15 +324,15 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 						Resource: settings.OtelInputResource{
 							Scope: &settings.OtelInputScope{
 								Span: &settings.OtelInputSpan{
-									Condition: ptr(boolExpr(`spanAttributes["http.method"] == "WRONG"`)),
+									Condition: ptr(boolExpr(`span.attributes["http.method"] == "WRONG"`)),
 									Action:    ptr(settings.CREATE),
 								},
 							},
 						},
 					},
 					Output: settings.OtelRelationMappingOutput{
-						SourceId: strExpr(`${resourceAttributes["service.name"]}`),
-						TargetId: strExpr(`${spanAttributes["service.name"]}`),
+						SourceId: strExpr(`${resource.attributes["service.name"]}`),
+						TargetId: strExpr(`${span.attributes["service.name"]}`),
 						TypeName: strExpr("http-request"),
 					},
 				},
@@ -350,44 +350,44 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							settings.TRACES,
 						},
 						Resource: settings.OtelInputResource{
-							Condition: ptr(boolExpr(`resourceAttributes["service.instance.id"] == "627cc493"`)),
+							Condition: ptr(boolExpr(`resource.attributes["service.instance.id"] == "627cc493"`)),
 							Action:    ptr(settings.CREATE),
 						},
 					},
 					Output: settings.OtelComponentMappingOutput{
 						Identifier:     strExpr("${vars.instanceId}"),
-						Name:           strExpr(`${resourceAttributes["not-existing-attr"]}`),
+						Name:           strExpr(`${resource.attributes["not-existing-attr"]}`),
 						TypeName:       strExpr(`service-instance`),
 						TypeIdentifier: ptr(strExpr(`service_instance_id`)),
-						DomainName:     strExpr(`${resourceAttributes["service.namespace"]}`),
+						DomainName:     strExpr(`${resource.attributes["service.namespace"]}`),
 						LayerName:      strExpr(`backend`),
 						Required: &settings.OtelComponentMappingFieldMapping{
 							AdditionalIdentifiers: &[]settings.OtelStringExpression{
-								{Expression: `${resourceAttributes["k8s.pod.name"]}`},
+								{Expression: `${resource.attributes["k8s.pod.name"]}`},
 							},
 							Tags: &[]settings.OtelTagMapping{
 								{
-									Source: anyExpr(`${resourceAttributes["host.name"]}`),
+									Source: anyExpr(`${resource.attributes["host.name"]}`),
 									Target: "host",
 								},
 							},
 						},
 						Optional: &settings.OtelComponentMappingFieldMapping{
 							AdditionalIdentifiers: &[]settings.OtelStringExpression{
-								{Expression: `${resourceAttributes["service.instance.id"]}`},
+								{Expression: `${resource.attributes["service.instance.id"]}`},
 							},
 							Tags: &[]settings.OtelTagMapping{
 								{
-									Source: anyExpr(`${scopeAttributes["otel.scope.name"]}`),
+									Source: anyExpr(`${scope.attributes["otel.scope.name"]}`),
 									Target: "instrumentation-lib",
 								},
 								{
-									Source: anyExpr(`${scopeAttributes["otel.scope.version"]}`),
-									Target: "instrumentation-version",
+									Source: anyExpr(`${scope.attributes["otel.scope.version"]}`),
+									Target: "instrumentation-Version",
 								},
 								{
 									// this attribute doesn't exist, but it is an Optional tag, so it is ignored by mapping
-									Source: anyExpr(`${scopeAttributes["otel.scope.provider"]}`),
+									Source: anyExpr(`${scope.attributes["otel.scope.provider"]}`),
 									Target: "instrumentation-provider",
 								},
 							},
@@ -396,7 +396,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 					Vars: &[]settings.OtelVariableMapping{
 						{
 							Name:  "instanceId",
-							Value: anyExpr(`${resourceAttributes["service.instance.id"]}`),
+							Value: anyExpr(`${resource.attributes["service.instance.id"]}`),
 						},
 					},
 				},
@@ -412,15 +412,15 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 						Resource: settings.OtelInputResource{
 							Scope: &settings.OtelInputScope{
 								Span: &settings.OtelInputSpan{
-									Condition: ptr(boolExpr(`spanAttributes["http.method"] == "GET"`)),
+									Condition: ptr(boolExpr(`span.attributes["http.method"] == "GET"`)),
 									Action:    ptr(settings.CREATE),
 								},
 							},
 						},
 					},
 					Output: settings.OtelRelationMappingOutput{
-						SourceId: strExpr(`${resourceAttributes["not-existing-attr"]}`),
-						TargetId: strExpr(`${spanAttributes["service.name"]}`),
+						SourceId: strExpr(`${resource.attributes["not-existing-attr"]}`),
+						TargetId: strExpr(`${span.attributes["service.name"]}`),
 						TypeName: strExpr(`http-request`),
 					},
 				},
@@ -477,25 +477,25 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 							settings.TRACES,
 						},
 						Resource: settings.OtelInputResource{
-							Condition: ptr(boolExpr(`resourceAttributes["service.instance.id"] == "627cc493"`)),
+							Condition: ptr(boolExpr(`resource.attributes["service.instance.id"] == "627cc493"`)),
 							Action:    ptr(settings.CREATE),
 						},
 					},
 					Identifier: "urn:otel-component-mapping:service",
 					Output: settings.OtelComponentMappingOutput{
 						Identifier:     strExpr("${vars.instanceId}"),
-						Name:           strExpr(`${resourceAttributes["service.name"]}`),
+						Name:           strExpr(`${resource.attributes["service.name"]}`),
 						TypeName:       strExpr(`service-instance`),
 						TypeIdentifier: ptr(strExpr(`service_instance_id`)),
-						DomainName:     strExpr(`${resourceAttributes["service.namespace"]}`),
+						DomainName:     strExpr(`${resource.attributes["service.namespace"]}`),
 						LayerName:      strExpr("backend"),
 						Required: &settings.OtelComponentMappingFieldMapping{
 							AdditionalIdentifiers: &[]settings.OtelStringExpression{
-								{Expression: `${resourceAttributes["k8s.pod.name"]}`},
+								{Expression: `${resource.attributes["k8s.pod.name"]}`},
 							},
 							Tags: &[]settings.OtelTagMapping{
 								{
-									Source: anyExpr(`${resourceAttributes["host.name"]}`),
+									Source: anyExpr(`${resource.attributes["host.name"]}`),
 									Target: "host",
 								},
 								{
@@ -508,15 +508,15 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 					Vars: &[]settings.OtelVariableMapping{
 						{
 							Name:  "isInstanceId",
-							Value: anyExpr(`${resourceAttributes["service.instance.id"] == "627cc493"}`),
+							Value: anyExpr(`${resource.attributes["service.instance.id"] == "627cc493"}`),
 						},
 						{
 							Name:  "instanceId",
-							Value: anyExpr(`${resourceAttributes["service.instance.id"]}`),
+							Value: anyExpr(`${resource.attributes["service.instance.id"]}`),
 						},
 						{
 							Name:  "arguments",
-							Value: anyExpr(`${resourceAttributes["process.command_args"]}`),
+							Value: anyExpr(`${resource.attributes["process.command_args"]}`),
 						},
 					},
 				},
@@ -814,7 +814,7 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage_MultipleComponents(t *te
 					settings.TRACES,
 				},
 				Resource: settings.OtelInputResource{
-					Condition: ptr(boolExpr(`resourceAttributes["service.name"] == "api-gateway"`)),
+					Condition: ptr(boolExpr(`resource.attributes["service.name"] == "api-gateway"`)),
 					Scope: &settings.OtelInputScope{
 						Metric: &settings.OtelInputMetric{
 							Datapoint: &settings.OtelInputDatapoint{
@@ -826,15 +826,15 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage_MultipleComponents(t *te
 			},
 			Identifier: "urn:otel-component-mapping:api-route",
 			Output: settings.OtelComponentMappingOutput{
-				Identifier: strExpr(`api-gateway-${datapointAttributes["http.route"]}`),
-				Name:       strExpr(`API Route: ${datapointAttributes["http.route"]}`),
+				Identifier: strExpr(`api-gateway-${datapoint.attributes["http.route"]}`),
+				Name:       strExpr(`API Route: ${datapoint.attributes["http.route"]}`),
 				TypeName:   strExpr(`api-route`),
-				DomainName: strExpr(`${resourceAttributes["service.namespace"]}`),
+				DomainName: strExpr(`${resource.attributes["service.namespace"]}`),
 				LayerName:  strExpr("frontend"),
 				Required: &settings.OtelComponentMappingFieldMapping{
 					Tags: &[]settings.OtelTagMapping{
 						{
-							Source: anyExpr(`${datapointAttributes["http.method"]}`),
+							Source: anyExpr(`${datapoint.attributes["http.method"]}`),
 							Target: "http_method",
 						},
 					},
@@ -1043,7 +1043,7 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 					settings.METRICS,
 				},
 				Resource: settings.OtelInputResource{
-					Condition: ptr(boolExpr(`resourceAttributes["service.instance.id"] == "627cc493"`)),
+					Condition: ptr(boolExpr(`resource.attributes["service.instance.id"] == "627cc493"`)),
 					Scope: &settings.OtelInputScope{
 						Metric: &settings.OtelInputMetric{
 							Datapoint: &settings.OtelInputDatapoint{
@@ -1055,15 +1055,15 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 			},
 			Identifier: "urn:otel-component-mapping:service",
 			Output: settings.OtelComponentMappingOutput{
-				Identifier:     strExpr(`${resourceAttributes["service.instance.id"]}`),
-				Name:           strExpr(`${resourceAttributes["service.name"]}`),
+				Identifier:     strExpr(`${resource.attributes["service.instance.id"]}`),
+				Name:           strExpr(`${resource.attributes["service.name"]}`),
 				TypeName:       strExpr(`service-instance`),
 				TypeIdentifier: ptr(strExpr(`service_instance_id`)),
-				DomainName:     strExpr(`${resourceAttributes["service.namespace"]}`),
-				LayerName:      strExpr(`${datapointAttributes["net.peer.name"]}`),
+				DomainName:     strExpr(`${resource.attributes["service.namespace"]}`),
+				LayerName:      strExpr(`${datapoint.attributes["net.peer.name"]}`),
 				Required: &settings.OtelComponentMappingFieldMapping{
 					AdditionalIdentifiers: &[]settings.OtelStringExpression{
-						{Expression: `${resourceAttributes["k8s.pod.name"]}`},
+						{Expression: `${resource.attributes["k8s.pod.name"]}`},
 					},
 				},
 			},
@@ -1082,7 +1082,7 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 					Scope: &settings.OtelInputScope{
 						Metric: &settings.OtelInputMetric{
 							Datapoint: &settings.OtelInputDatapoint{
-								Condition: ptr(boolExpr(`datapointAttributes["http.method"] == "GET"`)),
+								Condition: ptr(boolExpr(`datapoint.attributes["http.method"] == "GET"`)),
 								Action:    ptr(settings.CREATE),
 							},
 						},
@@ -1090,8 +1090,8 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 				},
 			},
 			Output: settings.OtelRelationMappingOutput{
-				SourceId: strExpr(`${resourceAttributes["service.name"]}`),
-				TargetId: strExpr(`${datapointAttributes["service.name"]}`),
+				SourceId: strExpr(`${resource.attributes["service.name"]}`),
+				TargetId: strExpr(`${datapoint.attributes["service.name"]}`),
 				TypeName: strExpr("http-request"),
 			},
 		},
@@ -1193,17 +1193,17 @@ func createSimpleComponentMapping(id string) settings.OtelComponentMapping {
 			Resource: settings.OtelInputResource{
 				Scope: &settings.OtelInputScope{
 					Span: &settings.OtelInputSpan{
-						Condition: ptr(boolExpr(`spanAttributes["http.method"] == "GET"`)),
+						Condition: ptr(boolExpr(`span.attributes["http.method"] == "GET"`)),
 						Action:    ptr(settings.CREATE),
 					},
 				},
 			},
 		},
 		Output: settings.OtelComponentMappingOutput{
-			Identifier: strExpr("${resourceAttributes[\"service.instance.id\"]}"),
-			Name:       strExpr(`${resourceAttributes["service.name"]}`),
+			Identifier: strExpr("${resource.attributes[\"service.instance.id\"]}"),
+			Name:       strExpr(`${resource.attributes["service.name"]}`),
 			TypeName:   strExpr("service-instance"),
-			DomainName: strExpr(`${resourceAttributes["service.namespace"]}`),
+			DomainName: strExpr(`${resource.attributes["service.namespace"]}`),
 			LayerName:  strExpr("backend"),
 		},
 	}
@@ -1221,15 +1221,15 @@ func createSimpleRelationMapping(id string) settings.OtelRelationMapping {
 			Resource: settings.OtelInputResource{
 				Scope: &settings.OtelInputScope{
 					Span: &settings.OtelInputSpan{
-						Condition: ptr(boolExpr(`spanAttributes["http.method"] == "GET"`)),
+						Condition: ptr(boolExpr(`span.attributes["http.method"] == "GET"`)),
 						Action:    ptr(settings.CREATE),
 					},
 				},
 			},
 		},
 		Output: settings.OtelRelationMappingOutput{
-			SourceId: strExpr(`${resourceAttributes["service.name"]}`),
-			TargetId: strExpr(`${spanAttributes["service.name"]}`),
+			SourceId: strExpr(`${resource.attributes["service.name"]}`),
+			TargetId: strExpr(`${span.attributes["service.name"]}`),
 			TypeName: strExpr(`http-request`),
 		},
 	}
