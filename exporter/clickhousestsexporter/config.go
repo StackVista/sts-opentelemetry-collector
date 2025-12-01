@@ -41,6 +41,16 @@ type Config struct {
 	MetricsTableName string `mapstructure:"metrics_table_name"`
 	// ResourcesTableName is the table name for resources. default is `otel_resources`.
 	ResourcesTableName string `mapstructure:"resources_table_name"`
+	// TopologyTableName is the table name for topology. default is `otel_topology`.
+	TopologyTableName string `mapstructure:"topology_table_name"`
+	// TopologyTimeRangeTableName is the table name for topology time range. default is `otel_topology_time_range`.
+	TopologyTimeRangeTableName string `mapstructure:"topology_time_range_table_name"`
+	// TopologyFieldValuesTableName is the table name for topology field values. default is `otel_topology_field_values`.
+	TopologyFieldValuesTableName string `mapstructure:"topology_field_values_table_name"`
+	// TopologyTimeRangeMVName is the materialized view name for topology time range. default is `otel_topology_time_range_mv`.
+	TopologyTimeRangeMVName string `mapstructure:"topology_time_range_mv_name"`
+	// TopologyFieldValuesMVName is the materialized view name for topology field values. default is `otel_topology_field_values_mv`.
+	TopologyFieldValuesMVName string `mapstructure:"topology_field_values_mv_name"`
 
 	// Deprecated: Use 'ttl' instead
 	TTLDays uint `mapstructure:"ttl_days"`
@@ -50,6 +60,8 @@ type Config struct {
 	CreateTracesTable bool `mapstructure:"create_traces_table"`
 	// Create the resources table on startup
 	CreateResourcesTable bool `mapstructure:"create_resources_table"`
+	// Create the topology table on startup
+	CreateTopologyTable bool `mapstructure:"create_topology_table"`
 
 	driverName string
 }
@@ -156,4 +168,32 @@ func (cfg *Config) BuildDB(database string) (*sql.DB, error) {
 // utility testing function
 func (cfg *Config) SetDriverName(driverName string) {
 	cfg.driverName = driverName
+}
+
+func (c *Config) GetTTLDays() uint {
+	return c.TTLDays
+}
+
+func (c *Config) GetTTL() string {
+	return c.TTL.String()
+}
+
+func (c *Config) GetTopologyTableName() string {
+	return c.TopologyTableName
+}
+
+func (c *Config) GetTopologyTimeRangeTableName() string {
+	return c.TopologyTimeRangeTableName
+}
+
+func (c *Config) GetTopologyFieldValuesTableName() string {
+	return c.TopologyFieldValuesTableName
+}
+
+func (c *Config) GetTopologyTimeRangeMVName() string {
+	return c.TopologyTimeRangeMVName
+}
+
+func (c *Config) GetTopologyFieldValuesMVName() string {
+	return c.TopologyFieldValuesMVName
 }

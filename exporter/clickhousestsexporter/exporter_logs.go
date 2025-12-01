@@ -12,6 +12,7 @@ import (
 
 	_ "github.com/ClickHouse/clickhouse-go/v2" // For register database driver.
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter/internal"
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -23,8 +24,9 @@ type LogsExporter struct {
 	client    *sql.DB
 	insertSQL string
 
-	logger *zap.Logger
-	cfg    *Config
+	logger           *zap.Logger
+	cfg              *Config
+	topologyExporter *TopologyExporter
 }
 
 func NewLogsExporter(logger *zap.Logger, cfg *Config) (*LogsExporter, error) {
@@ -33,15 +35,24 @@ func NewLogsExporter(logger *zap.Logger, cfg *Config) (*LogsExporter, error) {
 		return nil, err
 	}
 
+	topologyExporter, err := NewTopologyExporter(logger, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create topology exporter: %w", err)
+	}
+
 	return &LogsExporter{
-		client:    client,
-		insertSQL: renderInsertLogsSQL(cfg),
-		logger:    logger,
-		cfg:       cfg,
+		client:           client,
+		insertSQL:        renderInsertLogsSQL(cfg),
+		logger:           logger,
+		cfg:              cfg,
+		topologyExporter: topologyExporter,
 	}, nil
 }
 
-func (e *LogsExporter) Start(ctx context.Context, _ component.Host) error {
+func (e *LogsExporter) Start(ctx context.Context, host component.Host) error {
+	if err := e.topologyExporter.Start(ctx, host); err != nil {
+		return fmt.Errorf("failed to start topology exporter: %w", err)
+	}
 	if err := createDatabase(ctx, e.cfg); err != nil {
 		return err
 	}
@@ -50,7 +61,10 @@ func (e *LogsExporter) Start(ctx context.Context, _ component.Host) error {
 }
 
 // shutdown will shut down the exporter.
-func (e *LogsExporter) Shutdown(_ context.Context) error {
+func (e *LogsExporter) Shutdown(ctx context.Context) error {
+	if err := e.topologyExporter.Shutdown(ctx); err != nil {
+		return fmt.Errorf("failed to shutdown topology exporter: %w", err)
+	}
 	if e.client != nil {
 		return e.client.Close()
 	}
@@ -58,65 +72,60 @@ func (e *LogsExporter) Shutdown(_ context.Context) error {
 }
 
 func (e *LogsExporter) PushLogsData(ctx context.Context, ld plog.Logs) error {
-	start := time.Now()
-	err := doWithTx(ctx, e.client, func(tx *sql.Tx) error {
-		statement, err := tx.PrepareContext(ctx, e.insertSQL)
-		if err != nil {
-			return fmt.Errorf("PrepareContext:%w", err)
-		}
-		defer func() {
-			_ = statement.Close()
-		}()
-		var serviceName string
-		for i := 0; i < ld.ResourceLogs().Len(); i++ {
-			logs := ld.ResourceLogs().At(i)
-			res := logs.Resource()
-			resURL := logs.SchemaUrl()
-			resAttr := attributesToMap(res.Attributes())
-			if v, ok := res.Attributes().Get(string(conventions.ServiceNameKey)); ok {
-				serviceName = v.Str()
-			}
-			for j := 0; j < logs.ScopeLogs().Len(); j++ {
-				rs := logs.ScopeLogs().At(j).LogRecords()
-				scopeURL := logs.ScopeLogs().At(j).SchemaUrl()
-				scopeName := logs.ScopeLogs().At(j).Scope().Name()
-				scopeVersion := logs.ScopeLogs().At(j).Scope().Version()
-				scopeAttr := attributesToMap(logs.ScopeLogs().At(j).Scope().Attributes())
-				for k := 0; k < rs.Len(); k++ {
-					r := rs.At(k)
-					logAttr := attributesToMap(r.Attributes())
-					_, err = statement.ExecContext(ctx,
-						r.Timestamp().AsTime(),
-						TraceIDToHexOrEmptyString(r.TraceID()),
-						SpanIDToHexOrEmptyString(r.SpanID()),
-						uint32(r.Flags()),
-						r.SeverityText(),
-						int32(r.SeverityNumber()),
-						serviceName,
-						r.Body().AsString(),
-						resURL,
-						resAttr,
-						scopeURL,
-						scopeName,
-						scopeVersion,
-						scopeAttr,
-						logAttr,
-					)
-					if err != nil {
-						return fmt.Errorf("ExecContext:%w", err)
-					}
+	regularLogs := plog.NewLogs()
+	topologyLogs := plog.NewLogs()
+
+	for i := 0; i < ld.ResourceLogs().Len(); i++ {
+		rl := ld.ResourceLogs().At(i)
+		destRlRegular := regularLogs.ResourceLogs().AppendEmpty()
+		rl.Resource().CopyTo(destRlRegular.Resource())
+
+		destRlTopology := topologyLogs.ResourceLogs().AppendEmpty()
+		rl.Resource().CopyTo(destRlTopology.Resource())
+
+		for j := 0; j < rl.ScopeLogs().Len(); j++ {
+			sl := rl.ScopeLogs().At(j)
+			destSlRegular := destRlRegular.ScopeLogs().AppendEmpty()
+			sl.Scope().CopyTo(destSlRegular.Scope())
+
+			destSlTopology := destRlTopology.ScopeLogs().AppendEmpty()
+			sl.Scope().CopyTo(destSlTopology.Scope())
+
+			for k := 0; k < sl.LogRecords().Len(); k++ {
+				lr := sl.LogRecords().At(k)
+				if _, ok := lr.Attributes().Get(stskafkaexporter.KafkaMessageKey); ok {
+					lr.CopyTo(destSlTopology.LogRecords().AppendEmpty())
+				} else {
+					lr.CopyTo(destSlRegular.LogRecords().AppendEmpty())
 				}
 			}
 		}
-		return nil
-	})
-	duration := time.Since(start)
-	e.logger.Debug("insert logs", zap.Int("records", ld.LogRecordCount()),
-		zap.String("cost", duration.String()))
-	return err
+	}
+
+	var regularErr error
+	if regularLogs.LogRecordCount() > 0 {
+		regularErr = e.pushRegularLogs(ctx, regularLogs)
+	}
+
+	var topologyErr error
+	if topologyLogs.LogRecordCount() > 0 {
+		topologyErr = e.topologyExporter.PushLogsData(ctx, topologyLogs)
+	}
+
+	if regularErr != nil && topologyErr != nil {
+		return fmt.Errorf("failed to push logs: regular: %v, topology: %v", regularErr, topologyErr)
+	}
+	if regularErr != nil {
+		return fmt.Errorf("failed to push regular logs: %w", regularErr)
+	}
+	if topologyErr != nil {
+		return fmt.Errorf("failed to push topology logs: %w", topologyErr)
+	}
+
+	return nil
 }
 
-func attributesToMap(attributes pcommon.Map) map[string]string {
+func (e *LogsExporter) pushRegularLogs(ctx context.Context, ld plog.Logs) error {
 	m := make(map[string]string, attributes.Len())
 	attributes.Range(func(k string, v pcommon.Value) bool {
 		m[k] = v.AsString()

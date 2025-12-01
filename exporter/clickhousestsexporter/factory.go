@@ -42,11 +42,18 @@ func CreateDefaultConfig() component.Config {
 		Database:             defaultDatabase,
 		LogsTableName:        "otel_logs",
 		TracesTableName:      "otel_traces",
-		MetricsTableName:     "otel_metrics",
-		ResourcesTableName:   "otel_resources",
-		CreateTracesTable:    true,
-		CreateResourcesTable: true,
-		TTL:                  0,
+		MetricsTableName:              "otel_metrics",
+		ResourcesTableName:            "otel_resources",
+		TopologyTableName:             "otel_topology",
+		TopologyTimeRangeTableName:    "otel_topology_time_range",
+		TopologyFieldValuesTableName:  "otel_topology_field_values",
+		TopologyTimeRangeMVName:       "otel_topology_time_range_mv",
+		TopologyFieldValuesMVName:     "otel_topology_field_values_mv",
+		CreateTracesTable:             true,
+		CreateLogsTable:               true,
+		CreateMetricsTable:            true,
+		CreateResourcesTable:          true,
+		CreateTopologyTable:           true,
 	}
 }
 
