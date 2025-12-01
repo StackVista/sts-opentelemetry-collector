@@ -36,7 +36,7 @@ PARTITION BY toDate(Timestamp)
 ORDER BY (Identifier, Hash)
 SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
 `
-	// language=ClickHouse SQL
+// language=ClickHouse SQL
 	createRelationsTableSQL = `
 CREATE TABLE IF NOT EXISTS %s (
     Timestamp DateTime64(9) CODEC(Delta, ZSTD(1)),
@@ -120,8 +120,8 @@ SELECT Identifier, Hash, 'tag' as FieldName, arrayJoin(Tags) as FieldValue, Time
     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
     ?, ?, ?, sipHash64(
         (
-            Identifier, Name, Tags, TypeName, ifNull(TypeIdentifier, ''),
-            LayerName, ifNull(LayerIdentifier, ''), DomainName, ifNull(DomainIdentifier, ''), ComponentIdentifiers,
+            Identifier, Name, Tags, TypeName, TypeIdentifier,
+            LayerName, LayerIdentifier, DomainName, DomainIdentifier, ComponentIdentifiers,
             ResourceDefinition, StatusData
         )
     )
@@ -131,7 +131,7 @@ SELECT Identifier, Hash, 'tag' as FieldName, arrayJoin(Tags) as FieldValue, Time
     Timestamp, Identifier, Name, Tags, TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier, Hash
 ) VALUES (
     ?, ?, ?, ?, ?, ?, ?, ?,
-    sipHash64((Identifier, Name, Tags, TypeName, ifNull(TypeIdentifier, ''), SourceIdentifier, TargetIdentifier))
+    sipHash64((Identifier, Name, Tags, TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier))
 )`
 )
 
