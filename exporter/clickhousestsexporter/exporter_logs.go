@@ -121,11 +121,11 @@ func (e *LogsExporter) PushLogsData(ctx context.Context, ld plog.Logs) error {
 
 		if e.cfg.EnableTopology {
 			var err error
-			relationStatement, err = tx.PrepareContext(ctx, e.insertRelationSQL)
-			if err != nil {
-				return fmt.Errorf("PrepareContext(relation):%w", err)
-			}
-			defer func() { _ = relationStatement.Close() }()
+			// relationStatement, err = tx.PrepareContext(ctx, e.insertRelationSQL)
+			// if err != nil {
+			// 	return fmt.Errorf("PrepareContext(relation):%w", err)
+			// }
+			// defer func() { _ = relationStatement.Close() }()
 			componentStatement, err = tx.PrepareContext(ctx, e.insertComponentSQL)
 			if err != nil {
 				return fmt.Errorf("PrepareContext(component):%w", err)
@@ -224,15 +224,15 @@ func (e *LogsExporter) pushTopologyLogRecord(ctx context.Context, componentState
 	}
 
 	var components []*topostream.TopologyStreamComponent
-	var relations []*topostream.TopologyStreamRelation
+	// var relations []*topostream.TopologyStreamRelation
 
 	switch payload := msg.Payload.(type) {
 	case *topostream.TopologyStreamMessage_TopologyStreamSnapshotData:
 		components = payload.TopologyStreamSnapshotData.GetComponents()
-		relations = payload.TopologyStreamSnapshotData.GetRelations()
+		// relations = payload.TopologyStreamSnapshotData.GetRelations()
 	case *topostream.TopologyStreamMessage_TopologyStreamRepeatElementsData:
 		components = payload.TopologyStreamRepeatElementsData.GetComponents()
-		relations = payload.TopologyStreamRepeatElementsData.GetRelations()
+		// relations = payload.TopologyStreamRepeatElementsData.GetRelations()
 	}
 	timestamp := time.UnixMilli(msg.GetCollectionTimestamp())
 
@@ -242,11 +242,11 @@ func (e *LogsExporter) pushTopologyLogRecord(ctx context.Context, componentState
 		}
 	}
 
-	for _, relation := range relations {
-		if err := e.pushRelationLogRecord(ctx, relationStatement, timestamp, relation); err != nil {
-			return err
-		}
-	}
+	// for _, relation := range relations {
+	// 	if err := e.pushRelationLogRecord(ctx, relationStatement, timestamp, relation); err != nil {
+	// 		return err
+	// 	}
+	// }
 	return nil
 }
 
