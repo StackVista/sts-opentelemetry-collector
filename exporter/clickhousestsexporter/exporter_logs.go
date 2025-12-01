@@ -113,8 +113,25 @@ func (e *LogsExporter) Shutdown(_ context.Context) error {
 
 func (e *LogsExporter) PushLogsData(ctx context.Context, ld plog.Logs) error {
 	start := time.Now()
+
 	err := doWithTx(ctx, e.client, func(tx *sql.Tx) error {
+		var relationStatement *sql.Stmt
+		var componentStatement *sql.Stmt
 		var logStatement *sql.Stmt
+
+		if e.cfg.EnableTopology {
+			var err error
+			relationStatement, err = tx.PrepareContext(ctx, e.insertRelationSQL)
+			if err != nil {
+				return fmt.Errorf("PrepareContext(relation):%w", err)
+			}
+			defer func() { _ = relationStatement.Close() }()
+			componentStatement, err = tx.PrepareContext(ctx, e.insertComponentSQL)
+			if err != nil {
+				return fmt.Errorf("PrepareContext(component):%w", err)
+			}
+			defer func() { _ = componentStatement.Close() }()
+		}
 		if e.cfg.EnableLogs {
 			var err error
 			logStatement, err = tx.PrepareContext(ctx, e.insertSQL)
@@ -123,54 +140,40 @@ func (e *LogsExporter) PushLogsData(ctx context.Context, ld plog.Logs) error {
 			}
 			defer func() { _ = logStatement.Close() }()
 		}
-
-		var componentStatement *sql.Stmt
-		var relationStatement *sql.Stmt
-		if e.cfg.EnableTopology {
-			var err error
-			componentStatement, err = tx.PrepareContext(ctx, e.insertComponentSQL)
-			if err != nil {
-				return fmt.Errorf("PrepareContext(component):%w", err)
-			}
-			defer func() { _ = componentStatement.Close() }()
-
-			relationStatement, err = tx.PrepareContext(ctx, e.insertRelationSQL)
-			if err != nil {
-				return fmt.Errorf("PrepareContext(relation):%w", err)
-			}
-			defer func() { _ = relationStatement.Close() }()
-		}
-
-		for i := 0; i < ld.ResourceLogs().Len(); i++ {
-			logs := ld.ResourceLogs().At(i)
-			res := logs.Resource()
-			for j := 0; j < logs.ScopeLogs().Len(); j++ {
-				scopeLogs := logs.ScopeLogs().At(j)
-				for k := 0; k < scopeLogs.LogRecords().Len(); k++ {
-					r := scopeLogs.LogRecords().At(k)
-
-					if _, ok := r.Attributes().Get(stskafkaexporter.KafkaMessageKey); ok {
-						if e.cfg.EnableTopology {
-							if err := e.pushTopologyLogRecord(ctx, componentStatement, relationStatement, r); err != nil {
-								return err
-							}
-						}
-					} else {
-						if e.cfg.EnableLogs {
-							if err := e.pushRegularLogRecord(ctx, logStatement, res, scopeLogs, r); err != nil {
-								return err
-							}
-						}
-					}
+		return e.iterateLogsData(ctx, ld, func(res pcommon.Resource, scopeLogs plog.ScopeLogs, lr plog.LogRecord) error {
+			if _, ok := lr.Attributes().Get(stskafkaexporter.KafkaMessageKey); ok {
+				if e.cfg.EnableTopology {
+					return e.pushTopologyLogRecord(ctx, componentStatement, relationStatement, lr)
 				}
+			} else if e.cfg.EnableLogs {
+				return e.pushRegularLogRecord(ctx, logStatement, res, scopeLogs, lr)
 			}
-		}
-		return nil
+			return nil
+		})
 	})
+
 	duration := time.Since(start)
 	e.logger.Debug("insert logs", zap.Int("records", ld.LogRecordCount()),
 		zap.String("cost", duration.String()))
 	return err
+}
+
+func (e *LogsExporter) iterateLogsData(ctx context.Context, ld plog.Logs, f func(pcommon.Resource, plog.ScopeLogs, plog.LogRecord) error) error {
+	for i := 0; i < ld.ResourceLogs().Len(); i++ {
+		logs := ld.ResourceLogs().At(i)
+		res := logs.Resource()
+		for j := 0; j < logs.ScopeLogs().Len(); j++ {
+			scopeLogs := logs.ScopeLogs().At(j)
+			for k := 0; k < scopeLogs.LogRecords().Len(); k++ {
+				lr := scopeLogs.LogRecords().At(k)
+				err := f(res, scopeLogs, lr)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func (e *LogsExporter) pushRegularLogRecord(ctx context.Context, statement *sql.Stmt, res pcommon.Resource, scopeLogs plog.ScopeLogs, r plog.LogRecord) error {
