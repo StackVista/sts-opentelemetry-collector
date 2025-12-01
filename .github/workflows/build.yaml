@@ -6,6 +6,7 @@ on:
       - '*'
     tags:
       - 'v*'
+      - 'test-*'
 
 env:
   REGISTRY: quay.io
@@ -144,7 +145,13 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
       - name: Set up Docker
         uses: docker/setup-buildx-action@v3
+      # The metadata-action produces multi-line tags when a git tag is pushed.
+      # Example: "quay.io/stackstate/sts-opentelemetry-collector:v0.0.24\nquay.io/stackstate/sts-opentelemetry-collector:latest"
+      # Extract only the first tag so OTEL_COLLECTOR_IMAGE gets a clean value.
+      - name: Select first image tag
+        id: select_tag
+        run: echo "tag=$(echo '${{ needs.build.outputs.image }}' | head -n 1)" >> "$GITHUB_OUTPUT"
       - name: Run E2E tests
         env:
-          OTEL_COLLECTOR_IMAGE: ${{ needs.build.outputs.image }}@${{ needs.build.outputs.digest }}
+          OTEL_COLLECTOR_IMAGE: ${{ steps.select_tag.outputs.tag }}@${{ needs.build.outputs.digest }}
         run: go test -v ./test/e2e/...
