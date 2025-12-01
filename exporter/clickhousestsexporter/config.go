@@ -178,30 +178,30 @@ func (cfg *Config) SetDriverName(driverName string) {
 	cfg.driverName = driverName
 }
 
-func (c *Config) GetTTLDays() uint {
-	return c.TTLDays
+func (cfg *Config) GetTTLDays() uint {
+	return cfg.TTLDays
 }
 
-func (c *Config) GetTTL() time.Duration {
-	return c.TTL
+func (cfg *Config) GetTTL() time.Duration {
+	return cfg.TTL
 }
 
-func (c *Config) GetTopologyTableName() string {
-	return c.TopologyTableName
+func (cfg *Config) GetTopologyTableName() string {
+	return cfg.TopologyTableName
 }
 
-func (c *Config) GetTopologyTimeRangeTableName() string {
-	return c.TopologyTimeRangeTableName
+func (cfg *Config) GetTopologyTimeRangeTableName() string {
+	return cfg.TopologyTimeRangeTableName
 }
 
-func (c *Config) GetTopologyFieldValuesTableName() string {
-	return c.TopologyFieldValuesTableName
+func (cfg *Config) GetTopologyFieldValuesTableName() string {
+	return cfg.TopologyFieldValuesTableName
 }
 
-func (c *Config) GetTopologyTimeRangeMVName() string {
-	return c.TopologyTimeRangeMVName
+func (cfg *Config) GetTopologyTimeRangeMVName() string {
+	return cfg.TopologyTimeRangeMVName
 }
 
-func (c *Config) GetTopologyFieldValuesMVName() string {
-	return c.TopologyFieldValuesMVName
+func (cfg *Config) GetTopologyFieldValuesMVName() string {
+	return cfg.TopologyFieldValuesMVName
 }

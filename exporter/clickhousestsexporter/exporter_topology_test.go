@@ -36,6 +36,7 @@ func TestPushTopologyData(t *testing.T) {
 		cfg.Endpoint = defaultEndpoint
 	})
 
+	//nolint:forcetypeassert
 	initClickhouseTestServer(t, func(query string, values []driver.Value) error {
 		if strings.HasPrefix(query, fmt.Sprintf("INSERT INTO %s", cfg.LogsTableName)) {
 			logItems++
@@ -61,7 +62,7 @@ func TestPushTopologyData(t *testing.T) {
 	})
 
 	// Create Exporter
-	exporter := newTestTopologyLogsExporter(t, defaultEndpoint, cfg)
+	exporter := newTestTopologyLogsExporter(t, cfg)
 
 	// Test Data
 	logs := plog.NewLogs()
@@ -77,11 +78,11 @@ func TestPushTopologyData(t *testing.T) {
 	statusDataStruct, err := structpb.NewStruct(map[string]interface{}{"status": "ok"})
 	require.NoError(t, err)
 
-	typeId := "type_id"
+	typeID := "type_id"
 	layerName := "layer_name"
-	layerId := "layer_id"
+	layerID := "layer_id"
 	domainName := "domain_name"
-	domainId := "domain_id"
+	domainID := "domain_id"
 
 	topoMsg := &topostream.TopologyStreamMessage{
 		CollectionTimestamp: ts.UnixMilli(),
@@ -92,11 +93,11 @@ func TestPushTopologyData(t *testing.T) {
 						ExternalId:         "urn:test:component",
 						Name:               "test-component",
 						TypeName:           "service",
-						TypeIdentifier:     &typeId,
+						TypeIdentifier:     &typeID,
 						LayerName:          layerName,
-						LayerIdentifier:    &layerId,
+						LayerIdentifier:    &layerID,
 						DomainName:         domainName,
-						DomainIdentifier:   &domainId,
+						DomainIdentifier:   &domainID,
 						Identifiers:        []string{"id1", "id2"},
 						ResourceDefinition: resourceDefStruct,
 						StatusData:         statusDataStruct,
@@ -128,6 +129,7 @@ func TestPushTopologyData_Disabled(t *testing.T) {
 		cfg.EnableLogs = false
 		cfg.SetDriverName(t.Name())
 	})
+	//nolint:revive
 	initClickhouseTestServer(t, func(query string, values []driver.Value) error {
 		if strings.HasPrefix(query, fmt.Sprintf("INSERT INTO %s", cfg.LogsTableName)) {
 			logItems++
@@ -138,7 +140,7 @@ func TestPushTopologyData_Disabled(t *testing.T) {
 	})
 
 	// Create Exporter
-	exporter := newTestTopologyLogsExporter(t, defaultEndpoint, cfg)
+	exporter := newTestTopologyLogsExporter(t, cfg)
 
 	// Test Data (same as above, but should be ignored)
 	logs := plog.NewLogs()
@@ -169,6 +171,7 @@ func TestPushMixedLogs(t *testing.T) {
 		cfg.SetDriverName(t.Name())
 	})
 
+	//nolint:forcetypeassert
 	initClickhouseTestServer(t, func(query string, values []driver.Value) error {
 		if strings.HasPrefix(query, fmt.Sprintf("INSERT INTO %s", cfg.LogsTableName)) {
 			logItems++
@@ -195,7 +198,7 @@ func TestPushMixedLogs(t *testing.T) {
 		return nil
 	})
 
-	exporter := newTestTopologyLogsExporter(t, defaultEndpoint, cfg)
+	exporter := newTestTopologyLogsExporter(t, cfg)
 
 	logs := plog.NewLogs()
 	rl := logs.ResourceLogs().AppendEmpty()
@@ -204,7 +207,7 @@ func TestPushMixedLogs(t *testing.T) {
 
 	// Topology Log Record
 	ts := time.Now()
-	relTypeId := "rel_type_id"
+	relTypeID := "rel_type_id"
 	topoMsg := &topostream.TopologyStreamMessage{
 		CollectionTimestamp: ts.UnixMilli(),
 		Payload: &topostream.TopologyStreamMessage_TopologyStreamSnapshotData{
@@ -214,7 +217,7 @@ func TestPushMixedLogs(t *testing.T) {
 						ExternalId:       "urn:test:relation",
 						Name:             "test-relation",
 						TypeName:         "uses",
-						TypeIdentifier:   &relTypeId,
+						TypeIdentifier:   &relTypeID,
 						Tags:             []string{"rel_tag"},
 						SourceIdentifier: "source_id",
 						TargetIdentifier: "target_id",
@@ -244,7 +247,7 @@ func TestPushMixedLogs(t *testing.T) {
 
 // Below are the helper functions copied from exporter_logs_test.go, adapted for this package
 
-func newTestTopologyLogsExporter(t *testing.T, dsn string, config *clickhousestsexporter.Config) *clickhousestsexporter.LogsExporter {
+func newTestTopologyLogsExporter(t *testing.T, config *clickhousestsexporter.Config) *clickhousestsexporter.LogsExporter {
 	exporter, err := clickhousestsexporter.NewLogsExporter(zaptest.NewLogger(t), config)
 	require.NoError(t, err)
 	require.NoError(t, exporter.Start(context.TODO(), nil))

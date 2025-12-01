@@ -196,10 +196,15 @@ func (e *LogsExporter) pushTopologyLogRecord(ctx context.Context, statement *sql
 	timestamp := time.UnixMilli(msg.GetCollectionTimestamp())
 
 	for _, component := range components {
-		resourceDefBytes, _ := json.Marshal(component.GetResourceDefinition())
-		statusDataBytes, _ := json.Marshal(component.GetStatusData())
-
-		_, err := statement.ExecContext(ctx,
+		resourceDefBytes, err := json.Marshal(component.GetResourceDefinition())
+		if err != nil {
+			return fmt.Errorf("ExecContext component:%w", err)
+		}
+		statusDataBytes, err := json.Marshal(component.GetStatusData())
+		if err != nil {
+			return fmt.Errorf("ExecContext component:%w", err)
+		}
+		_, err = statement.ExecContext(ctx,
 			timestamp,
 			component.GetExternalId(),
 			"component",
