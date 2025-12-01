@@ -7,26 +7,30 @@ package clickhousestsexporter // import "github.com/stackvista/sts-opentelemetry
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	_ "github.com/ClickHouse/clickhouse-go/v2" // For register database driver.
+	topostream "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter/internal"
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter/internal/topology"
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 	conventions "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
 )
 
 type LogsExporter struct {
-	client    *sql.DB
-	insertSQL string
+	client            *sql.DB
+	insertSQL         string
+	insertTopologySQL string
 
-	logger           *zap.Logger
-	cfg              *Config
-	topologyExporter *TopologyExporter
+	logger *zap.Logger
+	cfg    *Config
 }
 
 func NewLogsExporter(logger *zap.Logger, cfg *Config) (*LogsExporter, error) {
@@ -35,36 +39,49 @@ func NewLogsExporter(logger *zap.Logger, cfg *Config) (*LogsExporter, error) {
 		return nil, err
 	}
 
-	topologyExporter, err := NewTopologyExporter(logger, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create topology exporter: %w", err)
-	}
-
 	return &LogsExporter{
-		client:           client,
-		insertSQL:        renderInsertLogsSQL(cfg),
-		logger:           logger,
-		cfg:              cfg,
-		topologyExporter: topologyExporter,
+		client:            client,
+		insertSQL:         renderInsertLogsSQL(cfg),
+		insertTopologySQL: topology.RenderInsertTopologySQL(cfg),
+		logger:            logger,
+		cfg:               cfg,
 	}, nil
 }
 
-func (e *LogsExporter) Start(ctx context.Context, host component.Host) error {
-	if err := e.topologyExporter.Start(ctx, host); err != nil {
-		return fmt.Errorf("failed to start topology exporter: %w", err)
-	}
+func (e *LogsExporter) Start(ctx context.Context, _ component.Host) error {
 	if err := createDatabase(ctx, e.cfg); err != nil {
 		return err
 	}
 
-	return createLogsTable(ctx, e.cfg, e.client)
+	if e.cfg.CreateLogsTable {
+		if err := createLogsTable(ctx, e.cfg, e.client); err != nil {
+			return err
+		}
+	}
+
+	if e.cfg.CreateTopologyTable {
+		if err := topology.CreateTopologyTable(ctx, e.cfg, e.client); err != nil {
+			return fmt.Errorf("failed to create topology table: %w", err)
+		}
+		if err := topology.CreateTopologyTimeRangeTable(ctx, e.cfg, e.client); err != nil {
+			return fmt.Errorf("failed to create topology time range table: %w", err)
+		}
+		if err := topology.CreateTopologyTimeRangeMV(ctx, e.cfg, e.client); err != nil {
+			return fmt.Errorf("failed to create topology time range materialized view: %w", err)
+		}
+		if err := topology.CreateTopologyFieldValuesTable(ctx, e.cfg, e.client); err != nil {
+			return fmt.Errorf("failed to create topology field values table: %w", err)
+		}
+		if err := topology.CreateTopologyFieldValuesMV(ctx, e.cfg, e.client); err != nil {
+			return fmt.Errorf("failed to create topology field values materialized view: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // shutdown will shut down the exporter.
-func (e *LogsExporter) Shutdown(ctx context.Context) error {
-	if err := e.topologyExporter.Shutdown(ctx); err != nil {
-		return fmt.Errorf("failed to shutdown topology exporter: %w", err)
-	}
+func (e *LogsExporter) Shutdown(_ context.Context) error {
 	if e.client != nil {
 		return e.client.Close()
 	}
@@ -72,60 +89,159 @@ func (e *LogsExporter) Shutdown(ctx context.Context) error {
 }
 
 func (e *LogsExporter) PushLogsData(ctx context.Context, ld plog.Logs) error {
-	regularLogs := plog.NewLogs()
-	topologyLogs := plog.NewLogs()
+	start := time.Now()
+	err := doWithTx(ctx, e.client, func(tx *sql.Tx) error {
+		logStatement, err := tx.PrepareContext(ctx, e.insertSQL)
+		if err != nil {
+			return fmt.Errorf("PrepareContext(log):%w", err)
+		}
+		defer func() { _ = logStatement.Close() }()
 
-	for i := 0; i < ld.ResourceLogs().Len(); i++ {
-		rl := ld.ResourceLogs().At(i)
-		destRlRegular := regularLogs.ResourceLogs().AppendEmpty()
-		rl.Resource().CopyTo(destRlRegular.Resource())
+		topologyStatement, err := tx.PrepareContext(ctx, e.insertTopologySQL)
+		if err != nil {
+			return fmt.Errorf("PrepareContext(topology):%w", err)
+		}
+		defer func() { _ = topologyStatement.Close() }()
 
-		destRlTopology := topologyLogs.ResourceLogs().AppendEmpty()
-		rl.Resource().CopyTo(destRlTopology.Resource())
+		for i := 0; i < ld.ResourceLogs().Len(); i++ {
+			logs := ld.ResourceLogs().At(i)
+			res := logs.Resource()
+			for j := 0; j < logs.ScopeLogs().Len(); j++ {
+				scopeLogs := logs.ScopeLogs().At(j)
+				for k := 0; k < scopeLogs.LogRecords().Len(); k++ {
+					r := scopeLogs.LogRecords().At(k)
 
-		for j := 0; j < rl.ScopeLogs().Len(); j++ {
-			sl := rl.ScopeLogs().At(j)
-			destSlRegular := destRlRegular.ScopeLogs().AppendEmpty()
-			sl.Scope().CopyTo(destSlRegular.Scope())
-
-			destSlTopology := destRlTopology.ScopeLogs().AppendEmpty()
-			sl.Scope().CopyTo(destSlTopology.Scope())
-
-			for k := 0; k < sl.LogRecords().Len(); k++ {
-				lr := sl.LogRecords().At(k)
-				if _, ok := lr.Attributes().Get(stskafkaexporter.KafkaMessageKey); ok {
-					lr.CopyTo(destSlTopology.LogRecords().AppendEmpty())
-				} else {
-					lr.CopyTo(destSlRegular.LogRecords().AppendEmpty())
+					if _, ok := r.Attributes().Get(stskafkaexporter.KafkaMessageKey); ok {
+						if err := e.pushTopologyLogRecord(ctx, topologyStatement, r); err != nil {
+							return err
+						}
+					} else {
+						if err := e.pushRegularLogRecord(ctx, logStatement, res, scopeLogs, r); err != nil {
+							return err
+						}
+					}
 				}
 			}
 		}
-	}
+		return nil
+	})
+	duration := time.Since(start)
+	e.logger.Debug("insert logs", zap.Int("records", ld.LogRecordCount()),
+		zap.String("cost", duration.String()))
+	return err
+}
 
-	var regularErr error
-	if regularLogs.LogRecordCount() > 0 {
-		regularErr = e.pushRegularLogs(ctx, regularLogs)
+func (e *LogsExporter) pushRegularLogRecord(ctx context.Context, statement *sql.Stmt, res pcommon.Resource, scopeLogs plog.ScopeLogs, r plog.LogRecord) error {
+	var serviceName string
+	if v, ok := res.Attributes().Get(string(conventions.ServiceNameKey)); ok {
+		serviceName = v.Str()
 	}
+	resURL := scopeLogs.SchemaUrl()
+	resAttr := attributesToMap(res.Attributes())
+	scopeURL := scopeLogs.SchemaUrl()
+	scopeName := scopeLogs.Scope().Name()
+	scopeVersion := scopeLogs.Scope().Version()
+	scopeAttr := attributesToMap(scopeLogs.Scope().Attributes())
+	logAttr := attributesToMap(r.Attributes())
 
-	var topologyErr error
-	if topologyLogs.LogRecordCount() > 0 {
-		topologyErr = e.topologyExporter.PushLogsData(ctx, topologyLogs)
+	_, err := statement.ExecContext(ctx,
+		r.Timestamp().AsTime(),
+		TraceIDToHexOrEmptyString(r.TraceID()),
+		SpanIDToHexOrEmptyString(r.SpanID()),
+		uint32(r.Flags()),
+		r.SeverityText(),
+		int32(r.SeverityNumber()),
+		serviceName,
+		r.Body().AsString(),
+		resURL,
+		resAttr,
+		scopeURL,
+		scopeName,
+		scopeVersion,
+		scopeAttr,
+		logAttr,
+	)
+	if err != nil {
+		return fmt.Errorf("ExecContext:%w", err)
 	}
-
-	if regularErr != nil && topologyErr != nil {
-		return fmt.Errorf("failed to push logs: regular: %v, topology: %v", regularErr, topologyErr)
-	}
-	if regularErr != nil {
-		return fmt.Errorf("failed to push regular logs: %w", regularErr)
-	}
-	if topologyErr != nil {
-		return fmt.Errorf("failed to push topology logs: %w", topologyErr)
-	}
-
 	return nil
 }
 
-func (e *LogsExporter) pushRegularLogs(ctx context.Context, ld plog.Logs) error {
+func (e *LogsExporter) pushTopologyLogRecord(ctx context.Context, statement *sql.Stmt, r plog.LogRecord) error {
+	body := r.Body().Bytes().AsRaw()
+	if body == nil {
+		return nil
+	}
+
+	var msg topostream.TopologyStreamMessage
+	if err := proto.Unmarshal(body, &msg); err != nil {
+		return fmt.Errorf("failed to unmarshal topology stream message: %w", err)
+	}
+
+	var components []*topostream.TopologyStreamComponent
+	var relations []*topostream.TopologyStreamRelation
+
+	switch payload := msg.Payload.(type) {
+	case *topostream.TopologyStreamMessage_TopologyStreamSnapshotData:
+		components = payload.TopologyStreamSnapshotData.GetComponents()
+		relations = payload.TopologyStreamSnapshotData.GetRelations()
+	case *topostream.TopologyStreamMessage_TopologyStreamRepeatElementsData:
+		components = payload.TopologyStreamRepeatElementsData.GetComponents()
+		relations = payload.TopologyStreamRepeatElementsData.GetRelations()
+	}
+	timestamp := time.UnixMilli(msg.GetCollectionTimestamp())
+
+	for _, component := range components {
+		resourceDefBytes, _ := json.Marshal(component.GetResourceDefinition())
+		statusDataBytes, _ := json.Marshal(component.GetStatusData())
+
+		_, err := statement.ExecContext(ctx,
+			timestamp,
+			component.GetExternalId(),
+			"component",
+			component.GetName(),
+			component.GetTags(),
+			component.GetTypeName(),
+			component.GetTypeIdentifier(),
+			component.GetLayerName(),
+			component.GetLayerIdentifier(),
+			component.GetDomainName(),
+			component.GetDomainIdentifier(),
+			component.GetIdentifiers(),
+			string(resourceDefBytes),
+			string(statusDataBytes),
+			// Relation fields are nil
+			nil,
+			nil,
+		)
+		if err != nil {
+			return fmt.Errorf("ExecContext component:%w", err)
+		}
+	}
+
+	for _, relation := range relations {
+		_, err := statement.ExecContext(ctx,
+			timestamp,
+			relation.GetExternalId(),
+			"relation",
+			relation.GetName(),
+			relation.GetTags(),
+			relation.GetTypeName(),
+			relation.GetTypeIdentifier(),
+			// Component fields are nil
+			nil, nil, nil, nil, nil, nil, nil,
+			// Relation fields
+			relation.GetSourceIdentifier(),
+			relation.GetTargetIdentifier(),
+		)
+		if err != nil {
+			return fmt.Errorf("ExecContext relation:%w", err)
+		}
+	}
+	return nil
+}
+
+func attributesToMap(attributes pcommon.Map) map[string]string {
 	m := make(map[string]string, attributes.Len())
 	attributes.Range(func(k string, v pcommon.Value) bool {
 		m[k] = v.AsString()
