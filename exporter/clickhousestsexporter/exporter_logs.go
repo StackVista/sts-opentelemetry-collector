@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	_ "github.com/ClickHouse/clickhouse-go/v2" // For register database driver.
@@ -259,12 +260,16 @@ func (e *LogsExporter) pushComponentLogRecord(ctx context.Context, statement *sq
 	if err != nil {
 		return fmt.Errorf("ExecContext component: marshal status data:%w", err)
 	}
+	var tags = component.GetTags()
+	slices.Sort(tags)
 
 	_, err = statement.ExecContext(ctx,
 		timestamp,
+		// TODO: This uses externalId which is the main identifier
+		// for open telemetry data, but this doesn't have to be like that
 		component.GetExternalId(),
 		component.GetName(),
-		component.GetTags(),
+		tags,
 		component.GetTypeName(),
 		component.GetTypeIdentifier(),
 		component.GetLayerName(),
