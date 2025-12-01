@@ -62,6 +62,10 @@ type Config struct {
 	CreateResourcesTable bool `mapstructure:"create_resources_table"`
 	// Create the topology table on startup
 	CreateTopologyTable bool `mapstructure:"create_topology_table"`
+	// EnableLogs enables the logs exporter.
+	EnableLogs bool `mapstructure:"enable_logs"`
+	// EnableTopology enables the topology exporter.
+	EnableTopology bool `mapstructure:"enable_topology"`
 
 	driverName string
 }

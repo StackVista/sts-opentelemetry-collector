@@ -53,13 +53,13 @@ func (e *LogsExporter) Start(ctx context.Context, _ component.Host) error {
 		return err
 	}
 
-	if e.cfg.CreateLogsTable {
+	if e.cfg.EnableLogs && e.cfg.CreateLogsTable {
 		if err := createLogsTable(ctx, e.cfg, e.client); err != nil {
 			return err
 		}
 	}
 
-	if e.cfg.CreateTopologyTable {
+	if e.cfg.EnableTopology && e.cfg.CreateTopologyTable {
 		if err := topology.CreateTopologyTable(ctx, e.cfg, e.client); err != nil {
 			return fmt.Errorf("failed to create topology table: %w", err)
 		}
@@ -112,12 +112,16 @@ func (e *LogsExporter) PushLogsData(ctx context.Context, ld plog.Logs) error {
 					r := scopeLogs.LogRecords().At(k)
 
 					if _, ok := r.Attributes().Get(stskafkaexporter.KafkaMessageKey); ok {
-						if err := e.pushTopologyLogRecord(ctx, topologyStatement, r); err != nil {
-							return err
+						if e.cfg.EnableTopology {
+							if err := e.pushTopologyLogRecord(ctx, topologyStatement, r); err != nil {
+								return err
+							}
 						}
 					} else {
-						if err := e.pushRegularLogRecord(ctx, logStatement, res, scopeLogs, r); err != nil {
-							return err
+						if e.cfg.EnableLogs {
+							if err := e.pushRegularLogRecord(ctx, logStatement, res, scopeLogs, r); err != nil {
+								return err
+							}
 						}
 					}
 				}

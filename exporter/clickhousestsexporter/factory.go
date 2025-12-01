@@ -54,6 +54,8 @@ func CreateDefaultConfig() component.Config {
 		CreateMetricsTable:            true,
 		CreateResourcesTable:          true,
 		CreateTopologyTable:           true,
+		EnableLogs:                    true,
+		EnableTopology:                true,
 	}
 }
 
