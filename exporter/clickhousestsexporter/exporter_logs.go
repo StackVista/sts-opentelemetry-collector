@@ -91,17 +91,23 @@ func (e *LogsExporter) Shutdown(_ context.Context) error {
 func (e *LogsExporter) PushLogsData(ctx context.Context, ld plog.Logs) error {
 	start := time.Now()
 	err := doWithTx(ctx, e.client, func(tx *sql.Tx) error {
-		logStatement, err := tx.PrepareContext(ctx, e.insertSQL)
-		if err != nil {
-			return fmt.Errorf("PrepareContext(log):%w", err)
+		var logStatement *sql.Stmt
+		if e.cfg.EnableLogs {
+			logStatement, err := tx.PrepareContext(ctx, e.insertSQL)
+			if err != nil {
+				return fmt.Errorf("PrepareContext(log):%w", err)
+			}
+			defer func() { _ = logStatement.Close() }()
 		}
-		defer func() { _ = logStatement.Close() }()
 
-		topologyStatement, err := tx.PrepareContext(ctx, e.insertTopologySQL)
-		if err != nil {
-			return fmt.Errorf("PrepareContext(topology):%w", err)
+		var topologyStatement *sql.Stmt
+		if e.cfg.EnableTopology {
+			topologyStatement, err := tx.PrepareContext(ctx, e.insertTopologySQL)
+			if err != nil {
+				return fmt.Errorf("PrepareContext(topology):%w", err)
+			}
+			defer func() { _ = topologyStatement.Close() }()
 		}
-		defer func() { _ = topologyStatement.Close() }()
 
 		for i := 0; i < ld.ResourceLogs().Len(); i++ {
 			logs := ld.ResourceLogs().At(i)
