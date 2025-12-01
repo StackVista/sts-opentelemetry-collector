@@ -25,9 +25,10 @@ import (
 )
 
 type LogsExporter struct {
-	client            *sql.DB
-	insertSQL         string
-	insertTopologySQL string
+	client             *sql.DB
+	insertSQL          string
+	insertComponentSQL string
+	insertRelationSQL  string
 
 	logger *zap.Logger
 	cfg    *Config
@@ -40,11 +41,12 @@ func NewLogsExporter(logger *zap.Logger, cfg *Config) (*LogsExporter, error) {
 	}
 
 	return &LogsExporter{
-		client:            client,
-		insertSQL:         renderInsertLogsSQL(cfg),
-		insertTopologySQL: topology.RenderInsertTopologySQL(cfg),
-		logger:            logger,
-		cfg:               cfg,
+		client:             client,
+		insertSQL:          renderInsertLogsSQL(cfg),
+		insertComponentSQL: topology.RenderInsertComponentsSQL(cfg),
+		insertRelationSQL:  topology.RenderInsertRelationsSQL(cfg),
+		logger:             logger,
+		cfg:                cfg,
 	}, nil
 }
 
@@ -60,20 +62,35 @@ func (e *LogsExporter) Start(ctx context.Context, _ component.Host) error {
 	}
 
 	if e.cfg.EnableTopology && e.cfg.CreateTopologyTable {
-		if err := topology.CreateTopologyTable(ctx, e.cfg, e.client); err != nil {
-			return fmt.Errorf("failed to create topology table: %w", err)
+		if err := topology.CreateComponentsTable(ctx, e.cfg, e.client); err != nil {
+			return fmt.Errorf("failed to create components table: %w", err)
 		}
-		if err := topology.CreateTopologyTimeRangeTable(ctx, e.cfg, e.client); err != nil {
-			return fmt.Errorf("failed to create topology time range table: %w", err)
+		if err := topology.CreateRelationsTable(ctx, e.cfg, e.client); err != nil {
+			return fmt.Errorf("failed to create relations table: %w", err)
 		}
-		if err := topology.CreateTopologyTimeRangeMV(ctx, e.cfg, e.client); err != nil {
-			return fmt.Errorf("failed to create topology time range materialized view: %w", err)
+		if err := topology.CreateComponentsTimeRangeTable(ctx, e.cfg, e.client); err != nil {
+			return fmt.Errorf("failed to create components time range table: %w", err)
 		}
-		if err := topology.CreateTopologyFieldValuesTable(ctx, e.cfg, e.client); err != nil {
-			return fmt.Errorf("failed to create topology field values table: %w", err)
+		if err := topology.CreateRelationsTimeRangeTable(ctx, e.cfg, e.client); err != nil {
+			return fmt.Errorf("failed to create relations time range table: %w", err)
 		}
-		if err := topology.CreateTopologyFieldValuesMV(ctx, e.cfg, e.client); err != nil {
-			return fmt.Errorf("failed to create topology field values materialized view: %w", err)
+		if err := topology.CreateComponentsTimeRangeMV(ctx, e.cfg, e.client); err != nil {
+			return fmt.Errorf("failed to create components time range materialized view: %w", err)
+		}
+		if err := topology.CreateRelationsTimeRangeMV(ctx, e.cfg, e.client); err != nil {
+			return fmt.Errorf("failed to create relations time range materialized view: %w", err)
+		}
+		if err := topology.CreateComponentsFieldValuesTable(ctx, e.cfg, e.client); err != nil {
+			return fmt.Errorf("failed to create components field values table: %w", err)
+		}
+		if err := topology.CreateRelationsFieldValuesTable(ctx, e.cfg, e.client); err != nil {
+			return fmt.Errorf("failed to create relations field values table: %w", err)
+		}
+		if err := topology.CreateComponentsFieldValuesMV(ctx, e.cfg, e.client); err != nil {
+			return fmt.Errorf("failed to create components field values materialized view: %w", err)
+		}
+		if err := topology.CreateRelationsFieldValuesMV(ctx, e.cfg, e.client); err != nil {
+			return fmt.Errorf("failed to create relations field values materialized view: %w", err)
 		}
 	}
 
@@ -99,20 +116,29 @@ func (e *LogsExporter) PushLogsData(ctx context.Context, ld plog.Logs) error {
 	err := doWithTx(ctx, e.client, func(tx *sql.Tx) error {
 		var logStatement *sql.Stmt
 		if e.cfg.EnableLogs {
-			logStatement, err := tx.PrepareContext(ctx, e.insertSQL)
+			var err error
+			logStatement, err = tx.PrepareContext(ctx, e.insertSQL)
 			if err != nil {
 				return fmt.Errorf("PrepareContext(log):%w", err)
 			}
 			defer func() { _ = logStatement.Close() }()
 		}
 
-		var topologyStatement *sql.Stmt
+		var componentStatement *sql.Stmt
+		var relationStatement *sql.Stmt
 		if e.cfg.EnableTopology {
-			topologyStatement, err := tx.PrepareContext(ctx, e.insertTopologySQL)
+			var err error
+			componentStatement, err = tx.PrepareContext(ctx, e.insertComponentSQL)
 			if err != nil {
-				return fmt.Errorf("PrepareContext(topology):%w", err)
+				return fmt.Errorf("PrepareContext(component):%w", err)
 			}
-			defer func() { _ = topologyStatement.Close() }()
+			defer func() { _ = componentStatement.Close() }()
+
+			relationStatement, err = tx.PrepareContext(ctx, e.insertRelationSQL)
+			if err != nil {
+				return fmt.Errorf("PrepareContext(relation):%w", err)
+			}
+			defer func() { _ = relationStatement.Close() }()
 		}
 
 		for i := 0; i < ld.ResourceLogs().Len(); i++ {
@@ -125,7 +151,7 @@ func (e *LogsExporter) PushLogsData(ctx context.Context, ld plog.Logs) error {
 
 					if _, ok := r.Attributes().Get(stskafkaexporter.KafkaMessageKey); ok {
 						if e.cfg.EnableTopology {
-							if err := e.pushTopologyLogRecord(ctx, topologyStatement, r); err != nil {
+							if err := e.pushTopologyLogRecord(ctx, componentStatement, relationStatement, r); err != nil {
 								return err
 							}
 						}
@@ -183,7 +209,7 @@ func (e *LogsExporter) pushRegularLogRecord(ctx context.Context, statement *sql.
 	return nil
 }
 
-func (e *LogsExporter) pushTopologyLogRecord(ctx context.Context, statement *sql.Stmt, r plog.LogRecord) error {
+func (e *LogsExporter) pushTopologyLogRecord(ctx context.Context, componentStatement, relationStatement *sql.Stmt, r plog.LogRecord) error {
 	body := r.Body().Bytes().AsRaw()
 	if body == nil {
 		return nil
@@ -208,56 +234,63 @@ func (e *LogsExporter) pushTopologyLogRecord(ctx context.Context, statement *sql
 	timestamp := time.UnixMilli(msg.GetCollectionTimestamp())
 
 	for _, component := range components {
-		resourceDefBytes, err := json.Marshal(component.GetResourceDefinition())
-		if err != nil {
-			return fmt.Errorf("ExecContext component:%w", err)
-		}
-		statusDataBytes, err := json.Marshal(component.GetStatusData())
-		if err != nil {
-			return fmt.Errorf("ExecContext component:%w", err)
-		}
-		_, err = statement.ExecContext(ctx,
-			timestamp,
-			component.GetExternalId(),
-			"component",
-			component.GetName(),
-			component.GetTags(),
-			component.GetTypeName(),
-			component.GetTypeIdentifier(),
-			component.GetLayerName(),
-			component.GetLayerIdentifier(),
-			component.GetDomainName(),
-			component.GetDomainIdentifier(),
-			component.GetIdentifiers(),
-			string(resourceDefBytes),
-			string(statusDataBytes),
-			// Relation fields are nil
-			nil,
-			nil,
-		)
-		if err != nil {
-			return fmt.Errorf("ExecContext component:%w", err)
+		if err := e.pushComponentLogRecord(ctx, componentStatement, timestamp, component); err != nil {
+			return err
 		}
 	}
 
 	for _, relation := range relations {
-		_, err := statement.ExecContext(ctx,
-			timestamp,
-			relation.GetExternalId(),
-			"relation",
-			relation.GetName(),
-			relation.GetTags(),
-			relation.GetTypeName(),
-			relation.GetTypeIdentifier(),
-			// Component fields are nil
-			nil, nil, nil, nil, nil, nil, nil,
-			// Relation fields
-			relation.GetSourceIdentifier(),
-			relation.GetTargetIdentifier(),
-		)
-		if err != nil {
-			return fmt.Errorf("ExecContext relation:%w", err)
+		if err := e.pushRelationLogRecord(ctx, relationStatement, timestamp, relation); err != nil {
+			return err
 		}
+	}
+	return nil
+}
+
+func (e *LogsExporter) pushComponentLogRecord(ctx context.Context, statement *sql.Stmt, timestamp time.Time, component *topostream.TopologyStreamComponent) error {
+	resourceDefBytes, err := json.Marshal(component.GetResourceDefinition())
+	if err != nil {
+		return fmt.Errorf("ExecContext component: marshal resource definition:%w", err)
+	}
+	statusDataBytes, err := json.Marshal(component.GetStatusData())
+	if err != nil {
+		return fmt.Errorf("ExecContext component: marshal status data:%w", err)
+	}
+
+	_, err = statement.ExecContext(ctx,
+		timestamp,
+		component.GetExternalId(),
+		component.GetName(),
+		component.GetTags(),
+		component.GetTypeName(),
+		component.GetTypeIdentifier(),
+		component.GetLayerName(),
+		component.GetLayerIdentifier(),
+		component.GetDomainName(),
+		component.GetDomainIdentifier(),
+		component.GetIdentifiers(),
+		string(resourceDefBytes),
+		string(statusDataBytes),
+	)
+	if err != nil {
+		return fmt.Errorf("ExecContext component:%w", err)
+	}
+	return nil
+}
+
+func (e *LogsExporter) pushRelationLogRecord(ctx context.Context, statement *sql.Stmt, timestamp time.Time, relation *topostream.TopologyStreamRelation) error {
+	_, err := statement.ExecContext(ctx,
+		timestamp,
+		relation.GetExternalId(),
+		relation.GetName(),
+		relation.GetTags(),
+		relation.GetTypeName(),
+		relation.GetTypeIdentifier(),
+		relation.GetSourceIdentifier(),
+		relation.GetTargetIdentifier(),
+	)
+	if err != nil {
+		return fmt.Errorf("ExecContext relation:%w", err)
 	}
 	return nil
 }

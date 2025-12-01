@@ -41,16 +41,26 @@ type Config struct {
 	MetricsTableName string `mapstructure:"metrics_table_name"`
 	// ResourcesTableName is the table name for resources. default is `otel_resources`.
 	ResourcesTableName string `mapstructure:"resources_table_name"`
-	// TopologyTableName is the table name for topology. default is `otel_topology`.
-	TopologyTableName string `mapstructure:"topology_table_name"`
-	// TopologyTimeRangeTableName is the table name for topology time range. default is `otel_topology_time_range`.
-	TopologyTimeRangeTableName string `mapstructure:"topology_time_range_table_name"`
-	// TopologyFieldValuesTableName is the table name for topology field values. default is `otel_topology_field_values`.
-	TopologyFieldValuesTableName string `mapstructure:"topology_field_values_table_name"`
-	// TopologyTimeRangeMVName is the materialized view name for topology time range. default is `otel_topology_time_range_mv`.
-	TopologyTimeRangeMVName string `mapstructure:"topology_time_range_mv_name"`
-	// TopologyFieldValuesMVName is the materialized view name for topology field values. default is `otel_topology_field_values_mv`.
-	TopologyFieldValuesMVName string `mapstructure:"topology_field_values_mv_name"`
+	// ComponentsTableName is the table name for components. default is `otel_components`.
+	ComponentsTableName string `mapstructure:"components_table_name"`
+	// RelationsTableName is the table name for relations. default is `otel_relations`.
+	RelationsTableName string `mapstructure:"relations_table_name"`
+	// ComponentsTimeRangeTableName is the table name for components time range. default is `otel_components_time_range`.
+	ComponentsTimeRangeTableName string `mapstructure:"components_time_range_table_name"`
+	// RelationsTimeRangeTableName is the table name for relations time range. default is `otel_relations_time_range`.
+	RelationsTimeRangeTableName string `mapstructure:"relations_time_range_table_name"`
+	// ComponentsFieldValuesTableName is the table name for components field values. default is `otel_components_field_values`.
+	ComponentsFieldValuesTableName string `mapstructure:"components_field_values_table_name"`
+	// RelationsFieldValuesTableName is the table name for relations field values. default is `otel_relations_field_values`.
+	RelationsFieldValuesTableName string `mapstructure:"relations_field_values_table_name"`
+	// ComponentsTimeRangeMVName is the materialized view name for components time range. default is `otel_components_time_range_mv`.
+	ComponentsTimeRangeMVName string `mapstructure:"components_time_range_mv_name"`
+	// RelationsTimeRangeMVName is the materialized view name for relations time range. default is `otel_relations_time_range_mv`.
+	RelationsTimeRangeMVName string `mapstructure:"relations_time_range_mv_name"`
+	// ComponentsFieldValuesMVName is the materialized view name for components field values. default is `otel_components_field_values_mv`.
+	ComponentsFieldValuesMVName string `mapstructure:"components_field_values_mv_name"`
+	// RelationsFieldValuesMVName is the materialized view name for relations field values. default is `otel_relations_field_values_mv`.
+	RelationsFieldValuesMVName string `mapstructure:"relations_relations_field_values_mv_name"`
 
 	// Deprecated: Use 'ttl' instead
 	TTLDays uint `mapstructure:"ttl_days"`
@@ -186,22 +196,42 @@ func (cfg *Config) GetTTL() time.Duration {
 	return cfg.TTL
 }
 
-func (cfg *Config) GetTopologyTableName() string {
-	return cfg.TopologyTableName
+func (cfg *Config) GetComponentsTableName() string {
+	return cfg.ComponentsTableName
 }
 
-func (cfg *Config) GetTopologyTimeRangeTableName() string {
-	return cfg.TopologyTimeRangeTableName
+func (cfg *Config) GetRelationsTableName() string {
+	return cfg.RelationsTableName
 }
 
-func (cfg *Config) GetTopologyFieldValuesTableName() string {
-	return cfg.TopologyFieldValuesTableName
+func (cfg *Config) GetComponentsTimeRangeTableName() string {
+	return cfg.ComponentsTimeRangeTableName
 }
 
-func (cfg *Config) GetTopologyTimeRangeMVName() string {
-	return cfg.TopologyTimeRangeMVName
+func (cfg *Config) GetRelationsTimeRangeTableName() string {
+	return cfg.RelationsTimeRangeTableName
 }
 
-func (cfg *Config) GetTopologyFieldValuesMVName() string {
-	return cfg.TopologyFieldValuesMVName
+func (cfg *Config) GetComponentsFieldValuesTableName() string {
+	return cfg.ComponentsFieldValuesTableName
+}
+
+func (cfg *Config) GetRelationsFieldValuesTableName() string {
+	return cfg.RelationsFieldValuesTableName
+}
+
+func (cfg *Config) GetComponentsTimeRangeMVName() string {
+	return cfg.ComponentsTimeRangeMVName
+}
+
+func (cfg *Config) GetRelationsTimeRangeMVName() string {
+	return cfg.RelationsTimeRangeMVName
+}
+
+func (cfg *Config) GetComponentsFieldValuesMVName() string {
+	return cfg.ComponentsFieldValuesMVName
+}
+
+func (cfg *Config) GetRelationsFieldValuesMVName() string {
+	return cfg.RelationsFieldValuesMVName
 }

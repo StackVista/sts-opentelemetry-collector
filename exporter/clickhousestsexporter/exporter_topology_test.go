@@ -17,46 +17,36 @@ import (
 	conventions "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"go.uber.org/zap/zaptest"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	topostream "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter"
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
+//nolint:forcetypeassert
 func TestPushTopologyData(t *testing.T) {
-	var topologyItems int
-	var logItems int
+	var componentItems int
+	var relationItems int
+	var componentValues []driver.Value
 
+	var logItems int
 	// Test Config
 	cfg := withDefaultConfig(func(cfg *clickhousestsexporter.Config) {
 		cfg.EnableTopology = true
 		cfg.EnableLogs = false // Disable regular logs to isolate topology testing
 		cfg.SetDriverName(t.Name())
-		cfg.Endpoint = defaultEndpoint
 	})
 
-	//nolint:forcetypeassert
 	initClickhouseTestServer(t, func(query string, values []driver.Value) error {
-		if strings.HasPrefix(query, fmt.Sprintf("INSERT INTO %s", cfg.LogsTableName)) {
+		switch {
+		case strings.HasPrefix(query, fmt.Sprintf("INSERT INTO %s", cfg.ComponentsTableName)):
+			componentItems++
+			componentValues = values
+		case strings.HasPrefix(query, fmt.Sprintf("INSERT INTO %s", cfg.RelationsTableName)):
+			relationItems++
+		case strings.HasPrefix(query, fmt.Sprintf("INSERT INTO %s", cfg.LogsTableName)):
 			logItems++
-		} else if strings.HasPrefix(query, fmt.Sprintf("INSERT INTO %s", cfg.TopologyTableName)) {
-			topologyItems++
-			require.Equal(t, "urn:test:component", values[1])                        // Identifier
-			require.Equal(t, "component", values[2])                                 // Type
-			require.Equal(t, "test-component", values[3])                            // Name
-			require.ElementsMatch(t, []string{"tag1", "tag2"}, values[4].([]string)) // Tags
-			require.Equal(t, "service", values[5])                                   // TypeName
-			require.Equal(t, "type_id", values[6])                                   // TypeIdentifier
-			require.Equal(t, "layer_name", values[7])                                // LayerName
-			require.Equal(t, "layer_id", values[8])                                  // LayerIdentifier
-			require.Equal(t, "domain_name", values[9])                               // DomainName
-			require.Equal(t, "domain_id", values[10])                                // DomainIdentifier
-			require.ElementsMatch(t, []string{"id1", "id2"}, values[11].([]string))  // ComponentIdentifiers
-			require.Equal(t, `{"key":"value"}`, values[12])                          // ResourceDefinition (JSON)
-			require.Equal(t, `{"status":"ok"}`, values[13])                          // StatusData (JSON)
-			require.Nil(t, values[14])                                               // SourceIdentifier
-			require.Nil(t, values[15])                                               // TargetIdentifier
 		}
 		return nil
 	})
@@ -79,9 +69,9 @@ func TestPushTopologyData(t *testing.T) {
 	require.NoError(t, err)
 
 	typeID := "type_id"
-	layerName := "layer_name"
+	layerNameStr := "layer_name"
 	layerID := "layer_id"
-	domainName := "domain_name"
+	domainNameStr := "domain_name"
 	domainID := "domain_id"
 
 	topoMsg := &topostream.TopologyStreamMessage{
@@ -94,9 +84,9 @@ func TestPushTopologyData(t *testing.T) {
 						Name:               "test-component",
 						TypeName:           "service",
 						TypeIdentifier:     &typeID,
-						LayerName:          layerName,
+						LayerName:          layerNameStr,
 						LayerIdentifier:    &layerID,
-						DomainName:         domainName,
+						DomainName:         domainNameStr,
 						DomainIdentifier:   &domainID,
 						Identifiers:        []string{"id1", "id2"},
 						ResourceDefinition: resourceDefStruct,
@@ -115,12 +105,27 @@ func TestPushTopologyData(t *testing.T) {
 	// Push Data
 	err = exporter.PushLogsData(context.Background(), logs)
 	require.NoError(t, err)
-	require.Equal(t, 1, topologyItems)
+	require.Equal(t, 1, componentItems)
+	require.Equal(t, 0, relationItems)
 	require.Equal(t, 0, logItems)
+
+	require.Equal(t, "urn:test:component", componentValues[1])                        // Identifier
+	require.Equal(t, "test-component", componentValues[2])                            // Name
+	require.ElementsMatch(t, []string{"tag1", "tag2"}, componentValues[3].([]string)) // Tags
+	require.Equal(t, "service", componentValues[4])                                   // TypeName
+	require.Equal(t, "type_id", componentValues[5])                                   // TypeIdentifier
+	require.Equal(t, "layer_name", componentValues[6])                                // LayerName
+	require.Equal(t, "layer_id", componentValues[7])                                  // LayerIdentifier
+	require.Equal(t, "domain_name", componentValues[8])                               // DomainName
+	require.Equal(t, "domain_id", componentValues[9])                                 // DomainIdentifier
+	require.ElementsMatch(t, []string{"id1", "id2"}, componentValues[10].([]string))  // ComponentIdentifiers
+	require.Equal(t, `{"key":"value"}`, componentValues[11])                          // ResourceDefinition (JSON)
+	require.Equal(t, `{"status":"ok"}`, componentValues[12])                          // StatusData (JSON)
 }
 
 func TestPushTopologyData_Disabled(t *testing.T) {
-	var topologyItems int
+	var componentItems int
+	var relationItems int
 	var logItems int
 
 	// Test Config
@@ -129,12 +134,16 @@ func TestPushTopologyData_Disabled(t *testing.T) {
 		cfg.EnableLogs = false
 		cfg.SetDriverName(t.Name())
 	})
+
 	//nolint:revive
 	initClickhouseTestServer(t, func(query string, values []driver.Value) error {
-		if strings.HasPrefix(query, fmt.Sprintf("INSERT INTO %s", cfg.LogsTableName)) {
+		switch {
+		case strings.HasPrefix(query, fmt.Sprintf("INSERT INTO %s", cfg.ComponentsTableName)):
+			componentItems++
+		case strings.HasPrefix(query, fmt.Sprintf("INSERT INTO %s", cfg.RelationsTableName)):
+			relationItems++
+		case strings.HasPrefix(query, fmt.Sprintf("INSERT INTO %s", cfg.LogsTableName)):
 			logItems++
-		} else if strings.HasPrefix(query, fmt.Sprintf("INSERT INTO %s", cfg.TopologyTableName)) {
-			topologyItems++
 		}
 		return nil
 	})
@@ -157,43 +166,36 @@ func TestPushTopologyData_Disabled(t *testing.T) {
 	err = exporter.PushLogsData(context.Background(), logs)
 	require.NoError(t, err)
 
-	require.Equal(t, 0, topologyItems)
+	require.Equal(t, 0, componentItems)
+	require.Equal(t, 0, relationItems)
 	require.Equal(t, 0, logItems)
 }
 
+//nolint:forcetypeassert
 func TestPushMixedLogs(t *testing.T) {
-	var topologyItems int
+	var componentItems int
+	var relationItems int
 	var logItems int
+	var componentValues []driver.Value
+	var relationValues []driver.Value
+	var logValues []driver.Value
 
 	cfg := withDefaultConfig(func(cfg *clickhousestsexporter.Config) {
 		cfg.EnableTopology = true
 		cfg.EnableLogs = true
 		cfg.SetDriverName(t.Name())
 	})
-
-	//nolint:forcetypeassert
 	initClickhouseTestServer(t, func(query string, values []driver.Value) error {
-		if strings.HasPrefix(query, fmt.Sprintf("INSERT INTO %s", cfg.LogsTableName)) {
+		switch {
+		case strings.HasPrefix(query, fmt.Sprintf("INSERT INTO %s", cfg.LogsTableName)):
 			logItems++
-			require.Equal(t, "test-service", values[6]) // ServiceName for regular log
-			require.Equal(t, "This is a regular log", values[7])
-		} else if strings.HasPrefix(query, fmt.Sprintf("INSERT INTO %s", cfg.TopologyTableName)) {
-			topologyItems++
-			require.Equal(t, "urn:test:relation", values[1])                    // Identifier
-			require.Equal(t, "relation", values[2])                             // Type
-			require.Equal(t, "test-relation", values[3])                        // Name
-			require.ElementsMatch(t, []string{"rel_tag"}, values[4].([]string)) // Tags
-			require.Equal(t, "uses", values[5])                                 // TypeName
-			require.Equal(t, "rel_type_id", values[6])                          // TypeIdentifier
-			require.Nil(t, values[7])                                           // LayerName
-			require.Nil(t, values[8])                                           // LayerIdentifier
-			require.Nil(t, values[9])                                           // DomainName
-			require.Nil(t, values[10])                                          // DomainIdentifier
-			require.Nil(t, values[11])                                          // ComponentIdentifiers
-			require.Nil(t, values[12])                                          // ResourceDefinition
-			require.Nil(t, values[13])                                          // StatusData
-			require.Equal(t, "source_id", values[14])                           // SourceIdentifier
-			require.Equal(t, "target_id", values[15])                           // TargetIdentifier
+			logValues = values
+		case strings.HasPrefix(query, fmt.Sprintf("INSERT INTO %s", cfg.ComponentsTableName)):
+			componentItems++
+			componentValues = values
+		case strings.HasPrefix(query, fmt.Sprintf("INSERT INTO %s", cfg.RelationsTableName)):
+			relationItems++
+			relationValues = values
 		}
 		return nil
 	})
@@ -205,10 +207,51 @@ func TestPushMixedLogs(t *testing.T) {
 	rl.Resource().Attributes().PutStr(string(conventions.ServiceNameKey), "test-service")
 	sl := rl.ScopeLogs().AppendEmpty()
 
-	// Topology Log Record
+	// Topology component record
 	ts := time.Now()
+	resourceDefStruct, err := structpb.NewStruct(map[string]interface{}{"key": "value"})
+	require.NoError(t, err)
+	statusDataStruct, err := structpb.NewStruct(map[string]interface{}{"status": "ok"})
+	require.NoError(t, err)
+
+	typeID := "type_id"
+	layerNameStr := "layer_name"
+	layerID := "layer_id"
+	domainNameStr := "domain_name"
+	domainID := "domain_id"
+
+	componentTopoMsg := &topostream.TopologyStreamMessage{
+		CollectionTimestamp: ts.UnixMilli(),
+		Payload: &topostream.TopologyStreamMessage_TopologyStreamSnapshotData{
+			TopologyStreamSnapshotData: &topostream.TopologyStreamSnapshotData{
+				Components: []*topostream.TopologyStreamComponent{
+					{
+						ExternalId:         "urn:test:component",
+						Name:               "test-component",
+						TypeName:           "service",
+						TypeIdentifier:     &typeID,
+						LayerName:          layerNameStr,
+						LayerIdentifier:    &layerID,
+						DomainName:         domainNameStr,
+						DomainIdentifier:   &domainID,
+						Identifiers:        []string{"id1"},
+						ResourceDefinition: resourceDefStruct,
+						StatusData:         statusDataStruct,
+						Tags:               []string{"tag1"},
+					},
+				},
+			},
+		},
+	}
+	componentTopoBody, err := proto.Marshal(componentTopoMsg)
+	require.NoError(t, err)
+	componentLr := sl.LogRecords().AppendEmpty()
+	componentLr.Body().SetEmptyBytes().FromRaw(componentTopoBody)
+	componentLr.Attributes().PutStr(stskafkaexporter.KafkaMessageKey, "some-component-key")
+
+	// Topology Relation Record
 	relTypeID := "rel_type_id"
-	topoMsg := &topostream.TopologyStreamMessage{
+	relationTopoMsg := &topostream.TopologyStreamMessage{
 		CollectionTimestamp: ts.UnixMilli(),
 		Payload: &topostream.TopologyStreamMessage_TopologyStreamSnapshotData{
 			TopologyStreamSnapshotData: &topostream.TopologyStreamSnapshotData{
@@ -226,11 +269,11 @@ func TestPushMixedLogs(t *testing.T) {
 			},
 		},
 	}
-	topoBody, err := proto.Marshal(topoMsg)
+	relationTopoBody, err := proto.Marshal(relationTopoMsg)
 	require.NoError(t, err)
-	topoLr := sl.LogRecords().AppendEmpty()
-	topoLr.Body().SetEmptyBytes().FromRaw(topoBody)
-	topoLr.Attributes().PutStr(stskafkaexporter.KafkaMessageKey, "some-key")
+	relationLr := sl.LogRecords().AppendEmpty()
+	relationLr.Body().SetEmptyBytes().FromRaw(relationTopoBody)
+	relationLr.Attributes().PutStr(stskafkaexporter.KafkaMessageKey, "some-relation-key")
 
 	// Regular Log Record
 	regLr := sl.LogRecords().AppendEmpty()
@@ -241,12 +284,37 @@ func TestPushMixedLogs(t *testing.T) {
 	err = exporter.PushLogsData(context.Background(), logs)
 	require.NoError(t, err)
 
-	require.Equal(t, 1, topologyItems)
+	require.Equal(t, 1, componentItems)
+	require.Equal(t, 1, relationItems)
 	require.Equal(t, 1, logItems)
+	require.Equal(t, "test-service", logValues[6]) // ServiceName for regular log
+	require.Equal(t, "This is a regular log", logValues[7])
+
+	// require.Equal(t, componentTopoMsg.CollectionTimestamp, componentValues[0]) // Timestamp
+	require.Equal(t, "urn:test:component", componentValues[1])                // Identifier
+	require.Equal(t, "test-component", componentValues[2])                    // Name
+	require.ElementsMatch(t, []string{"tag1"}, componentValues[3].([]string)) // Tags
+	require.Equal(t, "service", componentValues[4])                           // TypeName
+	require.Equal(t, "type_id", componentValues[5])                           // TypeIdentifier
+	require.Equal(t, "layer_name", componentValues[6])                        // LayerName
+	require.Equal(t, "layer_id", componentValues[7])                          // LayerIdentifier
+	require.Equal(t, "domain_name", componentValues[8])                       // DomainName
+	require.Equal(t, "domain_id", componentValues[9])                         // DomainIdentifier
+	require.ElementsMatch(t, []string{"id1"}, componentValues[10].([]string)) // ComponentIdentifiers
+	require.Equal(t, `{"key":"value"}`, componentValues[11])                  // ResourceDefinition (JSON)
+	require.Equal(t, `{"status":"ok"}`, componentValues[12])                  // StatusData (JSON)
+
+	// require.Equal(t, relationTopoMsg.CollectionTimestamp, relationValues[0])    // Timestamp
+	require.Equal(t, "urn:test:relation", relationValues[1])                    // Identifier
+	require.Equal(t, "test-relation", relationValues[2])                        // Name
+	require.ElementsMatch(t, []string{"rel_tag"}, relationValues[3].([]string)) // Tags
+	require.Equal(t, "uses", relationValues[4])                                 // TypeName
+	require.Equal(t, "rel_type_id", relationValues[5])                          // TypeIdentifier
+	require.Equal(t, "source_id", relationValues[6])                            // SourceIdentifier
+	require.Equal(t, "target_id", relationValues[7])                            // TargetIdentifier
 }
 
 // Below are the helper functions copied from exporter_logs_test.go, adapted for this package
-
 func newTestTopologyLogsExporter(t *testing.T, config *clickhousestsexporter.Config) *clickhousestsexporter.LogsExporter {
 	exporter, err := clickhousestsexporter.NewLogsExporter(zaptest.NewLogger(t), config)
 	require.NoError(t, err)
