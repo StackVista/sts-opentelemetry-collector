@@ -112,51 +112,110 @@ func (e *LogsExporter) Shutdown(_ context.Context) error {
 	return nil
 }
 
+type componentData struct {
+	Timestamp time.Time
+	Component *topostream.TopologyStreamComponent
+}
+
+type relationData struct {
+	Timestamp time.Time
+	Relation  *topostream.TopologyStreamRelation
+}
+
 func (e *LogsExporter) PushLogsData(ctx context.Context, ld plog.Logs) error {
 	start := time.Now()
 
-	err := doWithTx(ctx, e.client, func(tx *sql.Tx) error {
-		var relationStatement *sql.Stmt
-		var componentStatement *sql.Stmt
-		var logStatement *sql.Stmt
+	// var logsToInsert []plog.LogRecord
+	var componentsToInsert []componentData
+	var relationsToInsert []relationData
 
-		if e.cfg.EnableTopology {
-			var err error
-			// relationStatement, err = tx.PrepareContext(ctx, e.insertRelationSQL)
-			// if err != nil {
-			// 	return fmt.Errorf("PrepareContext(relation):%w", err)
-			// }
-			// defer func() { _ = relationStatement.Close() }()
-			componentStatement, err = tx.PrepareContext(ctx, e.insertComponentSQL)
+	e.iterateLogsData(ctx, ld, func(res pcommon.Resource, scopeLogs plog.ScopeLogs, lr plog.LogRecord) error {
+		if _, ok := lr.Attributes().Get(stskafkaexporter.KafkaMessageKey); ok {
+			if e.cfg.EnableTopology {
+				comps, rels, err := e.parseTopologyLogRecord(lr)
+				if err != nil {
+					return err
+				}
+				componentsToInsert = append(componentsToInsert, comps...)
+				relationsToInsert = append(relationsToInsert, rels...)
+			}
+		// } else if e.cfg.EnableLogs {
+		// 	logsToInsert = append(logsToInsert, lr)
+		}
+		return nil
+	})
+
+	// Insert regular logs
+	// if e.cfg.EnableLogs && len(logsToInsert) > 0 {
+	// 	err := doWithTx(ctx, e.client, func(tx *sql.Tx) error {
+	// 		logStatement, err := tx.PrepareContext(ctx, e.insertSQL)
+	// 		if err != nil {
+	// 			return fmt.Errorf("PrepareContext(log):%w", err)
+	// 		}
+	// 		defer func() { _ = logStatement.Close() }()
+
+	// 		for _, lr := range logsToInsert {
+	// 			// TODO: Need resource and scope for regular logs. This needs to be captured during iteration or refactor.
+	// 			// For now, these are mocked or passed as empty.
+	// 			res := pcommon.NewResource()      // Placeholder
+	// 			scopeLogs := plog.NewScopeLogs() // Placeholder
+	// 			if err := e.pushRegularLogRecord(ctx, logStatement, res, scopeLogs, lr); err != nil {
+	// 				return err
+	// 			}
+	// 		}
+	// 		return nil
+	// 	})
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// }
+
+	// Insert components
+	if e.cfg.EnableTopology && len(componentsToInsert) > 0 {
+		err := doWithTx(ctx, e.client, func(tx *sql.Tx) error {
+			componentStatement, err := tx.PrepareContext(ctx, e.insertComponentSQL)
 			if err != nil {
 				return fmt.Errorf("PrepareContext(component):%w", err)
 			}
 			defer func() { _ = componentStatement.Close() }()
-		}
-		if e.cfg.EnableLogs {
-			var err error
-			logStatement, err = tx.PrepareContext(ctx, e.insertSQL)
-			if err != nil {
-				return fmt.Errorf("PrepareContext(log):%w", err)
-			}
-			defer func() { _ = logStatement.Close() }()
-		}
-		return e.iterateLogsData(ctx, ld, func(res pcommon.Resource, scopeLogs plog.ScopeLogs, lr plog.LogRecord) error {
-			if _, ok := lr.Attributes().Get(stskafkaexporter.KafkaMessageKey); ok {
-				if e.cfg.EnableTopology {
-					return e.pushTopologyLogRecord(ctx, componentStatement, relationStatement, lr)
+
+			for _, cd := range componentsToInsert {
+				if err := e.pushComponentLogRecord(ctx, componentStatement, cd.Timestamp, cd.Component); err != nil {
+					return err
 				}
-			} else if e.cfg.EnableLogs {
-				return e.pushRegularLogRecord(ctx, logStatement, res, scopeLogs, lr)
 			}
 			return nil
 		})
-	})
+		if err != nil {
+			return err
+		}
+	}
+
+	// Insert relations
+	if e.cfg.EnableTopology && len(relationsToInsert) > 0 {
+		err := doWithTx(ctx, e.client, func(tx *sql.Tx) error {
+			relationStatement, err := tx.PrepareContext(ctx, e.insertRelationSQL)
+			if err != nil {
+				return fmt.Errorf("PrepareContext(relation):%w", err)
+			}
+			defer func() { _ = relationStatement.Close() }()
+
+			for _, rd := range relationsToInsert {
+				if err := e.pushRelationLogRecord(ctx, relationStatement, rd.Timestamp, rd.Relation); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
 
 	duration := time.Since(start)
 	e.logger.Debug("insert logs", zap.Int("records", ld.LogRecordCount()),
 		zap.String("cost", duration.String()))
-	return err
+	return nil
 }
 
 func (e *LogsExporter) iterateLogsData(ctx context.Context, ld plog.Logs, f func(pcommon.Resource, plog.ScopeLogs, plog.LogRecord) error) error {
@@ -213,42 +272,41 @@ func (e *LogsExporter) pushRegularLogRecord(ctx context.Context, statement *sql.
 	return nil
 }
 
-func (e *LogsExporter) pushTopologyLogRecord(ctx context.Context, componentStatement, relationStatement *sql.Stmt, r plog.LogRecord) error {
+func (e *LogsExporter) parseTopologyLogRecord(r plog.LogRecord) ([]componentData, []relationData, error) {
 	body := r.Body().Bytes().AsRaw()
 	if body == nil {
-		return nil
+		return nil, nil, nil
 	}
 
 	var msg topostream.TopologyStreamMessage
 	if err := proto.Unmarshal(body, &msg); err != nil {
-		return fmt.Errorf("failed to unmarshal topology stream message: %w", err)
+		return nil, nil, fmt.Errorf("failed to unmarshal topology stream message: %w", err)
 	}
 
 	var components []*topostream.TopologyStreamComponent
-	// var relations []*topostream.TopologyStreamRelation
+	var relations []*topostream.TopologyStreamRelation
 
 	switch payload := msg.Payload.(type) {
 	case *topostream.TopologyStreamMessage_TopologyStreamSnapshotData:
 		components = payload.TopologyStreamSnapshotData.GetComponents()
-		// relations = payload.TopologyStreamSnapshotData.GetRelations()
+		relations = payload.TopologyStreamSnapshotData.GetRelations()
 	case *topostream.TopologyStreamMessage_TopologyStreamRepeatElementsData:
 		components = payload.TopologyStreamRepeatElementsData.GetComponents()
-		// relations = payload.TopologyStreamRepeatElementsData.GetRelations()
+		relations = payload.TopologyStreamRepeatElementsData.GetRelations()
 	}
 	timestamp := time.UnixMilli(msg.GetCollectionTimestamp())
 
-	for _, component := range components {
-		if err := e.pushComponentLogRecord(ctx, componentStatement, timestamp, component); err != nil {
-			return err
-		}
+	var compsData []componentData
+	for _, comp := range components {
+		compsData = append(compsData, componentData{Timestamp: timestamp, Component: comp})
 	}
 
-	// for _, relation := range relations {
-	// 	if err := e.pushRelationLogRecord(ctx, relationStatement, timestamp, relation); err != nil {
-	// 		return err
-	// 	}
-	// }
-	return nil
+	var relsData []relationData
+	for _, rel := range relations {
+		relsData = append(relsData, relationData{Timestamp: timestamp, Relation: rel})
+	}
+
+	return compsData, relsData, nil
 }
 
 func (e *LogsExporter) pushComponentLogRecord(ctx context.Context, statement *sql.Stmt, timestamp time.Time, component *topostream.TopologyStreamComponent) error {
