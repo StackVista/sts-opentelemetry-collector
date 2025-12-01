@@ -87,18 +87,24 @@ ORDER BY (Identifier, Hash, FieldName, FieldValue);
 CREATE MATERIALIZED VIEW IF NOT EXISTS %s TO %s
 AS
 -- Component Fields
-SELECT Identifier, Hash, 'type_name' as FieldName, TypeName as FieldValue, Timestamp FROM %s WHERE Type = 'component' AND TypeName != ''
+SELECT Identifier, Hash, 'type_name' as FieldName, TypeName as FieldValue, Timestamp 
+FROM %s WHERE Type = 'component' AND TypeName != ''
 UNION ALL
-SELECT Identifier, Hash, 'layer_name' as FieldName, LayerName as FieldValue, Timestamp FROM %s WHERE Type = 'component' AND LayerName != ''
+SELECT Identifier, Hash, 'layer_name' as FieldName, LayerName as FieldValue, Timestamp 
+FROM %s WHERE Type = 'component' AND LayerName != ''
 UNION ALL
-SELECT Identifier, Hash, 'domain_name' as FieldName, DomainName as FieldValue, Timestamp FROM %s WHERE Type = 'component' AND DomainName != ''
+SELECT Identifier, Hash, 'domain_name' as FieldName, DomainName as FieldValue, Timestamp 
+FROM %s WHERE Type = 'component' AND DomainName != ''
 UNION ALL
-SELECT Identifier, Hash, 'tag' as FieldName, arrayJoin(Tags) as FieldValue, Timestamp FROM %s WHERE Type = 'component' AND length(Tags) > 0
+SELECT Identifier, Hash, 'tag' as FieldName, arrayJoin(Tags) as FieldValue, Timestamp 
+FROM %s WHERE Type = 'component' AND length(Tags) > 0
 UNION ALL
 -- Relation Fields
-SELECT Identifier, Hash, 'type_name' as FieldName, TypeName as FieldValue, Timestamp FROM %s WHERE Type = 'relation' AND TypeName != ''
+SELECT Identifier, Hash, 'type_name' as FieldName, TypeName as FieldValue, Timestamp 
+FROM %s WHERE Type = 'relation' AND TypeName != ''
 UNION ALL
-SELECT Identifier, Hash, 'tag' as FieldName, arrayJoin(Tags) as FieldValue, Timestamp FROM %s WHERE Type = 'relation' AND length(Tags) > 0;
+SELECT Identifier, Hash, 'tag' as FieldName, arrayJoin(Tags) as FieldValue, Timestamp 
+FROM %s WHERE Type = 'relation' AND length(Tags) > 0;
 `
 
 	// language=ClickHouse SQL
@@ -120,16 +126,15 @@ SELECT Identifier, Hash, 'tag' as FieldName, arrayJoin(Tags) as FieldValue, Time
     StatusData,
     -- Relation
     SourceIdentifier,
-    TargetIdentifier,
-    -- Hash
-    Hash
+    TargetIdentifier
 ) VALUES (
     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-    ?, ?, ?, ?, ?, ?, ?,
-    sipHash64(
+    ?, ?, ?, ?, ?, ?,
+        sipHash64(
         (
             Identifier, Type, Name, Tags, TypeName, TypeIdentifier,
-            LayerName, LayerIdentifier, DomainName, DomainIdentifier, ComponentIdentifiers, ResourceDefinition, StatusData,
+            LayerName, LayerIdentifier, DomainName, DomainIdentifier, 
+            ComponentIdentifiers, ResourceDefinition, StatusData,
             SourceIdentifier, TargetIdentifier
         )
     )
@@ -191,7 +196,8 @@ func renderCreateTopologyTimeRangeTableSQL(cfg Config) string {
 }
 
 func renderCreateTopologyTimeRangeMV(cfg Config) string {
-	return fmt.Sprintf(createTopologyTimeRangeMV, cfg.GetTopologyTimeRangeMVName(), cfg.GetTopologyTimeRangeTableName(), cfg.GetTopologyTableName())
+	return fmt.Sprintf(createTopologyTimeRangeMV, cfg.GetTopologyTimeRangeMVName(),
+		cfg.GetTopologyTimeRangeTableName(), cfg.GetTopologyTableName())
 }
 
 func renderCreateTopologyFieldValuesTableSQL(cfg Config) string {
@@ -199,7 +205,10 @@ func renderCreateTopologyFieldValuesTableSQL(cfg Config) string {
 }
 
 func renderCreateTopologyFieldValuesMV(cfg Config) string {
-	return fmt.Sprintf(createTopologyFieldValuesMV, cfg.GetTopologyFieldValuesMVName(), cfg.GetTopologyFieldValuesTableName(), cfg.GetTopologyTableName(), cfg.GetTopologyTableName(), cfg.GetTopologyTableName(), cfg.GetTopologyTableName(), cfg.GetTopologyTableName(), cfg.GetTopologyTableName())
+	return fmt.Sprintf(createTopologyFieldValuesMV, cfg.GetTopologyFieldValuesMVName(),
+		cfg.GetTopologyFieldValuesTableName(), cfg.GetTopologyTableName(),
+		cfg.GetTopologyTableName(), cfg.GetTopologyTableName(), cfg.GetTopologyTableName(),
+		cfg.GetTopologyTableName(), cfg.GetTopologyTableName())
 }
 
 func RenderInsertTopologySQL(cfg Config) string {
