@@ -18,7 +18,7 @@ const (
 CREATE TABLE IF NOT EXISTS %s (
     Timestamp DateTime64(9) CODEC(Delta, ZSTD(1)),
     Identifier String CODEC(ZSTD(1)),
-    Hash UInt64 CODEC(ZSTD(1)),
+    Hash UInt64 DEFAULT sipHash64( Identifier, Name, Tags, TypeName, TypeIdentifier, LayerName, LayerIdentifier, DomainName, DomainIdentifier, ComponentIdentifiers, ResourceDefinition, StatusData ) CODEC(ZSTD(1)),
     Name String CODEC(ZSTD(1)),
     Tags Array(String) CODEC(ZSTD(1)),
     TypeName LowCardinality(String) CODEC(ZSTD(1)),
@@ -41,7 +41,9 @@ SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
 CREATE TABLE IF NOT EXISTS %s (
     Timestamp DateTime64(9) CODEC(Delta, ZSTD(1)),
     Identifier String CODEC(ZSTD(1)),
-    Hash UInt64 CODEC(ZSTD(1)),
+    Hash UInt64 DEFAULT sipHash64(
+			Identifier, Name, Tags, TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier
+		) CODEC(ZSTD(1)),
     Name String CODEC(ZSTD(1)),
     Tags Array(String) CODEC(ZSTD(1)),
     TypeName LowCardinality(String) CODEC(ZSTD(1)),
@@ -115,23 +117,15 @@ SELECT Identifier, Hash, 'tag' as FieldName, arrayJoin(Tags) as FieldValue, Time
 	insertComponentsSQLTemplate = `INSERT INTO %s (
     Timestamp, Identifier, Name, Tags, TypeName, TypeIdentifier,
     LayerName, LayerIdentifier, DomainName, DomainIdentifier, ComponentIdentifiers,
-    ResourceDefinition, StatusData, Hash
+    ResourceDefinition, StatusData
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-    ?, ?, ?, sipHash64(
-        (
-            Identifier, Name, Tags, TypeName, TypeIdentifier,
-            LayerName, LayerIdentifier, DomainName, DomainIdentifier, ComponentIdentifiers,
-            ResourceDefinition, StatusData
-        )
-    )
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )`
 	// language=ClickHouse SQL
 	insertRelationsSQLTemplate = `INSERT INTO %s (
-    Timestamp, Identifier, Name, Tags, TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier, Hash
+    Timestamp, Identifier, Name, Tags, TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?,
-    sipHash64((Identifier, Name, Tags, TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier))
+    ?, ?, ?, ?, ?, ?, ?, ?
 )`
 )
 
