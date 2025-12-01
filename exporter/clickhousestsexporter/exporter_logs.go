@@ -77,6 +77,12 @@ func (e *LogsExporter) Start(ctx context.Context, _ component.Host) error {
 		}
 	}
 
+	if e.cfg.EnableLogs {
+		e.logger.Info("Started logs exporter.")
+	}
+	if e.cfg.EnableTopology {
+		e.logger.Info("Started topology logs exporter.")
+	}
 	return nil
 }
 

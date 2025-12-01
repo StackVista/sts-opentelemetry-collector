@@ -126,7 +126,9 @@ FROM %s WHERE Type = 'relation' AND length(Tags) > 0;
     StatusData,
     -- Relation
     SourceIdentifier,
-    TargetIdentifier
+    TargetIdentifier,
+    -- Hash
+    Hash
 ) VALUES (
     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
     ?, ?, ?, ?, ?, ?,
