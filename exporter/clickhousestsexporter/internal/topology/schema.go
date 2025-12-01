@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter/internal"
 )
@@ -137,7 +138,7 @@ SELECT Identifier, Hash, 'tag' as FieldName, arrayJoin(Tags) as FieldValue, Time
 
 type Config interface {
 	GetTTLDays() uint
-	GetTTL() string
+	GetTTL() time.Duration
 	GetTopologyTableName() string
 	GetTopologyTimeRangeTableName() string
 	GetTopologyFieldValuesTableName() string

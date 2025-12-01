@@ -58,6 +58,11 @@ func TestLoadConfig(t *testing.T) {
 				TracesTableName:    "otel_traces",
 				MetricsTableName:   "otel_metrics",
 				ResourcesTableName: "otel_resources",
+				TopologyTableName: "otel_topology",
+        TopologyTimeRangeTableName: "otel_topology_time_range",
+        TopologyFieldValuesTableName: "otel_topology_field_values",
+        TopologyTimeRangeMVName: "otel_topology_time_range_mv",
+        TopologyFieldValuesMVName: "otel_topology_field_values_mv",
 				TimeoutSettings: exporterhelper.TimeoutConfig{
 					Timeout: 5 * time.Second,
 				},
@@ -79,6 +84,11 @@ func TestLoadConfig(t *testing.T) {
 				}(),
 				CreateResourcesTable: true,
 				CreateTracesTable:    true,
+				CreateLogsTable: true,
+				CreateTopologyTable: true,
+				CreateMetricsTable: true,
+				EnableLogs: true,
+				EnableTopology: true,
 			},
 		},
 	}

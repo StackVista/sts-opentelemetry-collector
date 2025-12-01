@@ -58,6 +58,10 @@ type Config struct {
 	TTL time.Duration `mapstructure:"ttl"`
 	// Create the traces table on startup
 	CreateTracesTable bool `mapstructure:"create_traces_table"`
+	// Create the logs table on startup
+	CreateLogsTable bool `mapstructure:"create_logs_table"`
+	// Create the metrics table on startup
+	CreateMetricsTable bool `mapstructure:"create_metrics_table"`
 	// Create the resources table on startup
 	CreateResourcesTable bool `mapstructure:"create_resources_table"`
 	// Create the topology table on startup
@@ -178,8 +182,8 @@ func (c *Config) GetTTLDays() uint {
 	return c.TTLDays
 }
 
-func (c *Config) GetTTL() string {
-	return c.TTL.String()
+func (c *Config) GetTTL() time.Duration {
+	return c.TTL
 }
 
 func (c *Config) GetTopologyTableName() string {
