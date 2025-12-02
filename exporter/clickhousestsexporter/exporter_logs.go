@@ -305,7 +305,7 @@ func (e *LogsExporter) parseTopologyLogRecord(r plog.LogRecord) ([]componentData
 
 	expiryMs := (int64)(60 * 1000 * 10) // default expiry for snapshots without one
 	if expiryIntervalMs != nil {
-		expiryIntervalMs = *&expiryIntervalMs
+		expiryMs = *expiryIntervalMs
 	}
 
 	compsData := make([]componentData, 0, len(components))
