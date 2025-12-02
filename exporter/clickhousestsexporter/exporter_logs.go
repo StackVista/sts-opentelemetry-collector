@@ -9,7 +9,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"slices"
+	"strings"
 	"time"
 
 	_ "github.com/ClickHouse/clickhouse-go/v2" // For register database driver.
@@ -81,18 +81,6 @@ func (e *LogsExporter) Start(ctx context.Context, _ component.Host) error {
 		if err := topology.CreateRelationsTimeRangeMV(ctx, e.cfg, e.client); err != nil {
 			return fmt.Errorf("failed to create relations time range materialized view: %w", err)
 		}
-		if err := topology.CreateComponentsFieldValuesTable(ctx, e.cfg, e.client); err != nil {
-			return fmt.Errorf("failed to create components field values table: %w", err)
-		}
-		if err := topology.CreateRelationsFieldValuesTable(ctx, e.cfg, e.client); err != nil {
-			return fmt.Errorf("failed to create relations field values table: %w", err)
-		}
-		if err := topology.CreateComponentsFieldValuesMV(ctx, e.cfg, e.client); err != nil {
-			return fmt.Errorf("failed to create components field values materialized view: %w", err)
-		}
-		if err := topology.CreateRelationsFieldValuesMV(ctx, e.cfg, e.client); err != nil {
-			return fmt.Errorf("failed to create relations field values materialized view: %w", err)
-		}
 	}
 
 	if e.cfg.EnableLogs {
@@ -122,14 +110,20 @@ type relationData struct {
 	Relation  *topostream.TopologyStreamRelation
 }
 
+type logsData struct {
+	resource  pcommon.Resource
+	scopeLogs plog.ScopeLogs
+	logRecord plog.LogRecord
+}
+
 func (e *LogsExporter) PushLogsData(ctx context.Context, ld plog.Logs) error {
 	start := time.Now()
 
-	// var logsToInsert []plog.LogRecord
+	var logsToInsert []logsData
 	var componentsToInsert []componentData
 	var relationsToInsert []relationData
 
-	e.iterateLogsData(ctx, ld, func(res pcommon.Resource, scopeLogs plog.ScopeLogs, lr plog.LogRecord) error {
+	err := e.iterateLogsData(ld, func(res pcommon.Resource, scopeLogs plog.ScopeLogs, lr plog.LogRecord) error {
 		if _, ok := lr.Attributes().Get(stskafkaexporter.KafkaMessageKey); ok {
 			if e.cfg.EnableTopology {
 				comps, rels, err := e.parseTopologyLogRecord(lr)
@@ -139,36 +133,41 @@ func (e *LogsExporter) PushLogsData(ctx context.Context, ld plog.Logs) error {
 				componentsToInsert = append(componentsToInsert, comps...)
 				relationsToInsert = append(relationsToInsert, rels...)
 			}
-		// } else if e.cfg.EnableLogs {
-		// 	logsToInsert = append(logsToInsert, lr)
+		} else if e.cfg.EnableLogs {
+			logsData := logsData{
+				resource:  res,
+				scopeLogs: scopeLogs,
+				logRecord: lr,
+			}
+			logsToInsert = append(logsToInsert, logsData)
 		}
 		return nil
 	})
+	if err != nil {
+		e.logger.Error("Failed to iterate over logs data", zap.Error(err))
+		return err
+	}
 
 	// Insert regular logs
-	// if e.cfg.EnableLogs && len(logsToInsert) > 0 {
-	// 	err := doWithTx(ctx, e.client, func(tx *sql.Tx) error {
-	// 		logStatement, err := tx.PrepareContext(ctx, e.insertSQL)
-	// 		if err != nil {
-	// 			return fmt.Errorf("PrepareContext(log):%w", err)
-	// 		}
-	// 		defer func() { _ = logStatement.Close() }()
+	if e.cfg.EnableLogs && len(logsToInsert) > 0 {
+		err := doWithTx(ctx, e.client, func(tx *sql.Tx) error {
+			logStatement, err := tx.PrepareContext(ctx, e.insertSQL)
+			if err != nil {
+				return fmt.Errorf("PrepareContext(log):%w", err)
+			}
+			defer func() { _ = logStatement.Close() }()
 
-	// 		for _, lr := range logsToInsert {
-	// 			// TODO: Need resource and scope for regular logs. This needs to be captured during iteration or refactor.
-	// 			// For now, these are mocked or passed as empty.
-	// 			res := pcommon.NewResource()      // Placeholder
-	// 			scopeLogs := plog.NewScopeLogs() // Placeholder
-	// 			if err := e.pushRegularLogRecord(ctx, logStatement, res, scopeLogs, lr); err != nil {
-	// 				return err
-	// 			}
-	// 		}
-	// 		return nil
-	// 	})
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// }
+			for _, logsData := range logsToInsert {
+				if err := e.pushRegularLogRecord(ctx, logStatement, logsData.resource, logsData.scopeLogs, logsData.logRecord); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
 
 	// Insert components
 	if e.cfg.EnableTopology && len(componentsToInsert) > 0 {
@@ -187,6 +186,7 @@ func (e *LogsExporter) PushLogsData(ctx context.Context, ld plog.Logs) error {
 			return nil
 		})
 		if err != nil {
+			e.logger.Error("Failed to store components", zap.Error(err))
 			return err
 		}
 	}
@@ -208,17 +208,18 @@ func (e *LogsExporter) PushLogsData(ctx context.Context, ld plog.Logs) error {
 			return nil
 		})
 		if err != nil {
+			e.logger.Error("Failed to store relations", zap.Error(err))
 			return err
 		}
 	}
 
 	duration := time.Since(start)
-	e.logger.Debug("insert logs", zap.Int("records", ld.LogRecordCount()),
+	e.logger.Debug("insert logs and topology", zap.Int("records", ld.LogRecordCount()),
 		zap.String("cost", duration.String()))
 	return nil
 }
 
-func (e *LogsExporter) iterateLogsData(ctx context.Context, ld plog.Logs, f func(pcommon.Resource, plog.ScopeLogs, plog.LogRecord) error) error {
+func (e *LogsExporter) iterateLogsData(ld plog.Logs, f func(pcommon.Resource, plog.ScopeLogs, plog.LogRecord) error) error {
 	for i := 0; i < ld.ResourceLogs().Len(); i++ {
 		logs := ld.ResourceLogs().At(i)
 		res := logs.Resource()
@@ -287,6 +288,7 @@ func (e *LogsExporter) parseTopologyLogRecord(r plog.LogRecord) ([]componentData
 	var relations []*topostream.TopologyStreamRelation
 
 	switch payload := msg.Payload.(type) {
+	// TODO: We now ignore the difference between snapshots and repeat elements data.
 	case *topostream.TopologyStreamMessage_TopologyStreamSnapshotData:
 		components = payload.TopologyStreamSnapshotData.GetComponents()
 		relations = payload.TopologyStreamSnapshotData.GetRelations()
@@ -296,12 +298,12 @@ func (e *LogsExporter) parseTopologyLogRecord(r plog.LogRecord) ([]componentData
 	}
 	timestamp := time.UnixMilli(msg.GetCollectionTimestamp())
 
-	var compsData []componentData
+	compsData := make([]componentData, 0, len(components))
 	for _, comp := range components {
 		compsData = append(compsData, componentData{Timestamp: timestamp, Component: comp})
 	}
 
-	var relsData []relationData
+	relsData := make([]relationData, 0, len(relations))
 	for _, rel := range relations {
 		relsData = append(relsData, relationData{Timestamp: timestamp, Relation: rel})
 	}
@@ -318,8 +320,6 @@ func (e *LogsExporter) pushComponentLogRecord(ctx context.Context, statement *sq
 	if err != nil {
 		return fmt.Errorf("ExecContext component: marshal status data:%w", err)
 	}
-	var tags = component.GetTags()
-	slices.Sort(tags)
 
 	_, err = statement.ExecContext(ctx,
 		timestamp,
@@ -327,7 +327,7 @@ func (e *LogsExporter) pushComponentLogRecord(ctx context.Context, statement *sq
 		// for open telemetry data, but this doesn't have to be like that
 		component.GetExternalId(),
 		component.GetName(),
-		tags,
+		topoTagsToMap(component.GetTags()),
 		component.GetTypeName(),
 		component.GetTypeIdentifier(),
 		component.GetLayerName(),
@@ -349,7 +349,7 @@ func (e *LogsExporter) pushRelationLogRecord(ctx context.Context, statement *sql
 		timestamp,
 		relation.GetExternalId(),
 		relation.GetName(),
-		relation.GetTags(),
+		topoTagsToMap(relation.GetTags()),
 		relation.GetTypeName(),
 		relation.GetTypeIdentifier(),
 		relation.GetSourceIdentifier(),
@@ -368,6 +368,29 @@ func attributesToMap(attributes pcommon.Map) map[string]string {
 		return true
 	})
 	return m
+}
+
+func topoTagsToMap(tags []string) map[string]string {
+	tagMap := make(map[string]string)
+
+	for _, tag := range tags {
+		trimmedTag := strings.TrimSpace(tag)
+		if trimmedTag == "" {
+			continue // Skip empty strings
+		}
+
+		parts := strings.SplitN(trimmedTag, ":", 2)
+
+		key := strings.TrimSpace(parts[0])
+		value := ""
+
+		if len(parts) > 1 {
+			value = strings.TrimSpace(parts[1])
+		}
+		tagMap[key] = value
+	}
+
+	return tagMap
 }
 
 const (

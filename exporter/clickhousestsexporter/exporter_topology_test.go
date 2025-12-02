@@ -62,7 +62,7 @@ func TestPushTopologyData(t *testing.T) {
 
 	// Create a topology message
 	ts := time.Now()
-	
+
 	resourceDefStruct, err := structpb.NewStruct(map[string]interface{}{"key": "value"})
 	require.NoError(t, err)
 	statusDataStruct, err := structpb.NewStruct(map[string]interface{}{"status": "ok"})
@@ -91,7 +91,7 @@ func TestPushTopologyData(t *testing.T) {
 						Identifiers:        []string{"id1", "id2"},
 						ResourceDefinition: resourceDefStruct,
 						StatusData:         statusDataStruct,
-						Tags:               []string{"tag1", "tag2"},
+						Tags:               []string{"tag1", "tag2:value"},
 					},
 				},
 			},
@@ -109,18 +109,18 @@ func TestPushTopologyData(t *testing.T) {
 	require.Equal(t, 0, relationItems)
 	require.Equal(t, 0, logItems)
 
-	require.Equal(t, "urn:test:component", componentValues[1])                        // Identifier
-	require.Equal(t, "test-component", componentValues[2])                            // Name
-	require.ElementsMatch(t, []string{"tag1", "tag2"}, componentValues[3].([]string)) // Tags
-	require.Equal(t, "service", componentValues[4])                                   // TypeName
-	require.Equal(t, "type_id", componentValues[5])                                   // TypeIdentifier
-	require.Equal(t, "layer_name", componentValues[6])                                // LayerName
-	require.Equal(t, "layer_id", componentValues[7])                                  // LayerIdentifier
-	require.Equal(t, "domain_name", componentValues[8])                               // DomainName
-	require.Equal(t, "domain_id", componentValues[9])                                 // DomainIdentifier
-	require.ElementsMatch(t, []string{"id1", "id2"}, componentValues[10].([]string))  // ComponentIdentifiers
-	require.Equal(t, `{"key":"value"}`, componentValues[11])                          // ResourceDefinition (JSON)
-	require.Equal(t, `{"status":"ok"}`, componentValues[12])                          // StatusData (JSON)
+	require.Equal(t, "urn:test:component", componentValues[1])                                               // Identifier
+	require.Equal(t, "test-component", componentValues[2])                                                   // Name
+	require.Equal(t, map[string]string{"tag1": "", "tag2": "value"}, componentValues[3].(map[string]string)) // Tags
+	require.Equal(t, "service", componentValues[4])                                                          // TypeName
+	require.Equal(t, "type_id", componentValues[5])                                                          // TypeIdentifier
+	require.Equal(t, "layer_name", componentValues[6])                                                       // LayerName
+	require.Equal(t, "layer_id", componentValues[7])                                                         // LayerIdentifier
+	require.Equal(t, "domain_name", componentValues[8])                                                      // DomainName
+	require.Equal(t, "domain_id", componentValues[9])                                                        // DomainIdentifier
+	require.ElementsMatch(t, []string{"id1", "id2"}, componentValues[10].([]string))                         // ComponentIdentifiers
+	require.Equal(t, `{"key":"value"}`, componentValues[11])                                                 // ResourceDefinition (JSON)
+	require.Equal(t, `{"status":"ok"}`, componentValues[12])                                                 // StatusData (JSON)
 }
 
 func TestPushTopologyData_Disabled(t *testing.T) {
@@ -237,7 +237,7 @@ func TestPushMixedLogs(t *testing.T) {
 						Identifiers:        []string{"id1"},
 						ResourceDefinition: resourceDefStruct,
 						StatusData:         statusDataStruct,
-						Tags:               []string{"tag1"},
+						Tags:               []string{"tag1", "tag2:value"},
 					},
 				},
 			},
@@ -261,7 +261,7 @@ func TestPushMixedLogs(t *testing.T) {
 						Name:             "test-relation",
 						TypeName:         "uses",
 						TypeIdentifier:   &relTypeID,
-						Tags:             []string{"rel_tag"},
+						Tags:             []string{"rel_tag:value"},
 						SourceIdentifier: "source_id",
 						TargetIdentifier: "target_id",
 					},
@@ -290,26 +290,26 @@ func TestPushMixedLogs(t *testing.T) {
 	// require.Equal(t, "test-service", logValues[6]) // ServiceName for regular log
 	// require.Equal(t, "This is a regular log", logValues[7])
 
-	require.Equal(t, "urn:test:component", componentValues[1])                // Identifier
-	require.Equal(t, "test-component", componentValues[2])                    // Name
-	require.ElementsMatch(t, []string{"tag1"}, componentValues[3].([]string)) // Tags
-	require.Equal(t, "service", componentValues[4])                           // TypeName
-	require.Equal(t, "type_id", componentValues[5])                           // TypeIdentifier
-	require.Equal(t, "layer_name", componentValues[6])                        // LayerName
-	require.Equal(t, "layer_id", componentValues[7])                          // LayerIdentifier
-	require.Equal(t, "domain_name", componentValues[8])                       // DomainName
-	require.Equal(t, "domain_id", componentValues[9])                         // DomainIdentifier
-	require.ElementsMatch(t, []string{"id1"}, componentValues[10].([]string)) // ComponentIdentifiers
-	require.Equal(t, `{"key":"value"}`, componentValues[11])                  // ResourceDefinition (JSON)
-	require.Equal(t, `{"status":"ok"}`, componentValues[12])                  // StatusData (JSON)
+	require.Equal(t, "urn:test:component", componentValues[1])                                               // Identifier
+	require.Equal(t, "test-component", componentValues[2])                                                   // Name
+	require.Equal(t, map[string]string{"tag1": "", "tag2": "value"}, componentValues[3].(map[string]string)) // Tags
+	require.Equal(t, "service", componentValues[4])                                                          // TypeName
+	require.Equal(t, "type_id", componentValues[5])                                                          // TypeIdentifier
+	require.Equal(t, "layer_name", componentValues[6])                                                       // LayerName
+	require.Equal(t, "layer_id", componentValues[7])                                                         // LayerIdentifier
+	require.Equal(t, "domain_name", componentValues[8])                                                      // DomainName
+	require.Equal(t, "domain_id", componentValues[9])                                                        // DomainIdentifier
+	require.ElementsMatch(t, []string{"id1"}, componentValues[10].([]string))                                // ComponentIdentifiers
+	require.Equal(t, `{"key":"value"}`, componentValues[11])                                                 // ResourceDefinition (JSON)
+	require.Equal(t, `{"status":"ok"}`, componentValues[12])                                                 // StatusData (JSON)
 
-	require.Equal(t, "urn:test:relation", relationValues[1])                    // Identifier
-	require.Equal(t, "test-relation", relationValues[2])                        // Name
-	require.ElementsMatch(t, []string{"rel_tag"}, relationValues[3].([]string)) // Tags
-	require.Equal(t, "uses", relationValues[4])                                 // TypeName
-	require.Equal(t, "rel_type_id", relationValues[5])                          // TypeIdentifier
-	require.Equal(t, "source_id", relationValues[6])                            // SourceIdentifier
-	require.Equal(t, "target_id", relationValues[7])                            // TargetIdentifier
+	require.Equal(t, "urn:test:relation", relationValues[1])                                       // Identifier
+	require.Equal(t, "test-relation", relationValues[2])                                           // Name
+	require.Equal(t, map[string]string{"rel_tag": "value"}, relationValues[3].(map[string]string)) // Tags
+	require.Equal(t, "uses", relationValues[4])                                                    // TypeName
+	require.Equal(t, "rel_type_id", relationValues[5])                                             // TypeIdentifier
+	require.Equal(t, "source_id", relationValues[6])                                               // SourceIdentifier
+	require.Equal(t, "target_id", relationValues[7])                                               // TargetIdentifier
 }
 
 // Below are the helper functions copied from exporter_logs_test.go, adapted for this package

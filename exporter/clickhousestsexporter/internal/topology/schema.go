@@ -16,11 +16,15 @@ const (
 	// language=ClickHouse SQL
 	createComponentsTableSQL = `
 CREATE TABLE IF NOT EXISTS %s (
-    Timestamp DateTime64(9) CODEC(Delta, ZSTD(1)),
+    LastSeen DateTime64(6) CODEC(Delta, ZSTD(1)),
+		LastSeenHour DateTime DEFAULT toStartOfHour(LastSeen) CODEC(ZSTD(1)),
     Identifier String CODEC(ZSTD(1)),
-    Hash UInt64 DEFAULT cityHash64( Identifier, Name, Tags, TypeName, TypeIdentifier, LayerName, LayerIdentifier, DomainName, DomainIdentifier, ComponentIdentifiers, ResourceDefinition, StatusData ) CODEC(ZSTD(1)),
+    Hash UInt64 DEFAULT cityHash64(
+			Identifier, Name, mapSort(Tags), TypeName, TypeIdentifier, LayerName, LayerIdentifier, 
+			DomainName, DomainIdentifier, ComponentIdentifiers, ResourceDefinition, StatusData ) CODEC(ZSTD(1)
+		),
     Name String CODEC(ZSTD(1)),
-    Tags Array(String) CODEC(ZSTD(1)),
+    Tags Map(LowCardinality(String), String) CODEC(ZSTD(1)),
     TypeName LowCardinality(String) CODEC(ZSTD(1)),
     TypeIdentifier String CODEC(ZSTD(1)),
     LayerName LowCardinality(String) CODEC(ZSTD(1)),
@@ -29,23 +33,28 @@ CREATE TABLE IF NOT EXISTS %s (
     DomainIdentifier String CODEC(ZSTD(1)),
     ComponentIdentifiers Array(String) CODEC(ZSTD(1)),
     ResourceDefinition String CODEC(ZSTD(1)), -- JSON
-    StatusData String CODEC(ZSTD(1))         -- JSON
+    StatusData String CODEC(ZSTD(1)),         -- JSON
+		INDEX idx_name Name TYPE bloom_filter(0.001) GRANULARITY 1,
+		INDEX idx_tags TagsMap TYPE bloom_filter(0.01) GRANULARITY 1,
+		INDEX idx_tags_map_key mapKeys(TagsMap) TYPE bloom_filter(0.01) GRANULARITY 1,
+    INDEX idx__tags_map_value mapValues(TagsMap) TYPE bloom_filter(0.01) GRANULARITY 1,
 ) ENGINE = ReplacingMergeTree()
 %s
 PARTITION BY toDate(Timestamp)
-ORDER BY (Identifier, Hash)
+ORDER BY (Identifier, Hash, LastSeenHour)
 SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
 `
-// language=ClickHouse SQL
+	// language=ClickHouse SQL
 	createRelationsTableSQL = `
 CREATE TABLE IF NOT EXISTS %s (
-    Timestamp DateTime64(9) CODEC(Delta, ZSTD(1)),
+    LastSeen DateTime64(9) CODEC(Delta, ZSTD(1)),
+		LastSeenHour DateTime DEFAULT toStartOfHour(LastSeen) CODEC(ZSTD(1)),
     Identifier String CODEC(ZSTD(1)),
     Hash UInt64 DEFAULT cityHash64(
-			Identifier, Name, Tags, TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier
+			Identifier, Name, mapSort(Tags), TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier
 		) CODEC(ZSTD(1)),
     Name String CODEC(ZSTD(1)),
-    Tags Array(String) CODEC(ZSTD(1)),
+    Tags Map(LowCardinality(String), String) CODEC(ZSTD(1)),
     TypeName LowCardinality(String) CODEC(ZSTD(1)),
     TypeIdentifier String CODEC(ZSTD(1)),
     SourceIdentifier String CODEC(ZSTD(1)),
@@ -53,7 +62,7 @@ CREATE TABLE IF NOT EXISTS %s (
 ) ENGINE = ReplacingMergeTree()
 %s
 PARTITION BY toDate(Timestamp)
-ORDER BY (Identifier, Hash)
+ORDER BY (Identifier, Hash, LastSeenHour)
 SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
 `
 
@@ -62,8 +71,8 @@ SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
 CREATE TABLE IF NOT EXISTS %s (
     Identifier String,
     Hash UInt64,
-    minTimestamp AggregateFunction(min, DateTime64(9)),
-    maxTimestamp AggregateFunction(max, DateTime64(9))
+    minTimestamp AggregateFunction(min, DateTime64(6)),
+    maxTimestamp AggregateFunction(max, DateTime64(6))
 ) ENGINE = AggregatingMergeTree()
 ORDER BY (Identifier, Hash);
 `
@@ -81,41 +90,8 @@ GROUP BY Identifier, Hash;
 `
 
 	// language=ClickHouse SQL
-	createTopologyFieldValuesTableSQL = `
-CREATE TABLE IF NOT EXISTS %s (
-    Identifier String,
-    Hash UInt64,
-    FieldName LowCardinality(String),
-    FieldValue String,
-    Timestamp DateTime64(9)
-) ENGINE = ReplacingMergeTree()
-PARTITION BY toDate(Timestamp)
-ORDER BY (Identifier, Hash, FieldName, FieldValue);
-`
-
-	// language=ClickHouse SQL
-	createComponentsFieldValuesMV = `
-CREATE MATERIALIZED VIEW IF NOT EXISTS %s TO %s
-AS
-SELECT Identifier, Hash, 'type_name' as FieldName, TypeName as FieldValue, Timestamp FROM %s WHERE TypeName != ''
-UNION ALL
-SELECT Identifier, Hash, 'layer_name' as FieldName, LayerName as FieldValue, Timestamp FROM %s WHERE LayerName != ''
-UNION ALL
-SELECT Identifier, Hash, 'domain_name' as FieldName, DomainName as FieldValue, Timestamp FROM %s WHERE DomainName != ''
-UNION ALL
-SELECT Identifier, Hash, 'tag' as FieldName, arrayJoin(Tags) as FieldValue, Timestamp FROM %s WHERE length(Tags) > 0;
-`
-	// language=ClickHouse SQL
-	createRelationsFieldValuesMV = `
-CREATE MATERIALIZED VIEW IF NOT EXISTS %s TO %s
-AS
-SELECT Identifier, Hash, 'type_name' as FieldName, TypeName as FieldValue, Timestamp FROM %s WHERE TypeName != ''
-UNION ALL
-SELECT Identifier, Hash, 'tag' as FieldName, arrayJoin(Tags) as FieldValue, Timestamp FROM %s WHERE length(Tags) > 0;
-`
-	// language=ClickHouse SQL
 	insertComponentsSQLTemplate = `INSERT INTO %s (
-    Timestamp, Identifier, Name, Tags, TypeName, TypeIdentifier,
+    LastSeen, Identifier, Name, Tags, TypeName, TypeIdentifier,
     LayerName, LayerIdentifier, DomainName, DomainIdentifier, ComponentIdentifiers,
     ResourceDefinition, StatusData
 ) VALUES (
@@ -123,7 +99,7 @@ SELECT Identifier, Hash, 'tag' as FieldName, arrayJoin(Tags) as FieldValue, Time
 )`
 	// language=ClickHouse SQL
 	insertRelationsSQLTemplate = `INSERT INTO %s (
-    Timestamp, Identifier, Name, Tags, TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier
+    LastSeen, Identifier, Name, Tags, TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier
 ) VALUES (
     ?, ?, ?, ?, ?, ?, ?, ?
 )`
@@ -156,101 +132,43 @@ type Config interface {
 }
 
 func CreateComponentsTable(ctx context.Context, cfg Config, db *sql.DB) error {
-
 	if _, err := db.ExecContext(ctx, renderCreateComponentsTableSQL(cfg)); err != nil {
-
 		return fmt.Errorf("exec create components table sql: %w", err)
-
 	}
 	return nil
 }
 
 func CreateRelationsTable(ctx context.Context, cfg Config, db *sql.DB) error {
-
 	if _, err := db.ExecContext(ctx, renderCreateRelationsTableSQL(cfg)); err != nil {
-
 		return fmt.Errorf("exec create relations table sql: %w", err)
-
 	}
 	return nil
 }
 
 func CreateComponentsTimeRangeTable(ctx context.Context, cfg Config, db *sql.DB) error {
-
 	if _, err := db.ExecContext(ctx, renderCreateComponentsTimeRangeTableSQL(cfg)); err != nil {
-
 		return fmt.Errorf("exec create components time range table sql: %w", err)
-
 	}
 	return nil
 }
 
 func CreateRelationsTimeRangeTable(ctx context.Context, cfg Config, db *sql.DB) error {
-
 	if _, err := db.ExecContext(ctx, renderCreateRelationsTimeRangeTableSQL(cfg)); err != nil {
-
 		return fmt.Errorf("exec create relations time range table sql: %w", err)
-
 	}
 	return nil
 }
 
 func CreateComponentsTimeRangeMV(ctx context.Context, cfg Config, db *sql.DB) error {
-
 	if _, err := db.ExecContext(ctx, renderCreateComponentsTimeRangeMV(cfg)); err != nil {
-
 		return fmt.Errorf("exec create components time range mv sql: %w", err)
-
 	}
 	return nil
 }
 
 func CreateRelationsTimeRangeMV(ctx context.Context, cfg Config, db *sql.DB) error {
-
 	if _, err := db.ExecContext(ctx, renderCreateRelationsTimeRangeMV(cfg)); err != nil {
-
 		return fmt.Errorf("exec create relations time range mv sql: %w", err)
-
-	}
-	return nil
-}
-
-func CreateComponentsFieldValuesTable(ctx context.Context, cfg Config, db *sql.DB) error {
-
-	if _, err := db.ExecContext(ctx, renderCreateComponentsFieldValuesTableSQL(cfg)); err != nil {
-
-		return fmt.Errorf("exec create components field values table sql: %w", err)
-
-	}
-	return nil
-}
-
-func CreateRelationsFieldValuesTable(ctx context.Context, cfg Config, db *sql.DB) error {
-
-	if _, err := db.ExecContext(ctx, renderCreateRelationsFieldValuesTableSQL(cfg)); err != nil {
-
-		return fmt.Errorf("exec create relations field values table sql: %w", err)
-
-	}
-	return nil
-}
-
-func CreateComponentsFieldValuesMV(ctx context.Context, cfg Config, db *sql.DB) error {
-
-	if _, err := db.ExecContext(ctx, renderCreateComponentsFieldValuesMV(cfg)); err != nil {
-
-		return fmt.Errorf("exec create components field values mv sql: %w", err)
-
-	}
-	return nil
-}
-
-func CreateRelationsFieldValuesMV(ctx context.Context, cfg Config, db *sql.DB) error {
-
-	if _, err := db.ExecContext(ctx, renderCreateRelationsFieldValuesMV(cfg)); err != nil {
-
-		return fmt.Errorf("exec create relations field values mv sql: %w", err)
-
 	}
 	return nil
 }
@@ -283,25 +201,6 @@ func renderCreateComponentsTimeRangeMV(cfg Config) string {
 func renderCreateRelationsTimeRangeMV(cfg Config) string {
 	return fmt.Sprintf(createTopologyTimeRangeMV, cfg.GetRelationsTimeRangeMVName(),
 		cfg.GetRelationsTimeRangeTableName(), cfg.GetRelationsTableName())
-}
-
-func renderCreateComponentsFieldValuesTableSQL(cfg Config) string {
-	return fmt.Sprintf(createTopologyFieldValuesTableSQL, cfg.GetComponentsFieldValuesTableName())
-}
-
-func renderCreateRelationsFieldValuesTableSQL(cfg Config) string {
-	return fmt.Sprintf(createTopologyFieldValuesTableSQL, cfg.GetRelationsFieldValuesTableName())
-}
-
-func renderCreateComponentsFieldValuesMV(cfg Config) string {
-	return fmt.Sprintf(createComponentsFieldValuesMV, cfg.GetComponentsFieldValuesMVName(),
-		cfg.GetComponentsFieldValuesTableName(), cfg.GetComponentsTableName(), cfg.GetComponentsTableName(),
-		cfg.GetComponentsTableName(), cfg.GetComponentsTableName())
-}
-
-func renderCreateRelationsFieldValuesMV(cfg Config) string {
-	return fmt.Sprintf(createRelationsFieldValuesMV, cfg.GetRelationsFieldValuesMVName(),
-		cfg.GetRelationsFieldValuesTableName(), cfg.GetRelationsTableName(), cfg.GetRelationsTableName())
 }
 
 func RenderInsertComponentsSQL(cfg Config) string {

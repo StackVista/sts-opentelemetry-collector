@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -19,106 +20,106 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
-// func TestLogsExporter_New(t *testing.T) {
-// 	type validate func(*testing.T, *clickhousestsexporter.LogsExporter, error)
+func TestLogsExporter_New(t *testing.T) {
+	type validate func(*testing.T, *clickhousestsexporter.LogsExporter, error)
 
-// 	_ = func(t *testing.T, exporter *clickhousestsexporter.LogsExporter, err error) {
-// 		require.NoError(t, err)
-// 		require.NotNil(t, exporter)
-// 	}
+	_ = func(t *testing.T, exporter *clickhousestsexporter.LogsExporter, err error) {
+		require.NoError(t, err)
+		require.NotNil(t, exporter)
+	}
 
-// 	_ = func(want error) validate {
-// 		return func(t *testing.T, exporter *clickhousestsexporter.LogsExporter, err error) {
-// 			require.Nil(t, exporter)
-// 			require.Error(t, err)
-// 			if !errors.Is(err, want) {
-// 				t.Fatalf("Expected error '%v', but got '%v'", want, err)
-// 			}
-// 		}
-// 	}
+	_ = func(want error) validate {
+		return func(t *testing.T, exporter *clickhousestsexporter.LogsExporter, err error) {
+			require.Nil(t, exporter)
+			require.Error(t, err)
+			if !errors.Is(err, want) {
+				t.Fatalf("Expected error '%v', but got '%v'", want, err)
+			}
+		}
+	}
 
-// 	failWithMsg := func(msg string) validate {
-// 		return func(t *testing.T, _ *clickhousestsexporter.LogsExporter, err error) {
-// 			require.Error(t, err)
-// 			require.Contains(t, err.Error(), msg)
-// 		}
-// 	}
+	failWithMsg := func(msg string) validate {
+		return func(t *testing.T, _ *clickhousestsexporter.LogsExporter, err error) {
+			require.Error(t, err)
+			require.Contains(t, err.Error(), msg)
+		}
+	}
 
-// 	tests := map[string]struct {
-// 		config *clickhousestsexporter.Config
-// 		want   validate
-// 	}{
-// 		"no dsn": {
-// 			config: withDefaultConfig(),
-// 			want:   failWithMsg("exec create logs table sql: parse dsn address failed"),
-// 		},
-// 	}
+	tests := map[string]struct {
+		config *clickhousestsexporter.Config
+		want   validate
+	}{
+		"no dsn": {
+			config: withDefaultConfig(),
+			want:   failWithMsg("exec create logs table sql: parse dsn address failed"),
+		},
+	}
 
-// 	for name, test := range tests {
-// 		t.Run(name, func(t *testing.T) {
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
 
-// 			var err error
-// 			exporter, err := clickhousestsexporter.NewLogsExporter(zaptest.NewLogger(t), test.config)
-// 			err = errors.Join(err, err)
+			var err error
+			exporter, err := clickhousestsexporter.NewLogsExporter(zaptest.NewLogger(t), test.config)
+			err = errors.Join(err, err)
 
-// 			if exporter != nil {
-// 				err = errors.Join(err, exporter.Start(context.TODO(), nil))
-// 				defer func() {
-// 					require.NoError(t, exporter.Shutdown(context.TODO()))
-// 				}()
-// 			}
+			if exporter != nil {
+				err = errors.Join(err, exporter.Start(context.TODO(), nil))
+				defer func() {
+					require.NoError(t, exporter.Shutdown(context.TODO()))
+				}()
+			}
 
-// 			test.want(t, exporter, err)
-// 		})
-// 	}
-// }
+			test.want(t, exporter, err)
+		})
+	}
+}
 
-// func TestExporter_pushLogsData(t *testing.T) {
-// 	t.Run("push success", func(t *testing.T) {
-// 		var items int
-// 		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
-// 			t.Logf("%d, values:%+v", items, values)
-// 			if strings.HasPrefix(query, "INSERT") {
-// 				items++
-// 			}
-// 			return nil
-// 		})
+func TestExporter_pushLogsData(t *testing.T) {
+	t.Run("push success", func(t *testing.T) {
+		var items int
+		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
+			t.Logf("%d, values:%+v", items, values)
+			if strings.HasPrefix(query, "INSERT") {
+				items++
+			}
+			return nil
+		})
 
-// 		exporter := newTestLogsExporter(t, defaultEndpoint)
-// 		mustPushLogsData(t, exporter, simpleLogs(1))
-// 		mustPushLogsData(t, exporter, simpleLogs(2))
+		exporter := newTestLogsExporter(t, defaultEndpoint)
+		mustPushLogsData(t, exporter, simpleLogs(1))
+		mustPushLogsData(t, exporter, simpleLogs(2))
 
-// 		require.Equal(t, 3, items)
-// 	})
-// 	t.Run("test check resource metadata", func(t *testing.T) {
-// 		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
-// 			if strings.HasPrefix(query, "INSERT") {
-// 				require.Equal(t, "https://opentelemetry.io/schemas/1.7.0", values[8])
-// 				require.Equal(t, map[string]string{
-// 					"service.name": "test-service",
-// 				}, values[9])
-// 			}
-// 			return nil
-// 		})
-// 		exporter := newTestLogsExporter(t, defaultEndpoint)
-// 		mustPushLogsData(t, exporter, simpleLogs(1))
-// 	})
-// 	t.Run("test check scope metadata", func(t *testing.T) {
-// 		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
-// 			if strings.HasPrefix(query, "INSERT") {
-// 				require.Equal(t, "https://opentelemetry.io/schemas/1.7.0", values[10])
-// 				require.Equal(t, "io.opentelemetry.contrib.clickhouse", values[11])
-// 				require.Equal(t, "1.0.0", values[12])
-// 				require.Equal(t, map[string]string{
-// 					"lib": "clickhouse",
-// 				}, values[13])
-// 			}
-// 			return nil
-// 		})
-// 		exporter := newTestLogsExporter(t, defaultEndpoint)
-// 		mustPushLogsData(t, exporter, simpleLogs(1))
-// 	})
-// }
+		require.Equal(t, 3, items)
+	})
+	t.Run("test check resource metadata", func(t *testing.T) {
+		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
+			if strings.HasPrefix(query, "INSERT") {
+				require.Equal(t, "https://opentelemetry.io/schemas/1.7.0", values[8])
+				require.Equal(t, map[string]string{
+					"service.name": "test-service",
+				}, values[9])
+			}
+			return nil
+		})
+		exporter := newTestLogsExporter(t, defaultEndpoint)
+		mustPushLogsData(t, exporter, simpleLogs(1))
+	})
+	t.Run("test check scope metadata", func(t *testing.T) {
+		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
+			if strings.HasPrefix(query, "INSERT") {
+				require.Equal(t, "https://opentelemetry.io/schemas/1.7.0", values[10])
+				require.Equal(t, "io.opentelemetry.contrib.clickhouse", values[11])
+				require.Equal(t, "1.0.0", values[12])
+				require.Equal(t, map[string]string{
+					"lib": "clickhouse",
+				}, values[13])
+			}
+			return nil
+		})
+		exporter := newTestLogsExporter(t, defaultEndpoint)
+		mustPushLogsData(t, exporter, simpleLogs(1))
+	})
+}
 
 func newTestLogsExporter(t *testing.T, dsn string, fns ...func(*clickhousestsexporter.Config)) *clickhousestsexporter.LogsExporter {
 	exporter, err := clickhousestsexporter.NewLogsExporter(zaptest.NewLogger(t), withTestExporterConfig(t, fns...)(dsn))
