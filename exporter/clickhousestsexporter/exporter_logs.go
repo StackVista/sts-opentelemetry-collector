@@ -101,13 +101,15 @@ func (e *LogsExporter) Shutdown(_ context.Context) error {
 }
 
 type componentData struct {
-	Timestamp time.Time
-	Component *topostream.TopologyStreamComponent
+	Timestamp        time.Time
+	Component        *topostream.TopologyStreamComponent
+	ExpiryIntervalMs int64
 }
 
 type relationData struct {
-	Timestamp time.Time
-	Relation  *topostream.TopologyStreamRelation
+	Timestamp        time.Time
+	Relation         *topostream.TopologyStreamRelation
+	ExpiryIntervalMs int64
 }
 
 type logsData struct {
@@ -179,7 +181,7 @@ func (e *LogsExporter) PushLogsData(ctx context.Context, ld plog.Logs) error {
 			defer func() { _ = componentStatement.Close() }()
 
 			for _, cd := range componentsToInsert {
-				if err := e.pushComponentLogRecord(ctx, componentStatement, cd.Timestamp, cd.Component); err != nil {
+				if err := e.pushComponentLogRecord(ctx, componentStatement, cd); err != nil {
 					return err
 				}
 			}
@@ -201,7 +203,7 @@ func (e *LogsExporter) PushLogsData(ctx context.Context, ld plog.Logs) error {
 			defer func() { _ = relationStatement.Close() }()
 
 			for _, rd := range relationsToInsert {
-				if err := e.pushRelationLogRecord(ctx, relationStatement, rd.Timestamp, rd.Relation); err != nil {
+				if err := e.pushRelationLogRecord(ctx, relationStatement, rd); err != nil {
 					return err
 				}
 			}
@@ -286,57 +288,67 @@ func (e *LogsExporter) parseTopologyLogRecord(r plog.LogRecord) ([]componentData
 
 	var components []*topostream.TopologyStreamComponent
 	var relations []*topostream.TopologyStreamRelation
+	var expiryIntervalMs *int64
 
 	switch payload := msg.Payload.(type) {
 	// TODO: We now ignore the difference between snapshots and repeat elements data.
 	case *topostream.TopologyStreamMessage_TopologyStreamSnapshotData:
+		expiryIntervalMs = payload.TopologyStreamSnapshotData.ExpiryIntervalMs
 		components = payload.TopologyStreamSnapshotData.GetComponents()
 		relations = payload.TopologyStreamSnapshotData.GetRelations()
 	case *topostream.TopologyStreamMessage_TopologyStreamRepeatElementsData:
+		expiryIntervalMs = &payload.TopologyStreamRepeatElementsData.ExpiryIntervalMs
 		components = payload.TopologyStreamRepeatElementsData.GetComponents()
 		relations = payload.TopologyStreamRepeatElementsData.GetRelations()
 	}
 	timestamp := time.UnixMilli(msg.GetCollectionTimestamp())
 
+	expiryMs := (int64)(60 * 1000 * 10) // default expiry for snapshots without one
+	if expiryIntervalMs != nil {
+		expiryIntervalMs = *&expiryIntervalMs
+	}
+
 	compsData := make([]componentData, 0, len(components))
 	for _, comp := range components {
-		compsData = append(compsData, componentData{Timestamp: timestamp, Component: comp})
+		compsData = append(compsData, componentData{Timestamp: timestamp, Component: comp, ExpiryIntervalMs: expiryMs})
 	}
 
 	relsData := make([]relationData, 0, len(relations))
 	for _, rel := range relations {
-		relsData = append(relsData, relationData{Timestamp: timestamp, Relation: rel})
+		relsData = append(relsData, relationData{Timestamp: timestamp, Relation: rel, ExpiryIntervalMs: expiryMs})
 	}
 
 	return compsData, relsData, nil
 }
 
-func (e *LogsExporter) pushComponentLogRecord(ctx context.Context, statement *sql.Stmt, timestamp time.Time, component *topostream.TopologyStreamComponent) error {
-	resourceDefBytes, err := json.Marshal(component.GetResourceDefinition())
+func (e *LogsExporter) pushComponentLogRecord(ctx context.Context, statement *sql.Stmt, c componentData) error {
+	resourceDefBytes, err := json.Marshal(c.Component.GetResourceDefinition())
 	if err != nil {
 		return fmt.Errorf("ExecContext component: marshal resource definition:%w", err)
 	}
-	statusDataBytes, err := json.Marshal(component.GetStatusData())
+	statusDataBytes, err := json.Marshal(c.Component.GetStatusData())
 	if err != nil {
 		return fmt.Errorf("ExecContext component: marshal status data:%w", err)
 	}
 
+	expiresAt := c.Timestamp.Add(time.Duration(c.ExpiryIntervalMs) * time.Millisecond)
 	_, err = statement.ExecContext(ctx,
-		timestamp,
+		c.Timestamp,
 		// TODO: This uses externalId which is the main identifier
 		// for open telemetry data, but this doesn't have to be like that
-		component.GetExternalId(),
-		component.GetName(),
-		topoTagsToMap(component.GetTags()),
-		component.GetTypeName(),
-		component.GetTypeIdentifier(),
-		component.GetLayerName(),
-		component.GetLayerIdentifier(),
-		component.GetDomainName(),
-		component.GetDomainIdentifier(),
-		component.GetIdentifiers(),
+		c.Component.GetExternalId(),
+		c.Component.GetName(),
+		topoTagsToMap(c.Component.GetTags()),
+		c.Component.GetTypeName(),
+		c.Component.GetTypeIdentifier(),
+		c.Component.GetLayerName(),
+		c.Component.GetLayerIdentifier(),
+		c.Component.GetDomainName(),
+		c.Component.GetDomainIdentifier(),
+		c.Component.GetIdentifiers(),
 		string(resourceDefBytes),
 		string(statusDataBytes),
+		expiresAt,
 	)
 	if err != nil {
 		return fmt.Errorf("ExecContext component:%w", err)
@@ -344,16 +356,19 @@ func (e *LogsExporter) pushComponentLogRecord(ctx context.Context, statement *sq
 	return nil
 }
 
-func (e *LogsExporter) pushRelationLogRecord(ctx context.Context, statement *sql.Stmt, timestamp time.Time, relation *topostream.TopologyStreamRelation) error {
+func (e *LogsExporter) pushRelationLogRecord(ctx context.Context, statement *sql.Stmt, r relationData) error {
+	expiresAt := r.Timestamp.Add(time.Duration(r.ExpiryIntervalMs) * time.Millisecond)
+
 	_, err := statement.ExecContext(ctx,
-		timestamp,
-		relation.GetExternalId(),
-		relation.GetName(),
-		topoTagsToMap(relation.GetTags()),
-		relation.GetTypeName(),
-		relation.GetTypeIdentifier(),
-		relation.GetSourceIdentifier(),
-		relation.GetTargetIdentifier(),
+		r.Timestamp,
+		r.Relation.GetExternalId(),
+		r.Relation.GetName(),
+		topoTagsToMap(r.Relation.GetTags()),
+		r.Relation.GetTypeName(),
+		r.Relation.GetTypeIdentifier(),
+		r.Relation.GetSourceIdentifier(),
+		r.Relation.GetTargetIdentifier(),
+		expiresAt,
 	)
 	if err != nil {
 		return fmt.Errorf("ExecContext relation:%w", err)

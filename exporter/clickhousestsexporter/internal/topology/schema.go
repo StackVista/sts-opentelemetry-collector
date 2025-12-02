@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS %s (
     Identifiers Array(String) CODEC(ZSTD(1)),
     ResourceDefinition String CODEC(ZSTD(1)), -- JSON
     StatusData String CODEC(ZSTD(1)),         -- JSON
+		ExpiresAt DateTime64(6) CODEC(Delta, ZSTD(1)),
 		INDEX idx_name Name TYPE bloom_filter(0.001) GRANULARITY 1,
 		INDEX idx_tags_key mapKeys(Tags) TYPE bloom_filter(0.01) GRANULARITY 1,
     INDEX idx_tags_value mapValues(Tags) TYPE bloom_filter(0.01) GRANULARITY 1,
@@ -62,6 +63,7 @@ CREATE TABLE IF NOT EXISTS %s (
     TypeIdentifier String CODEC(ZSTD(1)),
     SourceIdentifier String CODEC(ZSTD(1)),
     TargetIdentifier String CODEC(ZSTD(1)),
+		ExpiresAt DateTime64(6) CODEC(Delta, ZSTD(1)),
 		INDEX idx_name Name TYPE bloom_filter(0.001) GRANULARITY 1,
 		INDEX idx_tags_key mapKeys(Tags) TYPE bloom_filter(0.01) GRANULARITY 1,
     INDEX idx_tags_value mapValues(Tags) TYPE bloom_filter(0.01) GRANULARITY 1,
@@ -102,15 +104,15 @@ GROUP BY Identifier, Hash;
 	insertComponentsSQLTemplate = `INSERT INTO %s (
     LastSeen, Identifier, Name, Tags, TypeName, TypeIdentifier,
     LayerName, LayerIdentifier, DomainName, DomainIdentifier, Identifiers,
-    ResourceDefinition, StatusData
+    ResourceDefinition, StatusData, ExpiresAt
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )`
 	// language=ClickHouse SQL
 	insertRelationsSQLTemplate = `INSERT INTO %s (
-    LastSeen, Identifier, Name, Tags, TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier
+    LastSeen, Identifier, Name, Tags, TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier, ExpiresAt
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?
 )`
 )
 
