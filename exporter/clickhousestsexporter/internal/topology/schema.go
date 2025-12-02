@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS %s (
     Identifier String CODEC(ZSTD(1)),
     Hash UInt64 DEFAULT cityHash64(
 			Identifier, Name, mapSort(Tags), TypeName, TypeIdentifier, LayerName, LayerIdentifier, 
-			DomainName, DomainIdentifier, ComponentIdentifiers, ResourceDefinition, StatusData ) CODEC(ZSTD(1)
+			DomainName, DomainIdentifier, Identifiers, ResourceDefinition, StatusData ) CODEC(ZSTD(1)
 		),
     Name String CODEC(ZSTD(1)),
     Tags Map(LowCardinality(String), String) CODEC(ZSTD(1)),
@@ -31,23 +31,26 @@ CREATE TABLE IF NOT EXISTS %s (
     LayerIdentifier String CODEC(ZSTD(1)),
     DomainName LowCardinality(String) CODEC(ZSTD(1)),
     DomainIdentifier String CODEC(ZSTD(1)),
-    ComponentIdentifiers Array(String) CODEC(ZSTD(1)),
+    Identifiers Array(String) CODEC(ZSTD(1)),
     ResourceDefinition String CODEC(ZSTD(1)), -- JSON
     StatusData String CODEC(ZSTD(1)),         -- JSON
 		INDEX idx_name Name TYPE bloom_filter(0.001) GRANULARITY 1,
-		INDEX idx_tags TagsMap TYPE bloom_filter(0.01) GRANULARITY 1,
-		INDEX idx_tags_map_key mapKeys(TagsMap) TYPE bloom_filter(0.01) GRANULARITY 1,
-    INDEX idx__tags_map_value mapValues(TagsMap) TYPE bloom_filter(0.01) GRANULARITY 1,
-) ENGINE = ReplacingMergeTree()
+		INDEX idx_tags_key mapKeys(Tags) TYPE bloom_filter(0.01) GRANULARITY 1,
+    INDEX idx_tags_value mapValues(Tags) TYPE bloom_filter(0.01) GRANULARITY 1,
+		INDEX idx_type_name TypeName TYPE bloom_filter(0.001) GRANULARITY 1,
+		INDEX idx_layer_name LayerName TYPE bloom_filter(0.001) GRANULARITY 1,
+		INDEX idx__domain_name DomainName TYPE bloom_filter(0.001) GRANULARITY 1,
+		INDEX idx_identifiers Identifiers TYPE bloom_filter(0.001) GRANULARITY 1,
+  ) ENGINE = ReplacingMergeTree()
 %s
-PARTITION BY toDate(Timestamp)
+PARTITION BY toDate(LastSeen)
 ORDER BY (Identifier, Hash, LastSeenHour)
 SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
 `
 	// language=ClickHouse SQL
 	createRelationsTableSQL = `
 CREATE TABLE IF NOT EXISTS %s (
-    LastSeen DateTime64(9) CODEC(Delta, ZSTD(1)),
+    LastSeen DateTime64(6) CODEC(Delta, ZSTD(1)),
 		LastSeenHour DateTime DEFAULT toStartOfHour(LastSeen) CODEC(ZSTD(1)),
     Identifier String CODEC(ZSTD(1)),
     Hash UInt64 DEFAULT cityHash64(
@@ -58,10 +61,16 @@ CREATE TABLE IF NOT EXISTS %s (
     TypeName LowCardinality(String) CODEC(ZSTD(1)),
     TypeIdentifier String CODEC(ZSTD(1)),
     SourceIdentifier String CODEC(ZSTD(1)),
-    TargetIdentifier String CODEC(ZSTD(1))
-) ENGINE = ReplacingMergeTree()
+    TargetIdentifier String CODEC(ZSTD(1)),
+		INDEX idx_name Name TYPE bloom_filter(0.001) GRANULARITY 1,
+		INDEX idx_tags_key mapKeys(Tags) TYPE bloom_filter(0.01) GRANULARITY 1,
+    INDEX idx_tags_value mapValues(Tags) TYPE bloom_filter(0.01) GRANULARITY 1,
+		INDEX idx_type_name TypeName TYPE bloom_filter(0.001) GRANULARITY 1,
+		INDEX idx_source_identifier SourceIdentifier TYPE bloom_filter(0.001) GRANULARITY 1,
+		INDEX idx_target_identifier TargetIdentifier TYPE bloom_filter(0.001) GRANULARITY 1
+	) ENGINE = ReplacingMergeTree()
 %s
-PARTITION BY toDate(Timestamp)
+PARTITION BY toDate(LastSeen)
 ORDER BY (Identifier, Hash, LastSeenHour)
 SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
 `
@@ -83,8 +92,8 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS %s TO %s
 AS SELECT
     Identifier,
     Hash,
-    minState(Timestamp) as minTimestamp,
-    maxState(Timestamp) as maxTimestamp
+    minState(LastSeen) as minTimestamp,
+    maxState(LastSeen) as maxTimestamp
 FROM %s
 GROUP BY Identifier, Hash;
 `
@@ -92,7 +101,7 @@ GROUP BY Identifier, Hash;
 	// language=ClickHouse SQL
 	insertComponentsSQLTemplate = `INSERT INTO %s (
     LastSeen, Identifier, Name, Tags, TypeName, TypeIdentifier,
-    LayerName, LayerIdentifier, DomainName, DomainIdentifier, ComponentIdentifiers,
+    LayerName, LayerIdentifier, DomainName, DomainIdentifier, Identifiers,
     ResourceDefinition, StatusData
 ) VALUES (
     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
@@ -175,13 +184,13 @@ func CreateRelationsTimeRangeMV(ctx context.Context, cfg Config, db *sql.DB) err
 
 func renderCreateComponentsTableSQL(cfg Config) string {
 
-	ttlExpr := internal.GenerateTTLExpr(cfg.GetTTLDays(), cfg.GetTTL(), "Timestamp")
+	ttlExpr := internal.GenerateTTLExpr(cfg.GetTTLDays(), cfg.GetTTL(), "LastSeen")
 	return fmt.Sprintf(createComponentsTableSQL, cfg.GetComponentsTableName(), ttlExpr)
 }
 
 func renderCreateRelationsTableSQL(cfg Config) string {
 
-	ttlExpr := internal.GenerateTTLExpr(cfg.GetTTLDays(), cfg.GetTTL(), "Timestamp")
+	ttlExpr := internal.GenerateTTLExpr(cfg.GetTTLDays(), cfg.GetTTL(), "LastSeen")
 	return fmt.Sprintf(createRelationsTableSQL, cfg.GetRelationsTableName(), ttlExpr)
 }
 
