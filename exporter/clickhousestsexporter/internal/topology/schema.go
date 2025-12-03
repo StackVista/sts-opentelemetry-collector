@@ -95,7 +95,7 @@ AS SELECT
     Identifier,
     Hash,
     minState(LastSeen) as minTimestamp,
-    maxState(LastSeen) as maxTimestamp
+    maxState(ExpiresAt) as maxTimestamp
 FROM %s
 GROUP BY Identifier, Hash;
 `
