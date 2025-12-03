@@ -20,10 +20,11 @@ CREATE TABLE IF NOT EXISTS %s (
 		LastSeenHour DateTime DEFAULT toStartOfHour(LastSeen) CODEC(ZSTD(1)),
     Identifier String CODEC(ZSTD(1)),
     Hash UInt64 DEFAULT cityHash64(
-			Identifier, Name, mapSort(Tags), TypeName, TypeIdentifier, LayerName, LayerIdentifier, 
+			Identifier, Name, Labels, TypeName, TypeIdentifier, LayerName, LayerIdentifier, 
 			DomainName, DomainIdentifier, Identifiers, ResourceDefinition, StatusData ) CODEC(ZSTD(1)
 		),
     Name String CODEC(ZSTD(1)),
+		Labels Array(String) CODEC(ZSTD(1)),
     Tags Map(LowCardinality(String), String) CODEC(ZSTD(1)),
     TypeName LowCardinality(String) CODEC(ZSTD(1)),
     TypeIdentifier String CODEC(ZSTD(1)),
@@ -55,9 +56,10 @@ CREATE TABLE IF NOT EXISTS %s (
 		LastSeenHour DateTime DEFAULT toStartOfHour(LastSeen) CODEC(ZSTD(1)),
     Identifier String CODEC(ZSTD(1)),
     Hash UInt64 DEFAULT cityHash64(
-			Identifier, Name, mapSort(Tags), TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier
+			Identifier, Name, Labels, TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier
 		) CODEC(ZSTD(1)),
     Name String CODEC(ZSTD(1)),
+		Labels Array(String) CODEC(ZSTD(1)),
     Tags Map(LowCardinality(String), String) CODEC(ZSTD(1)),
     TypeName LowCardinality(String) CODEC(ZSTD(1)),
     TypeIdentifier String CODEC(ZSTD(1)),
@@ -102,17 +104,17 @@ GROUP BY Identifier, Hash;
 
 	// language=ClickHouse SQL
 	insertComponentsSQLTemplate = `INSERT INTO %s (
-    LastSeen, Identifier, Name, Tags, TypeName, TypeIdentifier,
+    LastSeen, Identifier, Name, Labels, Tags, TypeName, TypeIdentifier,
     LayerName, LayerIdentifier, DomainName, DomainIdentifier, Identifiers,
     ResourceDefinition, StatusData, ExpiresAt
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )`
 	// language=ClickHouse SQL
 	insertRelationsSQLTemplate = `INSERT INTO %s (
-    LastSeen, Identifier, Name, Tags, TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier, ExpiresAt
+    LastSeen, Identifier, Name, Labels, Tags, TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier, ExpiresAt
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )`
 )
 

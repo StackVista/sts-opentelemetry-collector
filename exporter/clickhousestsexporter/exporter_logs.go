@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -331,6 +332,9 @@ func (e *LogsExporter) pushComponentLogRecord(ctx context.Context, statement *sq
 		return fmt.Errorf("ExecContext component: marshal status data:%w", err)
 	}
 
+	sortedLabels := c.Component.GetTags()
+	slices.Sort(sortedLabels)
+
 	expiresAt := c.Timestamp.Add(time.Duration(c.ExpiryIntervalMs) * time.Millisecond)
 	_, err = statement.ExecContext(ctx,
 		c.Timestamp,
@@ -338,6 +342,7 @@ func (e *LogsExporter) pushComponentLogRecord(ctx context.Context, statement *sq
 		// for open telemetry data, but this doesn't have to be like that
 		c.Component.GetExternalId(),
 		c.Component.GetName(),
+		sortedLabels,
 		topoTagsToMap(c.Component.GetTags()),
 		c.Component.GetTypeName(),
 		c.Component.GetTypeIdentifier(),
@@ -359,10 +364,14 @@ func (e *LogsExporter) pushComponentLogRecord(ctx context.Context, statement *sq
 func (e *LogsExporter) pushRelationLogRecord(ctx context.Context, statement *sql.Stmt, r relationData) error {
 	expiresAt := r.Timestamp.Add(time.Duration(r.ExpiryIntervalMs) * time.Millisecond)
 
+	sortedLabels := r.Relation.GetTags()
+	slices.Sort(sortedLabels)
+
 	_, err := statement.ExecContext(ctx,
 		r.Timestamp,
 		r.Relation.GetExternalId(),
 		r.Relation.GetName(),
+		sortedLabels,
 		topoTagsToMap(r.Relation.GetTags()),
 		r.Relation.GetTypeName(),
 		r.Relation.GetTypeIdentifier(),
