@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS %s (
 		INDEX idx_name Name TYPE bloom_filter(0.001) GRANULARITY 1,
 		INDEX idx_tags_key mapKeys(Tags) TYPE bloom_filter(0.01) GRANULARITY 1,
     INDEX idx_tags_value mapValues(Tags) TYPE bloom_filter(0.01) GRANULARITY 1,
+    INDEX idx_labels Labels TYPE bloom_filter(0.01) GRANULARITY 1,
 		INDEX idx_type_name TypeName TYPE bloom_filter(0.001) GRANULARITY 1,
 		INDEX idx_layer_name LayerName TYPE bloom_filter(0.001) GRANULARITY 1,
 		INDEX idx__domain_name DomainName TYPE bloom_filter(0.001) GRANULARITY 1,
@@ -69,6 +70,7 @@ CREATE TABLE IF NOT EXISTS %s (
 		INDEX idx_name Name TYPE bloom_filter(0.001) GRANULARITY 1,
 		INDEX idx_tags_key mapKeys(Tags) TYPE bloom_filter(0.01) GRANULARITY 1,
     INDEX idx_tags_value mapValues(Tags) TYPE bloom_filter(0.01) GRANULARITY 1,
+    INDEX idx_labels Labels TYPE bloom_filter(0.01) GRANULARITY 1,
 		INDEX idx_type_name TypeName TYPE bloom_filter(0.001) GRANULARITY 1,
 		INDEX idx_source_identifier SourceIdentifier TYPE bloom_filter(0.001) GRANULARITY 1,
 		INDEX idx_target_identifier TargetIdentifier TYPE bloom_filter(0.001) GRANULARITY 1
