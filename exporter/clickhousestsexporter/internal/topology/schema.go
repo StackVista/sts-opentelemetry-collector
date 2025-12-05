@@ -86,8 +86,8 @@ SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
 CREATE TABLE IF NOT EXISTS %s (
     Identifier String,
     Hash UInt64,
-    minTimestamp AggregateFunction(min, DateTime64(6)),
-    maxTimestamp AggregateFunction(max, DateTime64(6))
+    minTimestamp SimpleAggregateFunction(min, DateTime64(6)),
+    maxTimestamp SimpleAggregateFunction(max, DateTime64(6))
 ) ENGINE = AggregatingMergeTree()
 ORDER BY (Identifier, Hash);
 `
@@ -98,8 +98,8 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS %s TO %s
 AS SELECT
     Identifier,
     Hash,
-    minState(LastSeen) as minTimestamp,
-    maxState(ExpiresAt) as maxTimestamp
+    min(LastSeen) as minTimestamp,
+    max(ExpiresAt) as maxTimestamp
 FROM %s
 GROUP BY Identifier, Hash;
 `
