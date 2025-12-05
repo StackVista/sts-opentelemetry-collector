@@ -369,7 +369,6 @@ func (e *LogsExporter) pushRelationLogRecord(ctx context.Context, statement *sql
 
 	_, err := statement.ExecContext(ctx,
 		r.Timestamp,
-		r.Relation.GetExternalId(),
 		r.Relation.GetName(),
 		sortedLabels,
 		topoTagsToMap(r.Relation.GetTags()),

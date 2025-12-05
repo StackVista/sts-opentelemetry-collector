@@ -55,9 +55,8 @@ SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
 CREATE TABLE IF NOT EXISTS %s (
     LastSeen DateTime64(6) CODEC(Delta, ZSTD(1)),
 		LastSeenHour DateTime DEFAULT toStartOfHour(LastSeen) CODEC(ZSTD(1)),
-    Identifier String CODEC(ZSTD(1)),
     Hash UInt64 DEFAULT cityHash64(
-			Identifier, Name, Labels, TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier
+			Name, Labels, TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier
 		) CODEC(ZSTD(1)),
     Name String CODEC(ZSTD(1)),
 		Labels Array(String) CODEC(ZSTD(1)),
@@ -77,7 +76,7 @@ CREATE TABLE IF NOT EXISTS %s (
 	) ENGINE = ReplacingMergeTree()
 %s
 PARTITION BY toDate(LastSeen)
-ORDER BY (Identifier, Hash, LastSeenHour)
+ORDER BY (SourceIdentifier, TargetIdentifier, Hash, LastSeenHour)
 SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
 `
 
@@ -93,6 +92,18 @@ ORDER BY (Identifier, Hash);
 `
 
 	// language=ClickHouse SQL
+	createRelationsTimeRangeTableSQL = `
+CREATE TABLE IF NOT EXISTS %s (
+    SourceIdentifier String,
+    TargetIdentifier String,
+    Hash UInt64,
+    minTimestamp SimpleAggregateFunction(min, DateTime64(6)),
+    maxTimestamp SimpleAggregateFunction(max, DateTime64(6))
+) ENGINE = AggregatingMergeTree()
+ORDER BY (SourceIdentifier, TargetIdentifier, Hash);
+`
+
+	// language=ClickHouse SQL
 	createTopologyTimeRangeMV = `
 CREATE MATERIALIZED VIEW IF NOT EXISTS %s TO %s
 AS SELECT
@@ -105,6 +116,19 @@ GROUP BY Identifier, Hash;
 `
 
 	// language=ClickHouse SQL
+	createRelationsTimeRangeMV = `
+CREATE MATERIALIZED VIEW IF NOT EXISTS %s TO %s
+AS SELECT
+    SourceIdentifier,
+    TargetIdentifier,
+    Hash,
+    min(LastSeen) as minTimestamp,
+    max(ExpiresAt) as maxTimestamp
+FROM %s
+GROUP BY SourceIdentifier, TargetIdentifier, Hash;
+`
+
+	// language=ClickHouse SQL
 	insertComponentsSQLTemplate = `INSERT INTO %s (
     LastSeen, Identifier, Name, Labels, Tags, TypeName, TypeIdentifier,
     LayerName, LayerIdentifier, DomainName, DomainIdentifier, Identifiers,
@@ -114,9 +138,9 @@ GROUP BY Identifier, Hash;
 )`
 	// language=ClickHouse SQL
 	insertRelationsSQLTemplate = `INSERT INTO %s (
-    LastSeen, Identifier, Name, Labels, Tags, TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier, ExpiresAt
+    LastSeen, Name, Labels, Tags, TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier, ExpiresAt
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?
 )`
 )
 
@@ -205,7 +229,7 @@ func renderCreateComponentsTimeRangeTableSQL(cfg Config) string {
 }
 
 func renderCreateRelationsTimeRangeTableSQL(cfg Config) string {
-	return fmt.Sprintf(createTopologyTimeRangeTableSQL, cfg.GetRelationsTimeRangeTableName())
+	return fmt.Sprintf(createRelationsTimeRangeTableSQL, cfg.GetRelationsTimeRangeTableName())
 }
 
 func renderCreateComponentsTimeRangeMV(cfg Config) string {
@@ -214,7 +238,7 @@ func renderCreateComponentsTimeRangeMV(cfg Config) string {
 }
 
 func renderCreateRelationsTimeRangeMV(cfg Config) string {
-	return fmt.Sprintf(createTopologyTimeRangeMV, cfg.GetRelationsTimeRangeMVName(),
+	return fmt.Sprintf(createRelationsTimeRangeMV, cfg.GetRelationsTimeRangeMVName(),
 		cfg.GetRelationsTimeRangeTableName(), cfg.GetRelationsTableName())
 }
 

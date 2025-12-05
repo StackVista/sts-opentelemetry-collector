@@ -305,14 +305,13 @@ func TestPushMixedLogs(t *testing.T) {
 	require.Equal(t, `{"key":"value"}`, componentValues[12])                                                 // ResourceDefinition (JSON)
 	require.Equal(t, `{"status":"ok"}`, componentValues[13])                                                 // StatusData (JSON)
 
-	require.Equal(t, "urn:test:relation", relationValues[1])                                       // Identifier
-	require.Equal(t, "test-relation", relationValues[2])                                           // Name
-	require.Equal(t, []string{"rel_tag:value"}, relationValues[3].([]string))                      // Labels
-	require.Equal(t, map[string]string{"rel_tag": "value"}, relationValues[4].(map[string]string)) // Tags
-	require.Equal(t, "uses", relationValues[5])                                                    // TypeName
-	require.Equal(t, "rel_type_id", relationValues[6])                                             // TypeIdentifier
-	require.Equal(t, "source_id", relationValues[7])                                               // SourceIdentifier
-	require.Equal(t, "target_id", relationValues[8])                                               // TargetIdentifier
+	require.Equal(t, "test-relation", relationValues[1])                                           // Name
+	require.Equal(t, []string{"rel_tag:value"}, relationValues[2].([]string))                      // Labels
+	require.Equal(t, map[string]string{"rel_tag": "value"}, relationValues[3].(map[string]string)) // Tags
+	require.Equal(t, "uses", relationValues[4])                                                    // TypeName
+	require.Equal(t, "rel_type_id", relationValues[5])                                             // TypeIdentifier
+	require.Equal(t, "source_id", relationValues[6])                                               // SourceIdentifier
+	require.Equal(t, "target_id", relationValues[7])                                               // TargetIdentifier
 }
 
 // Below are the helper functions copied from exporter_logs_test.go, adapted for this package
