@@ -11,6 +11,10 @@ clickhousests/full:
   resources_table_name: otel_resources
   create_traces_table: true
   create_resources_table: true
+  create_logs_table: true
+  create_topology_table: true
+  enable_topology: true
+  enable_logs: true
   timeout: 5s
   retry_on_failure:
     enabled: true
