@@ -70,16 +70,16 @@ func (e *LogsExporter) Start(ctx context.Context, _ component.Host) error {
 		if err := topology.CreateRelationsTable(ctx, e.cfg, e.client); err != nil {
 			return fmt.Errorf("failed to create relations table: %w", err)
 		}
-		if err := topology.CreateComponentsTimeRangeTable(ctx, e.cfg, e.client); err != nil {
+		if err := topology.CreateComponentsFirstSeenTable(ctx, e.cfg, e.client); err != nil {
 			return fmt.Errorf("failed to create components time range table: %w", err)
 		}
-		if err := topology.CreateRelationsTimeRangeTable(ctx, e.cfg, e.client); err != nil {
+		if err := topology.CreateRelationsFirstSeenTable(ctx, e.cfg, e.client); err != nil {
 			return fmt.Errorf("failed to create relations time range table: %w", err)
 		}
-		if err := topology.CreateComponentsTimeRangeMV(ctx, e.cfg, e.client); err != nil {
+		if err := topology.CreateComponentsFirstSeenMV(ctx, e.cfg, e.client); err != nil {
 			return fmt.Errorf("failed to create components time range materialized view: %w", err)
 		}
-		if err := topology.CreateRelationsTimeRangeMV(ctx, e.cfg, e.client); err != nil {
+		if err := topology.CreateRelationsFirstSeenMV(ctx, e.cfg, e.client); err != nil {
 			return fmt.Errorf("failed to create relations time range materialized view: %w", err)
 		}
 	}

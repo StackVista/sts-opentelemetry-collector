@@ -16,7 +16,7 @@ const (
 	// language=ClickHouse SQL
 	createComponentsTableSQL = `
 CREATE TABLE IF NOT EXISTS %s (
-    LastSeen DateTime64(6) CODEC(Delta, ZSTD(1)),
+    LastSeen DateTime CODEC(Delta, ZSTD(1)),
 		LastSeenHour DateTime DEFAULT toStartOfHour(LastSeen) CODEC(ZSTD(1)),
     Identifier String CODEC(ZSTD(1)),
     Hash UInt64 DEFAULT cityHash64(
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS %s (
     Identifiers Array(String) CODEC(ZSTD(1)),
     ResourceDefinition String CODEC(ZSTD(1)), -- JSON
     StatusData String CODEC(ZSTD(1)),         -- JSON
-		ExpiresAt DateTime64(6) CODEC(Delta, ZSTD(1)),
+		ExpiresAt DateTime CODEC(Delta, ZSTD(1)),
 		INDEX idx_name Name TYPE bloom_filter(0.001) GRANULARITY 1,
 		INDEX idx_tags_key mapKeys(Tags) TYPE bloom_filter(0.01) GRANULARITY 1,
     INDEX idx_tags_value mapValues(Tags) TYPE bloom_filter(0.01) GRANULARITY 1,
@@ -47,13 +47,13 @@ CREATE TABLE IF NOT EXISTS %s (
   ) ENGINE = ReplacingMergeTree()
 %s
 PARTITION BY toDate(LastSeen)
-ORDER BY (Identifier, Hash, LastSeenHour)
+ORDER BY (TypeName, Identifier, toUnixTimestamp(LastSeenHour), Hash)
 SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
 `
 	// language=ClickHouse SQL
 	createRelationsTableSQL = `
 CREATE TABLE IF NOT EXISTS %s (
-    LastSeen DateTime64(6) CODEC(Delta, ZSTD(1)),
+    LastSeen DateTime CODEC(Delta, ZSTD(1)),
 		LastSeenHour DateTime DEFAULT toStartOfHour(LastSeen) CODEC(ZSTD(1)),
     Hash UInt64 DEFAULT cityHash64(
 			Name, Labels, TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS %s (
     TypeIdentifier String CODEC(ZSTD(1)),
     SourceIdentifier String CODEC(ZSTD(1)),
     TargetIdentifier String CODEC(ZSTD(1)),
-		ExpiresAt DateTime64(6) CODEC(Delta, ZSTD(1)),
+		ExpiresAt DateTime CODEC(Delta, ZSTD(1)),
 		INDEX idx_name Name TYPE bloom_filter(0.001) GRANULARITY 1,
 		INDEX idx_tags_key mapKeys(Tags) TYPE bloom_filter(0.01) GRANULARITY 1,
     INDEX idx_tags_value mapValues(Tags) TYPE bloom_filter(0.01) GRANULARITY 1,
@@ -76,56 +76,53 @@ CREATE TABLE IF NOT EXISTS %s (
 	) ENGINE = ReplacingMergeTree()
 %s
 PARTITION BY toDate(LastSeen)
-ORDER BY (SourceIdentifier, TargetIdentifier, Hash, LastSeenHour)
+ORDER BY (SourceIdentifier, TargetIdentifier, LastSeenHour, Hash)
 SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
 `
 
 	// language=ClickHouse SQL
-	createTopologyTimeRangeTableSQL = `
+	createComponentFirstSeenTableSQL = `
 CREATE TABLE IF NOT EXISTS %s (
-    Identifier String,
-    Hash UInt64,
-    minTimestamp SimpleAggregateFunction(min, DateTime64(6)),
-    maxTimestamp SimpleAggregateFunction(max, DateTime64(6))
-) ENGINE = AggregatingMergeTree()
-ORDER BY (Identifier, Hash);
+	Identifier String,
+	Hash UInt64,
+	FirstSeen DateTime,
+	Version Int32
+) ENGINE = ReplacingMergeTree(Version)
+ORDER BY (Identifier, Hash) SETTINGS index_granularity = 8192;;
 `
 
 	// language=ClickHouse SQL
-	createRelationsTimeRangeTableSQL = `
+	createRelationsFirstSeenTableSQL = `
 CREATE TABLE IF NOT EXISTS %s (
-    SourceIdentifier String,
-    TargetIdentifier String,
-    Hash UInt64,
-    minTimestamp SimpleAggregateFunction(min, DateTime64(6)),
-    maxTimestamp SimpleAggregateFunction(max, DateTime64(6))
-) ENGINE = AggregatingMergeTree()
-ORDER BY (SourceIdentifier, TargetIdentifier, Hash);
+  SourceIdentifier String,
+  TargetIdentifier String,
+  Hash UInt64,
+  FirstSeen DateTime,
+  Version Int32,
+) ENGINE = ReplacingMergeTree(Version)
+ORDER BY (SourceIdentifier, TargetIdentifier, Hash) SETTINGS index_granularity = 8192;
 `
 
 	// language=ClickHouse SQL
-	createTopologyTimeRangeMV = `
+	createComponentFirstSeenMV = `
+CREATE MATERIALIZED VIEW IF NOT EXISTS %s TO %s
+AS SELECT Identifier,
+  Hash,
+  LastSeen as FirstSeen,
+  - toUnixTimestamp(LastSeen) as Version
+FROM %s;
+`
+
+	// language=ClickHouse SQL
+	createRelationsFirstSeenMV = `
 CREATE MATERIALIZED VIEW IF NOT EXISTS %s TO %s
 AS SELECT
-    Identifier,
-    Hash,
-    min(LastSeen) as minTimestamp,
-    max(ExpiresAt) as maxTimestamp
-FROM %s
-GROUP BY Identifier, Hash;
-`
-
-	// language=ClickHouse SQL
-	createRelationsTimeRangeMV = `
-CREATE MATERIALIZED VIEW IF NOT EXISTS %s TO %s
-AS SELECT
-    SourceIdentifier,
-    TargetIdentifier,
-    Hash,
-    min(LastSeen) as minTimestamp,
-    max(ExpiresAt) as maxTimestamp
-FROM %s
-GROUP BY SourceIdentifier, TargetIdentifier, Hash;
+	SourceIdentifier,
+  TargetIdentifier,
+  Hash,
+  LastSeen as FirstSeen,
+  - toUnixTimestamp(LastSeen) as Version
+FROM %s;
 `
 
 	// language=ClickHouse SQL
@@ -153,17 +150,17 @@ type Config interface {
 
 	GetRelationsTableName() string
 
-	GetComponentsTimeRangeTableName() string
+	GetComponentsFirstSeenTableName() string
 
-	GetRelationsTimeRangeTableName() string
+	GetRelationsFirstSeenTableName() string
 
 	GetComponentsFieldValuesTableName() string
 
 	GetRelationsFieldValuesTableName() string
 
-	GetComponentsTimeRangeMVName() string
+	GetComponentsFirstSeenMVName() string
 
-	GetRelationsTimeRangeMVName() string
+	GetRelationsFirstSeenMVName() string
 
 	GetComponentsFieldValuesMVName() string
 
@@ -184,29 +181,29 @@ func CreateRelationsTable(ctx context.Context, cfg Config, db *sql.DB) error {
 	return nil
 }
 
-func CreateComponentsTimeRangeTable(ctx context.Context, cfg Config, db *sql.DB) error {
-	if _, err := db.ExecContext(ctx, renderCreateComponentsTimeRangeTableSQL(cfg)); err != nil {
+func CreateComponentsFirstSeenTable(ctx context.Context, cfg Config, db *sql.DB) error {
+	if _, err := db.ExecContext(ctx, renderCreateComponentsFirstSeenTableSQL(cfg)); err != nil {
 		return fmt.Errorf("exec create components time range table sql: %w", err)
 	}
 	return nil
 }
 
-func CreateRelationsTimeRangeTable(ctx context.Context, cfg Config, db *sql.DB) error {
-	if _, err := db.ExecContext(ctx, renderCreateRelationsTimeRangeTableSQL(cfg)); err != nil {
+func CreateRelationsFirstSeenTable(ctx context.Context, cfg Config, db *sql.DB) error {
+	if _, err := db.ExecContext(ctx, renderCreateRelationsFirstSeenTableSQL(cfg)); err != nil {
 		return fmt.Errorf("exec create relations time range table sql: %w", err)
 	}
 	return nil
 }
 
-func CreateComponentsTimeRangeMV(ctx context.Context, cfg Config, db *sql.DB) error {
-	if _, err := db.ExecContext(ctx, renderCreateComponentsTimeRangeMV(cfg)); err != nil {
+func CreateComponentsFirstSeenMV(ctx context.Context, cfg Config, db *sql.DB) error {
+	if _, err := db.ExecContext(ctx, renderCreateComponentsFirstSeenMV(cfg)); err != nil {
 		return fmt.Errorf("exec create components time range mv sql: %w", err)
 	}
 	return nil
 }
 
-func CreateRelationsTimeRangeMV(ctx context.Context, cfg Config, db *sql.DB) error {
-	if _, err := db.ExecContext(ctx, renderCreateRelationsTimeRangeMV(cfg)); err != nil {
+func CreateRelationsFirstSeenMV(ctx context.Context, cfg Config, db *sql.DB) error {
+	if _, err := db.ExecContext(ctx, renderCreateRelationsFirstSeenMV(cfg)); err != nil {
 		return fmt.Errorf("exec create relations time range mv sql: %w", err)
 	}
 	return nil
@@ -224,22 +221,22 @@ func renderCreateRelationsTableSQL(cfg Config) string {
 	return fmt.Sprintf(createRelationsTableSQL, cfg.GetRelationsTableName(), ttlExpr)
 }
 
-func renderCreateComponentsTimeRangeTableSQL(cfg Config) string {
-	return fmt.Sprintf(createTopologyTimeRangeTableSQL, cfg.GetComponentsTimeRangeTableName())
+func renderCreateComponentsFirstSeenTableSQL(cfg Config) string {
+	return fmt.Sprintf(createComponentFirstSeenTableSQL, cfg.GetComponentsFirstSeenTableName())
 }
 
-func renderCreateRelationsTimeRangeTableSQL(cfg Config) string {
-	return fmt.Sprintf(createRelationsTimeRangeTableSQL, cfg.GetRelationsTimeRangeTableName())
+func renderCreateRelationsFirstSeenTableSQL(cfg Config) string {
+	return fmt.Sprintf(createRelationsFirstSeenTableSQL, cfg.GetRelationsFirstSeenTableName())
 }
 
-func renderCreateComponentsTimeRangeMV(cfg Config) string {
-	return fmt.Sprintf(createTopologyTimeRangeMV, cfg.GetComponentsTimeRangeMVName(),
-		cfg.GetComponentsTimeRangeTableName(), cfg.GetComponentsTableName())
+func renderCreateComponentsFirstSeenMV(cfg Config) string {
+	return fmt.Sprintf(createComponentFirstSeenMV, cfg.GetComponentsFirstSeenMVName(),
+		cfg.GetComponentsFirstSeenTableName(), cfg.GetComponentsTableName())
 }
 
-func renderCreateRelationsTimeRangeMV(cfg Config) string {
-	return fmt.Sprintf(createRelationsTimeRangeMV, cfg.GetRelationsTimeRangeMVName(),
-		cfg.GetRelationsTimeRangeTableName(), cfg.GetRelationsTableName())
+func renderCreateRelationsFirstSeenMV(cfg Config) string {
+	return fmt.Sprintf(createRelationsFirstSeenMV, cfg.GetRelationsFirstSeenMVName(),
+		cfg.GetRelationsFirstSeenTableName(), cfg.GetRelationsTableName())
 }
 
 func RenderInsertComponentsSQL(cfg Config) string {
