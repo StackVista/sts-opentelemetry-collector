@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS %s (
 		INDEX idx_identifiers Identifiers TYPE bloom_filter(0.001) GRANULARITY 1,
   ) ENGINE = ReplacingMergeTree()
 %s
-PARTITION BY toDate(LastSeen)
+PARTITION BY toDate(LastSeenHour)
 ORDER BY (TypeName, Identifier, toUnixTimestamp(LastSeenHour), Hash)
 SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
 `
@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS %s (
 		INDEX idx_target_identifier TargetIdentifier TYPE bloom_filter(0.001) GRANULARITY 1
 	) ENGINE = ReplacingMergeTree()
 %s
-PARTITION BY toDate(LastSeen)
+PARTITION BY toDate(LastSeenHour)
 ORDER BY (SourceIdentifier, TargetIdentifier, LastSeenHour, Hash)
 SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
 `
