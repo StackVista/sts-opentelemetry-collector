@@ -88,7 +88,8 @@ CREATE TABLE IF NOT EXISTS %s (
 	FirstSeen DateTime,
 	Version Int32
 ) ENGINE = ReplacingMergeTree(Version)
-ORDER BY (Identifier, Hash) SETTINGS index_granularity = 8192;;
+PARTITION BY toDate(FirstSeen)
+ORDER BY (Identifier, Hash) SETTINGS index_granularity = 8192;
 `
 
 	// language=ClickHouse SQL
@@ -100,6 +101,7 @@ CREATE TABLE IF NOT EXISTS %s (
   FirstSeen DateTime,
   Version Int32,
 ) ENGINE = ReplacingMergeTree(Version)
+PARTITION BY toDate(FirstSeen)
 ORDER BY (SourceIdentifier, TargetIdentifier, Hash) SETTINGS index_granularity = 8192;
 `
 
