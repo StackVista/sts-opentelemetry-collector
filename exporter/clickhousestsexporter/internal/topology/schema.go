@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS %s (
   ) ENGINE = ReplacingMergeTree()
 %s
 PARTITION BY toDate(LastSeenHour)
-ORDER BY (TypeName, Identifier, toUnixTimestamp(LastSeenHour), Hash)
+ORDER BY (Identifier, toUnixTimestamp(LastSeenHour), Hash)
 SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
 `
 	// language=ClickHouse SQL
