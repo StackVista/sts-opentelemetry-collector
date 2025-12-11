@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
@@ -15,7 +16,7 @@ import (
 )
 
 func TestTraceToOtelTopology_CreateComponentAndRelationMappings(t *testing.T) {
-	env := harness.SetupTopologyTest(t, 1)
+	env := harness.SetupTopologyTest(t, 1, false)
 	defer env.Cleanup()
 
 	env.PublishSettingSnapshots(
@@ -33,8 +34,37 @@ func TestTraceToOtelTopology_CreateComponentAndRelationMappings(t *testing.T) {
 	assertRelations(t, relations)
 }
 
+func TestTraceToOtelTopology_CreateComponentAndRelationMappings_DeduplicationEnabled(t *testing.T) {
+	env := harness.SetupTopologyTest(t, 1, true)
+	defer env.Cleanup()
+
+	env.PublishSettingSnapshots(
+		t,
+		otelComponentMappingSnapshot(otelComponentMappingSpecCheckoutService()),
+		otelRelationMappingSnapshot(otelRelationMappingSpec()),
+	)
+	sendTraces(t, env)
+
+	recs := env.ConsumeTopologyRecords(t, 6)
+	components, relations, errs := harness.ExtractComponentsAndRelations(t, recs)
+	require.Len(t, errs, 0)
+
+	assertComponents(t, components)
+	assertRelations(t, relations)
+
+	// send traces again (same input) - should not produce any new topology records
+	sendTraces(t, env)
+
+	recs, err := env.Kafka.TopologyConsumer.ConsumeTopology(env.Ctx, 6, time.Second*5)
+	require.NoError(t, err)
+	components, relations, errs = harness.ExtractComponentsAndRelations(t, recs)
+	require.Len(t, errs, 0)
+	require.Len(t, components, 0)
+	require.Len(t, relations, 0)
+}
+
 func TestTraceToOtelTopology_UpdateComponentAndRelationMappings(t *testing.T) {
-	env := harness.SetupTopologyTest(t, 1)
+	env := harness.SetupTopologyTest(t, 1, false)
 	defer env.Cleanup()
 
 	// Publish initial settings
@@ -97,7 +127,7 @@ func TestTraceToOtelTopology_UpdateComponentAndRelationMappings(t *testing.T) {
 }
 
 func TestTraceToOtelTopology_ErrorReturnedOnIncorrectMappingConfig(t *testing.T) {
-	env := harness.SetupTopologyTest(t, 1)
+	env := harness.SetupTopologyTest(t, 1, false)
 	defer env.Cleanup()
 
 	component := otelComponentMappingSpecCheckoutService()
@@ -122,7 +152,7 @@ func TestTraceToOtelTopology_ErrorReturnedOnIncorrectMappingConfig(t *testing.T)
 }
 
 func TestTraceToOtelTopology_RemovesMappingsWhenOmittedFromNextSnapshot(t *testing.T) {
-	env := harness.SetupTopologyTest(t, 1)
+	env := harness.SetupTopologyTest(t, 1, false)
 	defer env.Cleanup()
 
 	// Note, the component mappings are somewhat contrived here, but it's to simulate a scenario where two

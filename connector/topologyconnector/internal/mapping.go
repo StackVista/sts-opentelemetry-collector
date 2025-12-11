@@ -174,7 +174,7 @@ func (me *Mapper) ResolveTagMappings(
 				errs = append(
 					errs,
 					newCelEvaluationError(
-						"value for key %q in OtelTagMapping source %q is not a string: %v",
+						"value for Key %q in OtelTagMapping source %q is not a string: %v",
 						key, m.Source.Expression, stringifyErr,
 					),
 				)

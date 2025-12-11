@@ -80,13 +80,16 @@ func newConnectorEnv(t *testing.T, signal settings.OtelInputSignal) *connectorTe
 	logsConsumer := &consumertest.LogsSink{}
 	logger := zaptest.NewLogger(t)
 
-	snapshotManager := NewSnapshotManager(logger, []settings.OtelInputSignal{settings.TRACES, settings.METRICS})
 	celEvaluator, _ := internal.NewCELEvaluator(
 		ctx,
 		metrics.MeteredCacheSettings{
 			Name:          "expression_cache",
 			EnableMetrics: false,
 		},
+	)
+	expressionRefManager := NewExpressionRefManager(logger, celEvaluator)
+	snapshotManager := NewSnapshotManager(
+		logger, []settings.OtelInputSignal{settings.TRACES, settings.METRICS}, expressionRefManager,
 	)
 	mapper := internal.NewMapper(
 		ctx,
@@ -107,7 +110,9 @@ func newConnectorEnv(t *testing.T, signal settings.OtelInputSignal) *connectorTe
 		componenttest.NewNopTelemetrySettings(),
 		logsConsumer,
 		snapshotManager,
+		expressionRefManager,
 		celEvaluator,
+		internal.NewNoopDeduplicator(),
 		mapper,
 		signal,
 	)

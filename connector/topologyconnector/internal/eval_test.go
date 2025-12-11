@@ -8,6 +8,7 @@ import (
 
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"github.com/stretchr/testify/require"
+
 	"go.opentelemetry.io/collector/pdata/ptrace"
 
 	"github.com/stretchr/testify/assert"
@@ -42,6 +43,30 @@ func (f *mockEvalExpressionEvaluator) EvalBooleanExpression(_ settings.OtelBoole
 }
 
 func (f *mockEvalExpressionEvaluator) EvalMapExpression(_ settings.OtelAnyExpression, _ *ExpressionEvalContext) (map[string]any, error) {
+	//nolint:nilnil
+	return nil, nil
+}
+func (f *mockEvalExpressionEvaluator) GetStringExpressionAST(_ settings.OtelStringExpression) (*GetASTResult, error) {
+	//nolint:nilnil
+	return nil, nil
+}
+
+func (f *mockEvalExpressionEvaluator) GetOptionalStringExpressionAST(_ *settings.OtelStringExpression) (*GetASTResult, error) {
+	//nolint:nilnil
+	return nil, nil
+}
+
+func (f *mockEvalExpressionEvaluator) GetBooleanExpressionAST(_ settings.OtelBooleanExpression) (*GetASTResult, error) {
+	//nolint:nilnil
+	return nil, nil
+}
+
+func (f *mockEvalExpressionEvaluator) GetMapExpressionAST(_ settings.OtelAnyExpression) (*GetASTResult, error) {
+	//nolint:nilnil
+	return nil, nil
+}
+
+func (f *mockEvalExpressionEvaluator) GetAnyExpressionAST(_ settings.OtelAnyExpression) (*GetASTResult, error) {
 	//nolint:nilnil
 	return nil, nil
 }

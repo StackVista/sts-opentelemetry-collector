@@ -148,7 +148,7 @@ func TestEvalStringExpression(t *testing.T) {
 			expected: "test",
 		},
 		{
-			name:        "missing attribute key returns error",
+			name:        "missing attribute Key returns error",
 			expr:        `${resource.attributes["not-existing-attr"]}`,
 			errContains: "no such key",
 		},
@@ -198,7 +198,7 @@ func TestEvalStringExpression(t *testing.T) {
 			expected: "good-cart",
 		},
 		{
-			name:     "support key existence checks",
+			name:     "support Key existence checks",
 			expr:     `${'service.name' in resource.attributes ? 'yes' : 'no'}`,
 			expected: "yes",
 		},
@@ -281,7 +281,7 @@ func TestEvalBooleanExpression(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:                "missing attribute key returns error",
+			name:                "missing attribute Key returns error",
 			expr:                `resource.attributes["not-existing-attr"]`,
 			expectErrorContains: "no such key",
 		},
@@ -394,9 +394,9 @@ func TestEvalMapExpression(t *testing.T) {
 		},
 		{
 			name: "Map literal",
-			expr: settings.OtelAnyExpression{Expression: "${{'key': 'value'}}"},
+			expr: settings.OtelAnyExpression{Expression: "${{'Key': 'value'}}"},
 			want: map[string]any{
-				"key": "value",
+				"Key": "value",
 			},
 		},
 		{
@@ -421,7 +421,7 @@ func TestEvalMapExpression(t *testing.T) {
 			name:        "invalid: keys are not strings",
 			expr:        settings.OtelAnyExpression{Expression: "${{true: 'value'}}"},
 			want:        nil,
-			expectError: "cannot convert key of type '*internal.CelEvaluationError' to string: true",
+			expectError: "cannot convert Key of type '*internal.CelEvaluationError' to string: true",
 		},
 		{
 			name:        "unsupported type returns error",
@@ -520,7 +520,7 @@ func TestEvalAnyExpression(t *testing.T) {
 			},
 		},
 		{
-			name:        "missing attribute key returns error",
+			name:        "missing attribute Key returns error",
 			expr:        `${resource.attributes["not-existing-attr"]}`,
 			errContains: "no such key",
 		},
@@ -635,7 +635,7 @@ func TestEvalCacheEvictionBySize(t *testing.T) {
 }
 
 func TestEvalCacheExpiryByTTL(t *testing.T) {
-	// short TTL so entries expire quickly
+	// short CacheTTL so entries expire quickly
 	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 200*time.Millisecond))
 	ctx := makeContext(true, true)
 
@@ -645,7 +645,7 @@ func TestEvalCacheExpiryByTTL(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, eval.cacheSize()) // compiled once
 
-	// wait until the TTL expires
+	// wait until the CacheTTL expires
 	time.Sleep(300 * time.Millisecond)
 
 	_, err = eval.EvalBooleanExpression(expr, &ctx)

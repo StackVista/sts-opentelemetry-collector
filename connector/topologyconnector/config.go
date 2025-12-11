@@ -9,6 +9,7 @@ import (
 )
 
 const (
+	// cache defaults
 	defaultCacheSize = 5000
 	maxCacheSize     = 1000_000
 	minValidTTL      = 100 * time.Nanosecond // to avoid hashicorp/golang-lru ticker panic
@@ -16,9 +17,10 @@ const (
 
 // Config defines the configuration options for topologyconnector.
 type Config struct {
-	ExpressionCacheSettings  CacheSettings `mapstructure:"expression_cache_settings"`
-	TagRegexCacheSettings    CacheSettings `mapstructure:"tag_regex_cache_settings"`
-	TagTemplateCacheSettings CacheSettings `mapstructure:"tag_template_cache_settings"`
+	ExpressionCache  CacheSettings         `mapstructure:"expression_cache_settings"`
+	TagRegexCache    CacheSettings         `mapstructure:"tag_regex_cache_settings"`
+	TagTemplateCache CacheSettings         `mapstructure:"tag_template_cache_settings"`
+	Deduplication    DeduplicationSettings `mapstructure:"deduplication"`
 }
 
 type CacheSettings struct {
@@ -40,6 +42,17 @@ func (c *CacheSettings) ToMetered(
 	}
 }
 
+// DeduplicationSettings controls pre-mapping CacheTTL-aware deduplication.
+type DeduplicationSettings struct {
+	// Enabled toggles deduplication entirely.
+	Enabled bool `mapstructure:"enabled"`
+	// RefreshFraction determines the fraction of CacheTTL under which an already-sent element is considered
+	// "recent" and therefore skipped. For example 0.5 means: if last-sent < CacheTTL/2 ago, skip/suppress.
+	// Acceptable range: 0.1 .. 0.9. If 0, defaults to 0.5.
+	RefreshFraction float64       `mapstructure:"refresh_fraction"`
+	Cache           CacheSettings `mapstructure:"cache"`
+}
+
 func (c *CacheSettings) Validate(cacheName string) error {
 	if c.Size <= 0 {
 		c.Size = defaultCacheSize
@@ -47,7 +60,7 @@ func (c *CacheSettings) Validate(cacheName string) error {
 		return fmt.Errorf("%s.size: must not exceed %d", cacheName, maxCacheSize)
 	}
 
-	// TTL = 0 means "no expiration", so allow it
+	// CacheTTL = 0 means "no expiration", so allow it
 	if c.TTL < 0 {
 		return fmt.Errorf("%s.ttl: must not be negative (0 disables expiration)", cacheName)
 	} else if c.TTL > 0 && c.TTL <= minValidTTL {
@@ -57,14 +70,32 @@ func (c *CacheSettings) Validate(cacheName string) error {
 	return nil
 }
 
+func (d *DeduplicationSettings) Validate() error {
+	// Normalise deduplication refresh fraction
+	if d.RefreshFraction < 0 {
+		d.RefreshFraction = 0.5
+	} else if d.RefreshFraction > 1 {
+		d.RefreshFraction = 1
+	}
+
+	if err := d.Cache.Validate("deduplication_cache"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (cfg *Config) Validate() error {
-	if err := cfg.ExpressionCacheSettings.Validate("expression_cache"); err != nil {
+	if err := cfg.ExpressionCache.Validate("expression_cache"); err != nil {
 		return err
 	}
-	if err := cfg.TagRegexCacheSettings.Validate("tag_regex_cache"); err != nil {
+	if err := cfg.TagRegexCache.Validate("tag_regex_cache"); err != nil {
 		return err
 	}
-	if err := cfg.TagTemplateCacheSettings.Validate("tag_template_cache"); err != nil {
+	if err := cfg.TagTemplateCache.Validate("tag_template_cache"); err != nil {
+		return err
+	}
+	if err := cfg.Deduplication.Validate(); err != nil {
 		return err
 	}
 	return nil

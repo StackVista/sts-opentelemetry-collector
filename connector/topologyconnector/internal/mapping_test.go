@@ -413,9 +413,9 @@ func TestResolveTagMappings(t *testing.T) {
 			want:          map[string]string{},
 			errorContains: "failed to evaluate OtelTagMapping source \"${scope.attributes}\": expected string type, got: map(string, dyn), for expression '${scope.attributes}'",
 		},
-		// cases for group merge mapping and explicit mapping trying to populate the same key
+		// cases for group merge mapping and explicit mapping trying to populate the same Key
 		{
-			name: "explicit mapping overrides merged group key",
+			name: "explicit mapping overrides merged group Key",
 			mappings: []settings.OtelTagMapping{
 				{
 					// Group mapping injects all scope Attributes with pattern
@@ -424,7 +424,7 @@ func TestResolveTagMappings(t *testing.T) {
 					Target:  "otel.${1}",
 				},
 				{
-					// Explicit mapping for one key that would otherwise be produced by the group
+					// Explicit mapping for one Key that would otherwise be produced by the group
 					Source: anyExpr("overridden-value"),
 					Target: "otel.lang",
 				},
@@ -436,7 +436,7 @@ func TestResolveTagMappings(t *testing.T) {
 			},
 		},
 		{
-			name: "merged group mapping does not override explicit key",
+			name: "merged group mapping does not override explicit Key",
 			mappings: []settings.OtelTagMapping{
 				{
 					Source: anyExpr("explicit-value"),

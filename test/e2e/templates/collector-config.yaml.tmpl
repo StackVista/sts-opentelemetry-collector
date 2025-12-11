@@ -12,6 +12,8 @@ receivers:
 
 connectors:
   topology:
+    deduplication:
+      enabled: {{ .DeduplicationEnabled }}
 
 exporters:
   sts_kafka_exporter:
