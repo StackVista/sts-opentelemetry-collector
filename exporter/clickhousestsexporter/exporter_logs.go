@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"strings"
 	"time"
 
 	_ "github.com/ClickHouse/clickhouse-go/v2" // For register database driver.
@@ -343,7 +342,7 @@ func (e *LogsExporter) pushComponentLogRecord(ctx context.Context, statement *sq
 		c.Component.GetExternalId(),
 		c.Component.GetName(),
 		sortedLabels,
-		topoTagsToMap(c.Component.GetTags()),
+		map[string]string{}, // Empty Properties placeholder
 		c.Component.GetTypeName(),
 		c.Component.GetTypeIdentifier(),
 		c.Component.GetLayerName(),
@@ -371,7 +370,6 @@ func (e *LogsExporter) pushRelationLogRecord(ctx context.Context, statement *sql
 		r.Timestamp,
 		r.Relation.GetName(),
 		sortedLabels,
-		topoTagsToMap(r.Relation.GetTags()),
 		r.Relation.GetTypeName(),
 		r.Relation.GetTypeIdentifier(),
 		r.Relation.GetSourceIdentifier(),
@@ -391,29 +389,6 @@ func attributesToMap(attributes pcommon.Map) map[string]string {
 		return true
 	})
 	return m
-}
-
-func topoTagsToMap(tags []string) map[string]string {
-	tagMap := make(map[string]string)
-
-	for _, tag := range tags {
-		trimmedTag := strings.TrimSpace(tag)
-		if trimmedTag == "" {
-			continue // Skip empty strings
-		}
-
-		parts := strings.SplitN(trimmedTag, ":", 2)
-
-		key := strings.TrimSpace(parts[0])
-		value := ""
-
-		if len(parts) > 1 {
-			value = strings.TrimSpace(parts[1])
-		}
-		tagMap[key] = value
-	}
-
-	return tagMap
 }
 
 const (

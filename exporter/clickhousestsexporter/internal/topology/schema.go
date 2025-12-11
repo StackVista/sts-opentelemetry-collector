@@ -20,12 +20,12 @@ CREATE TABLE IF NOT EXISTS %s (
 		LastSeenHour DateTime DEFAULT toStartOfHour(LastSeen) CODEC(ZSTD(1)),
     Identifier String CODEC(ZSTD(1)),
     Hash UInt64 DEFAULT cityHash64(
-			Identifier, Name, Labels, TypeName, TypeIdentifier, LayerName, LayerIdentifier, 
+			Identifier, Name, Labels, mapSort(Properties), TypeName, TypeIdentifier, LayerName, LayerIdentifier,
 			DomainName, DomainIdentifier, Identifiers, ResourceDefinition, StatusData ) CODEC(ZSTD(1)
 		),
     Name String CODEC(ZSTD(1)),
 		Labels Array(String) CODEC(ZSTD(1)),
-    Tags Map(LowCardinality(String), String) CODEC(ZSTD(1)),
+    Properties Map(String, String) CODEC(ZSTD(1)),
     TypeName LowCardinality(String) CODEC(ZSTD(1)),
     TypeIdentifier String CODEC(ZSTD(1)),
     LayerName LowCardinality(String) CODEC(ZSTD(1)),
@@ -37,8 +37,6 @@ CREATE TABLE IF NOT EXISTS %s (
     StatusData String CODEC(ZSTD(1)),         -- JSON
 		ExpiresAt DateTime CODEC(Delta, ZSTD(1)),
 		INDEX idx_name Name TYPE bloom_filter(0.001) GRANULARITY 1,
-		INDEX idx_tags_key mapKeys(Tags) TYPE bloom_filter(0.01) GRANULARITY 1,
-    INDEX idx_tags_value mapValues(Tags) TYPE bloom_filter(0.01) GRANULARITY 1,
     INDEX idx_labels Labels TYPE bloom_filter(0.01) GRANULARITY 1,
 		INDEX idx_type_name TypeName TYPE bloom_filter(0.001) GRANULARITY 1,
 		INDEX idx_layer_name LayerName TYPE bloom_filter(0.001) GRANULARITY 1,
@@ -60,15 +58,12 @@ CREATE TABLE IF NOT EXISTS %s (
 		) CODEC(ZSTD(1)),
     Name String CODEC(ZSTD(1)),
 		Labels Array(String) CODEC(ZSTD(1)),
-    Tags Map(LowCardinality(String), String) CODEC(ZSTD(1)),
     TypeName LowCardinality(String) CODEC(ZSTD(1)),
     TypeIdentifier String CODEC(ZSTD(1)),
     SourceIdentifier String CODEC(ZSTD(1)),
     TargetIdentifier String CODEC(ZSTD(1)),
 		ExpiresAt DateTime CODEC(Delta, ZSTD(1)),
 		INDEX idx_name Name TYPE bloom_filter(0.001) GRANULARITY 1,
-		INDEX idx_tags_key mapKeys(Tags) TYPE bloom_filter(0.01) GRANULARITY 1,
-    INDEX idx_tags_value mapValues(Tags) TYPE bloom_filter(0.01) GRANULARITY 1,
     INDEX idx_labels Labels TYPE bloom_filter(0.01) GRANULARITY 1,
 		INDEX idx_type_name TypeName TYPE bloom_filter(0.001) GRANULARITY 1,
 		INDEX idx_source_identifier SourceIdentifier TYPE bloom_filter(0.001) GRANULARITY 1,
@@ -129,7 +124,7 @@ FROM %s;
 
 	// language=ClickHouse SQL
 	insertComponentsSQLTemplate = `INSERT INTO %s (
-    LastSeen, Identifier, Name, Labels, Tags, TypeName, TypeIdentifier,
+    LastSeen, Identifier, Name, Labels, Properties, TypeName, TypeIdentifier,
     LayerName, LayerIdentifier, DomainName, DomainIdentifier, Identifiers,
     ResourceDefinition, StatusData, ExpiresAt
 ) VALUES (
@@ -137,9 +132,9 @@ FROM %s;
 )`
 	// language=ClickHouse SQL
 	insertRelationsSQLTemplate = `INSERT INTO %s (
-    LastSeen, Name, Labels, Tags, TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier, ExpiresAt
+    LastSeen, Name, Labels, TypeName, TypeIdentifier, SourceIdentifier, TargetIdentifier, ExpiresAt
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?
 )`
 )
 
