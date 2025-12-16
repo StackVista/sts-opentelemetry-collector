@@ -46,9 +46,16 @@ func (c *CacheSettings) ToMetered(
 type DeduplicationSettings struct {
 	// Enabled toggles deduplication entirely.
 	Enabled bool `mapstructure:"enabled"`
-	// RefreshFraction determines the fraction of CacheTTL under which an already-sent element is considered
-	// "recent" and therefore skipped. For example 0.5 means: if last-sent < CacheTTL/2 ago, skip/suppress.
-	// Acceptable range: 0.1 .. 0.9. If 0, defaults to 0.5.
+	// RefreshFraction controls how often a mapping is re-emitted relative to its
+	// configured expiration window (ExpireAfterMs).
+	//
+	// After a mapping has been sent, subsequent invocations are suppressed until
+	// at least (RefreshFraction * ExpireAfterMs) has elapsed since the last send.
+	//
+	// For example, a value of 0.5 means the mapping may be re-sent halfway through
+	// its expiration window; invocations before that are skipped.
+	//
+	// Valid range: 0.1 .. 0.9. A value of 0 is treated as the default (0.5).
 	RefreshFraction float64       `mapstructure:"refresh_fraction"`
 	Cache           CacheSettings `mapstructure:"cache"`
 }
