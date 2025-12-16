@@ -46,6 +46,31 @@ func (f *mockEvalExpressionEvaluator) EvalMapExpression(_ settings.OtelAnyExpres
 	return nil, nil
 }
 
+func (f *mockEvalExpressionEvaluator) GetStringExpressionAST(_ settings.OtelStringExpression) (*GetASTResult, error) {
+	//nolint:nilnil
+	return nil, nil
+}
+
+func (f *mockEvalExpressionEvaluator) GetOptionalStringExpressionAST(_ *settings.OtelStringExpression) (*GetASTResult, error) {
+	//nolint:nilnil
+	return nil, nil
+}
+
+func (f *mockEvalExpressionEvaluator) GetBooleanExpressionAST(_ settings.OtelBooleanExpression) (*GetASTResult, error) {
+	//nolint:nilnil
+	return nil, nil
+}
+
+func (f *mockEvalExpressionEvaluator) GetMapExpressionAST(_ settings.OtelAnyExpression) (*GetASTResult, error) {
+	//nolint:nilnil
+	return nil, nil
+}
+
+func (f *mockEvalExpressionEvaluator) GetAnyExpressionAST(_ settings.OtelAnyExpression) (*GetASTResult, error) {
+	//nolint:nilnil
+	return nil, nil
+}
+
 type pair struct {
 	name, expr string
 }

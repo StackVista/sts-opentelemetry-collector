@@ -36,7 +36,7 @@ func (f *connectorFactory) initSharedState(
 	var err error
 	f.init.Do(func() {
 		eval, e := internal.NewCELEvaluator(
-			ctx, connectorCfg.ExpressionCacheSettings.ToMetered("cel_expression_cache", telemetrySettings),
+			ctx, connectorCfg.ExpressionCache.ToMetered("cel_expression_cache", telemetrySettings),
 		)
 		if e != nil {
 			err = e
@@ -45,8 +45,8 @@ func (f *connectorFactory) initSharedState(
 
 		mapper := internal.NewMapper(
 			ctx,
-			connectorCfg.TagRegexCacheSettings.ToMetered("tag_regex_cache", telemetrySettings),
-			connectorCfg.TagTemplateCacheSettings.ToMetered("tag_template_cache", telemetrySettings),
+			connectorCfg.TagRegexCache.ToMetered("tag_regex_cache", telemetrySettings),
+			connectorCfg.TagTemplateCache.ToMetered("tag_template_cache", telemetrySettings),
 		)
 
 		snapshotManager := NewSnapshotManager(logger, []settings.OtelInputSignal{settings.TRACES, settings.METRICS})
@@ -70,17 +70,26 @@ func NewFactory() connector.Factory {
 
 func createDefaultConfig() component.Config {
 	return &Config{
-		ExpressionCacheSettings: CacheSettings{
+		Deduplication: DeduplicationSettings{
+			Enabled:         true,
+			RefreshFraction: 0.5,
+			Cache: CacheSettings{
+				EnableMetrics: false,
+				Size:          50000,
+				TTL:           15 * time.Minute,
+			},
+		},
+		ExpressionCache: CacheSettings{
 			EnableMetrics: false,
 			Size:          20000,
 			TTL:           15 * time.Minute,
 		},
-		TagRegexCacheSettings: CacheSettings{
+		TagRegexCache: CacheSettings{
 			EnableMetrics: false,
 			Size:          2000,
 			TTL:           15 * time.Minute,
 		},
-		TagTemplateCacheSettings: CacheSettings{
+		TagTemplateCache: CacheSettings{
 			EnableMetrics: false,
 			Size:          2000,
 			TTL:           15 * time.Minute,

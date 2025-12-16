@@ -22,8 +22,6 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
-func ptr[T any](v T) *T { return &v }
-
 func strExpr(s string) settings.OtelStringExpression {
 	return settings.OtelStringExpression{
 		Expression: s,
