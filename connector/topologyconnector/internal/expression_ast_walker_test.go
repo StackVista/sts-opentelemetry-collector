@@ -41,6 +41,27 @@ func TestStringExpressionAstWalker_Walk(t *testing.T) {
 				{Root: "span", Path: []string{"attributes", "http.status_code"}},
 			},
 		},
+		{
+			name: "extract the deepest key in a nested key",
+			expr: `${span.attributes[resource.attributes["http.status_code"]]}`,
+			wantRefs: []internal.Reference{
+				{Root: "resource", Path: []string{"attributes", "http.status_code"}},
+			},
+		},
+		{
+			name: "extract the deepest key in a nested key when using string manipulation functions",
+			expr: `${resource.attributes[scope.name.lowerAscii()]}`,
+			wantRefs: []internal.Reference{
+				{Root: "scope", Path: []string{"name"}},
+			},
+		},
+		{
+			name: "extract references with string manipulation functions",
+			expr: `${scope.name.lowerAscii()}`,
+			wantRefs: []internal.Reference{
+				{Root: "scope", Path: []string{"name"}},
+			},
+		},
 	}
 
 	eval := newTestEvaluator(t)
@@ -66,6 +87,21 @@ func TestBooleanExpressionAstWalker_Walk(t *testing.T) {
 		{
 			name: "simple field equality",
 			expr: `scope.name == "foo"`,
+			wantRefs: []internal.Reference{
+				{Root: "scope", Path: []string{"name"}},
+			},
+		},
+		{
+			name: "simple relation operator",
+			expr: `span.attributes["http.status_code"] < resource.attributes["http.status_code"]`,
+			wantRefs: []internal.Reference{
+				{Root: "span", Path: []string{"attributes", "http.status_code"}},
+				{Root: "resource", Path: []string{"attributes", "http.status_code"}},
+			},
+		},
+		{
+			name: "macro usage",
+			expr: `has(scope.name)`,
 			wantRefs: []internal.Reference{
 				{Root: "scope", Path: []string{"name"}},
 			},
