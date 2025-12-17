@@ -68,6 +68,7 @@ func (f *connectorFactory) initSharedState(
 		)
 		f.mapper = mapper
 		f.snapshotManager = snapshotManager
+		f.expressionRefManager = expressionRefManager
 	})
 	return err
 }

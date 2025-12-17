@@ -107,7 +107,17 @@ func (p *DefaultExpressionRefManager) Current(
 ) map[string]*types.ExpressionRefSummary {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	return p.expressionRefSummaries[signal]
+
+	src := p.expressionRefSummaries[signal]
+	if src == nil {
+		return nil
+	}
+
+	dst := make(map[string]*types.ExpressionRefSummary, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
 }
 
 func (p *DefaultExpressionRefManager) collectRefsForComponent(

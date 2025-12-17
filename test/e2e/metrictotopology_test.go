@@ -14,7 +14,7 @@ import (
 )
 
 func TestMetricToOtelTopology_CreateComponentAndRelationMappings(t *testing.T) {
-	env := harness.SetupTopologyTest(t, 1)
+	env := harness.SetupTopologyTest(t, 1, false)
 	defer env.Cleanup()
 
 	env.PublishSettingSnapshots(
@@ -36,7 +36,7 @@ func TestMetricToOtelTopology_CreateComponentAndRelationMappings(t *testing.T) {
 }
 
 func TestMetricToOtelTopology_UpdateComponentAndRelationMappings(t *testing.T) {
-	env := harness.SetupTopologyTest(t, 1)
+	env := harness.SetupTopologyTest(t, 1, false)
 	defer env.Cleanup()
 
 	// Publish initial settings
@@ -103,7 +103,7 @@ func TestMetricToOtelTopology_UpdateComponentAndRelationMappings(t *testing.T) {
 }
 
 func TestMetricToOtelTopology_ErrorReturnedOnIncorrectMappingConfig(t *testing.T) {
-	env := harness.SetupTopologyTest(t, 1)
+	env := harness.SetupTopologyTest(t, 1, false)
 	defer env.Cleanup()
 
 	component := otelComponentMappingSpecForService()
@@ -128,7 +128,7 @@ func TestMetricToOtelTopology_ErrorReturnedOnIncorrectMappingConfig(t *testing.T
 }
 
 func TestMetricToOtelTopology_RemovesMappingsWhenOmittedFromNextSnapshot(t *testing.T) {
-	env := harness.SetupTopologyTest(t, 1)
+	env := harness.SetupTopologyTest(t, 1, false)
 	defer env.Cleanup()
 
 	env.PublishSettingSnapshots(
