@@ -21,10 +21,12 @@ var (
 )
 
 type connectorFactory struct {
-	celEvaluator    *internal.CelEvaluator
-	mapper          *internal.Mapper
-	snapshotManager *SnapshotManager
-	init            sync.Once
+	celEvaluator         *internal.CelEvaluator
+	mapper               *internal.Mapper
+	deduplicator         internal.Deduplicator
+	snapshotManager      *SnapshotManager
+	expressionRefManager ExpressionRefManager
+	init                 sync.Once
 }
 
 func (f *connectorFactory) initSharedState(
@@ -35,7 +37,7 @@ func (f *connectorFactory) initSharedState(
 ) error {
 	var err error
 	f.init.Do(func() {
-		eval, e := internal.NewCELEvaluator(
+		evaluator, e := internal.NewCELEvaluator(
 			ctx, connectorCfg.ExpressionCache.ToMetered("cel_expression_cache", telemetrySettings),
 		)
 		if e != nil {
@@ -49,9 +51,21 @@ func (f *connectorFactory) initSharedState(
 			connectorCfg.TagTemplateCache.ToMetered("tag_template_cache", telemetrySettings),
 		)
 
-		snapshotManager := NewSnapshotManager(logger, []settings.OtelInputSignal{settings.TRACES, settings.METRICS})
+		expressionRefManager := NewExpressionRefManager(logger, evaluator)
+		snapshotManager := NewSnapshotManager(
+			logger, []settings.OtelInputSignal{settings.TRACES, settings.METRICS}, expressionRefManager,
+		)
 
-		f.celEvaluator = eval
+		f.celEvaluator = evaluator
+		f.deduplicator = internal.NewTopologyDeduplicator(
+			ctx,
+			logger,
+			internal.DeduplicationConfig{
+				Enabled:         connectorCfg.Deduplication.Enabled,
+				RefreshFraction: connectorCfg.Deduplication.RefreshFraction,
+				CacheConfig:     connectorCfg.Deduplication.Cache.ToMetered("deduplication_cache", telemetrySettings),
+			},
+		)
 		f.mapper = mapper
 		f.snapshotManager = snapshotManager
 	})
@@ -119,7 +133,9 @@ func (f *connectorFactory) createTracesToLogsConnector(
 		params.TelemetrySettings,
 		nextConsumer,
 		f.snapshotManager,
+		f.expressionRefManager,
 		f.celEvaluator,
+		f.deduplicator,
 		f.mapper,
 		settings.TRACES,
 	), nil
@@ -147,7 +163,9 @@ func (f *connectorFactory) createMetricsToLogsConnector(
 		params.TelemetrySettings,
 		nextConsumer,
 		f.snapshotManager,
+		f.expressionRefManager,
 		f.celEvaluator,
+		f.deduplicator,
 		f.mapper,
 		settings.METRICS,
 	), nil

@@ -29,6 +29,8 @@ type SnapshotManager struct {
 	// lifecycle safety
 	started  bool
 	refCount int // how many connectors are currently using this instance
+
+	observers []SnapshotUpdateListener
 }
 
 type onRemovalsFunc = func(
@@ -37,12 +39,27 @@ type onRemovalsFunc = func(
 	relationMappings []stsSettingsModel.OtelRelationMapping,
 )
 
-func NewSnapshotManager(logger *zap.Logger, supportedSignals []stsSettingsModel.OtelInputSignal) *SnapshotManager {
+// SnapshotUpdateListener is notified when mapping snapshots change. Implementors
+// can precompute derived data (e.g., expression reference summaries) asynchronously.
+type SnapshotUpdateListener interface {
+	Update(
+		signals []stsSettingsModel.OtelInputSignal,
+		componentMappings map[stsSettingsModel.OtelInputSignal][]stsSettingsModel.OtelComponentMapping,
+		relationMappings map[stsSettingsModel.OtelInputSignal][]stsSettingsModel.OtelRelationMapping,
+	)
+}
+
+func NewSnapshotManager(
+	logger *zap.Logger,
+	supportedSignals []stsSettingsModel.OtelInputSignal,
+	observers ...SnapshotUpdateListener,
+) *SnapshotManager {
 	return &SnapshotManager{
 		logger:            logger,
 		supportedSignals:  supportedSignals,
 		componentMappings: make(map[stsSettingsModel.OtelInputSignal][]stsSettingsModel.OtelComponentMapping),
 		relationMappings:  make(map[stsSettingsModel.OtelInputSignal][]stsSettingsModel.OtelRelationMapping),
+		observers:         observers,
 	}
 }
 
@@ -143,7 +160,6 @@ func (s *SnapshotManager) Update(
 	onRemovals onRemovalsFunc,
 ) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	prevComponents := flattenMappings(s.componentMappings)
 	prevRelations := flattenMappings(s.relationMappings)
@@ -159,8 +175,29 @@ func (s *SnapshotManager) Update(
 		s.relationMappings[signal] = filterForSignal(newRelationMappings, signal)
 	}
 
+	// Copy current state needed for async ref precomputation
+	observersCopy := append([]SnapshotUpdateListener(nil), s.observers...)
+	signalsCopy := append([]stsSettingsModel.OtelInputSignal(nil), s.supportedSignals...)
+	componentMappingsCopy := make(map[stsSettingsModel.OtelInputSignal][]stsSettingsModel.OtelComponentMapping)
+	relationMappingsCopy := make(map[stsSettingsModel.OtelInputSignal][]stsSettingsModel.OtelRelationMapping)
+	for _, sig := range signalsCopy {
+		componentMappingsCopy[sig] = append([]stsSettingsModel.OtelComponentMapping(nil), s.componentMappings[sig]...)
+		relationMappingsCopy[sig] = append([]stsSettingsModel.OtelRelationMapping(nil), s.relationMappings[sig]...)
+	}
+
 	if len(change.RemovedComponentMappings) > 0 || len(change.RemovedRelationMappings) > 0 {
 		onRemovals(ctx, change.RemovedComponentMappings, change.RemovedRelationMappings)
+	}
+
+	s.mu.Unlock()
+
+	// Notify observers asynchronously so we don't block the snapshot update path.
+	for _, obs := range observersCopy {
+		o := obs
+		// TODO: If the number of observers (atm, only ExpressionRefManager is a subscriber) or update frequency grows,
+		// we should consider serializing (with a buffered worker) updates per observer to avoid a flurry of goroutines.
+		// Leaving it as-is for now to prevent pre-maturely optimising.
+		go o.Update(signalsCopy, componentMappingsCopy, relationMappingsCopy)
 	}
 }
 
