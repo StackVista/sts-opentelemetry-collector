@@ -1,7 +1,7 @@
 package topologyconnector
 
 import (
-	"slices"
+	"sort"
 	"sync"
 
 	"github.com/google/cel-go/cel"
@@ -10,8 +10,6 @@ import (
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"go.uber.org/zap"
 )
-
-const attributeMap = "attributes"
 
 // ExpressionRefManager should perform best-effort extraction of referenced variables
 // and attribute keys from mapping expressions.
@@ -145,7 +143,7 @@ func (p *DefaultExpressionRefManager) collectRefsForComponentFieldMapping(
 	agg *expressionRefAggregator,
 	componentFieldMapping *stsSettingsModel.OtelComponentMappingFieldMapping,
 ) {
-	if componentFieldMapping != nil && componentFieldMapping.AdditionalIdentifiers != nil {
+	if componentFieldMapping != nil {
 		if componentFieldMapping.AdditionalIdentifiers != nil {
 			for _, e := range *componentFieldMapping.AdditionalIdentifiers {
 				agg.walkString(p.evaluator, e)
@@ -187,24 +185,44 @@ func (p *DefaultExpressionRefManager) collectRefsForRelation(
 
 // expressionRefAggregator accumulates references using the ExpressionAstWalker and reduces them
 // to ExpressionRefSummary.
+
+type entityFieldSelector struct {
+	// attributes["*"] – hash the entire attribute map
+	allAttributes bool
+
+	// attributes["key"]
+	attributeKeys map[string]struct{}
+
+	// top-level fields (e.g. span.name, metric.unit)
+	fieldKeys map[string]struct{}
+}
+
 type expressionRefAggregator struct {
 	logger *zap.Logger
 
-	datapointAttrSet map[string]struct{}
-	spanAttrSet      map[string]struct{}
-	metricAttrSet    map[string]struct{}
+	datapoint entityFieldSelector
+	span      entityFieldSelector
+	metric    entityFieldSelector
 
-	// track if any valid AST was processed
 	hasValidExpr bool
 }
 
 func newExpressionRefAggregator(logger *zap.Logger) *expressionRefAggregator {
 	return &expressionRefAggregator{
-		logger:           logger,
-		datapointAttrSet: make(map[string]struct{}),
-		spanAttrSet:      make(map[string]struct{}),
-		metricAttrSet:    make(map[string]struct{}),
-		hasValidExpr:     false,
+		logger: logger,
+		datapoint: entityFieldSelector{
+			attributeKeys: make(map[string]struct{}),
+			fieldKeys:     make(map[string]struct{}),
+		},
+		span: entityFieldSelector{
+			attributeKeys: make(map[string]struct{}),
+			fieldKeys:     make(map[string]struct{}),
+		},
+		metric: entityFieldSelector{
+			attributeKeys: make(map[string]struct{}),
+			fieldKeys:     make(map[string]struct{}),
+		},
+		hasValidExpr: false,
 	}
 }
 
@@ -243,7 +261,7 @@ func (r *expressionRefAggregator) walkAny(
 }
 
 // walkAST processes a checked CEL AST and accumulates attribute references
-// into the corresponding sets (datapointAttrSet, spanAttrSet, metricAttrSet).
+// into the corresponding sets (datapointAttrFilter, spanAttrFilter, metricAttrFilter).
 //
 // Current behavior:
 //   - "datapoint" root: adds keys from datapoint.attributes
@@ -262,26 +280,22 @@ func (r *expressionRefAggregator) walkAny(
 func (r *expressionRefAggregator) walkAST(checked *cel.Ast) {
 	walker := internal.NewExpressionAstWalker()
 	walker.Walk(checked.NativeRep().Expr())
+
 	for _, ref := range walker.GetReferences() {
 		switch ref.Root {
 		case "datapoint":
-			if len(ref.Path) >= 2 && ref.Path[0] == attributeMap {
-				key := ref.Path[1]
-				r.datapointAttrSet[key] = struct{}{}
-			}
+			r.walkAttributeRef(&r.datapoint, ref)
+
 		case "span":
-			if len(ref.Path) >= 2 && ref.Path[0] == attributeMap {
-				key := ref.Path[1]
-				r.spanAttrSet[key] = struct{}{}
-			}
+			r.walkAttributeRef(&r.span, ref)
+
 		case "metric":
-			if len(ref.Path) >= 2 && ref.Path[0] == attributeMap {
-				key := ref.Path[1]
-				r.metricAttrSet[key] = struct{}{}
-			}
+			r.walkAttributeRef(&r.metric, ref)
+
 		case "resource", "scope", "vars":
-			// resource and scope are ignored (they are always fully included) and
-			// vars refer to datapoints, spans or metrics data
+			// resource & scope are always fully included
+			// vars resolve to datapoint/span/metric data
+
 		default:
 			r.logger.Debug(
 				"Unknown expression ref root detected; consider updating walkAST and toSummary",
@@ -291,17 +305,50 @@ func (r *expressionRefAggregator) walkAST(checked *cel.Ast) {
 	}
 }
 
+func (r *expressionRefAggregator) walkAttributeRef(
+	sel *entityFieldSelector,
+	ref internal.Reference,
+) {
+	if sel.allAttributes {
+		return
+	}
+
+	// attributes
+	if len(ref.Path) == 1 && ref.Path[0] == "attributes" {
+		sel.allAttributes = true
+		sel.attributeKeys = nil
+		return
+	}
+
+	// top-level fields (span.name, metric.unit, etc.)
+	if len(ref.Path) == 1 {
+		sel.fieldKeys[ref.Path[0]] = struct{}{}
+	}
+
+	// attributes["key"]
+	if len(ref.Path) >= 2 && ref.Path[0] == "attributes" {
+		sel.attributeKeys[ref.Path[1]] = struct{}{}
+	}
+}
+
 func (r *expressionRefAggregator) toSummary() *types.ExpressionRefSummary {
 	if !r.hasValidExpr {
-		// no valid expressions were processed → return nil
 		return nil
 	}
 
-	dp := setKeys(r.datapointAttrSet)
-	sp := setKeys(r.spanAttrSet)
-	met := setKeys(r.metricAttrSet)
+	return types.NewExpressionRefSummary(
+		selectorToSummary(r.datapoint),
+		selectorToSummary(r.span),
+		selectorToSummary(r.metric),
+	)
+}
 
-	return types.NewExpressionRefSummary(dp, sp, met)
+func selectorToSummary(sel entityFieldSelector) types.EntityRefSummary {
+	return types.NewEntityRefSummary(
+		sel.allAttributes,
+		setKeys(sel.attributeKeys),
+		setKeys(sel.fieldKeys),
+	)
 }
 
 func setKeys(m map[string]struct{}) []string {
@@ -312,6 +359,6 @@ func setKeys(m map[string]struct{}) []string {
 	for k := range m {
 		out = append(out, k)
 	}
-	slices.Sort(out)
+	sort.Strings(out)
 	return out
 }

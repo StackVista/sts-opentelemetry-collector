@@ -124,9 +124,19 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentAndRelation(t *testing.T
 			Name:       sExpr("name-${vars.ns}"),
 			TypeName:   sExpr("type"),
 			LayerName:  sExpr("layer-${datapoint.attributes['kind']}"),
+
+			Required: &stsSettingsModel.OtelComponentMappingFieldMapping{
+				Tags: &[]stsSettingsModel.OtelTagMapping{
+					{
+						Source:  aExpr("${span.attributes}"),
+						Pattern: ptr("service.\\(.*)"),
+						Target:  "service.${1}",
+					},
+				},
+			},
 		},
 		Vars: &[]stsSettingsModel.OtelVariableMapping{
-			{Name: "ns", Value: aExpr("${scope.name}")},
+			{Name: "ns", Value: aExpr("${span.name}")},
 		},
 	}
 
@@ -161,7 +171,9 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentAndRelation(t *testing.T
 	require.NotNil(t, m)
 	compRefs, ok := m["comp-1"]
 	require.True(t, ok)
-	require.ElementsMatch(t, []string{"kind"}, compRefs.DatapointKeys())
+	require.ElementsMatch(t, []string{"kind"}, compRefs.Datapoint.AttributeKeys)
+	require.True(t, compRefs.Span.AllAttributes)
+	require.ElementsMatch(t, []string{"name"}, compRefs.Span.FieldKeys)
 	// resource and scope are implicitly included in projection; we only assert tracked keys here
 
 	// Traces signal -> relation expressionRefSummaries
@@ -169,7 +181,7 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentAndRelation(t *testing.T
 	require.NotNil(t, tr)
 	relRefs, ok := tr["rel-1"]
 	require.True(t, ok)
-	require.ElementsMatch(t, []string{"src", "dst"}, relRefs.SpanKeys())
+	require.ElementsMatch(t, []string{"src", "dst"}, relRefs.Span.AttributeKeys)
 }
 
 // Verify that a mapping without datapoint, span or metric expressions still returns an "empty" ExpressionRefSummary
@@ -204,9 +216,9 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentWithResourceOnlyExpressi
 	require.NotNil(t, m)
 	compRefs, ok := m["comp-1"]
 	require.True(t, ok)
-	require.Empty(t, compRefs.DatapointKeys())
-	require.Empty(t, compRefs.DatapointKeys())
-	require.Empty(t, compRefs.DatapointKeys())
+	require.Empty(t, compRefs.Datapoint)
+	require.Empty(t, compRefs.Span)
+	require.Empty(t, compRefs.Metric)
 }
 
 func TestExpressionRefManager_Current_NilForUnknownSignal(t *testing.T) {
@@ -280,7 +292,7 @@ func TestExpressionRefManager_OptionalFieldsAreLenient(t *testing.T) {
 	require.NotNil(t, cur)
 	compRefs, ok := cur["comp"]
 	require.True(t, ok)
-	require.ElementsMatch(t, []string{"ns"}, compRefs.SpanKeys())
+	require.ElementsMatch(t, []string{"ns"}, compRefs.Span.AttributeKeys)
 }
 
 func TestExpressionRefManager_UpdateReplacesState(t *testing.T) {
@@ -449,3 +461,5 @@ func sExpr(s string) stsSettingsModel.OtelStringExpression {
 func aExpr(s string) stsSettingsModel.OtelAnyExpression {
 	return stsSettingsModel.OtelAnyExpression{Expression: s}
 }
+
+func ptr[T any](v T) *T { return &v }
