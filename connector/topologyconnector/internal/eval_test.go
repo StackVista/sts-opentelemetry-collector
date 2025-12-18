@@ -51,11 +51,6 @@ func (f *mockEvalExpressionEvaluator) GetStringExpressionAST(_ settings.OtelStri
 	return nil, nil
 }
 
-func (f *mockEvalExpressionEvaluator) GetOptionalStringExpressionAST(_ *settings.OtelStringExpression) (*GetASTResult, error) {
-	//nolint:nilnil
-	return nil, nil
-}
-
 func (f *mockEvalExpressionEvaluator) GetBooleanExpressionAST(_ settings.OtelBooleanExpression) (*GetASTResult, error) {
 	//nolint:nilnil
 	return nil, nil

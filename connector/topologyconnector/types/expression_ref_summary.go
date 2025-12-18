@@ -6,7 +6,6 @@ import "sort"
 // ExpressionRefSummary summarizes which inputs to include in the projection for a mapping.
 // Resource attributes and Scope fields are always included entirely.
 type ExpressionRefSummary struct {
-	vars          []string
 	datapointKeys []string
 	spanKeys      []string
 	metricKeys    []string
@@ -14,7 +13,7 @@ type ExpressionRefSummary struct {
 
 // NewExpressionRefSummary Constructor ensures all slices are sorted deterministically
 func NewExpressionRefSummary(
-	vars, datapointKeys, spanKeys, metricKeys []string,
+	datapointKeys, spanKeys, metricKeys []string,
 ) *ExpressionRefSummary {
 	sorted := func(s []string) []string {
 		c := append([]string(nil), s...) // copy to avoid mutating caller
@@ -23,14 +22,12 @@ func NewExpressionRefSummary(
 	}
 
 	return &ExpressionRefSummary{
-		vars:          sorted(vars),
 		datapointKeys: sorted(datapointKeys),
 		spanKeys:      sorted(spanKeys),
 		metricKeys:    sorted(metricKeys),
 	}
 }
 
-func (r *ExpressionRefSummary) Vars() []string { return append([]string(nil), r.vars...) }
 func (r *ExpressionRefSummary) DatapointKeys() []string {
 	return append([]string(nil), r.datapointKeys...)
 }

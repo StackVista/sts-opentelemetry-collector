@@ -69,13 +69,15 @@ func (p *DefaultExpressionRefManager) Update(
 		summariesBySignal := make(map[string]*types.ExpressionRefSummary)
 
 		for _, cm := range componentMappings[sig] {
-			if refs, ok := p.collectRefsForComponent(&cm); ok {
-				summariesBySignal[cm.GetIdentifier()] = refs
+			refSummary := p.collectRefsForComponent(&cm)
+			if refSummary != nil {
+				summariesBySignal[cm.GetIdentifier()] = refSummary
 			}
 		}
 		for _, rm := range relationMappings[sig] {
-			if refs, ok := p.collectRefsForRelation(&rm); ok {
-				summariesBySignal[rm.GetIdentifier()] = refs
+			refSummary := p.collectRefsForRelation(&rm)
+			if refSummary != nil {
+				summariesBySignal[rm.GetIdentifier()] = refSummary
 			}
 		}
 
@@ -112,8 +114,10 @@ func (p *DefaultExpressionRefManager) Current(
 
 func (p *DefaultExpressionRefManager) collectRefsForComponent(
 	m *stsSettingsModel.OtelComponentMapping,
-) (*types.ExpressionRefSummary, bool) {
+) *types.ExpressionRefSummary {
 	agg := newExpressionRefAggregator()
+
+	// input not being walked - it's already processed at this point (via the signal traverser/visitor)
 
 	// variables
 	if m.Vars != nil {
@@ -131,37 +135,39 @@ func (p *DefaultExpressionRefManager) collectRefsForComponent(
 	agg.walkOptionalString(p.evaluator, m.Output.LayerIdentifier)
 	agg.walkString(p.evaluator, m.Output.DomainName)
 	agg.walkOptionalString(p.evaluator, m.Output.DomainIdentifier)
-
-	if m.Output.Optional != nil && m.Output.Optional.AdditionalIdentifiers != nil {
-		for _, e := range *m.Output.Optional.AdditionalIdentifiers {
-			agg.walkString(p.evaluator, e)
-		}
-	}
-	if m.Output.Required != nil && m.Output.Required.AdditionalIdentifiers != nil {
-		for _, e := range *m.Output.Required.AdditionalIdentifiers {
-			agg.walkString(p.evaluator, e)
-		}
-	}
-
-	// tags
-	if m.Output.Optional != nil && m.Output.Optional.Tags != nil {
-		for _, tm := range *m.Output.Optional.Tags {
-			agg.walkAny(p.evaluator, tm.Source)
-		}
-	}
-	if m.Output.Required != nil && m.Output.Required.Tags != nil {
-		for _, tm := range *m.Output.Required.Tags {
-			agg.walkAny(p.evaluator, tm.Source)
-		}
-	}
+	p.collectRefsForComponentFieldMapping(agg, m.Output.Optional)
+	p.collectRefsForComponentFieldMapping(agg, m.Output.Required)
 
 	return agg.toSummary()
 }
 
+func (p *DefaultExpressionRefManager) collectRefsForComponentFieldMapping(
+	agg *expressionRefAggregator,
+	componentFieldMapping *stsSettingsModel.OtelComponentMappingFieldMapping,
+) {
+	if componentFieldMapping != nil && componentFieldMapping.AdditionalIdentifiers != nil {
+		if componentFieldMapping.AdditionalIdentifiers != nil {
+			for _, e := range *componentFieldMapping.AdditionalIdentifiers {
+				agg.walkString(p.evaluator, e)
+			}
+		}
+		if componentFieldMapping.Tags != nil {
+			for _, tm := range *componentFieldMapping.Tags {
+				agg.walkAny(p.evaluator, tm.Source)
+			}
+		}
+		if componentFieldMapping.Version != nil {
+			agg.walkOptionalString(p.evaluator, componentFieldMapping.Version)
+		}
+	}
+}
+
 func (p *DefaultExpressionRefManager) collectRefsForRelation(
 	m *stsSettingsModel.OtelRelationMapping,
-) (*types.ExpressionRefSummary, bool) {
-	agg := newExpressionRefAggregator()
+) *types.ExpressionRefSummary {
+	agg := newExpressionRefAggregator(p.logger)
+
+	// input not being walked - it's already processed at this point (via the signal traverser/visitor)
 
 	// variables
 	if m.Vars != nil {
@@ -182,18 +188,23 @@ func (p *DefaultExpressionRefManager) collectRefsForRelation(
 // expressionRefAggregator accumulates references using the ExpressionAstWalker and reduces them
 // to ExpressionRefSummary.
 type expressionRefAggregator struct {
-	varsSet          map[string]struct{}
+	logger *zap.Logger
+
 	datapointAttrSet map[string]struct{}
 	spanAttrSet      map[string]struct{}
 	metricAttrSet    map[string]struct{}
+
+	// track if any valid AST was processed
+	hasValidExpr bool
 }
 
-func newExpressionRefAggregator() *expressionRefAggregator {
+func newExpressionRefAggregator(logger *zap.Logger) *expressionRefAggregator {
 	return &expressionRefAggregator{
-		varsSet:          make(map[string]struct{}),
+		logger:           logger,
 		datapointAttrSet: make(map[string]struct{}),
 		spanAttrSet:      make(map[string]struct{}),
 		metricAttrSet:    make(map[string]struct{}),
+		hasValidExpr:     false,
 	}
 }
 
@@ -205,6 +216,7 @@ func (r *expressionRefAggregator) walkString(
 	if err != nil || astRes == nil || astRes.CheckedAST == nil {
 		return
 	}
+	r.hasValidExpr = true
 	r.walkAST(astRes.CheckedAST)
 }
 
@@ -226,18 +238,32 @@ func (r *expressionRefAggregator) walkAny(
 	if err != nil || astRes == nil || astRes.CheckedAST == nil {
 		return
 	}
+	r.hasValidExpr = true
 	r.walkAST(astRes.CheckedAST)
 }
 
+// walkAST processes a checked CEL AST and accumulates attribute references
+// into the corresponding sets (datapointAttrSet, spanAttrSet, metricAttrSet).
+//
+// Current behavior:
+//   - "datapoint" root: adds keys from datapoint.attributes
+//   - "span" root: adds keys from span.attributes
+//   - "metric" root: adds keys from metric.attributes
+//   - "resource" and "scope" roots are ignored because they are fully included
+//
+// IMPORTANT: If a new type of input is added (e.g., logs, events) or a new root
+// is introduced in the mapping expressions, this function must be extended
+// to correctly accumulate references for deduplication purposes.
+//
+// Also, if additional roots are supported, make sure to update:
+//   - types.ExpressionRefSummary
+//   - expressionRefAggregator.toSummary()
+//   - collectRefsForComponent / collectRefsForRelation
 func (r *expressionRefAggregator) walkAST(checked *cel.Ast) {
 	walker := internal.NewExpressionAstWalker()
 	walker.Walk(checked.NativeRep().Expr())
 	for _, ref := range walker.GetReferences() {
 		switch ref.Root {
-		case "vars":
-			if len(ref.Path) > 0 {
-				r.varsSet[ref.Path[0]] = struct{}{}
-			}
 		case "datapoint":
 			if len(ref.Path) >= 2 && ref.Path[0] == attributeMap {
 				key := ref.Path[1]
@@ -253,22 +279,29 @@ func (r *expressionRefAggregator) walkAST(checked *cel.Ast) {
 				key := ref.Path[1]
 				r.metricAttrSet[key] = struct{}{}
 			}
+		case "resource", "scope", "vars":
+			// resource and scope are ignored (they are always fully included) and
+			// vars refer to datapoints, spans or metrics data
 		default:
-			// resource and scope are ignored here (they are always fully included)
+			r.logger.Debug(
+				"Unknown expression ref root detected; consider updating walkAST and toSummary",
+				zap.String("root", ref.Root),
+			)
 		}
 	}
 }
 
-func (r *expressionRefAggregator) toSummary() (*types.ExpressionRefSummary, bool) {
-	vars := setKeys(r.varsSet)
+func (r *expressionRefAggregator) toSummary() *types.ExpressionRefSummary {
+	if !r.hasValidExpr {
+		// no valid expressions were processed → return nil
+		return nil
+	}
+
 	dp := setKeys(r.datapointAttrSet)
 	sp := setKeys(r.spanAttrSet)
 	met := setKeys(r.metricAttrSet)
-	if len(vars) == 0 && len(dp) == 0 && len(sp) == 0 && len(met) == 0 {
-		return types.NewExpressionRefSummary(nil, nil, nil, nil), false
-	}
 
-	return types.NewExpressionRefSummary(vars, dp, sp, met), true
+	return types.NewExpressionRefSummary(dp, sp, met)
 }
 
 func setKeys(m map[string]struct{}) []string {

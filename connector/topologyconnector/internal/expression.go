@@ -35,7 +35,6 @@ type ExpressionEvaluator interface {
 
 	// GetStringExpressionAST returns the parsed AST of a String expression without evaluating it.
 	GetStringExpressionAST(expr settings.OtelStringExpression) (*GetASTResult, error)
-	GetOptionalStringExpressionAST(expr *settings.OtelStringExpression) (*GetASTResult, error)
 	// GetBooleanExpressionAST returns the parsed AST of a Boolean expression without evaluation.
 	GetBooleanExpressionAST(expr settings.OtelBooleanExpression) (*GetASTResult, error)
 	// GetMapExpressionAST returns the parsed AST of a Map expression without evaluating it.
@@ -247,19 +246,6 @@ func (e *CelEvaluator) GetStringExpressionAST(expr settings.OtelStringExpression
 		return nil, err
 	}
 	return &GetASTResult{CheckedAST: ast}, nil
-}
-
-func (e *CelEvaluator) GetOptionalStringExpressionAST(expr *settings.OtelStringExpression) (*GetASTResult, error) {
-	if expr == nil {
-		//nolint:nilnil
-		return nil, nil
-	}
-
-	result, err := e.GetStringExpressionAST(*expr)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
 }
 
 func (e *CelEvaluator) GetBooleanExpressionAST(expr settings.OtelBooleanExpression) (*GetASTResult, error) {
