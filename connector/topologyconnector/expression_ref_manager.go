@@ -115,7 +115,7 @@ func (p *DefaultExpressionRefManager) Current(
 func (p *DefaultExpressionRefManager) collectRefsForComponent(
 	m *stsSettingsModel.OtelComponentMapping,
 ) *types.ExpressionRefSummary {
-	agg := newExpressionRefAggregator()
+	agg := newExpressionRefAggregator(p.logger)
 
 	// input not being walked - it's already processed at this point (via the signal traverser/visitor)
 
