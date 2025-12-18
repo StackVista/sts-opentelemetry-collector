@@ -25,6 +25,12 @@ func NewEntityRefSummary(allAttrs bool, attrKeys, fieldKeys []string) EntityRefS
 	}
 }
 
+func (e EntityRefSummary) HasRefs() bool {
+	return e.AllAttributes ||
+		len(e.FieldKeys) > 0 ||
+		len(e.AttributeKeys) > 0
+}
+
 // ExpressionRefSummary summarizes which inputs to include in the projection for a mapping.
 // Resource attributes and Scope fields are always included entirely.
 type ExpressionRefSummary struct {

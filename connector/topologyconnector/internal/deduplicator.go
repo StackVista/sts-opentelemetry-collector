@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -101,9 +102,12 @@ func NewTopologyDeduplicator(
 // ExpressionRefSummary). This projection hash serves as both the deduplication key
 // and the content identifier.
 //
-// Note: Deduplication is only applied when selective expression references are known.
-// If expressionRef is nil, the mapping depends only on resource/scope and deduplication
-// is intentionally skipped to avoid over-deduplication.
+// Note: An ExpressionRefSummary can be in one of three states:
+//   - nil: No deduplication is performed for this mapping.
+//   - empty: A valid ExpressionRefSummary with no expression references. Only resource and scope data will be
+//     included in deduplication.
+//   - populated: A valid ExpressionRefSummary with expression references for datapoint, span, or metric attributes.
+//     Resource and scope data will still be included, along with the specific fields referenced by the expressions.
 //
 // Semantics:
 //
@@ -151,17 +155,19 @@ func (d *TopologyDeduplicator) ShouldSend(
 		return true
 	}
 
-	if d.cacheTTL > 0 && d.cacheTTL < mappingTTL { // cacheTTL == 0 means no eviction
-		d.logger.Warn(
-			"Dedup cache TTL is smaller than mapping TTL; entries may be evicted prematurely.",
-			zap.Duration("cacheTTL", d.cacheTTL),
+	now := time.Now()
+	refreshInterval := time.Duration(float64(mappingTTL) * d.refreshFraction)
+
+	if d.cacheTTL > 0 && d.cacheTTL < refreshInterval { // cacheTTL == 0 means no eviction
+		d.logger.Info(
+			"Deduplication cache TTL may be too small to cover the effective deduplication window; "+
+				"mapping might not benefit from deduplication",
 			zap.String("mappingIdentifier", mappingIdentifier),
+			zap.Duration("cacheTTL", d.cacheTTL),
 			zap.Duration("mappingTTL", mappingTTL),
+			zap.Duration("effectiveDedupWindow", refreshInterval),
 		)
 	}
-
-	now := time.Now()
-	refreshBefore := time.Duration(float64(mappingTTL) * d.refreshFraction)
 
 	// Generate deterministic key from the projection of signal inputs.
 	// This serves as both the cache key and content identifier.
@@ -181,7 +187,7 @@ func (d *TopologyDeduplicator) ShouldSend(
 	}
 
 	// Existing series with same content -> only refresh according to time policy
-	if now.Sub(e.lastSent) >= refreshBefore {
+	if now.Sub(e.lastSent) >= refreshInterval {
 		d.cache.Add(key, dedupEntry{lastSent: now})
 		return true
 	}
@@ -213,8 +219,6 @@ func (s *SignalMappingProjectionHasher) ProjectionHash(
 ) string {
 	h := xxhash.New()
 
-	// Domain separator and identifiers
-	mustWrite(h, []byte("projection_v1\x00"))
 	mustWrite(h, []byte(mappingIdentifier))
 	mustWrite(h, separator)
 	mustWrite(h, []byte(signal))
@@ -222,45 +226,33 @@ func (s *SignalMappingProjectionHasher) ProjectionHash(
 
 	// Resource (always include full resource)
 	if ctx.Resource != nil {
-		mustWrite(h, []byte("resource:"))
+		mustWrite(h, []byte{'R'})
 		canonicalHashValue(h, ctx.Resource.ToMap())
 	}
 	mustWrite(h, separator)
 
 	// Scope (always include full scope)
 	if ctx.Scope != nil {
-		mustWrite(h, []byte("scope:"))
+		mustWrite(h, []byte{'C'})
 		canonicalHashValue(h, ctx.Scope.ToMap())
 	}
 	mustWrite(h, separator)
 
-	// Vars (only referenced ones)
-	if ctx.Vars != nil && ref != nil && len(ref.Vars()) > 0 {
-		for _, k := range ref.Vars() {
-			mustWrite(h, []byte("var:"))
-			mustWrite(h, []byte(k))
-			mustWrite(h, []byte{'='})
-			canonicalHashValue(h, ctx.Vars[k])
-			mustWrite(h, []byte{';'})
-		}
-	}
-	mustWrite(h, separator)
-
 	// Datapoint attributes (only referenced)
-	if ctx.Datapoint != nil && ref != nil && len(ref.DatapointKeys()) > 0 {
-		hashSelectedEntityFields(h, ctx.Datapoint.ToMap(), ref.DatapointKeys(), "dp")
+	if ctx.Datapoint != nil && ref != nil && ref.Datapoint.HasRefs() {
+		hashSelectedEntityFields(h, ctx.Datapoint.ToMap(), ref.Datapoint, 'D')
 	}
 	mustWrite(h, separator)
 
 	// Span attributes (only referenced)
-	if ctx.Span != nil && ref != nil && len(ref.SpanKeys()) > 0 {
-		hashSelectedEntityFields(h, ctx.Span.ToMap(), ref.SpanKeys(), "span")
+	if ctx.Span != nil && ref != nil && ref.Span.HasRefs() {
+		hashSelectedEntityFields(h, ctx.Span.ToMap(), ref.Span, 'P')
 	}
 	mustWrite(h, separator)
 
 	// Metric attributes (only referenced)
-	if ctx.Metric != nil && ref != nil && len(ref.MetricKeys()) > 0 {
-		hashSelectedEntityFields(h, ctx.Metric.ToMap(), ref.MetricKeys(), "metric")
+	if ctx.Metric != nil && ref != nil && ref.Metric.HasRefs() {
+		hashSelectedEntityFields(h, ctx.Metric.ToMap(), ref.Metric, 'M')
 	}
 	mustWrite(h, separator)
 
@@ -278,43 +270,43 @@ func canonicalHashValue(h io.Writer, v any) {
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			mustWrite(h, []byte("k:"))
+			mustWrite(h, []byte{'K'})
 			mustWrite(h, []byte(k))
-			mustWrite(h, []byte(";v:"))
+			mustWrite(h, []byte{'V'})
 			canonicalHashValue(h, t[k])
-			mustWrite(h, []byte(";"))
+			mustWrite(h, []byte{';'})
 		}
 	case []any:
 		for _, it := range t {
-			mustWrite(h, []byte("["))
+			mustWrite(h, []byte{'['})
 			canonicalHashValue(h, it)
-			mustWrite(h, []byte("]"))
+			mustWrite(h, []byte{']'})
 		}
 	case string:
-		mustWrite(h, []byte("s:"))
+		mustWrite(h, []byte{'S'})
 		mustWrite(h, []byte(t))
 	case []byte:
-		mustWrite(h, []byte("b:"))
+		mustWrite(h, []byte{'B'})
 		mustWrite(h, t)
 	case bool:
 		if t {
-			mustWrite(h, []byte("t"))
+			mustWrite(h, []byte{'T'})
 		} else {
-			mustWrite(h, []byte("f"))
+			mustWrite(h, []byte{'F'})
 		}
 	case int:
 		canonicalHashValue(h, int64(t))
 	case int32:
 		canonicalHashValue(h, int64(t))
 	case int64:
-		mustWrite(h, []byte("i:"))
+		mustWrite(h, []byte{'I'})
 		writeInt64(h, t)
 	case uint:
 		canonicalHashValue(h, uint64(t))
 	case uint32:
 		canonicalHashValue(h, uint64(t))
 	case uint64:
-		mustWrite(h, []byte("u:"))
+		mustWrite(h, []byte{'U'})
 		writeUint64(h, t)
 	case float32:
 		canonicalHashValue(h, float64(t))
@@ -323,80 +315,82 @@ func canonicalHashValue(h io.Writer, v any) {
 		bits := math.Float64bits(t)
 		canonicalHashValue(h, bits)
 	case nil:
-		mustWrite(h, []byte("nil"))
+		mustWrite(h, []byte{'N'})
 	default:
 		// Fallback for unexpected types
-		mustWrite(h, []byte("x:"))
+		mustWrite(h, []byte{'X'})
 		mustWrite(h, []byte(fmt.Sprintf("%v", t)))
 	}
 }
 
-// writeInt64 writes an int64 as decimal ASCII (without using fmt, which would allocate memory)
 func writeInt64(w io.Writer, n int64) {
-	if n == 0 {
-		mustWrite(w, []byte{'0'})
-		return
-	}
-
-	var u uint64
-	if n < 0 {
-		mustWrite(w, []byte{'-'})
-		// Handle MinInt64 correctly - int64: -9223372036854775808 to 9223372036854775807
-		//nolint:gosec
-		u = uint64(-(n + 1)) + 1
-	} else {
-		u = uint64(n)
-	}
-	writeUint64(w, u)
+	var buf [8]byte
+	//nolint:gosec
+	binary.LittleEndian.PutUint64(buf[:], uint64(n))
+	_, _ = w.Write(buf[:])
 }
 
-// writeUint64 writes a uint64 as decimal ASCII (without using fmt, which would allocate memory)
 func writeUint64(w io.Writer, n uint64) {
-	if n == 0 {
-		mustWrite(w, []byte{'0'})
-		return
-	}
-
-	var buf [20]byte
-	i := len(buf)
-	for n > 0 {
-		i--
-		buf[i] = byte('0' + n%10) // `+ digit` converts digit to ASCII
-		n /= 10
-	}
-	mustWrite(w, buf[i:])
+	var buf [8]byte
+	binary.LittleEndian.PutUint64(buf[:], n)
+	_, _ = w.Write(buf[:])
 }
 
 // hashSelectedEntityFields hashes selected fields from an entity map deterministically.
 // Fields can be top-level (e.g., span.name, metric.unit) or nested under "attributes".
 // The prefix helps distinguish field types in the hash (e.g., "span:name" vs "metric:name").
 // Note: xxhash.Write() never returns an error, so we can safely ignore it.
-func hashSelectedEntityFields(w io.Writer, entity map[string]any, keys []string, prefix string) {
-	for _, k := range keys { // keys are sorted
-		// Try top-level field first
-		val, exists := entity[k]
-
-		// If not found, try under "attributes" (for span/datapoint)
-		if !exists {
-			if attrsRaw, ok := entity["attributes"]; ok {
-				if attrs, ok := attrsRaw.(map[string]any); ok {
-					val, exists = attrs[k]
-				}
+func hashSelectedEntityFields(
+	w io.Writer, entity map[string]any, entityRefSummary types.EntityRefSummary, prefix byte,
+) {
+	// Full attribute map
+	if entityRefSummary.AllAttributes {
+		if attrsRaw, ok := entity["attributes"]; ok {
+			if attrs, typeOk := attrsRaw.(map[string]any); typeOk {
+				mustWrite(w, []byte{prefix, '*'})
+				canonicalHashValue(w, attrs)
+				mustWrite(w, []byte{';'})
 			}
 		}
+	}
 
-		// Skip if field doesn't exist anywhere
+	// Top-level fields
+	for _, f := range entityRefSummary.FieldKeys {
+		val, exists := entity[f]
 		if !exists {
 			continue
 		}
 
-		// Hash the field with prefix for domain separation
-		mustWrite(w, []byte(prefix))
-		mustWrite(w, []byte(":"))
-		mustWrite(w, []byte(k))
-		mustWrite(w, []byte("="))
+		mustWrite(w, []byte{prefix, '.'})
+		mustWrite(w, []byte(f))
+		mustWrite(w, []byte{'='})
 		canonicalHashValue(w, val)
-		mustWrite(w, []byte(";"))
+		mustWrite(w, []byte{';'})
+	}
+
+	// Only hash individual attribute keys if AllAttributes is false
+	if !entityRefSummary.AllAttributes {
+		attrsRaw, ok := entity["attributes"]
+		if !ok {
+			return
+		}
+		attrs, ok := attrsRaw.(map[string]any)
+		if !ok {
+			return
+		}
+
+		for _, k := range entityRefSummary.AttributeKeys {
+			val, exists := attrs[k]
+			if !exists {
+				continue
+			}
+
+			mustWrite(w, []byte{prefix, '@'})
+			mustWrite(w, []byte(k))
+			mustWrite(w, []byte{'='})
+			canonicalHashValue(w, val)
+			mustWrite(w, []byte{';'})
+		}
 	}
 }
 
