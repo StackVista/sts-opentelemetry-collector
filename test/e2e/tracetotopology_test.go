@@ -406,7 +406,7 @@ func otelRelationMappingSpec() *harness.OtelRelationMappingSpec {
 	return &harness.OtelRelationMappingSpec{
 		MappingID:         "rel-mapping-1",
 		MappingIdentifier: "urn:rel-mapping-1",
-		ExpireAfterMs:     300000,
+		ExpireAfterMs:     60000,
 		Input: settings.OtelInput{
 			Signal: settings.OtelInputSignalList{
 				settings.TRACES,

@@ -65,6 +65,7 @@ func (f *connectorFactory) initSharedState(
 				RefreshFraction: connectorCfg.Deduplication.RefreshFraction,
 				CacheConfig:     connectorCfg.Deduplication.Cache.ToMetered("deduplication_cache", telemetrySettings),
 			},
+			expressionRefManager,
 		)
 		f.mapper = mapper
 		f.snapshotManager = snapshotManager

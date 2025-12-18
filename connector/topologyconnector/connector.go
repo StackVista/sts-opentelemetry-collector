@@ -99,11 +99,9 @@ func (p *connectorImpl) Capabilities() consumer.Capabilities {
 
 func (p *connectorImpl) ConsumeMetrics(ctx context.Context, metrics pmetric.Metrics) error {
 	start := time.Now()
-
 	collectionTimestampMs := time.Now().UnixMilli()
-	componentMappings, relationMappings := p.snapshotManager.Current(p.supportedSignal)
-	expressionRefSummaries := p.expressionRefManager.Current(p.supportedSignal)
 
+	componentMappings, relationMappings := p.snapshotManager.Current(p.supportedSignal)
 	messagesWithKeys := internal.ConvertMetricsToTopologyStreamMessage(
 		ctx,
 		p.logger,
@@ -113,7 +111,6 @@ func (p *connectorImpl) ConsumeMetrics(ctx context.Context, metrics pmetric.Metr
 		metrics,
 		componentMappings,
 		relationMappings,
-		expressionRefSummaries,
 		collectionTimestampMs,
 		p.metricsRecorder,
 	)
@@ -134,7 +131,6 @@ func (p *connectorImpl) ConsumeTraces(ctx context.Context, traceData ptrace.Trac
 	collectionTimestampMs := start.UnixMilli()
 
 	componentMappings, relationMappings := p.snapshotManager.Current(p.supportedSignal)
-	expressionRefSummaries := p.expressionRefManager.Current(p.supportedSignal)
 	messages := internal.ConvertSpanToTopologyStreamMessage(
 		ctx,
 		p.logger,
@@ -144,13 +140,11 @@ func (p *connectorImpl) ConsumeTraces(ctx context.Context, traceData ptrace.Trac
 		traceData,
 		componentMappings,
 		relationMappings,
-		expressionRefSummaries,
 		collectionTimestampMs,
 		p.metricsRecorder,
 	)
 
 	duration := time.Since(start)
-
 	p.publishMessagesAsLogs(ctx, messages)
 
 	p.metricsRecorder.RecordRequestDuration(

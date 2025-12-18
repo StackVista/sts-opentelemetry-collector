@@ -15,7 +15,13 @@ import (
 )
 
 func TestProjectionHash_DeterministicOverAttributeOrder(t *testing.T) {
-	d := newDedup(t, 0.5)
+	ref := types.NewExpressionRefSummary(
+		types.EntityRefSummary{AttributeKeys: []string{"x", "y"}},
+		types.EntityRefSummary{},
+		types.EntityRefSummary{},
+	)
+	refSummaries := newExpressionRefSummaryForSignal(settings.METRICS, "m1", *ref)
+	d := newDedup(t, 0.5, refSummaries)
 	ctx1 := &ExpressionEvalContext{
 		Resource: NewResource(
 			map[string]any{
@@ -47,19 +53,16 @@ func TestProjectionHash_DeterministicOverAttributeOrder(t *testing.T) {
 		}),
 	}
 
-	ref := types.NewExpressionRefSummary(
-		types.EntityRefSummary{AttributeKeys: []string{"x", "y"}},
-		types.EntityRefSummary{},
-		types.EntityRefSummary{},
-	)
-
 	h1 := d.hasher.ProjectionHash("m1", settings.METRICS, ctx1, ref)
 	h2 := d.hasher.ProjectionHash("m1", settings.METRICS, ctx2, ref)
 	require.Equal(t, h1, h2, "Hash should be stable regardless of map iteration order")
 }
 
 func TestProjectionHash_SliceOrderMatters(t *testing.T) {
-	d := newDedup(t, 0.5)
+	refSummaries := newExpressionRefSummaryForSignal(
+		settings.METRICS, "m1", types.ExpressionRefSummary{},
+	)
+	d := newDedup(t, 0.5, refSummaries)
 
 	ctx1 := &ExpressionEvalContext{
 		Resource: NewResource(map[string]any{
@@ -79,7 +82,11 @@ func TestProjectionHash_SliceOrderMatters(t *testing.T) {
 }
 
 func TestProjectionHash_MappingIdentifierIsolation(t *testing.T) {
-	d := newDedup(t, 0.5)
+	refSummary1 := newExpressionRefSummaryForSignal(
+		settings.TRACES, "mapping-A", types.ExpressionRefSummary{})
+	refSummary2 := newExpressionRefSummaryForSignal(
+		settings.TRACES, "mapping-B", types.ExpressionRefSummary{})
+	d := newDedup(t, 0.5, mergeExpressionRefSummaries(refSummary1, refSummary2))
 
 	ctx := &ExpressionEvalContext{
 		Resource: NewResource(map[string]any{"a": 1}),
@@ -93,7 +100,8 @@ func TestProjectionHash_MappingIdentifierIsolation(t *testing.T) {
 
 // {"a": nil} hashes differently from {}
 func TestProjectionHash_NilVsMissing(t *testing.T) {
-	d := newDedup(t, 0.5)
+	refSummaries := newExpressionRefSummaryForSignal(settings.METRICS, "m1", types.ExpressionRefSummary{})
+	d := newDedup(t, 0.5, refSummaries)
 
 	ctx1 := &ExpressionEvalContext{
 		Resource: NewResource(map[string]any{"a": nil}),
@@ -109,7 +117,13 @@ func TestProjectionHash_NilVsMissing(t *testing.T) {
 }
 
 func TestShouldSend_KeyChangesWhenReferencedInputChanges(t *testing.T) {
-	d := newDedup(t, 0.25)
+	ref := types.NewExpressionRefSummary(
+		types.EntityRefSummary{AttributeKeys: []string{"kind"}},
+		types.EntityRefSummary{},
+		types.EntityRefSummary{AttributeKeys: []string{"unit"}},
+	)
+	refSummaries := newExpressionRefSummaryForSignal(settings.METRICS, "m1", *ref)
+	d := newDedup(t, 0.25, refSummaries)
 	ctx := &ExpressionEvalContext{
 		Resource: NewResource(map[string]any{"service.name": "cart"}),
 		Metric:   NewMetric("m1", "desc", "unit"),
@@ -117,69 +131,65 @@ func TestShouldSend_KeyChangesWhenReferencedInputChanges(t *testing.T) {
 			"kind": "db",
 		}),
 	}
-	ref := types.NewExpressionRefSummary(
-		types.EntityRefSummary{AttributeKeys: []string{"kind"}},
-		types.EntityRefSummary{},
-		types.EntityRefSummary{AttributeKeys: []string{"unit"}},
-	)
 
-	send1 := d.ShouldSend("m1", settings.METRICS, ctx, ref, time.Minute)
+	send1 := d.ShouldSend("m1", settings.METRICS, ctx, time.Minute)
 	require.True(t, send1)
 
 	// Second call with same inputs -> should not Send (refresh window not reached)
-	send2 := d.ShouldSend("m1", settings.METRICS, ctx, ref, time.Minute)
+	send2 := d.ShouldSend("m1", settings.METRICS, ctx, time.Minute)
 	require.False(t, send2)
 
 	// Change a referenced input -> Key should change and Send
 	ctx.Datapoint = NewDatapoint(map[string]any{"kind": "messaging"})
-	send3 := d.ShouldSend("m1", settings.METRICS, ctx, ref, time.Minute)
+	send3 := d.ShouldSend("m1", settings.METRICS, ctx, time.Minute)
 	require.True(t, send3)
 }
 
 func TestShouldSend_UnreferencedInputDoesNotChangeKey(t *testing.T) {
-	d := newDedup(t, 0.5)
+	ref := types.NewExpressionRefSummary(
+		types.EntityRefSummary{},
+		types.EntityRefSummary{},
+		types.EntityRefSummary{},
+	)
+	refSummaries := newExpressionRefSummaryForSignal(settings.METRICS, "m1", *ref)
+	d := newDedup(t, 0.5, refSummaries)
 
 	ctx := &ExpressionEvalContext{
 		Resource: NewResource(map[string]any{"service.name": "cart"}),
 		Metric:   NewMetric("ignored", "ignored", "ignored"),
 	}
-	ref := types.NewExpressionRefSummary(
-		types.EntityRefSummary{},
-		types.EntityRefSummary{},
-		types.EntityRefSummary{},
-	)
 
-	send1 := d.ShouldSend("m1", settings.METRICS, ctx, ref, time.Minute)
+	send1 := d.ShouldSend("m1", settings.METRICS, ctx, time.Minute)
 	require.True(t, send1)
 
-	send2 := d.ShouldSend("m1", settings.METRICS, ctx, ref, time.Minute)
+	send2 := d.ShouldSend("m1", settings.METRICS, ctx, time.Minute)
 	require.False(t, send2)
 
 	// Change unreferenced var
 	ctx.Metric.cachedMap["name"] = "changed"
 
-	send3 := d.ShouldSend("m1", settings.METRICS, ctx, ref, time.Minute)
+	send3 := d.ShouldSend("m1", settings.METRICS, ctx, time.Minute)
 	require.False(t, send3, "unreferenced input must not trigger send")
 }
 
 func TestShouldSend_RefreshAfterThreshold(t *testing.T) {
 	// Set refreshFraction small to trigger quickly
 	ttl := 200 * time.Millisecond
-	d := newDedup(t, 0.5)
+	refSummaries := newExpressionRefSummaryForSignal(settings.TRACES, "m1", types.ExpressionRefSummary{})
+	d := newDedup(t, 0.5, refSummaries)
 	ctx := &ExpressionEvalContext{Resource: NewResource(map[string]any{"a": 1})}
-	ref := &types.ExpressionRefSummary{}
 
-	send1 := d.ShouldSend("m1", settings.TRACES, ctx, ref, ttl)
+	send1 := d.ShouldSend("m1", settings.TRACES, ctx, ttl)
 	require.True(t, send1)
 
 	// Immediately should not Send again
-	send2 := d.ShouldSend("m1", settings.TRACES, ctx, ref, ttl)
+	send2 := d.ShouldSend("m1", settings.TRACES, ctx, ttl)
 	require.False(t, send2)
 
 	// Wait past refresh threshold (cacheTTL*refreshFraction)
 	time.Sleep(ttl/2 + 20*time.Millisecond)
 
-	send3 := d.ShouldSend("m1", settings.TRACES, ctx, ref, ttl)
+	send3 := d.ShouldSend("m1", settings.TRACES, ctx, ttl)
 	require.True(t, send3)
 }
 
@@ -192,7 +202,37 @@ func testCacheSettings() metrics.MeteredCacheSettings {
 	}
 }
 
-func newDedup(t *testing.T, refresh float64) *TopologyDeduplicator {
+func newExpressionRefSummaryForSignal(
+	signal settings.OtelInputSignal, mappingIdentifier string, summary types.ExpressionRefSummary,
+) map[settings.OtelInputSignal]map[string]*types.ExpressionRefSummary {
+	return map[settings.OtelInputSignal]map[string]*types.ExpressionRefSummary{
+		signal: {
+			mappingIdentifier: &summary,
+		},
+	}
+}
+
+func mergeExpressionRefSummaries(
+	summaries map[settings.OtelInputSignal]map[string]*types.ExpressionRefSummary,
+	rest ...map[settings.OtelInputSignal]map[string]*types.ExpressionRefSummary,
+) map[settings.OtelInputSignal]map[string]*types.ExpressionRefSummary {
+	result := make(map[settings.OtelInputSignal]map[string]*types.ExpressionRefSummary)
+	for k, v := range summaries {
+		result[k] = v
+	}
+	for _, summary := range rest {
+		for k, v := range summary {
+			result[k] = v
+		}
+	}
+	return result
+}
+
+func newDedup(
+	t *testing.T,
+	refresh float64,
+	expressionRefSummaries map[settings.OtelInputSignal]map[string]*types.ExpressionRefSummary,
+) *TopologyDeduplicator {
 	t.Helper()
 	return NewTopologyDeduplicator(
 		context.Background(),
@@ -201,5 +241,18 @@ func newDedup(t *testing.T, refresh float64) *TopologyDeduplicator {
 			Enabled:         true,
 			RefreshFraction: refresh,
 			CacheConfig:     testCacheSettings(),
-		})
+		},
+		&MockExpressionRefReader{expressionRefSummaries},
+	)
+}
+
+type MockExpressionRefReader struct {
+	// signal -> mappingIdentifier -> summary
+	expressionRefSummaries map[settings.OtelInputSignal]map[string]*types.ExpressionRefSummary
+}
+
+func (m *MockExpressionRefReader) Current(
+	signal settings.OtelInputSignal, mappingIdentifier string,
+) *types.ExpressionRefSummary {
+	return m.expressionRefSummaries[signal][mappingIdentifier]
 }

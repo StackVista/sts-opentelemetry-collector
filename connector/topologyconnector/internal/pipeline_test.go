@@ -573,7 +573,6 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 				traces,
 				tt.componentMappings,
 				tt.relationMappings,
-				make(map[string]*types.ExpressionRefSummary),
 				collectionTimestampMs,
 				metrics,
 			)
@@ -607,7 +606,6 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			traces,
 			componentMappings,
 			relationMappings,
-			make(map[string]*types.ExpressionRefSummary),
 			collectionTimestampMs,
 			metrics,
 		)
@@ -690,7 +688,6 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			traceWithSpans,
 			componentMappings,
 			relationMappings,
-			make(map[string]*types.ExpressionRefSummary),
 			collectionTimestampMs,
 			metrics,
 		)
@@ -922,7 +919,6 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage_MultipleComponents(t *te
 		metrics,
 		componentMappings,
 		relationMappings,
-		make(map[string]*types.ExpressionRefSummary),
 		collectionTimestampMs,
 		metricsReporter,
 	)
@@ -1182,7 +1178,6 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 				tt.metrics,
 				componentMappings,
 				relationMappings,
-				make(map[string]*types.ExpressionRefSummary),
 				collectionTimestampMs,
 				metricsReporter,
 			)
@@ -1280,6 +1275,16 @@ func TestPipeline_Deduplication(t *testing.T) {
 	ctx := context.Background()
 	metricsReporter := &noopMetrics{}
 
+	// Provide an ExpressionRefSummary entry to enable deduplication for this mapping.
+	// Resource and scope are always part of the projection; no specific vars/attrs are needed.
+	exprRefSummaries := map[settings.OtelInputSignal]map[string]*types.ExpressionRefSummary{
+		settings.METRICS: {
+			"urn:otel-component-mapping:dedup-metrics-comp": types.NewExpressionRefSummary(
+				types.EntityRefSummary{}, types.EntityRefSummary{}, types.EntityRefSummary{},
+			),
+		},
+	}
+
 	// Small cache TTL; refreshFraction=0.5 with mapping TTL=200ms -> refresh interval ~100ms
 	deduplicator := NewTopologyDeduplicator(
 		ctx,
@@ -1289,6 +1294,7 @@ func TestPipeline_Deduplication(t *testing.T) {
 			RefreshFraction: 0.5,
 			CacheConfig:     makeMeteredCacheSettings(100, 5*time.Second),
 		},
+		&MockExpressionRefManager{exprRefSummaries},
 	)
 
 	mapper := NewMapper(context.Background(), makeMeteredCacheSettings(100, 30*time.Second), makeMeteredCacheSettings(100, 30*time.Second))
@@ -1339,12 +1345,6 @@ func TestPipeline_Deduplication(t *testing.T) {
 	}
 	relationMappings := []settings.OtelRelationMapping{}
 
-	// Provide an ExpressionRefSummary entry to enable deduplication for this mapping.
-	// Resource and scope are always part of the projection; no specific vars/attrs are needed.
-	exprRefSummaries := map[string]*types.ExpressionRefSummary{
-		"urn:otel-component-mapping:dedup-metrics-comp": types.NewExpressionRefSummary(nil, nil, nil, nil),
-	}
-
 	collectionTimestampMs := time.Now().UnixMilli()
 
 	// First conversion: should produce one message
@@ -1357,7 +1357,6 @@ func TestPipeline_Deduplication(t *testing.T) {
 		buildMetrics(),
 		componentMappings,
 		relationMappings,
-		exprRefSummaries,
 		collectionTimestampMs,
 		metricsReporter,
 	)
@@ -1373,7 +1372,6 @@ func TestPipeline_Deduplication(t *testing.T) {
 		buildMetrics(),
 		componentMappings,
 		relationMappings,
-		exprRefSummaries,
 		collectionTimestampMs,
 		metricsReporter,
 	)
@@ -1391,9 +1389,19 @@ func TestPipeline_Deduplication(t *testing.T) {
 		buildMetrics(),
 		componentMappings,
 		relationMappings,
-		exprRefSummaries,
 		collectionTimestampMs,
 		metricsReporter,
 	)
 	require.Len(t, res3, 1, "expected refresh send after interval")
+}
+
+type MockExpressionRefManager struct {
+	// signal -> mappingIdentifier -> summary
+	expressionRefSummaries map[settings.OtelInputSignal]map[string]*types.ExpressionRefSummary
+}
+
+func (m *MockExpressionRefManager) Current(
+	signal settings.OtelInputSignal, mappingIdentifier string,
+) *types.ExpressionRefSummary {
+	return m.expressionRefSummaries[signal][mappingIdentifier]
 }

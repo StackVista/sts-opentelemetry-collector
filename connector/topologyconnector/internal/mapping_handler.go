@@ -118,14 +118,9 @@ func (v *MappingContext[T]) ExecuteMapping(
 	ctx context.Context,
 	evalCtx *ExpressionEvalContext,
 ) {
-	// Only perform pre-mapping deduplication when we have selective expression references.
-	// If a mapping only depends on resource/scope (which are always hashed unconditionally),
-	// no ExpressionRefSummary is produced and deduplication is intentionally skipped.
-	// This avoids over-deduplication when no additional selectivity can be proven from
-	// the mapping expressions.
-	expressionRef := v.BaseCtx.ExpressionRefSummaries[v.Mapping.GetIdentifier()]
+	// Perform pre-mapping deduplication
 	send := v.BaseCtx.Deduplicator.ShouldSend(
-		v.Mapping.GetIdentifier(), v.BaseCtx.Signal, evalCtx, expressionRef,
+		v.Mapping.GetIdentifier(), v.BaseCtx.Signal, evalCtx,
 		time.Duration(v.Mapping.GetExpireAfterMs())*time.Millisecond,
 	)
 	if !send {

@@ -5,7 +5,6 @@ import (
 
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
-	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/types"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
@@ -21,7 +20,6 @@ func ConvertSpanToTopologyStreamMessage(
 	traceData ptrace.Traces,
 	componentMappings []settings.OtelComponentMapping,
 	relationMappings []settings.OtelRelationMapping,
-	expressionRefSummaries map[string]*types.ExpressionRefSummary,
 	collectionTimestampMs int64,
 	metricsRecorder metrics.ConnectorMetricsRecorder,
 ) []MessageWithKey {
@@ -37,7 +35,6 @@ func ConvertSpanToTopologyStreamMessage(
 		mapper,
 		componentMappings,
 		relationMappings,
-		expressionRefSummaries,
 		collectionTimestampMs,
 		metricsRecorder,
 	)
@@ -52,7 +49,6 @@ func ConvertMetricsToTopologyStreamMessage(
 	metricData pmetric.Metrics,
 	componentMappings []settings.OtelComponentMapping,
 	relationMappings []settings.OtelRelationMapping,
-	expressionRefSummaries map[string]*types.ExpressionRefSummary,
 	collectionTimestampMs int64,
 	metricsRecorder metrics.ConnectorMetricsRecorder,
 ) []MessageWithKey {
@@ -68,7 +64,6 @@ func ConvertMetricsToTopologyStreamMessage(
 		mapper,
 		componentMappings,
 		relationMappings,
-		expressionRefSummaries,
 		collectionTimestampMs,
 		metricsRecorder,
 	)
@@ -84,21 +79,19 @@ func convertSignalDataToTopologyStreamMessage(
 	mapper *Mapper,
 	componentMappings []settings.OtelComponentMapping,
 	relationMappings []settings.OtelRelationMapping,
-	expressionRefSummaries map[string]*types.ExpressionRefSummary,
 	collectionTimestampMs int64,
 	metricsRecorder metrics.ConnectorMetricsRecorder,
 ) []MessageWithKey {
 	result := make([]MessageWithKey, 0)
 
 	baseCtx := BaseContext{
-		Signal:                 signal,
-		Mapper:                 mapper,
-		Evaluator:              eval,
-		Deduplicator:           deduplicator,
-		ExpressionRefSummaries: expressionRefSummaries,
-		CollectionTimestamp:    collectionTimestampMs,
-		MetricsRecorder:        metricsRecorder,
-		Results:                &result,
+		Signal:              signal,
+		Mapper:              mapper,
+		Evaluator:           eval,
+		Deduplicator:        deduplicator,
+		CollectionTimestamp: collectionTimestampMs,
+		MetricsRecorder:     metricsRecorder,
+		Results:             &result,
 	}
 
 	for _, componentMapping := range componentMappings {

@@ -194,7 +194,7 @@ func (s *SnapshotManager) Update(
 	// Notify observers asynchronously so we don't block the snapshot update path.
 	for _, obs := range observersCopy {
 		o := obs
-		// TODO: If the number of observers (atm, only ExpressionRefManager is a subscriber) or update frequency grows,
+		// If the number of observers (atm, only ExpressionRefManager is a subscriber) or update frequency grows,
 		// we should consider serializing (with a buffered worker) updates per observer to avoid a flurry of goroutines.
 		// Leaving it as-is for now to prevent pre-maturely optimising.
 		go o.Update(signalsCopy, componentMappingsCopy, relationMappingsCopy)

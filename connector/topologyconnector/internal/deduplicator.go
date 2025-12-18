@@ -20,12 +20,16 @@ import (
 //nolint:gochecknoglobals
 var separator = []byte{0}
 
+// ExpressionRefReader a read-only interface, implicitly implemented by topologyconnector.ExpressionRefManager
+type ExpressionRefReader interface {
+	Current(signal settings.OtelInputSignal, mappingIdentifier string) *types.ExpressionRefSummary
+}
+
 type Deduplicator interface {
 	ShouldSend(
 		mappingIdentifier string,
 		signal settings.OtelInputSignal,
 		evalCtx *ExpressionEvalContext,
-		expressionRef *types.ExpressionRefSummary,
 		ttl time.Duration,
 	) bool
 }
@@ -40,7 +44,6 @@ func (n *NoopDeduplicator) ShouldSend(
 	_ string,
 	_ settings.OtelInputSignal,
 	_ *ExpressionEvalContext,
-	_ *types.ExpressionRefSummary,
 	_ time.Duration,
 ) bool {
 	return true
@@ -53,7 +56,8 @@ type TopologyDeduplicator struct {
 	refreshFraction float64
 	cacheTTL        time.Duration
 
-	hasher DedupHasher
+	expressionRefReader ExpressionRefReader
+	hasher              DedupHasher
 
 	cache *metrics.MeteredCache[string, dedupEntry]
 }
@@ -72,12 +76,13 @@ func NewTopologyDeduplicator(
 	ctx context.Context,
 	logger *zap.Logger,
 	dedupCfg DeduplicationConfig,
+	expressionRefReader ExpressionRefReader,
 ) *TopologyDeduplicator {
 	cache := metrics.NewCache[string, dedupEntry](ctx, dedupCfg.CacheConfig, nil)
 
 	// same as validation done for DeduplicationSettings.RefreshFraction in config.go
 	normalisedRefreshFraction := dedupCfg.RefreshFraction
-	if normalisedRefreshFraction < 0 {
+	if normalisedRefreshFraction <= 0 {
 		normalisedRefreshFraction = 0.5
 	}
 	if normalisedRefreshFraction > 1 {
@@ -85,12 +90,13 @@ func NewTopologyDeduplicator(
 	}
 
 	return &TopologyDeduplicator{
-		logger:          logger,
-		enabled:         dedupCfg.Enabled,
-		refreshFraction: normalisedRefreshFraction,
-		cacheTTL:        dedupCfg.CacheConfig.TTL,
-		hasher:          &SignalMappingProjectionHasher{},
-		cache:           cache,
+		logger:              logger,
+		enabled:             dedupCfg.Enabled,
+		refreshFraction:     normalisedRefreshFraction,
+		cacheTTL:            dedupCfg.CacheConfig.TTL,
+		expressionRefReader: expressionRefReader,
+		hasher:              &SignalMappingProjectionHasher{},
+		cache:               cache,
 	}
 }
 
@@ -148,10 +154,14 @@ func (d *TopologyDeduplicator) ShouldSend(
 	mappingIdentifier string,
 	signal settings.OtelInputSignal,
 	evalCtx *ExpressionEvalContext,
-	expressionRef *types.ExpressionRefSummary,
 	mappingTTL time.Duration,
 ) bool {
-	if !d.enabled || expressionRef == nil {
+	if !d.enabled {
+		return true
+	}
+
+	expressionRef := d.expressionRefReader.Current(signal, mappingIdentifier)
+	if expressionRef == nil {
 		return true
 	}
 

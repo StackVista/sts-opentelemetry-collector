@@ -167,20 +167,16 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentAndRelation(t *testing.T
 	refManager.Update(signals, compBySig, relBySig)
 
 	// Metrics signal -> component expressionRefSummaries
-	m := refManager.Current(stsSettingsModel.METRICS)
-	require.NotNil(t, m)
-	compRefs, ok := m["comp-1"]
-	require.True(t, ok)
+	compRefs := refManager.Current(stsSettingsModel.METRICS, "comp-1")
+	require.NotNil(t, compRefs)
 	require.ElementsMatch(t, []string{"kind"}, compRefs.Datapoint.AttributeKeys)
 	require.True(t, compRefs.Span.AllAttributes)
 	require.ElementsMatch(t, []string{"name"}, compRefs.Span.FieldKeys)
 	// resource and scope are implicitly included in projection; we only assert tracked keys here
 
 	// Traces signal -> relation expressionRefSummaries
-	tr := refManager.Current(stsSettingsModel.TRACES)
-	require.NotNil(t, tr)
-	relRefs, ok := tr["rel-1"]
-	require.True(t, ok)
+	relRefs := refManager.Current(stsSettingsModel.TRACES, "rel-1")
+	require.NotNil(t, relRefs)
 	require.ElementsMatch(t, []string{"src", "dst"}, relRefs.Span.AttributeKeys)
 }
 
@@ -212,10 +208,8 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentWithResourceOnlyExpressi
 
 	refManager.Update(signals, compBySig, relBySig)
 
-	m := refManager.Current(stsSettingsModel.METRICS)
-	require.NotNil(t, m)
-	compRefs, ok := m["comp-1"]
-	require.True(t, ok)
+	compRefs := refManager.Current(stsSettingsModel.METRICS, "comp-1")
+	require.NotNil(t, compRefs)
 	require.Empty(t, compRefs.Datapoint)
 	require.Empty(t, compRefs.Span)
 	require.Empty(t, compRefs.Metric)
@@ -226,8 +220,23 @@ func TestExpressionRefManager_Current_NilForUnknownSignal(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	refManager := topologyConnector.NewExpressionRefManager(logger, eval)
 
-	// No update yet
-	cur := refManager.Current(stsSettingsModel.TRACES)
+	cur := refManager.Current(stsSettingsModel.TRACES, "")
+	require.Nil(t, cur)
+}
+
+func TestExpressionRefManager_Current_NilForUnknownComp(t *testing.T) {
+	eval := newTestCELEvaluator(t)
+	logger := zaptest.NewLogger(t)
+	refManager := topologyConnector.NewExpressionRefManager(logger, eval)
+
+	signals := []stsSettingsModel.OtelInputSignal{stsSettingsModel.METRICS}
+	compBySig := map[stsSettingsModel.OtelInputSignal][]stsSettingsModel.OtelComponentMapping{
+		stsSettingsModel.METRICS: {},
+	}
+	relBySig := make(map[stsSettingsModel.OtelInputSignal][]stsSettingsModel.OtelRelationMapping)
+	refManager.Update(signals, compBySig, relBySig)
+
+	cur := refManager.Current(stsSettingsModel.METRICS, "comp-1")
 	require.Nil(t, cur)
 }
 
@@ -255,7 +264,7 @@ func TestExpressionRefManager_InvalidExpressionsAreIgnored(t *testing.T) {
 		nil,
 	)
 
-	cur := refManager.Current(stsSettingsModel.METRICS)
+	cur := refManager.Current(stsSettingsModel.METRICS, "bad-comp")
 	require.Nil(t, cur, "invalid expressions should produce no summaries")
 }
 
@@ -288,10 +297,8 @@ func TestExpressionRefManager_OptionalFieldsAreLenient(t *testing.T) {
 		nil,
 	)
 
-	cur := refManager.Current(stsSettingsModel.METRICS)
-	require.NotNil(t, cur)
-	compRefs, ok := cur["comp"]
-	require.True(t, ok)
+	compRefs := refManager.Current(stsSettingsModel.METRICS, "comp")
+	require.NotNil(t, compRefs)
 	require.ElementsMatch(t, []string{"ns"}, compRefs.Span.AttributeKeys)
 }
 
@@ -312,7 +319,7 @@ func TestExpressionRefManager_UpdateReplacesState(t *testing.T) {
 		nil,
 	)
 
-	require.Nil(t, refManager.Current(stsSettingsModel.METRICS))
+	require.Nil(t, refManager.Current(stsSettingsModel.METRICS, ""))
 }
 
 func TestComponentMappingFieldsCoverage(t *testing.T) {
