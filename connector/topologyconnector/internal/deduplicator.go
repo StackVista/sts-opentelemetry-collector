@@ -230,34 +230,35 @@ func (s *SignalMappingProjectionHasher) ProjectionHash(
 	mustWrite(h, []byte(signal))
 	mustWrite(h, separator)
 
-	// Early return if no expression references available
-	if ref == nil {
-		return hex.EncodeToString(h.Sum(nil))
+	// Resource attributes (only referenced)
+	if ctx.Resource != nil && ref != nil && ref.Resource.HasRefs() {
+		hashSelectedEntityFields(h, ctx.Resource.ToMap(), ref.Resource, 'R')
 	}
+	mustWrite(h, separator)
 
-	// Hash only referenced fields from each entity
-	type entity struct {
-		otelTyp    OtelDataType
-		refSummary types.EntityRefSummary
-		prefix     byte
+	// Scope fields (only referenced)
+	if ctx.Scope != nil && ref != nil && ref.Scope.HasRefs() {
+		hashSelectedEntityFields(h, ctx.Scope.ToMap(), ref.Scope, 'C')
 	}
+	mustWrite(h, separator)
 
-	entities := []entity{
-		{ctx.Resource, ref.Resource, 'R'},
-		{ctx.Scope, ref.Scope, 'C'},
-		{ctx.Datapoint, ref.Datapoint, 'D'},
-		{ctx.Span, ref.Span, 'P'},
-		{ctx.Metric, ref.Metric, 'M'},
+	// Datapoint attributes (only referenced)
+	if ctx.Datapoint != nil && ref != nil && ref.Datapoint.HasRefs() {
+		hashSelectedEntityFields(h, ctx.Datapoint.ToMap(), ref.Datapoint, 'D')
 	}
+	mustWrite(h, separator)
 
-	for _, e := range entities {
-		if e.otelTyp == nil || !e.refSummary.HasRefs() {
-			continue
-		}
-
-		data := e.otelTyp.ToMap()
-		hashSelectedEntityFields(h, data, e.refSummary, e.prefix)
+	// Span attributes (only referenced)
+	if ctx.Span != nil && ref != nil && ref.Span.HasRefs() {
+		hashSelectedEntityFields(h, ctx.Span.ToMap(), ref.Span, 'P')
 	}
+	mustWrite(h, separator)
+
+	// Metric attributes (only referenced)
+	if ctx.Metric != nil && ref != nil && ref.Metric.HasRefs() {
+		hashSelectedEntityFields(h, ctx.Metric.ToMap(), ref.Metric, 'M')
+	}
+	mustWrite(h, separator)
 
 	return hex.EncodeToString(h.Sum(nil))
 }
