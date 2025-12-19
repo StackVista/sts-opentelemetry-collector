@@ -110,10 +110,8 @@ func NewTopologyDeduplicator(
 //
 // Note: An ExpressionRefSummary can be in one of three states:
 //   - nil: No deduplication is performed for this mapping.
-//   - empty: A valid ExpressionRefSummary with no expression references. Only resource and scope data will be
-//     included in deduplication.
-//   - populated: A valid ExpressionRefSummary with expression references for datapoint, span, or metric attributes.
-//     Resource and scope data will still be included, along with the specific fields referenced by the expressions.
+//   - populated: A valid ExpressionRefSummary with expression references for datapoint, span, metric, scope and
+//     resource fields/attributes. The specific data referenced by the expressions will be projected into the hash.
 //
 // Semantics:
 //
@@ -219,8 +217,6 @@ type DedupHasher interface {
 type SignalMappingProjectionHasher struct{}
 
 // ProjectionHash computes a stable hash for the subset of signal data to deduplicate on.
-// It always includes the full resource map and only the referenced vars/attributes for the rest.
-// If ref is nil, fall back to hashing only mapping+signal to avoid false positives.
 func (s *SignalMappingProjectionHasher) ProjectionHash(
 	mappingIdentifier string,
 	signal settings.OtelInputSignal,
@@ -234,39 +230,89 @@ func (s *SignalMappingProjectionHasher) ProjectionHash(
 	mustWrite(h, []byte(signal))
 	mustWrite(h, separator)
 
-	// Resource (always include full resource)
-	if ctx.Resource != nil {
-		mustWrite(h, []byte{'R'})
-		canonicalHashValue(h, ctx.Resource.ToMap())
+	// Early return if no expression references available
+	if ref == nil {
+		return hex.EncodeToString(h.Sum(nil))
 	}
-	mustWrite(h, separator)
 
-	// Scope (always include full scope)
-	if ctx.Scope != nil {
-		mustWrite(h, []byte{'C'})
-		canonicalHashValue(h, ctx.Scope.ToMap())
+	// Hash only referenced fields from each entity
+	entities := []struct {
+		data       map[string]any
+		refSummary types.EntityRefSummary
+		prefix     byte
+	}{
+		{ctx.Resource.ToMap(), ref.Resource, 'R'},
+		{ctx.Scope.ToMap(), ref.Scope, 'C'},
+		{ctx.Datapoint.ToMap(), ref.Datapoint, 'D'},
+		{ctx.Span.ToMap(), ref.Span, 'P'},
+		{ctx.Metric.ToMap(), ref.Metric, 'M'},
 	}
-	mustWrite(h, separator)
 
-	// Datapoint attributes (only referenced)
-	if ctx.Datapoint != nil && ref != nil && ref.Datapoint.HasRefs() {
-		hashSelectedEntityFields(h, ctx.Datapoint.ToMap(), ref.Datapoint, 'D')
+	for _, e := range entities {
+		if e.data != nil && e.refSummary.HasRefs() {
+			hashSelectedEntityFields(h, e.data, e.refSummary, e.prefix)
+		}
 	}
-	mustWrite(h, separator)
-
-	// Span attributes (only referenced)
-	if ctx.Span != nil && ref != nil && ref.Span.HasRefs() {
-		hashSelectedEntityFields(h, ctx.Span.ToMap(), ref.Span, 'P')
-	}
-	mustWrite(h, separator)
-
-	// Metric attributes (only referenced)
-	if ctx.Metric != nil && ref != nil && ref.Metric.HasRefs() {
-		hashSelectedEntityFields(h, ctx.Metric.ToMap(), ref.Metric, 'M')
-	}
-	mustWrite(h, separator)
 
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+// hashSelectedEntityFields hashes selected fields from an entity map deterministically.
+// Fields can be top-level (e.g., span.name, metric.unit) or nested under "attributes".
+// The prefix helps distinguish field types in the hash (e.g., "span:name" vs "metric:name").
+// Note: xxhash.Write() never returns an error, so we can safely ignore it.
+func hashSelectedEntityFields(
+	w io.Writer, entity map[string]any, entityRefSummary types.EntityRefSummary, prefix byte,
+) {
+	// Full attribute map
+	if entityRefSummary.AllAttributes {
+		if attrsRaw, ok := entity["attributes"]; ok {
+			if attrs, typeOk := attrsRaw.(map[string]any); typeOk {
+				mustWrite(w, []byte{prefix, '*'})
+				canonicalHashValue(w, attrs)
+				mustWrite(w, []byte{';'})
+			}
+		}
+	}
+
+	// Top-level fields
+	for _, f := range entityRefSummary.FieldKeys {
+		val, exists := entity[f]
+		if !exists {
+			continue
+		}
+
+		mustWrite(w, []byte{prefix, '.'})
+		mustWrite(w, []byte(f))
+		mustWrite(w, []byte{'='})
+		canonicalHashValue(w, val)
+		mustWrite(w, []byte{';'})
+	}
+
+	// Only hash individual attribute keys if AllAttributes is false
+	if !entityRefSummary.AllAttributes {
+		attrsRaw, ok := entity["attributes"]
+		if !ok {
+			return
+		}
+		attrs, ok := attrsRaw.(map[string]any)
+		if !ok {
+			return
+		}
+
+		for _, k := range entityRefSummary.AttributeKeys {
+			val, exists := attrs[k]
+			if !exists {
+				continue
+			}
+
+			mustWrite(w, []byte{prefix, '@'})
+			mustWrite(w, []byte(k))
+			mustWrite(w, []byte{'='})
+			canonicalHashValue(w, val)
+			mustWrite(w, []byte{';'})
+		}
+	}
 }
 
 // canonicalHashValue walks v and writes a deterministic representation into hasher.
@@ -344,64 +390,6 @@ func writeUint64(w io.Writer, n uint64) {
 	var buf [8]byte
 	binary.LittleEndian.PutUint64(buf[:], n)
 	_, _ = w.Write(buf[:])
-}
-
-// hashSelectedEntityFields hashes selected fields from an entity map deterministically.
-// Fields can be top-level (e.g., span.name, metric.unit) or nested under "attributes".
-// The prefix helps distinguish field types in the hash (e.g., "span:name" vs "metric:name").
-// Note: xxhash.Write() never returns an error, so we can safely ignore it.
-func hashSelectedEntityFields(
-	w io.Writer, entity map[string]any, entityRefSummary types.EntityRefSummary, prefix byte,
-) {
-	// Full attribute map
-	if entityRefSummary.AllAttributes {
-		if attrsRaw, ok := entity["attributes"]; ok {
-			if attrs, typeOk := attrsRaw.(map[string]any); typeOk {
-				mustWrite(w, []byte{prefix, '*'})
-				canonicalHashValue(w, attrs)
-				mustWrite(w, []byte{';'})
-			}
-		}
-	}
-
-	// Top-level fields
-	for _, f := range entityRefSummary.FieldKeys {
-		val, exists := entity[f]
-		if !exists {
-			continue
-		}
-
-		mustWrite(w, []byte{prefix, '.'})
-		mustWrite(w, []byte(f))
-		mustWrite(w, []byte{'='})
-		canonicalHashValue(w, val)
-		mustWrite(w, []byte{';'})
-	}
-
-	// Only hash individual attribute keys if AllAttributes is false
-	if !entityRefSummary.AllAttributes {
-		attrsRaw, ok := entity["attributes"]
-		if !ok {
-			return
-		}
-		attrs, ok := attrsRaw.(map[string]any)
-		if !ok {
-			return
-		}
-
-		for _, k := range entityRefSummary.AttributeKeys {
-			val, exists := attrs[k]
-			if !exists {
-				continue
-			}
-
-			mustWrite(w, []byte{prefix, '@'})
-			mustWrite(w, []byte(k))
-			mustWrite(w, []byte{'='})
-			canonicalHashValue(w, val)
-			mustWrite(w, []byte{';'})
-		}
-	}
 }
 
 // mustWrite writes b to w and panics on error.

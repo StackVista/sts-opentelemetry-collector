@@ -19,6 +19,8 @@ func TestProjectionHash_DeterministicOverAttributeOrder(t *testing.T) {
 		types.EntityRefSummary{AttributeKeys: []string{"x", "y"}},
 		types.EntityRefSummary{},
 		types.EntityRefSummary{},
+		types.EntityRefSummary{},
+		types.EntityRefSummary{},
 	)
 	refSummaries := newExpressionRefSummaryForSignal(settings.METRICS, "m1", *ref)
 	d := newDedup(t, 0.5, refSummaries)
@@ -59,9 +61,14 @@ func TestProjectionHash_DeterministicOverAttributeOrder(t *testing.T) {
 }
 
 func TestProjectionHash_SliceOrderMatters(t *testing.T) {
-	refSummaries := newExpressionRefSummaryForSignal(
-		settings.METRICS, "m1", types.ExpressionRefSummary{},
+	ref := types.NewExpressionRefSummary(
+		types.EntityRefSummary{},
+		types.EntityRefSummary{},
+		types.EntityRefSummary{},
+		types.EntityRefSummary{},
+		types.EntityRefSummary{AttributeKeys: []string{"roles"}},
 	)
+	refSummaries := newExpressionRefSummaryForSignal(settings.METRICS, "m1", *ref)
 	d := newDedup(t, 0.5, refSummaries)
 
 	ctx1 := &ExpressionEvalContext{
@@ -75,8 +82,8 @@ func TestProjectionHash_SliceOrderMatters(t *testing.T) {
 		}),
 	}
 
-	h1 := d.hasher.ProjectionHash("m1", settings.METRICS, ctx1, nil)
-	h2 := d.hasher.ProjectionHash("m1", settings.METRICS, ctx2, nil)
+	h1 := d.hasher.ProjectionHash("m1", settings.METRICS, ctx1, ref)
+	h2 := d.hasher.ProjectionHash("m1", settings.METRICS, ctx2, ref)
 
 	require.NotEqual(t, h1, h2, "slice order must affect hash")
 }
@@ -100,7 +107,14 @@ func TestProjectionHash_MappingIdentifierIsolation(t *testing.T) {
 
 // {"a": nil} hashes differently from {}
 func TestProjectionHash_NilVsMissing(t *testing.T) {
-	refSummaries := newExpressionRefSummaryForSignal(settings.METRICS, "m1", types.ExpressionRefSummary{})
+	ref := types.NewExpressionRefSummary(
+		types.EntityRefSummary{},
+		types.EntityRefSummary{},
+		types.EntityRefSummary{},
+		types.EntityRefSummary{},
+		types.EntityRefSummary{AttributeKeys: []string{"a"}},
+	)
+	refSummaries := newExpressionRefSummaryForSignal(settings.METRICS, "m1", *ref)
 	d := newDedup(t, 0.5, refSummaries)
 
 	ctx1 := &ExpressionEvalContext{
@@ -110,7 +124,7 @@ func TestProjectionHash_NilVsMissing(t *testing.T) {
 		Resource: NewResource(map[string]any{}),
 	}
 
-	h1 := d.hasher.ProjectionHash("m1", settings.METRICS, ctx1, nil)
+	h1 := d.hasher.ProjectionHash("m1", settings.METRICS, ctx1, ref)
 	h2 := d.hasher.ProjectionHash("m1", settings.METRICS, ctx2, nil)
 
 	require.NotEqual(t, h1, h2)
@@ -121,6 +135,8 @@ func TestShouldSend_KeyChangesWhenReferencedInputChanges(t *testing.T) {
 		types.EntityRefSummary{AttributeKeys: []string{"kind"}},
 		types.EntityRefSummary{},
 		types.EntityRefSummary{AttributeKeys: []string{"unit"}},
+		types.EntityRefSummary{},
+		types.EntityRefSummary{},
 	)
 	refSummaries := newExpressionRefSummaryForSignal(settings.METRICS, "m1", *ref)
 	d := newDedup(t, 0.25, refSummaries)
@@ -147,6 +163,8 @@ func TestShouldSend_KeyChangesWhenReferencedInputChanges(t *testing.T) {
 
 func TestShouldSend_UnreferencedInputDoesNotChangeKey(t *testing.T) {
 	ref := types.NewExpressionRefSummary(
+		types.EntityRefSummary{},
+		types.EntityRefSummary{},
 		types.EntityRefSummary{},
 		types.EntityRefSummary{},
 		types.EntityRefSummary{},

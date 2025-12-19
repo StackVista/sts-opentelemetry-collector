@@ -37,10 +37,12 @@ type ExpressionRefSummary struct {
 	Datapoint EntityRefSummary
 	Span      EntityRefSummary
 	Metric    EntityRefSummary
+	Scope     EntityRefSummary
+	Resource  EntityRefSummary
 }
 
 // NewExpressionRefSummary Constructor ensures all slices are sorted deterministically
-func NewExpressionRefSummary(datapoint, span, metric EntityRefSummary) *ExpressionRefSummary {
+func NewExpressionRefSummary(datapoint, span, metric, scope, resource EntityRefSummary) *ExpressionRefSummary {
 	sortStrings := func(s []string) []string {
 		if len(s) == 0 {
 			return nil
@@ -59,9 +61,17 @@ func NewExpressionRefSummary(datapoint, span, metric EntityRefSummary) *Expressi
 	metric.AttributeKeys = sortStrings(metric.AttributeKeys)
 	metric.FieldKeys = sortStrings(metric.FieldKeys)
 
+	scope.AttributeKeys = sortStrings(scope.AttributeKeys)
+	scope.FieldKeys = sortStrings(scope.FieldKeys)
+
+	resource.AttributeKeys = sortStrings(resource.AttributeKeys)
+	resource.FieldKeys = sortStrings(resource.FieldKeys)
+
 	return &ExpressionRefSummary{
 		Datapoint: datapoint,
 		Span:      span,
 		Metric:    metric,
+		Scope:     scope,
+		Resource:  resource,
 	}
 }

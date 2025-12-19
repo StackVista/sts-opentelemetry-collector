@@ -7,7 +7,7 @@ import (
 	"github.com/google/cel-go/cel"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/internal"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/types"
-	settings "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"go.uber.org/zap"
 )
 
@@ -16,9 +16,6 @@ import (
 //
 // All errors during expression parsing or type-checking should intentionally be ignored.
 // Missing or invalid expressions simply result in fewer extracted references.
-//
-// Note: Mappings that only reference resource/scope do not produce ExpressionRefSummaries,
-// as those are always hashed unconditionally during deduplication.
 type ExpressionRefManager interface {
 	Update(
 		signals []settings.OtelInputSignal,
@@ -203,31 +200,33 @@ type entityFieldSelector struct {
 	fieldKeys map[string]struct{}
 }
 
+func newEntityFieldSelector() entityFieldSelector {
+	return entityFieldSelector{
+		attributeKeys: make(map[string]struct{}),
+		fieldKeys:     make(map[string]struct{}),
+	}
+}
+
 type expressionRefAggregator struct {
 	logger *zap.Logger
 
 	datapoint entityFieldSelector
 	span      entityFieldSelector
 	metric    entityFieldSelector
+	scope     entityFieldSelector
+	resource  entityFieldSelector
 
 	hasValidExpr bool
 }
 
 func newExpressionRefAggregator(logger *zap.Logger) *expressionRefAggregator {
 	return &expressionRefAggregator{
-		logger: logger,
-		datapoint: entityFieldSelector{
-			attributeKeys: make(map[string]struct{}),
-			fieldKeys:     make(map[string]struct{}),
-		},
-		span: entityFieldSelector{
-			attributeKeys: make(map[string]struct{}),
-			fieldKeys:     make(map[string]struct{}),
-		},
-		metric: entityFieldSelector{
-			attributeKeys: make(map[string]struct{}),
-			fieldKeys:     make(map[string]struct{}),
-		},
+		logger:       logger,
+		datapoint:    newEntityFieldSelector(),
+		span:         newEntityFieldSelector(),
+		metric:       newEntityFieldSelector(),
+		scope:        newEntityFieldSelector(),
+		resource:     newEntityFieldSelector(),
 		hasValidExpr: false,
 	}
 }
@@ -266,14 +265,15 @@ func (r *expressionRefAggregator) walkAny(
 	r.walkAST(astRes.CheckedAST)
 }
 
-// walkAST processes a checked CEL AST and accumulates attribute references
-// into the corresponding sets (datapointAttrFilter, spanAttrFilter, metricAttrFilter).
+// walkAST processes a checked CEL AST and accumulates field/attribute references
+// into the corresponding entityFieldSelector.
 //
 // Current behavior:
 //   - "datapoint" root: adds keys from datapoint.attributes
-//   - "span" root: adds keys from span.attributes
+//   - "span" root: adds fields/keys from span and span.attributes
 //   - "metric" root: adds keys from metric.attributes
-//   - "resource" and "scope" roots are ignored because they are fully included
+//   - "scope" root: adds fields from scope
+//   - "resource" root: adds keys from resource.atttributes
 //
 // IMPORTANT: If a new type of input is added (e.g., logs, events) or a new root
 // is introduced in the mapping expressions, this function must be extended
@@ -298,9 +298,14 @@ func (r *expressionRefAggregator) walkAST(checked *cel.Ast) {
 		case "metric":
 			r.walkAttributeRef(&r.metric, ref)
 
-		case "resource", "scope", "vars":
-			// resource & scope are always fully included
-			// vars resolve to datapoint/span/metric data
+		case "scope":
+			r.walkAttributeRef(&r.scope, ref)
+
+		case "resource":
+			r.walkAttributeRef(&r.resource, ref)
+
+		case "vars":
+			// ignored: vars resolve to resource/scope/datapoint/span/metric data
 
 		default:
 			r.logger.Debug(
@@ -346,6 +351,8 @@ func (r *expressionRefAggregator) toSummary() *types.ExpressionRefSummary {
 		selectorToSummary(r.datapoint),
 		selectorToSummary(r.span),
 		selectorToSummary(r.metric),
+		selectorToSummary(r.scope),
+		selectorToSummary(r.resource),
 	)
 }
 
