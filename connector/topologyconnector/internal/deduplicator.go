@@ -236,22 +236,27 @@ func (s *SignalMappingProjectionHasher) ProjectionHash(
 	}
 
 	// Hash only referenced fields from each entity
-	entities := []struct {
-		data       map[string]any
+	type entity struct {
+		otelTyp    OtelDataType
 		refSummary types.EntityRefSummary
 		prefix     byte
-	}{
-		{ctx.Resource.ToMap(), ref.Resource, 'R'},
-		{ctx.Scope.ToMap(), ref.Scope, 'C'},
-		{ctx.Datapoint.ToMap(), ref.Datapoint, 'D'},
-		{ctx.Span.ToMap(), ref.Span, 'P'},
-		{ctx.Metric.ToMap(), ref.Metric, 'M'},
+	}
+
+	entities := []entity{
+		{ctx.Resource, ref.Resource, 'R'},
+		{ctx.Scope, ref.Scope, 'C'},
+		{ctx.Datapoint, ref.Datapoint, 'D'},
+		{ctx.Span, ref.Span, 'P'},
+		{ctx.Metric, ref.Metric, 'M'},
 	}
 
 	for _, e := range entities {
-		if e.data != nil && e.refSummary.HasRefs() {
-			hashSelectedEntityFields(h, e.data, e.refSummary, e.prefix)
+		if e.otelTyp == nil || !e.refSummary.HasRefs() {
+			continue
 		}
+
+		data := e.otelTyp.ToMap()
+		hashSelectedEntityFields(h, data, e.refSummary, e.prefix)
 	}
 
 	return hex.EncodeToString(h.Sum(nil))
