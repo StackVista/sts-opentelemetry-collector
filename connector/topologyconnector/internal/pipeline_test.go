@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/types"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -21,8 +22,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
-
-func ptr[T any](v T) *T { return &v }
 
 func strExpr(s string) settings.OtelStringExpression {
 	return settings.OtelStringExpression{
@@ -564,10 +563,12 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			ctx := context.Background()
 			metrics := &noopMetrics{}
 			eval, _ := NewCELEvaluator(ctx, makeMeteredCacheSettings(100, 30*time.Second))
+			deduplicator := NewNoopDeduplicator()
 			result := ConvertSpanToTopologyStreamMessage(
 				ctx,
 				zaptest.NewLogger(t),
 				eval,
+				deduplicator,
 				mapper,
 				traces,
 				tt.componentMappings,
@@ -594,11 +595,13 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			createSimpleRelationMapping("rm2"),
 		}
 		eval, _ := NewCELEvaluator(ctx, makeMeteredCacheSettings(100, 30*time.Second))
+		deduplicator := NewNoopDeduplicator()
 		mapper := NewMapper(context.Background(), makeMeteredCacheSettings(100, 30*time.Second), makeMeteredCacheSettings(100, 30*time.Second))
 		result := ConvertSpanToTopologyStreamMessage(
 			ctx,
 			zaptest.NewLogger(t),
 			eval,
+			deduplicator,
 			mapper,
 			traces,
 			componentMappings,
@@ -674,11 +677,13 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			createSimpleRelationMapping("rm1"),
 		}
 		eval, _ := NewCELEvaluator(ctx, makeMeteredCacheSettings(100, 30*time.Second))
+		deduplicator := NewNoopDeduplicator()
 		mapper := NewMapper(context.Background(), makeMeteredCacheSettings(100, 30*time.Second), makeMeteredCacheSettings(100, 30*time.Second))
 		result := ConvertSpanToTopologyStreamMessage(
 			ctx,
 			zaptest.NewLogger(t),
 			eval,
+			deduplicator,
 			mapper,
 			traceWithSpans,
 			componentMappings,
@@ -904,10 +909,12 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage_MultipleComponents(t *te
 	ctx := context.Background()
 	metricsReporter := &noopMetrics{}
 	eval, _ := NewCELEvaluator(ctx, makeMeteredCacheSettings(100, 30*time.Second))
+	deduplicator := NewNoopDeduplicator()
 	result := ConvertMetricsToTopologyStreamMessage(
 		ctx,
 		zaptest.NewLogger(t),
 		eval,
+		deduplicator,
 		mapper,
 		metrics,
 		componentMappings,
@@ -1154,17 +1161,19 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 		},
 	}
 
-	unifyMessages(t, &expected) // only need to do this once
+	unifyMessages(t, &expected)
 	mapper := NewMapper(context.Background(), makeMeteredCacheSettings(100, 30*time.Second), makeMeteredCacheSettings(100, 30*time.Second))
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			metricsReporter := &noopMetrics{}
 			eval, _ := NewCELEvaluator(ctx, makeMeteredCacheSettings(100, 30*time.Second))
+			deduplicator := NewNoopDeduplicator()
 			result := ConvertMetricsToTopologyStreamMessage(
 				ctx,
 				zaptest.NewLogger(t),
 				eval,
+				deduplicator,
 				mapper,
 				tt.metrics,
 				componentMappings,
@@ -1258,4 +1267,142 @@ func unifyMessages(t *testing.T, data *[]MessageWithKey) {
 			}
 		}
 	}
+}
+
+// A simplistic deduplication case to verify all the components are working as expected. More elaborate tests
+// exist in the respective component's tests.
+func TestPipeline_Deduplication(t *testing.T) {
+	ctx := context.Background()
+	metricsReporter := &noopMetrics{}
+
+	// Provide an ExpressionRefSummary entry to enable deduplication for this mapping.
+	// Resource and scope are always part of the projection; no specific vars/attrs are needed.
+	exprRefSummaries := map[settings.OtelInputSignal]map[string]*types.ExpressionRefSummary{
+		settings.METRICS: {
+			"urn:otel-component-mapping:dedup-metrics-comp": types.NewExpressionRefSummary(
+				types.EntityRefSummary{}, types.EntityRefSummary{}, types.EntityRefSummary{},
+				types.EntityRefSummary{}, types.EntityRefSummary{},
+			),
+		},
+	}
+
+	// Small cache TTL; refreshFraction=0.5 with mapping TTL=200ms -> refresh interval ~100ms
+	deduplicator := NewTopologyDeduplicator(
+		ctx,
+		zaptest.NewLogger(t),
+		DeduplicationConfig{
+			Enabled:         true,
+			RefreshFraction: 0.5,
+			CacheConfig:     makeMeteredCacheSettings(100, 5*time.Second),
+		},
+		&MockExpressionRefManager{exprRefSummaries},
+	)
+
+	mapper := NewMapper(context.Background(), makeMeteredCacheSettings(100, 30*time.Second), makeMeteredCacheSettings(100, 30*time.Second))
+	eval, _ := NewCELEvaluator(ctx, makeMeteredCacheSettings(100, 30*time.Second))
+
+	buildMetrics := func() pmetric.Metrics {
+		m := pmetric.NewMetrics()
+		rm := m.ResourceMetrics().AppendEmpty()
+		_ = rm.Resource().Attributes().FromRaw(map[string]any{
+			"service.name":        "checkout-service",
+			"service.instance.id": "627cc493",
+			"service.namespace":   "shop",
+		})
+		sm := rm.ScopeMetrics().AppendEmpty()
+		_ = sm.Scope().Attributes().FromRaw(map[string]any{"otel.scope.name": "io.opentelemetry.instrumentation.http"})
+		metric := sm.Metrics().AppendEmpty()
+		metric.SetName("http.server.duration")
+		sum := metric.SetEmptySum()
+		dp := sum.DataPoints().AppendEmpty()
+		// keep attributes constant to keep projection stable
+		_ = dp.Attributes().FromRaw(map[string]any{
+			"http.method": "GET",
+		})
+		return m
+	}
+
+	// Create a simple METRICS component mapping that derives all outputs purely from resource fields
+	// so the deduplication projection remains constant across identical inputs.
+	componentMappings := []settings.OtelComponentMapping{
+		{
+			Id:            "dedup-metrics-comp",
+			Identifier:    "urn:otel-component-mapping:dedup-metrics-comp",
+			ExpireAfterMs: 200, // 200ms TTL -> refresh interval ~100ms
+			Input: settings.OtelInput{
+				Signal: settings.OtelInputSignalList{settings.METRICS},
+				Resource: settings.OtelInputResource{
+					Action: ptr(settings.CREATE), // no condition => defaults to true
+				},
+			},
+			Output: settings.OtelComponentMappingOutput{
+				Identifier: strExpr("${resource.attributes[\"service.instance.id\"]}"),
+				Name:       strExpr("${resource.attributes[\"service.name\"]}"),
+				TypeName:   strExpr("service-instance"),
+				DomainName: strExpr("${resource.attributes[\"service.namespace\"]}"),
+				LayerName:  strExpr("backend"),
+			},
+		},
+	}
+	relationMappings := []settings.OtelRelationMapping{}
+
+	collectionTimestampMs := time.Now().UnixMilli()
+
+	// First conversion: should produce one message
+	res1 := ConvertMetricsToTopologyStreamMessage(
+		ctx,
+		zaptest.NewLogger(t),
+		eval,
+		deduplicator,
+		mapper,
+		buildMetrics(),
+		componentMappings,
+		relationMappings,
+		collectionTimestampMs,
+		metricsReporter,
+	)
+	require.Len(t, res1, 1, "expected initial send")
+
+	// Immediate second conversion with identical inputs: deduplicator should suppress output
+	res2 := ConvertMetricsToTopologyStreamMessage(
+		ctx,
+		zaptest.NewLogger(t),
+		eval,
+		deduplicator,
+		mapper,
+		buildMetrics(),
+		componentMappings,
+		relationMappings,
+		collectionTimestampMs,
+		metricsReporter,
+	)
+	require.Len(t, res2, 0, "expected suppression due to deduplication")
+
+	// Wait for refresh interval to elapse (>100ms) and try again; should send once more
+	time.Sleep(150 * time.Millisecond)
+
+	res3 := ConvertMetricsToTopologyStreamMessage(
+		ctx,
+		zaptest.NewLogger(t),
+		eval,
+		deduplicator,
+		mapper,
+		buildMetrics(),
+		componentMappings,
+		relationMappings,
+		collectionTimestampMs,
+		metricsReporter,
+	)
+	require.Len(t, res3, 1, "expected refresh send after interval")
+}
+
+type MockExpressionRefManager struct {
+	// signal -> mappingIdentifier -> summary
+	expressionRefSummaries map[settings.OtelInputSignal]map[string]*types.ExpressionRefSummary
+}
+
+func (m *MockExpressionRefManager) Current(
+	signal settings.OtelInputSignal, mappingIdentifier string,
+) *types.ExpressionRefSummary {
+	return m.expressionRefSummaries[signal][mappingIdentifier]
 }

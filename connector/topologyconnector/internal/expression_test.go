@@ -594,6 +594,35 @@ func TestNoSpanError(t *testing.T) {
 	assert.Equal(t, err.Error(), "no such attribute(s): span")
 }
 
+func TestCelEvaluator_GetStringExpressionAST_WithLiteral(t *testing.T) {
+	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
+
+	res, err := eval.GetStringExpressionAST(settings.OtelStringExpression{Expression: `hello`})
+	require.NoError(t, err)
+	require.Nil(t, res.CheckedAST)
+	assert.Equal(t, *res.literal, "hello")
+}
+
+func TestAstCacheReuse(t *testing.T) {
+	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
+
+	expr := settings.OtelBooleanExpression{Expression: `span.attributes["retries"] == 2`}
+
+	_, err := eval.GetBooleanExpressionAST(expr)
+	require.NoError(t, err)
+	require.Equal(t, 1, eval.cacheSize()) // compiled once
+
+	_, err = eval.GetBooleanExpressionAST(expr)
+	require.NoError(t, err)
+	require.Equal(t, 1, eval.cacheSize()) // still one entry
+
+	// different expression should increase cache size
+	other := settings.OtelBooleanExpression{Expression: `span.attributes["retries"] == 10`}
+	_, err = eval.GetBooleanExpressionAST(other)
+	require.NoError(t, err)
+	require.Equal(t, 2, eval.cacheSize())
+}
+
 func TestEvalCacheReuse(t *testing.T) {
 	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 	ctx := makeContext(true, false)
@@ -635,7 +664,7 @@ func TestEvalCacheEvictionBySize(t *testing.T) {
 }
 
 func TestEvalCacheExpiryByTTL(t *testing.T) {
-	// short TTL so entries expire quickly
+	// short CacheTTL so entries expire quickly
 	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 200*time.Millisecond))
 	ctx := makeContext(true, true)
 
@@ -645,7 +674,7 @@ func TestEvalCacheExpiryByTTL(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, eval.cacheSize()) // compiled once
 
-	// wait until the TTL expires
+	// wait until the CacheTTL expires
 	time.Sleep(300 * time.Millisecond)
 
 	_, err = eval.EvalBooleanExpression(expr, &ctx)

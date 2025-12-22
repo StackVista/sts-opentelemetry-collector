@@ -20,15 +20,17 @@ import (
 )
 
 type connectorImpl struct {
-	cfg              *Config
-	logger           *zap.Logger
-	logsConsumer     consumer.Logs
-	settingsProvider stsSettingsApi.StsSettingsProvider
-	snapshotManager  *SnapshotManager
-	eval             *internal.CelEvaluator
-	mapper           *internal.Mapper
-	metricsRecorder  metrics.ConnectorMetricsRecorder
-	supportedSignal  settings.OtelInputSignal
+	cfg                  *Config
+	logger               *zap.Logger
+	logsConsumer         consumer.Logs
+	settingsProvider     stsSettingsApi.StsSettingsProvider
+	snapshotManager      *SnapshotManager
+	expressionRefManager ExpressionRefManager
+	eval                 internal.ExpressionEvaluator
+	deduplicator         internal.Deduplicator
+	mapper               *internal.Mapper
+	metricsRecorder      metrics.ConnectorMetricsRecorder
+	supportedSignal      settings.OtelInputSignal
 }
 
 func newConnector(
@@ -38,20 +40,24 @@ func newConnector(
 	telemetrySettings component.TelemetrySettings,
 	nextConsumer consumer.Logs,
 	snapshotManager *SnapshotManager,
-	eval *internal.CelEvaluator,
+	expressionRefManager ExpressionRefManager,
+	eval internal.ExpressionEvaluator,
+	deduplicator internal.Deduplicator,
 	mapper *internal.Mapper,
 	supportedSignal settings.OtelInputSignal,
 ) *connectorImpl {
 	logger.Info("Building topology connector")
 	return &connectorImpl{
-		cfg:             &cfg,
-		logger:          logger,
-		logsConsumer:    nextConsumer,
-		eval:            eval,
-		mapper:          mapper,
-		snapshotManager: snapshotManager,
-		metricsRecorder: metrics.NewConnectorMetrics(Type.String(), telemetrySettings),
-		supportedSignal: supportedSignal,
+		cfg:                  &cfg,
+		logger:               logger,
+		logsConsumer:         nextConsumer,
+		eval:                 eval,
+		deduplicator:         deduplicator,
+		mapper:               mapper,
+		snapshotManager:      snapshotManager,
+		expressionRefManager: expressionRefManager,
+		metricsRecorder:      metrics.NewConnectorMetrics(Type.String(), telemetrySettings),
+		supportedSignal:      supportedSignal,
 	}
 }
 
@@ -93,14 +99,14 @@ func (p *connectorImpl) Capabilities() consumer.Capabilities {
 
 func (p *connectorImpl) ConsumeMetrics(ctx context.Context, metrics pmetric.Metrics) error {
 	start := time.Now()
-
 	collectionTimestampMs := time.Now().UnixMilli()
-	componentMappings, relationMappings := p.snapshotManager.Current(p.supportedSignal)
 
+	componentMappings, relationMappings := p.snapshotManager.Current(p.supportedSignal)
 	messagesWithKeys := internal.ConvertMetricsToTopologyStreamMessage(
 		ctx,
 		p.logger,
 		p.eval,
+		p.deduplicator,
 		p.mapper,
 		metrics,
 		componentMappings,
@@ -129,6 +135,7 @@ func (p *connectorImpl) ConsumeTraces(ctx context.Context, traceData ptrace.Trac
 		ctx,
 		p.logger,
 		p.eval,
+		p.deduplicator,
 		p.mapper,
 		traceData,
 		componentMappings,
@@ -138,7 +145,6 @@ func (p *connectorImpl) ConsumeTraces(ctx context.Context, traceData ptrace.Trac
 	)
 
 	duration := time.Since(start)
-
 	p.publishMessagesAsLogs(ctx, messages)
 
 	p.metricsRecorder.RecordRequestDuration(

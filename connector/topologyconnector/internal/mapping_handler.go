@@ -5,6 +5,8 @@ import (
 	"time"
 
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
+	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/types"
+
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
 )
@@ -95,12 +97,14 @@ func (h *MappingHandler[T]) evaluateCondition(
 
 // BaseContext contains shared dependencies used by all mapping contexts.
 type BaseContext struct {
-	Signal              settings.OtelInputSignal
-	Mapper              *Mapper
-	Evaluator           ExpressionEvaluator
-	CollectionTimestamp int64
-	MetricsRecorder     metrics.ConnectorMetricsRecorder
-	Results             *[]MessageWithKey
+	Signal                 settings.OtelInputSignal
+	Mapper                 *Mapper
+	Evaluator              ExpressionEvaluator
+	Deduplicator           Deduplicator
+	ExpressionRefSummaries map[string]*types.ExpressionRefSummary
+	CollectionTimestamp    int64
+	MetricsRecorder        metrics.ConnectorMetricsRecorder
+	Results                *[]MessageWithKey
 }
 
 // MappingContext binds a specific mapping (component or relation) to its runtime (dependency) context.
@@ -114,6 +118,15 @@ func (v *MappingContext[T]) ExecuteMapping(
 	ctx context.Context,
 	evalCtx *ExpressionEvalContext,
 ) {
+	// Perform pre-mapping deduplication
+	send := v.BaseCtx.Deduplicator.ShouldSend(
+		v.Mapping.GetIdentifier(), v.BaseCtx.Signal, evalCtx,
+		time.Duration(v.Mapping.GetExpireAfterMs())*time.Millisecond,
+	)
+	if !send {
+		return
+	}
+
 	switch mapping := any(v.Mapping).(type) {
 	case settings.OtelComponentMapping:
 		v.handleComponent(ctx, evalCtx, mapping)
@@ -167,7 +180,8 @@ func (v *MappingContext[T]) handleComponent(
 func (v *MappingContext[T]) handleRelation(
 	ctx context.Context,
 	evalCtx *ExpressionEvalContext,
-	mapping settings.OtelRelationMapping) {
+	mapping settings.OtelRelationMapping,
+) {
 	relation, errs := convertToRelation(v.BaseCtx.Evaluator, v.BaseCtx.Mapper, evalCtx, &mapping)
 	if relation != nil {
 		*v.BaseCtx.Results = append(

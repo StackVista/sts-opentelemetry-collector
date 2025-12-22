@@ -38,7 +38,7 @@ type TopologyTestEnv struct {
 	Cleanup   func()
 }
 
-func SetupTopologyTest(t *testing.T, numCollectors int) *TopologyTestEnv {
+func SetupTopologyTest(t *testing.T, numCollectors int, deduplicationEnabled bool) *TopologyTestEnv {
 	t.Helper()
 	logger := zaptest.NewLogger(t)
 
@@ -54,11 +54,12 @@ func SetupTopologyTest(t *testing.T, numCollectors int) *TopologyTestEnv {
 	require.NoError(t, CreateTopics(ctx, kafkaInstance.HostAddr, []string{settingsTopic, topologyTopic}))
 
 	cfg := CollectorConfig{
-		NumCollectors:     numCollectors,
-		DockerNetworkName: network.Name,
-		KafkaBroker:       kafkaInstance.ContainerAddr,
-		SettingsTopic:     settingsTopic,
-		TopologyTopic:     topologyTopic,
+		NumCollectors:        numCollectors,
+		DockerNetworkName:    network.Name,
+		KafkaBroker:          kafkaInstance.ContainerAddr,
+		SettingsTopic:        settingsTopic,
+		TopologyTopic:        topologyTopic,
+		DeduplicationEnabled: deduplicationEnabled,
 	}
 
 	collectors := StartCollectors(ctx, t, cfg)

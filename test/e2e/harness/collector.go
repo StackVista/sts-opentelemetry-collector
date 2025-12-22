@@ -39,13 +39,14 @@ type CollectorInstance struct {
 }
 
 type CollectorConfig struct {
-	NumCollectors     int
-	TemplatePath      string
-	DockerNetworkName string
-	KafkaBroker       string
-	SettingsTopic     string
-	TopologyTopic     string
-	OtlpGRPCEndpoint  string
+	NumCollectors        int
+	TemplatePath         string
+	DockerNetworkName    string
+	KafkaBroker          string
+	SettingsTopic        string
+	TopologyTopic        string
+	OtlpGRPCEndpoint     string
+	DeduplicationEnabled bool
 }
 
 func collectorImage() string {

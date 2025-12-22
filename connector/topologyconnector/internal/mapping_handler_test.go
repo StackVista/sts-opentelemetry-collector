@@ -35,6 +35,26 @@ func (m *mockEvaluator) EvalAnyExpression(_ settings.OtelAnyExpression, _ *inter
 	return nil, nil
 }
 
+func (m *mockEvaluator) GetStringExpressionAST(_ settings.OtelStringExpression) (*internal.GetASTResult, error) {
+	//nolint:nilnil
+	return nil, nil
+}
+
+func (m *mockEvaluator) GetBooleanExpressionAST(_ settings.OtelBooleanExpression) (*internal.GetASTResult, error) {
+	//nolint:nilnil
+	return nil, nil
+}
+
+func (m *mockEvaluator) GetMapExpressionAST(_ settings.OtelAnyExpression) (*internal.GetASTResult, error) {
+	//nolint:nilnil
+	return nil, nil
+}
+
+func (m *mockEvaluator) GetAnyExpressionAST(_ settings.OtelAnyExpression) (*internal.GetASTResult, error) {
+	//nolint:nilnil
+	return nil, nil
+}
+
 func makeHandler(t *testing.T, eval *mockEvaluator) (*internal.MappingHandler[settings.OtelComponentMapping], *bool) {
 	t.Helper()
 	executed := false
