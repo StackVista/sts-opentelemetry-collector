@@ -7,21 +7,29 @@ package clickhousestsexporter // import "github.com/stackvista/sts-opentelemetry
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	_ "github.com/ClickHouse/clickhouse-go/v2" // For register database driver.
+	topostream "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter/internal"
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter/internal/topology"
+	"github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 	conventions "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
 )
 
 type LogsExporter struct {
-	client    *sql.DB
-	insertSQL string
+	client             *sql.DB
+	insertSQL          string
+	insertComponentSQL string
+	insertRelationSQL  string
 
 	logger *zap.Logger
 	cfg    *Config
@@ -34,10 +42,12 @@ func NewLogsExporter(logger *zap.Logger, cfg *Config) (*LogsExporter, error) {
 	}
 
 	return &LogsExporter{
-		client:    client,
-		insertSQL: renderInsertLogsSQL(cfg),
-		logger:    logger,
-		cfg:       cfg,
+		client:             client,
+		insertSQL:          renderInsertLogsSQL(cfg),
+		insertComponentSQL: topology.RenderInsertComponentsSQL(cfg),
+		insertRelationSQL:  topology.RenderInsertRelationsSQL(cfg),
+		logger:             logger,
+		cfg:                cfg,
 	}, nil
 }
 
@@ -46,7 +56,40 @@ func (e *LogsExporter) Start(ctx context.Context, _ component.Host) error {
 		return err
 	}
 
-	return createLogsTable(ctx, e.cfg, e.client)
+	if e.cfg.EnableLogs && e.cfg.CreateLogsTable {
+		if err := createLogsTable(ctx, e.cfg, e.client); err != nil {
+			return err
+		}
+	}
+
+	if e.cfg.EnableTopology && e.cfg.CreateTopologyTable {
+		if err := topology.CreateComponentsTable(ctx, e.cfg, e.client); err != nil {
+			return fmt.Errorf("failed to create components table: %w", err)
+		}
+		if err := topology.CreateRelationsTable(ctx, e.cfg, e.client); err != nil {
+			return fmt.Errorf("failed to create relations table: %w", err)
+		}
+		if err := topology.CreateComponentsFirstSeenTable(ctx, e.cfg, e.client); err != nil {
+			return fmt.Errorf("failed to create components time range table: %w", err)
+		}
+		if err := topology.CreateRelationsFirstSeenTable(ctx, e.cfg, e.client); err != nil {
+			return fmt.Errorf("failed to create relations time range table: %w", err)
+		}
+		if err := topology.CreateComponentsFirstSeenMV(ctx, e.cfg, e.client); err != nil {
+			return fmt.Errorf("failed to create components time range materialized view: %w", err)
+		}
+		if err := topology.CreateRelationsFirstSeenMV(ctx, e.cfg, e.client); err != nil {
+			return fmt.Errorf("failed to create relations time range materialized view: %w", err)
+		}
+	}
+
+	if e.cfg.EnableLogs {
+		e.logger.Info("Started logs exporter.")
+	}
+	if e.cfg.EnableTopology {
+		e.logger.Info("Started topology logs exporter.")
+	}
+	return nil
 }
 
 // shutdown will shut down the exporter.
@@ -57,63 +100,286 @@ func (e *LogsExporter) Shutdown(_ context.Context) error {
 	return nil
 }
 
+type componentData struct {
+	Timestamp        time.Time
+	Component        *topostream.TopologyStreamComponent
+	ExpiryIntervalMs int64
+}
+
+type relationData struct {
+	Timestamp        time.Time
+	Relation         *topostream.TopologyStreamRelation
+	ExpiryIntervalMs int64
+}
+
+type logsData struct {
+	resource  pcommon.Resource
+	scopeLogs plog.ScopeLogs
+	logRecord plog.LogRecord
+}
+
 func (e *LogsExporter) PushLogsData(ctx context.Context, ld plog.Logs) error {
 	start := time.Now()
-	err := doWithTx(ctx, e.client, func(tx *sql.Tx) error {
-		statement, err := tx.PrepareContext(ctx, e.insertSQL)
-		if err != nil {
-			return fmt.Errorf("PrepareContext:%w", err)
-		}
-		defer func() {
-			_ = statement.Close()
-		}()
-		var serviceName string
-		for i := 0; i < ld.ResourceLogs().Len(); i++ {
-			logs := ld.ResourceLogs().At(i)
-			res := logs.Resource()
-			resURL := logs.SchemaUrl()
-			resAttr := attributesToMap(res.Attributes())
-			if v, ok := res.Attributes().Get(string(conventions.ServiceNameKey)); ok {
-				serviceName = v.Str()
-			}
-			for j := 0; j < logs.ScopeLogs().Len(); j++ {
-				rs := logs.ScopeLogs().At(j).LogRecords()
-				scopeURL := logs.ScopeLogs().At(j).SchemaUrl()
-				scopeName := logs.ScopeLogs().At(j).Scope().Name()
-				scopeVersion := logs.ScopeLogs().At(j).Scope().Version()
-				scopeAttr := attributesToMap(logs.ScopeLogs().At(j).Scope().Attributes())
-				for k := 0; k < rs.Len(); k++ {
-					r := rs.At(k)
-					logAttr := attributesToMap(r.Attributes())
-					_, err = statement.ExecContext(ctx,
-						r.Timestamp().AsTime(),
-						TraceIDToHexOrEmptyString(r.TraceID()),
-						SpanIDToHexOrEmptyString(r.SpanID()),
-						uint32(r.Flags()),
-						r.SeverityText(),
-						int32(r.SeverityNumber()),
-						serviceName,
-						r.Body().AsString(),
-						resURL,
-						resAttr,
-						scopeURL,
-						scopeName,
-						scopeVersion,
-						scopeAttr,
-						logAttr,
-					)
-					if err != nil {
-						return fmt.Errorf("ExecContext:%w", err)
-					}
+
+	var logsToInsert []logsData
+	var componentsToInsert []componentData
+	var relationsToInsert []relationData
+
+	err := e.iterateLogsData(ld, func(res pcommon.Resource, scopeLogs plog.ScopeLogs, lr plog.LogRecord) error {
+		if _, ok := lr.Attributes().Get(stskafkaexporter.KafkaMessageKey); ok {
+			if e.cfg.EnableTopology {
+				comps, rels, err := e.parseTopologyLogRecord(lr)
+				if err != nil {
+					return err
 				}
+				componentsToInsert = append(componentsToInsert, comps...)
+				relationsToInsert = append(relationsToInsert, rels...)
 			}
+		} else if e.cfg.EnableLogs {
+			logsData := logsData{
+				resource:  res,
+				scopeLogs: scopeLogs,
+				logRecord: lr,
+			}
+			logsToInsert = append(logsToInsert, logsData)
 		}
 		return nil
 	})
+	if err != nil {
+		e.logger.Error("Failed to iterate over logs data", zap.Error(err))
+		return err
+	}
+
+	// Insert regular logs
+	if e.cfg.EnableLogs && len(logsToInsert) > 0 {
+		err := doWithTx(ctx, e.client, func(tx *sql.Tx) error {
+			logStatement, err := tx.PrepareContext(ctx, e.insertSQL)
+			if err != nil {
+				return fmt.Errorf("PrepareContext(log):%w", err)
+			}
+			defer func() { _ = logStatement.Close() }()
+
+			for _, logsData := range logsToInsert {
+				if err := e.pushRegularLogRecord(ctx, logStatement, logsData.resource, logsData.scopeLogs, logsData.logRecord); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	// Insert components
+	if e.cfg.EnableTopology && len(componentsToInsert) > 0 {
+		err := doWithTx(ctx, e.client, func(tx *sql.Tx) error {
+			componentStatement, err := tx.PrepareContext(ctx, e.insertComponentSQL)
+			if err != nil {
+				return fmt.Errorf("PrepareContext(component):%w", err)
+			}
+			defer func() { _ = componentStatement.Close() }()
+
+			for _, cd := range componentsToInsert {
+				if err := e.pushComponentLogRecord(ctx, componentStatement, cd); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			e.logger.Error("Failed to store components", zap.Error(err))
+			return err
+		}
+	}
+
+	// Insert relations
+	if e.cfg.EnableTopology && len(relationsToInsert) > 0 {
+		err := doWithTx(ctx, e.client, func(tx *sql.Tx) error {
+			relationStatement, err := tx.PrepareContext(ctx, e.insertRelationSQL)
+			if err != nil {
+				return fmt.Errorf("PrepareContext(relation):%w", err)
+			}
+			defer func() { _ = relationStatement.Close() }()
+
+			for _, rd := range relationsToInsert {
+				if err := e.pushRelationLogRecord(ctx, relationStatement, rd); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			e.logger.Error("Failed to store relations", zap.Error(err))
+			return err
+		}
+	}
+
 	duration := time.Since(start)
-	e.logger.Debug("insert logs", zap.Int("records", ld.LogRecordCount()),
+	e.logger.Debug("insert logs and topology", zap.Int("records", ld.LogRecordCount()),
 		zap.String("cost", duration.String()))
-	return err
+	return nil
+}
+
+func (e *LogsExporter) iterateLogsData(ld plog.Logs, f func(pcommon.Resource, plog.ScopeLogs, plog.LogRecord) error) error {
+	for i := 0; i < ld.ResourceLogs().Len(); i++ {
+		logs := ld.ResourceLogs().At(i)
+		res := logs.Resource()
+		for j := 0; j < logs.ScopeLogs().Len(); j++ {
+			scopeLogs := logs.ScopeLogs().At(j)
+			for k := 0; k < scopeLogs.LogRecords().Len(); k++ {
+				lr := scopeLogs.LogRecords().At(k)
+				err := f(res, scopeLogs, lr)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (e *LogsExporter) pushRegularLogRecord(ctx context.Context, statement *sql.Stmt, res pcommon.Resource, scopeLogs plog.ScopeLogs, r plog.LogRecord) error {
+	var serviceName string
+	if v, ok := res.Attributes().Get(string(conventions.ServiceNameKey)); ok {
+		serviceName = v.Str()
+	}
+	resURL := scopeLogs.SchemaUrl()
+	resAttr := attributesToMap(res.Attributes())
+	scopeURL := scopeLogs.SchemaUrl()
+	scopeName := scopeLogs.Scope().Name()
+	scopeVersion := scopeLogs.Scope().Version()
+	scopeAttr := attributesToMap(scopeLogs.Scope().Attributes())
+	logAttr := attributesToMap(r.Attributes())
+
+	_, err := statement.ExecContext(ctx,
+		r.Timestamp().AsTime(),
+		TraceIDToHexOrEmptyString(r.TraceID()),
+		SpanIDToHexOrEmptyString(r.SpanID()),
+		uint32(r.Flags()),
+		r.SeverityText(),
+		int32(r.SeverityNumber()),
+		serviceName,
+		r.Body().AsString(),
+		resURL,
+		resAttr,
+		scopeURL,
+		scopeName,
+		scopeVersion,
+		scopeAttr,
+		logAttr,
+	)
+	if err != nil {
+		return fmt.Errorf("ExecContext:%w", err)
+	}
+	return nil
+}
+
+func (e *LogsExporter) parseTopologyLogRecord(r plog.LogRecord) ([]componentData, []relationData, error) {
+	body := r.Body().Bytes().AsRaw()
+	if body == nil {
+		return nil, nil, nil
+	}
+
+	var msg topostream.TopologyStreamMessage
+	if err := proto.Unmarshal(body, &msg); err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal topology stream message: %w", err)
+	}
+
+	var components []*topostream.TopologyStreamComponent
+	var relations []*topostream.TopologyStreamRelation
+	var expiryIntervalMs *int64
+
+	switch payload := msg.Payload.(type) {
+	// TODO: We now ignore the difference between snapshots and repeat elements data.
+	case *topostream.TopologyStreamMessage_TopologyStreamSnapshotData:
+		expiryIntervalMs = payload.TopologyStreamSnapshotData.ExpiryIntervalMs
+		components = payload.TopologyStreamSnapshotData.GetComponents()
+		relations = payload.TopologyStreamSnapshotData.GetRelations()
+	case *topostream.TopologyStreamMessage_TopologyStreamRepeatElementsData:
+		expiryIntervalMs = &payload.TopologyStreamRepeatElementsData.ExpiryIntervalMs
+		components = payload.TopologyStreamRepeatElementsData.GetComponents()
+		relations = payload.TopologyStreamRepeatElementsData.GetRelations()
+	}
+	timestamp := time.UnixMilli(msg.GetCollectionTimestamp())
+
+	expiryMs := (int64)(60 * 1000 * 10) // default expiry for snapshots without one
+	if expiryIntervalMs != nil {
+		expiryMs = *expiryIntervalMs
+	}
+
+	compsData := make([]componentData, 0, len(components))
+	for _, comp := range components {
+		compsData = append(compsData, componentData{Timestamp: timestamp, Component: comp, ExpiryIntervalMs: expiryMs})
+	}
+
+	relsData := make([]relationData, 0, len(relations))
+	for _, rel := range relations {
+		relsData = append(relsData, relationData{Timestamp: timestamp, Relation: rel, ExpiryIntervalMs: expiryMs})
+	}
+
+	return compsData, relsData, nil
+}
+
+func (e *LogsExporter) pushComponentLogRecord(ctx context.Context, statement *sql.Stmt, c componentData) error {
+	resourceDefBytes, err := json.Marshal(c.Component.GetResourceDefinition())
+	if err != nil {
+		return fmt.Errorf("ExecContext component: marshal resource definition:%w", err)
+	}
+	statusDataBytes, err := json.Marshal(c.Component.GetStatusData())
+	if err != nil {
+		return fmt.Errorf("ExecContext component: marshal status data:%w", err)
+	}
+
+	sortedLabels := c.Component.GetTags()
+	slices.Sort(sortedLabels)
+
+	expiresAt := c.Timestamp.Add(time.Duration(c.ExpiryIntervalMs) * time.Millisecond)
+	_, err = statement.ExecContext(ctx,
+		c.Timestamp,
+		// TODO: This uses externalId which is the main identifier
+		// for open telemetry data, but this doesn't have to be like that
+		c.Component.GetExternalId(),
+		c.Component.GetName(),
+		sortedLabels,
+		map[string]string{}, // Empty Properties placeholder
+		c.Component.GetTypeName(),
+		c.Component.GetTypeIdentifier(),
+		c.Component.GetLayerName(),
+		c.Component.GetLayerIdentifier(),
+		c.Component.GetDomainName(),
+		c.Component.GetDomainIdentifier(),
+		c.Component.GetIdentifiers(),
+		string(resourceDefBytes),
+		string(statusDataBytes),
+		expiresAt,
+	)
+	if err != nil {
+		return fmt.Errorf("ExecContext component:%w", err)
+	}
+	return nil
+}
+
+func (e *LogsExporter) pushRelationLogRecord(ctx context.Context, statement *sql.Stmt, r relationData) error {
+	expiresAt := r.Timestamp.Add(time.Duration(r.ExpiryIntervalMs) * time.Millisecond)
+
+	sortedLabels := r.Relation.GetTags()
+	slices.Sort(sortedLabels)
+
+	_, err := statement.ExecContext(ctx,
+		r.Timestamp,
+		r.Relation.GetName(),
+		sortedLabels,
+		r.Relation.GetTypeName(),
+		r.Relation.GetTypeIdentifier(),
+		r.Relation.GetSourceIdentifier(),
+		r.Relation.GetTargetIdentifier(),
+		expiresAt,
+	)
+	if err != nil {
+		return fmt.Errorf("ExecContext relation:%w", err)
+	}
+	return nil
 }
 
 func attributesToMap(attributes pcommon.Map) map[string]string {

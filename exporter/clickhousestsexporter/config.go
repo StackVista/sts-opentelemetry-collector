@@ -41,6 +41,26 @@ type Config struct {
 	MetricsTableName string `mapstructure:"metrics_table_name"`
 	// ResourcesTableName is the table name for resources. default is `otel_resources`.
 	ResourcesTableName string `mapstructure:"resources_table_name"`
+	// ComponentsTableName is the table name for components. default is `otel_components`.
+	ComponentsTableName string `mapstructure:"components_table_name"`
+	// RelationsTableName is the table name for relations. default is `otel_relations`.
+	RelationsTableName string `mapstructure:"relations_table_name"`
+	// ComponentsFirstSeenTableName is the table name for components first seen. default is `otel_components_first_seen`.
+	ComponentsFirstSeenTableName string `mapstructure:"components_first_seen_table_name"`
+	// RelationsFirstSeenTableName is the table name for relations first seen. default is `otel_relations_first_seen`.
+	RelationsFirstSeenTableName string `mapstructure:"relations_first_seen_table_name"`
+	// ComponentsFieldValuesTableName is the table name for components field values. default is `otel_components_field_values`.
+	ComponentsFieldValuesTableName string `mapstructure:"components_field_values_table_name"`
+	// RelationsFieldValuesTableName is the table name for relations field values. default is `otel_relations_field_values`.
+	RelationsFieldValuesTableName string `mapstructure:"relations_field_values_table_name"`
+	// ComponentsFirstSeenMVName is the materialized view name for components first seen. default is `otel_components_first_seen_mv`.
+	ComponentsFirstSeenMVName string `mapstructure:"components_first_seen_mv_name"`
+	// RelationsFirstSeenMVName is the materialized view name for relations first seen. default is `otel_relations_first_seen_mv`.
+	RelationsFirstSeenMVName string `mapstructure:"relations_first_seen_mv_name"`
+	// ComponentsFieldValuesMVName is the materialized view name for components field values. default is `otel_components_field_values_mv`.
+	ComponentsFieldValuesMVName string `mapstructure:"components_field_values_mv_name"`
+	// RelationsFieldValuesMVName is the materialized view name for relations field values. default is `otel_relations_field_values_mv`.
+	RelationsFieldValuesMVName string `mapstructure:"relations_relations_field_values_mv_name"`
 
 	// Deprecated: Use 'ttl' instead
 	TTLDays uint `mapstructure:"ttl_days"`
@@ -48,8 +68,18 @@ type Config struct {
 	TTL time.Duration `mapstructure:"ttl"`
 	// Create the traces table on startup
 	CreateTracesTable bool `mapstructure:"create_traces_table"`
+	// Create the logs table on startup
+	CreateLogsTable bool `mapstructure:"create_logs_table"`
+	// Create the metrics table on startup
+	CreateMetricsTable bool `mapstructure:"create_metrics_table"`
 	// Create the resources table on startup
 	CreateResourcesTable bool `mapstructure:"create_resources_table"`
+	// Create the topology table on startup
+	CreateTopologyTable bool `mapstructure:"create_topology_table"`
+	// EnableLogs enables the logs exporter.
+	EnableLogs bool `mapstructure:"enable_logs"`
+	// EnableTopology enables the topology exporter.
+	EnableTopology bool `mapstructure:"enable_topology"`
 
 	driverName string
 }
@@ -156,4 +186,52 @@ func (cfg *Config) BuildDB(database string) (*sql.DB, error) {
 // utility testing function
 func (cfg *Config) SetDriverName(driverName string) {
 	cfg.driverName = driverName
+}
+
+func (cfg *Config) GetTTLDays() uint {
+	return cfg.TTLDays
+}
+
+func (cfg *Config) GetTTL() time.Duration {
+	return cfg.TTL
+}
+
+func (cfg *Config) GetComponentsTableName() string {
+	return cfg.ComponentsTableName
+}
+
+func (cfg *Config) GetRelationsTableName() string {
+	return cfg.RelationsTableName
+}
+
+func (cfg *Config) GetComponentsFirstSeenTableName() string {
+	return cfg.ComponentsFirstSeenTableName
+}
+
+func (cfg *Config) GetRelationsFirstSeenTableName() string {
+	return cfg.RelationsFirstSeenTableName
+}
+
+func (cfg *Config) GetComponentsFieldValuesTableName() string {
+	return cfg.ComponentsFieldValuesTableName
+}
+
+func (cfg *Config) GetRelationsFieldValuesTableName() string {
+	return cfg.RelationsFieldValuesTableName
+}
+
+func (cfg *Config) GetComponentsFirstSeenMVName() string {
+	return cfg.ComponentsFirstSeenMVName
+}
+
+func (cfg *Config) GetRelationsFirstSeenMVName() string {
+	return cfg.RelationsFirstSeenMVName
+}
+
+func (cfg *Config) GetComponentsFieldValuesMVName() string {
+	return cfg.ComponentsFieldValuesMVName
+}
+
+func (cfg *Config) GetRelationsFieldValuesMVName() string {
+	return cfg.RelationsFieldValuesMVName
 }
