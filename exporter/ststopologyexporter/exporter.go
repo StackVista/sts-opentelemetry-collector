@@ -198,30 +198,39 @@ func (t *TopologyExporter) sendCollection(componentsByAPIKey map[string]*interna
 		res, err := t.httpClient.Do(req)
 		if err != nil {
 			log.Error("Receiver endpoint returned an error ", zap.Error(err))
+			// res may be nil on error, so continue to prevent nil pointer dereference
+			continue
 		}
 
-		if res.StatusCode == 403 {
-			log.Error("API Key was not valid", zap.Error(err))
-		}
-		if res.StatusCode < 300 {
-			log.Debug(
-				fmt.Sprintf("Sent %d components, %d relations for key ...%s (status %d)",
-					len(components),
-					len(relations),
-					apiKey[len(apiKey)-4:],
-					res.StatusCode,
-				),
-			)
-		} else {
-			log.Error(
-				fmt.Sprintf("Failed to send %d components, %d relations for key ...%s (status %d)",
-					len(components),
-					len(relations),
-					apiKey[len(apiKey)-4:],
-					res.StatusCode,
-				),
-			)
-		}
+		// Small inner function to ensure defer runs at the end of each loop iteration, allowing the response body to be
+		// closed for each request
+		func() {
+			// According to the httpClient.Do docs, we need to close the response body (to utilise keep-alive connections)
+			defer res.Body.Close()
+
+			if res.StatusCode == 403 {
+				log.Error("API Key was not valid")
+			}
+			if res.StatusCode < 300 {
+				log.Debug(
+					fmt.Sprintf("Sent %d components, %d relations for key ...%s (status %d)",
+						len(components),
+						len(relations),
+						apiKey[len(apiKey)-4:],
+						res.StatusCode,
+					),
+				)
+			} else {
+				log.Error(
+					fmt.Sprintf("Failed to send %d components, %d relations for key ...%s (status %d)",
+						len(components),
+						len(relations),
+						apiKey[len(apiKey)-4:],
+						res.StatusCode,
+					),
+				)
+			}
+		}()
 	}
 	return nil
 }
