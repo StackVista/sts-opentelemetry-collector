@@ -98,6 +98,17 @@ func TestExporter_simpleTrace(t *testing.T) {
 
 }
 
+func TestExporter_sendCollection_httpErrorDoesNotPanic(t *testing.T) {
+	// Create exporter with an endpoint that cannot be reached, forcing a non-nil error on httpClient.Do invocations.
+	exporter := newTestExporter(t, "http://127.0.0.1:0") // invalid port
+
+	// Use simpleMetrics to force a send.
+	err := exporter.ConsumeMetrics(context.Background(), simpleMetrics())
+
+	// We expect no panic and no error returned from ConsumeMetrics.
+	require.NoError(t, err)
+}
+
 // simpleMetrics there will be added two ResourceMetrics and each of them have count data point
 func simpleMetrics() pmetric.Metrics {
 	metrics := pmetric.NewMetrics()
