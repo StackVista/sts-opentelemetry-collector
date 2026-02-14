@@ -521,7 +521,7 @@ func stringify(result interface{}) (string, error) {
 		return v, nil
 	case fmt.Stringer:
 		return v.String(), nil
-	case int, int16, int32, uint64, int64, float32, float64:
+	case uint, int, int8, uint8, int16, uint16, int32, uint32, int64, uint64, float32, float64:
 		return fmt.Sprint(v), nil
 	default:
 		return "", newCelEvaluationError("cannot convert '%T' to 'string'", result)
