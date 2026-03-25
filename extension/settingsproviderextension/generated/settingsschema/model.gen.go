@@ -93,14 +93,9 @@ const (
 	LastUpdatedTimestampSourceTypeLastUpdatedTimestampSource LastUpdatedTimestampSourceType = "LastUpdatedTimestampSource"
 )
 
-// Defines values for MapProjectionType.
+// Defines values for MetricChartProjectionType.
 const (
-	MapProjectionTypeMapProjection MapProjectionType = "MapProjection"
-)
-
-// Defines values for MetricProjectionType.
-const (
-	MetricProjectionTypeMetricProjection MetricProjectionType = "MetricProjection"
+	MetricChartProjectionTypeMetricChartProjection MetricChartProjectionType = "MetricChartProjection"
 )
 
 // Defines values for NameSourceType.
@@ -128,14 +123,14 @@ const (
 	RatioDisplayTypeRatioDisplay RatioDisplayType = "RatioDisplay"
 )
 
-// Defines values for RatioProjectionType.
-const (
-	RatioProjectionTypeRatioProjection RatioProjectionType = "RatioProjection"
-)
-
 // Defines values for ReadyStatusDisplayType.
 const (
 	ReadyStatusDisplayTypeRatioDisplay ReadyStatusDisplayType = "RatioDisplay"
+)
+
+// Defines values for ReadyStatusProjectionType.
+const (
+	ReadyStatusProjectionTypeReadyStatusProjection ReadyStatusProjectionType = "ReadyStatusProjection"
 )
 
 // Defines values for TagDisplayType.
@@ -259,11 +254,6 @@ type ComponentHighlightMetrics struct {
 	Name            string   `json:"name"`
 }
 
-// ComponentHighlightProjection Display type and value for the field.
-type ComponentHighlightProjection struct {
-	union json.RawMessage
-}
-
 // ComponentLinkDisplay defines model for ComponentLinkDisplay.
 type ComponentLinkDisplay struct {
 	Type ComponentLinkDisplayType `json:"_type"`
@@ -276,8 +266,8 @@ type ComponentLinkDisplayType string
 type ComponentLinkProjection struct {
 	Type ComponentLinkProjectionType `json:"_type"`
 
-	// Identifier Cel expression that returns a string that represents the identifier in order to build the link
-	Identifier string `json:"identifier"`
+	// ComponentIdentifier Cel expression that returns a string that represents the componentIdentifier in order to build the link
+	ComponentIdentifier string `json:"componentIdentifier"`
 
 	// Name Cel expression that returns a string that represents the name of the component to link to
 	Name string `json:"name"`
@@ -285,11 +275,6 @@ type ComponentLinkProjection struct {
 
 // ComponentLinkProjectionType defines model for ComponentLinkProjection.Type.
 type ComponentLinkProjectionType string
-
-// ComponentOverviewProjection Display type and value for the field.
-type ComponentOverviewProjection struct {
-	union json.RawMessage
-}
 
 // ComponentPresentationQueryBinding defines model for ComponentPresentationQueryBinding.
 type ComponentPresentationQueryBinding struct {
@@ -422,11 +407,11 @@ type DurationDisplayType string
 type DurationProjection struct {
 	Type DurationProjectionType `json:"_type"`
 
-	// EndTime Cel expression that returns an ISO8601 formatted timestamp
-	EndTime *string `json:"endTime,omitempty"`
+	// EndDate Cel expression that returns a date
+	EndDate *string `json:"endDate,omitempty"`
 
-	// StartTime Cel expression that returns an ISO8601 formatted timestamp
-	StartTime string `json:"startTime"`
+	// StartDate Cel expression that returns a date
+	StartDate string `json:"startDate"`
 }
 
 // DurationProjectionType defines model for DurationProjection.Type.
@@ -493,22 +478,10 @@ type LastUpdatedTimestampSource struct {
 // LastUpdatedTimestampSourceType defines model for LastUpdatedTimestampSource.Type.
 type LastUpdatedTimestampSourceType string
 
-// MapProjection defines model for MapProjection.
-type MapProjection struct {
-	Type   MapProjectionType `json:"_type"`
-	AsTags *bool             `json:"asTags,omitempty"`
-
-	// Value Cel expression that returns a map<string,dyn>
-	Value string `json:"value"`
-}
-
-// MapProjectionType defines model for MapProjection.Type.
-type MapProjectionType string
-
-// MetricProjection defines model for MetricProjection.
-type MetricProjection struct {
-	Type          MetricProjectionType `json:"_type"`
-	DecimalPlaces *int                 `json:"decimalPlaces,omitempty"`
+// MetricChartProjection defines model for MetricChartProjection.
+type MetricChartProjection struct {
+	Type          MetricChartProjectionType `json:"_type"`
+	DecimalPlaces *int                      `json:"decimalPlaces,omitempty"`
 
 	// Query Individual metric query that returns a timeseries for a specific cell.
 	Query     string  `json:"query"`
@@ -516,8 +489,8 @@ type MetricProjection struct {
 	Unit      *string `json:"unit,omitempty"`
 }
 
-// MetricProjectionType defines model for MetricProjection.Type.
-type MetricProjectionType string
+// MetricChartProjectionType defines model for MetricChartProjection.Type.
+type MetricChartProjectionType string
 
 // NameSource defines model for NameSource.
 type NameSource struct {
@@ -544,39 +517,23 @@ type NumericProjectionType string
 type OverviewColumnDefinition struct {
 	ColumnId string `json:"columnId"`
 
-	// Projection Display type and value for the field.
-	Projection *ComponentOverviewProjection `json:"projection,omitempty"`
-	Title      *string                      `json:"title,omitempty"`
+	// Projection Display type and value for the column.
+	Projection *OverviewColumnProjection `json:"projection,omitempty"`
+	Title      *string                   `json:"title,omitempty"`
+}
+
+// OverviewColumnProjection Display type and value for the column.
+type OverviewColumnProjection struct {
+	union json.RawMessage
 }
 
 // PresentationDefinition defines model for PresentationDefinition.
 type PresentationDefinition struct {
-	// Highlight Highlight presentation definition. The `fields` define the fields to show in the ab. The `flags` field can be used to enable/disable functionalities.
-	// If multiple ComponentPresentations match, columns are merged by `columnId` according to binding rank. Absence of the field means no overview is shown.
-	Highlight *PresentationHighlight `json:"highlight,omitempty"`
-	Icon      *string                `json:"icon,omitempty"`
+	Icon *string `json:"icon,omitempty"`
 
 	// Overview Overview presentation definition. The `columns` field defines the columns to show in the overview table. The `flags` field can be used to enable/disable functionalities.
 	// If multiple ComponentPresentations match, columns are merged by `columnId` according to binding rank. Absence of the field means no overview is shown.
 	Overview *PresentationOverview `json:"overview,omitempty"`
-}
-
-// PresentationHighlight Highlight presentation definition. The `fields` define the fields to show in the ab. The `flags` field can be used to enable/disable functionalities.
-// If multiple ComponentPresentations match, columns are merged by `columnId` according to binding rank. Absence of the field means no overview is shown.
-type PresentationHighlight struct {
-	Fields []PresentationHighlightField `json:"fields"`
-	Title  string                       `json:"title"`
-}
-
-// PresentationHighlightField Definition of a field in the highlight presentation. The `fieldId` field is used to identify the field and merge fields from different presentations.
-type PresentationHighlightField struct {
-	Description *string `json:"description,omitempty"`
-	FieldId     string  `json:"fieldId"`
-	Order       float64 `json:"order"`
-
-	// Projection Display type and value for the field.
-	Projection *ComponentHighlightProjection `json:"projection,omitempty"`
-	Title      string                        `json:"title"`
 }
 
 // PresentationMainMenu defines model for PresentationMainMenu.
@@ -628,23 +585,6 @@ type RatioDisplay struct {
 // RatioDisplayType defines model for RatioDisplay.Type.
 type RatioDisplayType string
 
-// RatioProjection Helps rendering columns that summarize success rates
-type RatioProjection struct {
-	Type RatioProjectionType `json:"_type"`
-
-	// Denominator Cel expression that returns a number
-	Denominator string `json:"denominator"`
-
-	// Numerator Cel expression that returns a number
-	Numerator string `json:"numerator"`
-
-	// Status Cel expression that returns a string that represents a valid HealthState
-	Status *string `json:"status,omitempty"`
-}
-
-// RatioProjectionType defines model for RatioProjection.Type.
-type RatioProjectionType string
-
 // ReadyStatusDisplay defines model for ReadyStatusDisplay.
 type ReadyStatusDisplay struct {
 	Type ReadyStatusDisplayType `json:"_type"`
@@ -652,6 +592,23 @@ type ReadyStatusDisplay struct {
 
 // ReadyStatusDisplayType defines model for ReadyStatusDisplay.Type.
 type ReadyStatusDisplayType string
+
+// ReadyStatusProjection Helps rendering columns as Ready containers for K8s pods or Completions for K8s jobs
+type ReadyStatusProjection struct {
+	Type ReadyStatusProjectionType `json:"_type"`
+
+	// ReadyNumber Cel expression that returns a number
+	ReadyNumber string `json:"readyNumber"`
+
+	// ReadyStatus Cel expression that returns a string that represents a valid HealthState
+	ReadyStatus *string `json:"readyStatus,omitempty"`
+
+	// TotalNumber Cel expression that returns a number
+	TotalNumber string `json:"totalNumber"`
+}
+
+// ReadyStatusProjectionType defines model for ReadyStatusProjection.Type.
+type ReadyStatusProjectionType string
 
 // TagDisplay defines model for TagDisplay.
 type TagDisplay struct {
@@ -690,9 +647,6 @@ type TextDisplayType string
 // TextProjection defines model for TextProjection.
 type TextProjection struct {
 	Type TextProjectionType `json:"_type"`
-
-	// AsTag Should the value be rendered as a tag or as plain text
-	AsTag *bool `json:"asTag,omitempty"`
 
 	// Value Cel expression that returns a string
 	Value string `json:"value"`
@@ -884,574 +838,6 @@ type ViewTypeTableColTime struct {
 
 // ViewTypeTableColTimeType defines model for ViewTypeTableColTime.Type.
 type ViewTypeTableColTimeType string
-
-// AsHealthProjection returns the union data inside the ComponentHighlightProjection as a HealthProjection
-func (t ComponentHighlightProjection) AsHealthProjection() (HealthProjection, error) {
-	var body HealthProjection
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromHealthProjection overwrites any union data inside the ComponentHighlightProjection as the provided HealthProjection
-func (t *ComponentHighlightProjection) FromHealthProjection(v HealthProjection) error {
-	v.Type = "HealthProjection"
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeHealthProjection performs a merge with any union data inside the ComponentHighlightProjection, using the provided HealthProjection
-func (t *ComponentHighlightProjection) MergeHealthProjection(v HealthProjection) error {
-	v.Type = "HealthProjection"
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsMetricProjection returns the union data inside the ComponentHighlightProjection as a MetricProjection
-func (t ComponentHighlightProjection) AsMetricProjection() (MetricProjection, error) {
-	var body MetricProjection
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromMetricProjection overwrites any union data inside the ComponentHighlightProjection as the provided MetricProjection
-func (t *ComponentHighlightProjection) FromMetricProjection(v MetricProjection) error {
-	v.Type = "MetricProjection"
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeMetricProjection performs a merge with any union data inside the ComponentHighlightProjection, using the provided MetricProjection
-func (t *ComponentHighlightProjection) MergeMetricProjection(v MetricProjection) error {
-	v.Type = "MetricProjection"
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsComponentLinkProjection returns the union data inside the ComponentHighlightProjection as a ComponentLinkProjection
-func (t ComponentHighlightProjection) AsComponentLinkProjection() (ComponentLinkProjection, error) {
-	var body ComponentLinkProjection
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromComponentLinkProjection overwrites any union data inside the ComponentHighlightProjection as the provided ComponentLinkProjection
-func (t *ComponentHighlightProjection) FromComponentLinkProjection(v ComponentLinkProjection) error {
-	v.Type = "ComponentLinkProjection"
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeComponentLinkProjection performs a merge with any union data inside the ComponentHighlightProjection, using the provided ComponentLinkProjection
-func (t *ComponentHighlightProjection) MergeComponentLinkProjection(v ComponentLinkProjection) error {
-	v.Type = "ComponentLinkProjection"
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsTextProjection returns the union data inside the ComponentHighlightProjection as a TextProjection
-func (t ComponentHighlightProjection) AsTextProjection() (TextProjection, error) {
-	var body TextProjection
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromTextProjection overwrites any union data inside the ComponentHighlightProjection as the provided TextProjection
-func (t *ComponentHighlightProjection) FromTextProjection(v TextProjection) error {
-	v.Type = "TextProjection"
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeTextProjection performs a merge with any union data inside the ComponentHighlightProjection, using the provided TextProjection
-func (t *ComponentHighlightProjection) MergeTextProjection(v TextProjection) error {
-	v.Type = "TextProjection"
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsNumericProjection returns the union data inside the ComponentHighlightProjection as a NumericProjection
-func (t ComponentHighlightProjection) AsNumericProjection() (NumericProjection, error) {
-	var body NumericProjection
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromNumericProjection overwrites any union data inside the ComponentHighlightProjection as the provided NumericProjection
-func (t *ComponentHighlightProjection) FromNumericProjection(v NumericProjection) error {
-	v.Type = "NumericProjection"
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeNumericProjection performs a merge with any union data inside the ComponentHighlightProjection, using the provided NumericProjection
-func (t *ComponentHighlightProjection) MergeNumericProjection(v NumericProjection) error {
-	v.Type = "NumericProjection"
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsDurationProjection returns the union data inside the ComponentHighlightProjection as a DurationProjection
-func (t ComponentHighlightProjection) AsDurationProjection() (DurationProjection, error) {
-	var body DurationProjection
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromDurationProjection overwrites any union data inside the ComponentHighlightProjection as the provided DurationProjection
-func (t *ComponentHighlightProjection) FromDurationProjection(v DurationProjection) error {
-	v.Type = "DurationProjection"
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeDurationProjection performs a merge with any union data inside the ComponentHighlightProjection, using the provided DurationProjection
-func (t *ComponentHighlightProjection) MergeDurationProjection(v DurationProjection) error {
-	v.Type = "DurationProjection"
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsRatioProjection returns the union data inside the ComponentHighlightProjection as a RatioProjection
-func (t ComponentHighlightProjection) AsRatioProjection() (RatioProjection, error) {
-	var body RatioProjection
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromRatioProjection overwrites any union data inside the ComponentHighlightProjection as the provided RatioProjection
-func (t *ComponentHighlightProjection) FromRatioProjection(v RatioProjection) error {
-	v.Type = "RatioProjection"
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeRatioProjection performs a merge with any union data inside the ComponentHighlightProjection, using the provided RatioProjection
-func (t *ComponentHighlightProjection) MergeRatioProjection(v RatioProjection) error {
-	v.Type = "RatioProjection"
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsContainerImageProjection returns the union data inside the ComponentHighlightProjection as a ContainerImageProjection
-func (t ComponentHighlightProjection) AsContainerImageProjection() (ContainerImageProjection, error) {
-	var body ContainerImageProjection
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromContainerImageProjection overwrites any union data inside the ComponentHighlightProjection as the provided ContainerImageProjection
-func (t *ComponentHighlightProjection) FromContainerImageProjection(v ContainerImageProjection) error {
-	v.Type = "ContainerImageProjection"
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeContainerImageProjection performs a merge with any union data inside the ComponentHighlightProjection, using the provided ContainerImageProjection
-func (t *ComponentHighlightProjection) MergeContainerImageProjection(v ContainerImageProjection) error {
-	v.Type = "ContainerImageProjection"
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsMapProjection returns the union data inside the ComponentHighlightProjection as a MapProjection
-func (t ComponentHighlightProjection) AsMapProjection() (MapProjection, error) {
-	var body MapProjection
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromMapProjection overwrites any union data inside the ComponentHighlightProjection as the provided MapProjection
-func (t *ComponentHighlightProjection) FromMapProjection(v MapProjection) error {
-	v.Type = "MapProjection"
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeMapProjection performs a merge with any union data inside the ComponentHighlightProjection, using the provided MapProjection
-func (t *ComponentHighlightProjection) MergeMapProjection(v MapProjection) error {
-	v.Type = "MapProjection"
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t ComponentHighlightProjection) Discriminator() (string, error) {
-	var discriminator struct {
-		Discriminator string `json:"_type"`
-	}
-	err := json.Unmarshal(t.union, &discriminator)
-	return discriminator.Discriminator, err
-}
-
-func (t ComponentHighlightProjection) ValueByDiscriminator() (interface{}, error) {
-	discriminator, err := t.Discriminator()
-	if err != nil {
-		return nil, err
-	}
-	switch discriminator {
-	case "ComponentLinkProjection":
-		return t.AsComponentLinkProjection()
-	case "ContainerImageProjection":
-		return t.AsContainerImageProjection()
-	case "DurationProjection":
-		return t.AsDurationProjection()
-	case "HealthProjection":
-		return t.AsHealthProjection()
-	case "MapProjection":
-		return t.AsMapProjection()
-	case "MetricProjection":
-		return t.AsMetricProjection()
-	case "NumericProjection":
-		return t.AsNumericProjection()
-	case "RatioProjection":
-		return t.AsRatioProjection()
-	case "TextProjection":
-		return t.AsTextProjection()
-	default:
-		return nil, errors.New("unknown discriminator value: " + discriminator)
-	}
-}
-
-func (t ComponentHighlightProjection) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *ComponentHighlightProjection) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
-// AsHealthProjection returns the union data inside the ComponentOverviewProjection as a HealthProjection
-func (t ComponentOverviewProjection) AsHealthProjection() (HealthProjection, error) {
-	var body HealthProjection
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromHealthProjection overwrites any union data inside the ComponentOverviewProjection as the provided HealthProjection
-func (t *ComponentOverviewProjection) FromHealthProjection(v HealthProjection) error {
-	v.Type = "HealthProjection"
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeHealthProjection performs a merge with any union data inside the ComponentOverviewProjection, using the provided HealthProjection
-func (t *ComponentOverviewProjection) MergeHealthProjection(v HealthProjection) error {
-	v.Type = "HealthProjection"
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsMetricProjection returns the union data inside the ComponentOverviewProjection as a MetricProjection
-func (t ComponentOverviewProjection) AsMetricProjection() (MetricProjection, error) {
-	var body MetricProjection
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromMetricProjection overwrites any union data inside the ComponentOverviewProjection as the provided MetricProjection
-func (t *ComponentOverviewProjection) FromMetricProjection(v MetricProjection) error {
-	v.Type = "MetricProjection"
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeMetricProjection performs a merge with any union data inside the ComponentOverviewProjection, using the provided MetricProjection
-func (t *ComponentOverviewProjection) MergeMetricProjection(v MetricProjection) error {
-	v.Type = "MetricProjection"
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsComponentLinkProjection returns the union data inside the ComponentOverviewProjection as a ComponentLinkProjection
-func (t ComponentOverviewProjection) AsComponentLinkProjection() (ComponentLinkProjection, error) {
-	var body ComponentLinkProjection
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromComponentLinkProjection overwrites any union data inside the ComponentOverviewProjection as the provided ComponentLinkProjection
-func (t *ComponentOverviewProjection) FromComponentLinkProjection(v ComponentLinkProjection) error {
-	v.Type = "ComponentLinkProjection"
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeComponentLinkProjection performs a merge with any union data inside the ComponentOverviewProjection, using the provided ComponentLinkProjection
-func (t *ComponentOverviewProjection) MergeComponentLinkProjection(v ComponentLinkProjection) error {
-	v.Type = "ComponentLinkProjection"
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsTextProjection returns the union data inside the ComponentOverviewProjection as a TextProjection
-func (t ComponentOverviewProjection) AsTextProjection() (TextProjection, error) {
-	var body TextProjection
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromTextProjection overwrites any union data inside the ComponentOverviewProjection as the provided TextProjection
-func (t *ComponentOverviewProjection) FromTextProjection(v TextProjection) error {
-	v.Type = "TextProjection"
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeTextProjection performs a merge with any union data inside the ComponentOverviewProjection, using the provided TextProjection
-func (t *ComponentOverviewProjection) MergeTextProjection(v TextProjection) error {
-	v.Type = "TextProjection"
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsNumericProjection returns the union data inside the ComponentOverviewProjection as a NumericProjection
-func (t ComponentOverviewProjection) AsNumericProjection() (NumericProjection, error) {
-	var body NumericProjection
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromNumericProjection overwrites any union data inside the ComponentOverviewProjection as the provided NumericProjection
-func (t *ComponentOverviewProjection) FromNumericProjection(v NumericProjection) error {
-	v.Type = "NumericProjection"
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeNumericProjection performs a merge with any union data inside the ComponentOverviewProjection, using the provided NumericProjection
-func (t *ComponentOverviewProjection) MergeNumericProjection(v NumericProjection) error {
-	v.Type = "NumericProjection"
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsDurationProjection returns the union data inside the ComponentOverviewProjection as a DurationProjection
-func (t ComponentOverviewProjection) AsDurationProjection() (DurationProjection, error) {
-	var body DurationProjection
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromDurationProjection overwrites any union data inside the ComponentOverviewProjection as the provided DurationProjection
-func (t *ComponentOverviewProjection) FromDurationProjection(v DurationProjection) error {
-	v.Type = "DurationProjection"
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeDurationProjection performs a merge with any union data inside the ComponentOverviewProjection, using the provided DurationProjection
-func (t *ComponentOverviewProjection) MergeDurationProjection(v DurationProjection) error {
-	v.Type = "DurationProjection"
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsRatioProjection returns the union data inside the ComponentOverviewProjection as a RatioProjection
-func (t ComponentOverviewProjection) AsRatioProjection() (RatioProjection, error) {
-	var body RatioProjection
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromRatioProjection overwrites any union data inside the ComponentOverviewProjection as the provided RatioProjection
-func (t *ComponentOverviewProjection) FromRatioProjection(v RatioProjection) error {
-	v.Type = "RatioProjection"
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeRatioProjection performs a merge with any union data inside the ComponentOverviewProjection, using the provided RatioProjection
-func (t *ComponentOverviewProjection) MergeRatioProjection(v RatioProjection) error {
-	v.Type = "RatioProjection"
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsContainerImageProjection returns the union data inside the ComponentOverviewProjection as a ContainerImageProjection
-func (t ComponentOverviewProjection) AsContainerImageProjection() (ContainerImageProjection, error) {
-	var body ContainerImageProjection
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromContainerImageProjection overwrites any union data inside the ComponentOverviewProjection as the provided ContainerImageProjection
-func (t *ComponentOverviewProjection) FromContainerImageProjection(v ContainerImageProjection) error {
-	v.Type = "ContainerImageProjection"
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeContainerImageProjection performs a merge with any union data inside the ComponentOverviewProjection, using the provided ContainerImageProjection
-func (t *ComponentOverviewProjection) MergeContainerImageProjection(v ContainerImageProjection) error {
-	v.Type = "ContainerImageProjection"
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t ComponentOverviewProjection) Discriminator() (string, error) {
-	var discriminator struct {
-		Discriminator string `json:"_type"`
-	}
-	err := json.Unmarshal(t.union, &discriminator)
-	return discriminator.Discriminator, err
-}
-
-func (t ComponentOverviewProjection) ValueByDiscriminator() (interface{}, error) {
-	discriminator, err := t.Discriminator()
-	if err != nil {
-		return nil, err
-	}
-	switch discriminator {
-	case "ComponentLinkProjection":
-		return t.AsComponentLinkProjection()
-	case "ContainerImageProjection":
-		return t.AsContainerImageProjection()
-	case "DurationProjection":
-		return t.AsDurationProjection()
-	case "HealthProjection":
-		return t.AsHealthProjection()
-	case "MetricProjection":
-		return t.AsMetricProjection()
-	case "NumericProjection":
-		return t.AsNumericProjection()
-	case "RatioProjection":
-		return t.AsRatioProjection()
-	case "TextProjection":
-		return t.AsTextProjection()
-	default:
-		return nil, errors.New("unknown discriminator value: " + discriminator)
-	}
-}
-
-func (t ComponentOverviewProjection) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *ComponentOverviewProjection) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
 
 // AsComponentLinkDisplay returns the union data inside the ComponentTypeFieldDisplay as a ComponentLinkDisplay
 func (t ComponentTypeFieldDisplay) AsComponentLinkDisplay() (ComponentLinkDisplay, error) {
@@ -2107,6 +1493,275 @@ func (t ComponentTypeValueExtractor) MarshalJSON() ([]byte, error) {
 }
 
 func (t *ComponentTypeValueExtractor) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsMetricChartProjection returns the union data inside the OverviewColumnProjection as a MetricChartProjection
+func (t OverviewColumnProjection) AsMetricChartProjection() (MetricChartProjection, error) {
+	var body MetricChartProjection
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromMetricChartProjection overwrites any union data inside the OverviewColumnProjection as the provided MetricChartProjection
+func (t *OverviewColumnProjection) FromMetricChartProjection(v MetricChartProjection) error {
+	v.Type = "MetricChartProjection"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeMetricChartProjection performs a merge with any union data inside the OverviewColumnProjection, using the provided MetricChartProjection
+func (t *OverviewColumnProjection) MergeMetricChartProjection(v MetricChartProjection) error {
+	v.Type = "MetricChartProjection"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsComponentLinkProjection returns the union data inside the OverviewColumnProjection as a ComponentLinkProjection
+func (t OverviewColumnProjection) AsComponentLinkProjection() (ComponentLinkProjection, error) {
+	var body ComponentLinkProjection
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromComponentLinkProjection overwrites any union data inside the OverviewColumnProjection as the provided ComponentLinkProjection
+func (t *OverviewColumnProjection) FromComponentLinkProjection(v ComponentLinkProjection) error {
+	v.Type = "ComponentLinkProjection"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeComponentLinkProjection performs a merge with any union data inside the OverviewColumnProjection, using the provided ComponentLinkProjection
+func (t *OverviewColumnProjection) MergeComponentLinkProjection(v ComponentLinkProjection) error {
+	v.Type = "ComponentLinkProjection"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsHealthProjection returns the union data inside the OverviewColumnProjection as a HealthProjection
+func (t OverviewColumnProjection) AsHealthProjection() (HealthProjection, error) {
+	var body HealthProjection
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromHealthProjection overwrites any union data inside the OverviewColumnProjection as the provided HealthProjection
+func (t *OverviewColumnProjection) FromHealthProjection(v HealthProjection) error {
+	v.Type = "HealthProjection"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeHealthProjection performs a merge with any union data inside the OverviewColumnProjection, using the provided HealthProjection
+func (t *OverviewColumnProjection) MergeHealthProjection(v HealthProjection) error {
+	v.Type = "HealthProjection"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsTextProjection returns the union data inside the OverviewColumnProjection as a TextProjection
+func (t OverviewColumnProjection) AsTextProjection() (TextProjection, error) {
+	var body TextProjection
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTextProjection overwrites any union data inside the OverviewColumnProjection as the provided TextProjection
+func (t *OverviewColumnProjection) FromTextProjection(v TextProjection) error {
+	v.Type = "TextProjection"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTextProjection performs a merge with any union data inside the OverviewColumnProjection, using the provided TextProjection
+func (t *OverviewColumnProjection) MergeTextProjection(v TextProjection) error {
+	v.Type = "TextProjection"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsNumericProjection returns the union data inside the OverviewColumnProjection as a NumericProjection
+func (t OverviewColumnProjection) AsNumericProjection() (NumericProjection, error) {
+	var body NumericProjection
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromNumericProjection overwrites any union data inside the OverviewColumnProjection as the provided NumericProjection
+func (t *OverviewColumnProjection) FromNumericProjection(v NumericProjection) error {
+	v.Type = "NumericProjection"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeNumericProjection performs a merge with any union data inside the OverviewColumnProjection, using the provided NumericProjection
+func (t *OverviewColumnProjection) MergeNumericProjection(v NumericProjection) error {
+	v.Type = "NumericProjection"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsDurationProjection returns the union data inside the OverviewColumnProjection as a DurationProjection
+func (t OverviewColumnProjection) AsDurationProjection() (DurationProjection, error) {
+	var body DurationProjection
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromDurationProjection overwrites any union data inside the OverviewColumnProjection as the provided DurationProjection
+func (t *OverviewColumnProjection) FromDurationProjection(v DurationProjection) error {
+	v.Type = "DurationProjection"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeDurationProjection performs a merge with any union data inside the OverviewColumnProjection, using the provided DurationProjection
+func (t *OverviewColumnProjection) MergeDurationProjection(v DurationProjection) error {
+	v.Type = "DurationProjection"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsReadyStatusProjection returns the union data inside the OverviewColumnProjection as a ReadyStatusProjection
+func (t OverviewColumnProjection) AsReadyStatusProjection() (ReadyStatusProjection, error) {
+	var body ReadyStatusProjection
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromReadyStatusProjection overwrites any union data inside the OverviewColumnProjection as the provided ReadyStatusProjection
+func (t *OverviewColumnProjection) FromReadyStatusProjection(v ReadyStatusProjection) error {
+	v.Type = "ReadyStatusProjection"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeReadyStatusProjection performs a merge with any union data inside the OverviewColumnProjection, using the provided ReadyStatusProjection
+func (t *OverviewColumnProjection) MergeReadyStatusProjection(v ReadyStatusProjection) error {
+	v.Type = "ReadyStatusProjection"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsContainerImageProjection returns the union data inside the OverviewColumnProjection as a ContainerImageProjection
+func (t OverviewColumnProjection) AsContainerImageProjection() (ContainerImageProjection, error) {
+	var body ContainerImageProjection
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromContainerImageProjection overwrites any union data inside the OverviewColumnProjection as the provided ContainerImageProjection
+func (t *OverviewColumnProjection) FromContainerImageProjection(v ContainerImageProjection) error {
+	v.Type = "ContainerImageProjection"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeContainerImageProjection performs a merge with any union data inside the OverviewColumnProjection, using the provided ContainerImageProjection
+func (t *OverviewColumnProjection) MergeContainerImageProjection(v ContainerImageProjection) error {
+	v.Type = "ContainerImageProjection"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t OverviewColumnProjection) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"_type"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t OverviewColumnProjection) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "ComponentLinkProjection":
+		return t.AsComponentLinkProjection()
+	case "ContainerImageProjection":
+		return t.AsContainerImageProjection()
+	case "DurationProjection":
+		return t.AsDurationProjection()
+	case "HealthProjection":
+		return t.AsHealthProjection()
+	case "MetricChartProjection":
+		return t.AsMetricChartProjection()
+	case "NumericProjection":
+		return t.AsNumericProjection()
+	case "ReadyStatusProjection":
+		return t.AsReadyStatusProjection()
+	case "TextProjection":
+		return t.AsTextProjection()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t OverviewColumnProjection) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *OverviewColumnProjection) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }

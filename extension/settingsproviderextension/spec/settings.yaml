@@ -32,8 +32,6 @@ components:
           type: string
         overview:
           $ref: "#/components/schemas/PresentationOverview"
-        highlight:
-          $ref: "#/components/schemas/PresentationHighlight"
 
     PresentationName:
       type: object
@@ -92,109 +90,31 @@ components:
         title:
           type: string
         projection:
-          $ref: "#/components/schemas/ComponentOverviewProjection"
+          $ref: "#/components/schemas/OverviewColumnProjection"
       required:
         - columnId
       description: 'Definition of a column in the overview presentation. The `columnId` field is used to identify the column and merge columns from different presentations. If only the `columnId` is provided, the column will be rendered from the next more specific presentation definition.'
 
-    PresentationHighlight:
-      type: object
-      properties:
-        title:
-          type: string
-        fields:
-          type: array
-          items:
-            $ref: '#/components/schemas/PresentationHighlightField'
-      description: |
-        Highlight presentation definition. The `fields` define the fields to show in the ab. The `flags` field can be used to enable/disable functionalities.
-        If multiple ComponentPresentations match, columns are merged by `columnId` according to binding rank. Absence of the field means no overview is shown.
-      required:
-        - title
-        - fields
-
-    PresentationHighlightField:
-      type: object
-      properties:
-        fieldId:
-          type: string
-        title:
-          type: string
-        description:
-          type: string
-        order:
-          type: number
-          format: double
-        projection:
-          $ref: "#/components/schemas/ComponentHighlightProjection"
-      required:
-        - fieldId
-        - title
-        - order
-      description: 'Definition of a field in the highlight presentation. The `fieldId` field is used to identify the field and merge fields from different presentations.'
-
-    ComponentHighlightProjection:
+    OverviewColumnProjection:
       discriminator:
         propertyName: _type
       oneOf:
-        - $ref: '#/components/schemas/HealthProjection'
-        - $ref: '#/components/schemas/MetricProjection'
+        - $ref: '#/components/schemas/MetricChartProjection'
         - $ref: '#/components/schemas/ComponentLinkProjection'
+        - $ref: '#/components/schemas/HealthProjection'
         - $ref: '#/components/schemas/TextProjection'
         - $ref: '#/components/schemas/NumericProjection'
         - $ref: '#/components/schemas/DurationProjection'
-        - $ref: '#/components/schemas/RatioProjection'
+        - $ref: '#/components/schemas/ReadyStatusProjection'
         - $ref: '#/components/schemas/ContainerImageProjection'
-        - $ref: '#/components/schemas/MapProjection'
-      description: 'Display type and value for the field.'
+      description: 'Display type and value for the column.'
 
-    ComponentOverviewProjection:
-      discriminator:
-        propertyName: _type
-      oneOf:
-        - $ref: '#/components/schemas/HealthProjection'
-        - $ref: '#/components/schemas/MetricProjection'
-        - $ref: '#/components/schemas/ComponentLinkProjection'
-        - $ref: '#/components/schemas/TextProjection'
-        - $ref: '#/components/schemas/NumericProjection'
-        - $ref: '#/components/schemas/DurationProjection'
-        - $ref: '#/components/schemas/RatioProjection'
-        - $ref: '#/components/schemas/ContainerImageProjection'
-      description: 'Display type and value for the field.'
-
-    HealthProjection:
+    MetricChartProjection:
       type: object
       properties:
         _type:
           type: string
-          enum: [HealthProjection]
-        value:
-          type: string
-          description: 'Cel expression that returns a string that represents a valid HealthState'
-      required:
-        - _type
-        - value
-    MapProjection:
-      type: object
-      properties:
-        _type:
-          type: string
-          enum: [MapProjection]
-        value:
-          type: string
-          description: 'Cel expression that returns a map<string,dyn>'
-        asTags:
-          type: boolean
-          default: true
-      required:
-        - _type
-        - value
-    MetricProjection:
-      type: object
-      properties:
-        _type:
-          type: string
-          enum: [MetricProjection]
+          enum: [MetricChartProjection]
         showChart:
           type: boolean
         decimalPlaces:
@@ -216,13 +136,25 @@ components:
         name:
           type: string
           description: 'Cel expression that returns a string that represents the name of the component to link to'
-        identifier:
+        componentIdentifier:
           type: string
-          description: 'Cel expression that returns a string that represents the identifier in order to build the link'
+          description: 'Cel expression that returns a string that represents the componentIdentifier in order to build the link'
       required:
         - _type
         - name
-        - identifier
+        - componentIdentifier
+    HealthProjection:
+      type: object
+      properties:
+        _type:
+          type: string
+          enum: [HealthProjection]
+        value:
+          type: string
+          description: 'Cel expression that returns a string that represents a valid HealthState'
+      required:
+        - _type
+        - value
     TextProjection:
       type: object
       properties:
@@ -232,10 +164,6 @@ components:
         value:
           type: string
           description: 'Cel expression that returns a string'
-        asTag:
-          type: boolean
-          default: false
-          description: 'Should the value be rendered as a tag or as plain text'
       required:
         - _type
         - value
@@ -262,37 +190,35 @@ components:
         _type:
           type: string
           enum: [DurationProjection]
-        startTime:
+        startDate:
           type: string
-          description: 'Cel expression that returns an ISO8601 formatted timestamp'
-        endTime:
+          description: 'Cel expression that returns a date'
+        endDate:
           type: string
-          description: 'Cel expression that returns an ISO8601 formatted timestamp'
+          description: 'Cel expression that returns a date'
       required:
         - _type
-        - startTime
-
-    RatioProjection:
+        - startDate
+    ReadyStatusProjection:
       type: object
-      description: 'Helps rendering columns that summarize success rates'
+      description: 'Helps rendering columns as Ready containers for K8s pods or Completions for K8s jobs'
       properties:
         _type:
           type: string
-          enum: [RatioProjection]
-        numerator:
+          enum: [ReadyStatusProjection]
+        readyNumber:
           type: string
           description: 'Cel expression that returns a number'
-        denominator:
+        totalNumber:
           type: string
           description: 'Cel expression that returns a number'
-        status:
+        readyStatus:
           type: string
           description: 'Cel expression that returns a string that represents a valid HealthState'
       required:
         - _type
-        - numerator
-        - denominator
-
+        - readyNumber
+        - totalNumber
     ContainerImageProjection:
       type: object
       description: 'Helps rendering links for docker images'

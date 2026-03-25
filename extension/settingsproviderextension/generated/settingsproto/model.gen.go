@@ -236,6 +236,14 @@ const (
 	CREATE   OtelInputConditionAction = "CREATE"
 )
 
+// Defines values for OtelInputLogFormat.
+const (
+	AUTO      OtelInputLogFormat = "AUTO"
+	JSON      OtelInputLogFormat = "JSON"
+	PLAINTEXT OtelInputLogFormat = "PLAIN_TEXT"
+	YAML      OtelInputLogFormat = "YAML"
+)
+
 // Defines values for OtelInputSignal.
 const (
 	LOGS    OtelInputSignal = "LOGS"
@@ -877,7 +885,17 @@ type OtelComponentMappingType string
 // OtelComponentMappingFieldMapping defines model for OtelComponentMappingFieldMapping.
 type OtelComponentMappingFieldMapping struct {
 	AdditionalIdentifiers *[]OtelStringExpression `json:"additionalIdentifiers,omitempty"`
-	Tags                  *[]OtelTagMapping       `json:"tags,omitempty"`
+
+	// Configuration An expression that can produce any type. It uses the CEL expression within curly braces `${}` syntax.
+	// Variables use it to store any type of value. For example, to store a boolean in a variable named  `inTestNamespace` assign
+	// it the expression `"${resource.attributes['service.namespace'] == 'test'}"`. The variable can now be used directly in the conditions like this: `vars.inTestNamespace`.
+	Configuration *OtelAnyExpression `json:"configuration,omitempty"`
+
+	// Status An expression that can produce any type. It uses the CEL expression within curly braces `${}` syntax.
+	// Variables use it to store any type of value. For example, to store a boolean in a variable named  `inTestNamespace` assign
+	// it the expression `"${resource.attributes['service.namespace'] == 'test'}"`. The variable can now be used directly in the conditions like this: `vars.inTestNamespace`.
+	Status *OtelAnyExpression `json:"status,omitempty"`
+	Tags   *[]OtelTagMapping  `json:"tags,omitempty"`
 
 	// Version An expression that must produce a string. It must be one of these formats:
 	//   - A plain string, for example `"this is a plain string"`
@@ -959,6 +977,25 @@ type OtelInputDatapoint struct {
 	Condition *OtelBooleanExpression `json:"condition,omitempty"`
 }
 
+// OtelInputLog Defines conditional mapping at the resource -> scope -> log level.
+// If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
+type OtelInputLog struct {
+	Action *OtelInputConditionAction `json:"action,omitempty"`
+
+	// Condition A Cel expression that must return a boolean
+	Condition *OtelBooleanExpression `json:"condition,omitempty"`
+
+	// Format Defines the log body format for the resource -> scope -> log level.
+	// JSON and YAML formats allow parsing the log body into attributes using the specified format, while PLAIN_TEXT keeps the log body as a single string attribute. AUTO lets the system automatically detect the format of the log body - JSON -> YAML -> PLAIN_TEXT.
+	// Default is AUTO.
+	Format *OtelInputLogFormat `json:"format,omitempty"`
+}
+
+// OtelInputLogFormat Defines the log body format for the resource -> scope -> log level.
+// JSON and YAML formats allow parsing the log body into attributes using the specified format, while PLAIN_TEXT keeps the log body as a single string attribute. AUTO lets the system automatically detect the format of the log body - JSON -> YAML -> PLAIN_TEXT.
+// Default is AUTO.
+type OtelInputLogFormat string
+
 // OtelInputMetric Defines conditional mapping at the resource -> scope -> metric level.
 // If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
 type OtelInputMetric struct {
@@ -992,6 +1029,10 @@ type OtelInputScope struct {
 
 	// Condition A Cel expression that must return a boolean
 	Condition *OtelBooleanExpression `json:"condition,omitempty"`
+
+	// Log Defines conditional mapping at the resource -> scope -> log level.
+	// If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
+	Log *OtelInputLog `json:"log,omitempty"`
 
 	// Metric Defines conditional mapping at the resource -> scope -> metric level.
 	// If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
@@ -1032,7 +1073,13 @@ type OtelInputScope struct {
 //   - `datapoint.attributes`
 //
 //   - **LOGS**
-//     Not yet supported.
+//     Provides access to:
+//
+//   - `resource.attributes`
+//
+//   - `scope.name`, `scope.version`, `scope.attributes`
+//
+//   - `log.eventName`, `log.severityNumber`, `log.severityText`, `log.attributes`, `log.body`, `log.traceId`, `log.spanId`
 //
 // For example, if the signal is `METRICS`, expressions may reference:
 // `resource.attributes["service.name"]`, `scope.attributes["env"]`,

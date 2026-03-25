@@ -39,6 +39,7 @@ type MappingVisitor interface {
 	VisitMetric(ctx context.Context, evalCtx *ExpressionEvalContext) VisitResult
 	VisitDatapoint(ctx context.Context, evalCtx *ExpressionEvalContext)
 	VisitSpan(ctx context.Context, evalCtx *ExpressionEvalContext)
+	VisitLog(ctx context.Context, evalCtx *ExpressionEvalContext)
 }
 
 type GenericMappingVisitor[T settingsproto.SettingExtension] struct {
@@ -93,4 +94,21 @@ func (v *GenericMappingVisitor[T]) VisitSpan(ctx context.Context, evalCtx *Expre
 	}
 	spanInput := scopeInput.Span
 	v.handler.HandleTerminalVisit(ctx, evalCtx, spanInput.Action, spanInput.Condition)
+}
+
+func (v *GenericMappingVisitor[T]) VisitLog(ctx context.Context, evalCtx *ExpressionEvalContext) {
+	scopeInput := v.mappingCtx.Mapping.GetInput().Resource.Scope
+	if scopeInput == nil || scopeInput.Log == nil {
+		return
+	}
+	logInput := scopeInput.Log
+
+	// Format the log body according to the mapping's format specification.
+	// Only format if the body hasn't been formatted yet (avoids redundant formatting across mappings).
+	if evalCtx.Log != nil && logInput.Format != nil && !evalCtx.Log.IsFormatted() {
+		formattedBody := FormatLogBody(evalCtx.Log.Body(), logInput.Format)
+		evalCtx.Log.SetFormattedBody(formattedBody)
+	}
+
+	v.handler.HandleTerminalVisit(ctx, evalCtx, logInput.Action, logInput.Condition)
 }

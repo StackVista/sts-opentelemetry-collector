@@ -160,6 +160,12 @@ func (p *DefaultExpressionRefManager) collectRefsForComponentFieldMapping(
 		if componentFieldMapping.Version != nil {
 			agg.walkOptionalString(p.evaluator, componentFieldMapping.Version)
 		}
+		if componentFieldMapping.Configuration != nil {
+			agg.walkOptionalAny(p.evaluator, componentFieldMapping.Configuration)
+		}
+		if componentFieldMapping.Status != nil {
+			agg.walkOptionalAny(p.evaluator, componentFieldMapping.Status)
+		}
 	}
 }
 
@@ -263,6 +269,16 @@ func (r *expressionRefAggregator) walkAny(
 	}
 	r.hasValidExpr = true
 	r.walkAST(astRes.CheckedAST)
+}
+
+func (r *expressionRefAggregator) walkOptionalAny(
+	eval internal.ExpressionEvaluator,
+	expr *settingsproto.OtelAnyExpression,
+) {
+	if expr == nil {
+		return
+	}
+	r.walkAny(eval, *expr)
 }
 
 // walkAST processes a checked CEL AST and accumulates field/attribute references

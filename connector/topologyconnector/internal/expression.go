@@ -53,6 +53,7 @@ func ptr[T any](v T) *T { return &v }
 
 type ExpressionEvalContext struct {
 	Span      *Span
+	Log       *Log
 	Datapoint *Datapoint
 	Metric    *Metric
 	Scope     *Scope
@@ -100,6 +101,7 @@ func NewSpanEvalContext(
 ) *ExpressionEvalContext {
 	return &ExpressionEvalContext{
 		Span:      span,
+		Log:       nil,
 		Datapoint: nil,
 		Metric:    nil,
 		Scope:     scope,
@@ -113,8 +115,23 @@ func NewMetricEvalContext(
 ) *ExpressionEvalContext {
 	return &ExpressionEvalContext{
 		Span:      nil,
+		Log:       nil,
 		Datapoint: datapoint,
 		Metric:    metric,
+		Scope:     scope,
+		Resource:  resource,
+		Vars:      nil,
+	}
+}
+
+func NewLogEvalContext(
+	log *Log, scope *Scope, resource *Resource,
+) *ExpressionEvalContext {
+	return &ExpressionEvalContext{
+		Span:      nil,
+		Log:       log,
+		Datapoint: nil,
+		Metric:    nil,
 		Scope:     scope,
 		Resource:  resource,
 		Vars:      nil,
@@ -124,6 +141,7 @@ func NewMetricEvalContext(
 func (ec *ExpressionEvalContext) CloneWithVariables(vars map[string]any) *ExpressionEvalContext {
 	return &ExpressionEvalContext{
 		Span:      ec.Span,
+		Log:       ec.Log,
 		Metric:    ec.Metric,
 		Datapoint: ec.Datapoint,
 		Scope:     ec.Scope,
@@ -135,6 +153,7 @@ func (ec *ExpressionEvalContext) CloneWithVariables(vars map[string]any) *Expres
 func NewCELEvaluator(ctx context.Context, cacheSettings metrics.MeteredCacheSettings) (*CelEvaluator, error) {
 	env, err := cel.NewEnv(
 		cel.Variable("span", cel.MapType(cel.StringType, cel.DynType)),
+		cel.Variable("log", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("datapoint", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("metric", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("scope", cel.MapType(cel.StringType, cel.DynType)),
@@ -414,6 +433,10 @@ func (e *CelEvaluator) evaluateProgram(prog cel.Program, ctx *ExpressionEvalCont
 
 	if ctx.Span != nil {
 		runtimeVars["span"] = ctx.Span.ToMap()
+	}
+
+	if ctx.Log != nil {
+		runtimeVars["log"] = ctx.Log.ToMap()
 	}
 
 	result, _, err := prog.Eval(runtimeVars)

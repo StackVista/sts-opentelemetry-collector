@@ -72,6 +72,8 @@ var ExpectedComponentMappingFields = struct {
 		"AdditionalIdentifiers",
 		"Tags",
 		"Version",
+		"Configuration",
+		"Status",
 	},
 }
 

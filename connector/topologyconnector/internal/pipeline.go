@@ -6,6 +6,7 @@ import (
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
+	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.uber.org/zap"
@@ -59,6 +60,35 @@ func ConvertMetricsToTopologyStreamMessage(
 		logger,
 		metricsTraverser,
 		settingsproto.METRICS,
+		eval,
+		deduplicator,
+		mapper,
+		componentMappings,
+		relationMappings,
+		collectionTimestampMs,
+		metricsRecorder,
+	)
+}
+
+func ConvertLogToTopologyStreamMessage(
+	ctx context.Context,
+	logger *zap.Logger,
+	eval ExpressionEvaluator,
+	deduplicator Deduplicator,
+	mapper *Mapper,
+	logData plog.Logs,
+	componentMappings []settingsproto.OtelComponentMapping,
+	relationMappings []settingsproto.OtelRelationMapping,
+	collectionTimestampMs int64,
+	metricsRecorder metrics.ConnectorMetricsRecorder,
+) []MessageWithKey {
+	logsTraverser := NewLogTraverser(logData)
+
+	return convertSignalDataToTopologyStreamMessage(
+		ctx,
+		logger,
+		logsTraverser,
+		settingsproto.LOGS,
 		eval,
 		deduplicator,
 		mapper,
