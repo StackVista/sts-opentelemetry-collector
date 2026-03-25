@@ -80,7 +80,7 @@ func NewTopologyDeduplicator(
 ) *TopologyDeduplicator {
 	cache := metrics.NewCache[string, dedupEntry](ctx, dedupCfg.CacheConfig, nil)
 
-	// same as validation done for Deduplicationsettingsproto.RefreshFraction in config.go
+	// same as validation done for DeduplicationSettings.RefreshFraction in config.go
 	normalisedRefreshFraction := dedupCfg.RefreshFraction
 	if normalisedRefreshFraction <= 0 {
 		normalisedRefreshFraction = 0.5
@@ -138,7 +138,7 @@ func NewTopologyDeduplicator(
 //
 // Cache behavior:
 //
-//   - The underlying cache TTL (configured via MeteredCachesettingsproto.TTL) controls
+//   - The underlying cache TTL (configured via MeteredCacheSettings.TTL) controls
 //     how long deduplication state is retained in memory and is independent of
 //     mappingTTL.
 //

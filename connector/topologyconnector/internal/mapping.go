@@ -128,7 +128,9 @@ func (me *Mapper) ResolveTagMappings(
 	for _, m := range mappings {
 		if m.Pattern == nil {
 			// no regex pattern assumes standard string expr evaluation
-			val, err := evaluator.EvalStringExpression(settingsproto.OtelStringExpression{Expression: m.Source.Expression}, evalCtx)
+			val, err := evaluator.EvalStringExpression(
+				settingsproto.OtelStringExpression{Expression: m.Source.Expression}, evalCtx,
+			)
 			if err != nil {
 				errs = append(errs,
 					newCelEvaluationError("failed to evaluate OtelTagMapping source %q: %v", m.Source.Expression, err))
