@@ -14,7 +14,7 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter"
 	stsSettingsApi "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
@@ -73,7 +73,7 @@ type connectorTestEnv struct {
 	connector    *connectorImpl
 }
 
-func newConnectorEnv(t *testing.T, signal settings.OtelInputSignal) *connectorTestEnv {
+func newConnectorEnv(t *testing.T, signal settingsproto.OtelInputSignal) *connectorTestEnv {
 	t.Helper()
 
 	ctx := context.Background()
@@ -89,7 +89,7 @@ func newConnectorEnv(t *testing.T, signal settings.OtelInputSignal) *connectorTe
 	)
 	expressionRefManager := NewExpressionRefManager(logger, celEvaluator)
 	snapshotManager := NewSnapshotManager(
-		logger, []settings.OtelInputSignal{settings.TRACES, settings.METRICS}, expressionRefManager,
+		logger, []settingsproto.OtelInputSignal{settingsproto.TRACES, settingsproto.METRICS}, expressionRefManager,
 	)
 	mapper := internal.NewMapper(
 		ctx,
@@ -126,18 +126,18 @@ func newConnectorEnv(t *testing.T, signal settings.OtelInputSignal) *connectorTe
 
 func TestConnectorStart(t *testing.T) {
 	t.Run("return an error if not found settings provider", func(t *testing.T) {
-		connectorEnv := newConnectorEnv(t, settings.TRACES)
+		connectorEnv := newConnectorEnv(t, settingsproto.TRACES)
 		err := connectorEnv.connector.Start(connectorEnv.ctx, componenttest.NewNopHost())
 		require.ErrorContains(t, err, "sts_settings_provider extension not found")
 	})
 
 	t.Run("start with initial mappings and observe changes", func(t *testing.T) {
-		connectorEnv := newConnectorEnv(t, settings.TRACES)
+		connectorEnv := newConnectorEnv(t, settingsproto.TRACES)
 		provider := NewMockStsSettingsProvider(
-			[]settings.OtelComponentMapping{
+			[]settingsproto.OtelComponentMapping{
 				createSimpleTraceComponentMapping("mapping1"),
 			},
-			[]settings.OtelRelationMapping{
+			[]settingsproto.OtelRelationMapping{
 				createSimpleTraceRelationMapping("mapping2"),
 				createSimpleTraceRelationMapping("mapping3"),
 			},
@@ -148,37 +148,37 @@ func TestConnectorStart(t *testing.T) {
 		host := &mockHost{ext: extensions}
 		err := connectorEnv.connector.Start(connectorEnv.ctx, host)
 		require.NoError(t, err)
-		componentMappings, relationMappings := connectorEnv.connector.snapshotManager.Current(settings.TRACES)
+		componentMappings, relationMappings := connectorEnv.connector.snapshotManager.Current(settingsproto.TRACES)
 		assert.Len(t, componentMappings, 1)
 		assert.Len(t, relationMappings, 2)
 
-		provider.ComponentMappings = []settings.OtelComponentMapping{
+		provider.ComponentMappings = []settingsproto.OtelComponentMapping{
 			createSimpleTraceComponentMapping("mapping1"),
 			createSimpleTraceComponentMapping("mapping2"),
 			createSimpleTraceComponentMapping("mapping3"),
 		}
-		provider.RelationMappings = []settings.OtelRelationMapping{
+		provider.RelationMappings = []settingsproto.OtelRelationMapping{
 			createSimpleTraceRelationMapping("mapping4"),
 		}
-		componentMappings, relationMappings = connectorEnv.connector.snapshotManager.Current(settings.TRACES)
+		componentMappings, relationMappings = connectorEnv.connector.snapshotManager.Current(settingsproto.TRACES)
 		assert.Len(t, componentMappings, 1)
 		assert.Len(t, relationMappings, 2)
 
 		provider.SettingUpdatesCh <- stsSettingsEvents.UpdateSettingsEvent{}
 		time.Sleep(100 * time.Millisecond) // wait for snapshot manager to update
-		componentMappings, relationMappings = connectorEnv.connector.snapshotManager.Current(settings.TRACES)
+		componentMappings, relationMappings = connectorEnv.connector.snapshotManager.Current(settingsproto.TRACES)
 		assert.Len(t, componentMappings, 3)
 		assert.Len(t, relationMappings, 1)
 	})
 
 	t.Run("emits removal messages when mappings are deleted", func(t *testing.T) {
-		connectorEnv := newConnectorEnv(t, settings.TRACES)
+		connectorEnv := newConnectorEnv(t, settingsproto.TRACES)
 
 		provider := NewMockStsSettingsProvider(
-			[]settings.OtelComponentMapping{
+			[]settingsproto.OtelComponentMapping{
 				createSimpleTraceComponentMapping("mapping1"),
 			},
-			[]settings.OtelRelationMapping{
+			[]settingsproto.OtelRelationMapping{
 				createSimpleTraceRelationMapping("mapping2"),
 			},
 		)
@@ -189,7 +189,7 @@ func TestConnectorStart(t *testing.T) {
 		require.NoError(t, connectorEnv.connector.Start(connectorEnv.ctx, host))
 
 		// Verify initial state has mappings
-		componentMappings, relationMappings := connectorEnv.connector.snapshotManager.Current(settings.TRACES)
+		componentMappings, relationMappings := connectorEnv.connector.snapshotManager.Current(settingsproto.TRACES)
 		require.Len(t, componentMappings, 1)
 		require.Len(t, relationMappings, 1)
 
@@ -229,12 +229,12 @@ func TestConnectorStart(t *testing.T) {
 }
 
 func TestConnectorConsumeTraces(t *testing.T) {
-	connectorEnv := newConnectorEnv(t, settings.TRACES)
+	connectorEnv := newConnectorEnv(t, settingsproto.TRACES)
 	provider := NewMockStsSettingsProvider(
-		[]settings.OtelComponentMapping{
+		[]settingsproto.OtelComponentMapping{
 			createSimpleTraceComponentMapping("mapping1"),
 		},
-		[]settings.OtelRelationMapping{
+		[]settingsproto.OtelRelationMapping{
 			createSimpleTraceRelationMapping("mapping2"),
 		},
 	)
@@ -370,13 +370,13 @@ func TestConnectorConsumeTraces(t *testing.T) {
 
 // TODO: Add tests that trace mappings are excluded for metrics connector and vice versa
 func TestConnectorConsumeMetrics(t *testing.T) {
-	connectorEnv := newConnectorEnv(t, settings.METRICS)
+	connectorEnv := newConnectorEnv(t, settingsproto.METRICS)
 
 	provider := NewMockStsSettingsProvider(
-		[]settings.OtelComponentMapping{
+		[]settingsproto.OtelComponentMapping{
 			createSimpleMetricComponentMapping("mapping1"),
 		},
-		[]settings.OtelRelationMapping{
+		[]settingsproto.OtelRelationMapping{
 			createSimpleMetricRelationMapping("mapping2"),
 		},
 	)
@@ -493,7 +493,7 @@ func TestConnectorConsumeMetrics(t *testing.T) {
 }
 
 func TestPublishTopologyMessagesAsLogs(t *testing.T) {
-	connectorEnv := newConnectorEnv(t, settings.METRICS)
+	connectorEnv := newConnectorEnv(t, settingsproto.METRICS)
 
 	t.Run("publishes valid messages", func(t *testing.T) {
 		connectorEnv.logsConsumer.Reset()
@@ -549,12 +549,12 @@ func (nh *mockHost) GetExtensions() map[component.ID]component.Component {
 }
 
 type MockStsSettingsProvider struct {
-	ComponentMappings []settings.OtelComponentMapping
-	RelationMappings  []settings.OtelRelationMapping
+	ComponentMappings []settingsproto.OtelComponentMapping
+	RelationMappings  []settingsproto.OtelRelationMapping
 	SettingUpdatesCh  chan stsSettingsEvents.UpdateSettingsEvent
 }
 
-func NewMockStsSettingsProvider(componentMappings []settings.OtelComponentMapping, relationMappings []settings.OtelRelationMapping) *MockStsSettingsProvider {
+func NewMockStsSettingsProvider(componentMappings []settingsproto.OtelComponentMapping, relationMappings []settingsproto.OtelRelationMapping) *MockStsSettingsProvider {
 	return &MockStsSettingsProvider{
 		ComponentMappings: componentMappings,
 		RelationMappings:  relationMappings,
@@ -570,7 +570,7 @@ func (m *MockStsSettingsProvider) Shutdown(_ context.Context) error {
 	return nil
 }
 
-func (m *MockStsSettingsProvider) RegisterForUpdates(_ ...settings.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
+func (m *MockStsSettingsProvider) RegisterForUpdates(_ ...settingsproto.SettingType) (<-chan stsSettingsEvents.UpdateSettingsEvent, error) {
 	return m.SettingUpdatesCh, nil
 }
 
@@ -586,64 +586,64 @@ func toAnySlice[T any](slice []T) []any {
 	return result
 }
 
-func (m *MockStsSettingsProvider) UnsafeGetCurrentSettingsByType(typ settings.SettingType) ([]any, error) {
+func (m *MockStsSettingsProvider) UnsafeGetCurrentSettingsByType(typ settingsproto.SettingType) ([]any, error) {
 	//nolint:exhaustive
 	switch typ {
-	case settings.SettingTypeOtelComponentMapping:
+	case settingsproto.SettingTypeOtelComponentMapping:
 		return toAnySlice(m.ComponentMappings), nil
-	case settings.SettingTypeOtelRelationMapping:
+	case settingsproto.SettingTypeOtelRelationMapping:
 		return toAnySlice(m.RelationMappings), nil
 	default:
 		return nil, errors.New("not supported type of settings")
 	}
 }
 
-func strExpr(s string) settings.OtelStringExpression {
-	return settings.OtelStringExpression{
+func strExpr(s string) settingsproto.OtelStringExpression {
+	return settingsproto.OtelStringExpression{
 		Expression: s,
 	}
 }
 
-func anyExpr(s string) settings.OtelAnyExpression {
-	return settings.OtelAnyExpression{
+func anyExpr(s string) settingsproto.OtelAnyExpression {
+	return settingsproto.OtelAnyExpression{
 		Expression: s,
 	}
 }
 
-func boolExpr(s string) settings.OtelBooleanExpression {
-	return settings.OtelBooleanExpression{
+func boolExpr(s string) settingsproto.OtelBooleanExpression {
+	return settingsproto.OtelBooleanExpression{
 		Expression: s,
 	}
 }
 
 func ptr[T any](v T) *T { return &v }
 
-func createSimpleTraceComponentMapping(id string) settings.OtelComponentMapping {
-	return settings.OtelComponentMapping{
+func createSimpleTraceComponentMapping(id string) settingsproto.OtelComponentMapping {
+	return settingsproto.OtelComponentMapping{
 		Id:            id,
 		Identifier:    fmt.Sprintf("urn:otel-component-mapping:%s", id),
 		ExpireAfterMs: 60000,
-		Input: settings.OtelInput{
-			Signal: settings.OtelInputSignalList{
-				settings.TRACES,
+		Input: settingsproto.OtelInput{
+			Signal: settingsproto.OtelInputSignalList{
+				settingsproto.TRACES,
 			},
-			Resource: settings.OtelInputResource{
-				Scope: &settings.OtelInputScope{
-					Span: &settings.OtelInputSpan{
+			Resource: settingsproto.OtelInputResource{
+				Scope: &settingsproto.OtelInputScope{
+					Span: &settingsproto.OtelInputSpan{
 						Condition: ptr(boolExpr(`span.attributes["http.method"] == "GET"`)),
-						Action:    ptr(settings.CREATE),
+						Action:    ptr(settingsproto.CREATE),
 					},
 				},
 			},
 		},
-		Output: settings.OtelComponentMappingOutput{
+		Output: settingsproto.OtelComponentMappingOutput{
 			Identifier: strExpr("${resource.attributes[\"service.instance.id\"]}"),
 			Name:       strExpr(`${resource.attributes["service.name"]}`),
 			TypeName:   strExpr("service-instance"),
 			DomainName: strExpr(`${resource.attributes["service.namespace"]}`),
 			LayerName:  strExpr("backend"),
-			Required: &settings.OtelComponentMappingFieldMapping{
-				Tags: &[]settings.OtelTagMapping{
+			Required: &settingsproto.OtelComponentMappingFieldMapping{
+				Tags: &[]settingsproto.OtelTagMapping{
 					{
 						Source: anyExpr(`${span.attributes["http.status_code"]}`),
 						Target: "status_code",
@@ -654,25 +654,25 @@ func createSimpleTraceComponentMapping(id string) settings.OtelComponentMapping 
 	}
 }
 
-func createSimpleTraceRelationMapping(id string) settings.OtelRelationMapping {
-	return settings.OtelRelationMapping{
+func createSimpleTraceRelationMapping(id string) settingsproto.OtelRelationMapping {
+	return settingsproto.OtelRelationMapping{
 		Id:            id,
 		Identifier:    fmt.Sprintf("urn:otel-relation-mapping:%s", id),
 		ExpireAfterMs: 300000,
-		Input: settings.OtelInput{
-			Signal: settings.OtelInputSignalList{
-				settings.TRACES,
+		Input: settingsproto.OtelInput{
+			Signal: settingsproto.OtelInputSignalList{
+				settingsproto.TRACES,
 			},
-			Resource: settings.OtelInputResource{
-				Scope: &settings.OtelInputScope{
-					Span: &settings.OtelInputSpan{
+			Resource: settingsproto.OtelInputResource{
+				Scope: &settingsproto.OtelInputScope{
+					Span: &settingsproto.OtelInputSpan{
 						Condition: ptr(boolExpr(`span.attributes["http.status_code"] == "200"`)),
-						Action:    ptr(settings.CREATE),
+						Action:    ptr(settingsproto.CREATE),
 					},
 				},
 			},
 		},
-		Output: settings.OtelRelationMappingOutput{
+		Output: settingsproto.OtelRelationMappingOutput{
 			SourceId: strExpr(`${resource.attributes["service.name"]}`),
 			TargetId: strExpr(`${span.attributes["service.name"]}`),
 			TypeName: strExpr("http-request"),
@@ -680,34 +680,34 @@ func createSimpleTraceRelationMapping(id string) settings.OtelRelationMapping {
 	}
 }
 
-func createSimpleMetricComponentMapping(id string) settings.OtelComponentMapping {
-	return settings.OtelComponentMapping{
+func createSimpleMetricComponentMapping(id string) settingsproto.OtelComponentMapping {
+	return settingsproto.OtelComponentMapping{
 		Id:            id,
 		Identifier:    fmt.Sprintf("urn:otel-component-mapping:%s", id),
 		ExpireAfterMs: 60000,
-		Input: settings.OtelInput{
-			Signal: settings.OtelInputSignalList{
-				settings.METRICS,
+		Input: settingsproto.OtelInput{
+			Signal: settingsproto.OtelInputSignalList{
+				settingsproto.METRICS,
 			},
-			Resource: settings.OtelInputResource{
-				Scope: &settings.OtelInputScope{
-					Metric: &settings.OtelInputMetric{
-						Datapoint: &settings.OtelInputDatapoint{
+			Resource: settingsproto.OtelInputResource{
+				Scope: &settingsproto.OtelInputScope{
+					Metric: &settingsproto.OtelInputMetric{
+						Datapoint: &settingsproto.OtelInputDatapoint{
 							Condition: ptr(boolExpr(`datapoint.attributes["http.method"] == "GET"`)),
-							Action:    ptr(settings.CREATE),
+							Action:    ptr(settingsproto.CREATE),
 						},
 					},
 				},
 			},
 		},
-		Output: settings.OtelComponentMappingOutput{
+		Output: settingsproto.OtelComponentMappingOutput{
 			Identifier: strExpr("${resource.attributes[\"service.instance.id\"]}"),
 			Name:       strExpr(`${resource.attributes["service.name"]}`),
 			TypeName:   strExpr("service-instance"),
 			DomainName: strExpr(`${resource.attributes["service.namespace"]}`),
 			LayerName:  strExpr("backend"),
-			Required: &settings.OtelComponentMappingFieldMapping{
-				Tags: &[]settings.OtelTagMapping{
+			Required: &settingsproto.OtelComponentMappingFieldMapping{
+				Tags: &[]settingsproto.OtelTagMapping{
 					{
 						Source: anyExpr(`${datapoint.attributes["http.status_code"]}`),
 						Target: "status_code",
@@ -718,27 +718,27 @@ func createSimpleMetricComponentMapping(id string) settings.OtelComponentMapping
 	}
 }
 
-func createSimpleMetricRelationMapping(id string) settings.OtelRelationMapping {
-	return settings.OtelRelationMapping{
+func createSimpleMetricRelationMapping(id string) settingsproto.OtelRelationMapping {
+	return settingsproto.OtelRelationMapping{
 		Id:            id,
 		Identifier:    fmt.Sprintf("urn:otel-relation-mapping:%s", id),
 		ExpireAfterMs: 300000,
-		Input: settings.OtelInput{
-			Signal: settings.OtelInputSignalList{
-				settings.METRICS,
+		Input: settingsproto.OtelInput{
+			Signal: settingsproto.OtelInputSignalList{
+				settingsproto.METRICS,
 			},
-			Resource: settings.OtelInputResource{
-				Scope: &settings.OtelInputScope{
-					Metric: &settings.OtelInputMetric{
-						Datapoint: &settings.OtelInputDatapoint{
+			Resource: settingsproto.OtelInputResource{
+				Scope: &settingsproto.OtelInputScope{
+					Metric: &settingsproto.OtelInputMetric{
+						Datapoint: &settingsproto.OtelInputDatapoint{
 							Condition: ptr(boolExpr(`datapoint.attributes["http.status_code"] == "200"`)),
-							Action:    ptr(settings.CREATE),
+							Action:    ptr(settingsproto.CREATE),
 						},
 					},
 				},
 			},
 		},
-		Output: settings.OtelRelationMappingOutput{
+		Output: settingsproto.OtelRelationMappingOutput{
 			SourceId: strExpr(`${resource.attributes["service.name"]}`),
 			TargetId: strExpr(`${datapoint.attributes["service.name"]}`),
 			TypeName: strExpr("http-request"),

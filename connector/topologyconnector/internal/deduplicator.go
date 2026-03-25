@@ -13,7 +13,7 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/types"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"go.uber.org/zap"
 )
 
@@ -22,13 +22,13 @@ var separator = []byte{0}
 
 // ExpressionRefReader a read-only interface, implicitly implemented by topologyconnector.ExpressionRefManager
 type ExpressionRefReader interface {
-	Current(signal settings.OtelInputSignal, mappingIdentifier string) *types.ExpressionRefSummary
+	Current(signal settingsproto.OtelInputSignal, mappingIdentifier string) *types.ExpressionRefSummary
 }
 
 type Deduplicator interface {
 	ShouldSend(
 		mappingIdentifier string,
-		signal settings.OtelInputSignal,
+		signal settingsproto.OtelInputSignal,
 		evalCtx *ExpressionEvalContext,
 		ttl time.Duration,
 	) bool
@@ -42,7 +42,7 @@ func NewNoopDeduplicator() *NoopDeduplicator {
 
 func (n *NoopDeduplicator) ShouldSend(
 	_ string,
-	_ settings.OtelInputSignal,
+	_ settingsproto.OtelInputSignal,
 	_ *ExpressionEvalContext,
 	_ time.Duration,
 ) bool {
@@ -150,7 +150,7 @@ func NewTopologyDeduplicator(
 //     next invocation.
 func (d *TopologyDeduplicator) ShouldSend(
 	mappingIdentifier string,
-	signal settings.OtelInputSignal,
+	signal settingsproto.OtelInputSignal,
 	evalCtx *ExpressionEvalContext,
 	mappingTTL time.Duration,
 ) bool {
@@ -208,7 +208,7 @@ type DedupHasher interface {
 	// ProjectionHash generates a stable identifier based on structure, not content
 	ProjectionHash(
 		mappingIdentifier string,
-		signal settings.OtelInputSignal,
+		signal settingsproto.OtelInputSignal,
 		ctx *ExpressionEvalContext,
 		ref *types.ExpressionRefSummary,
 	) string
@@ -219,7 +219,7 @@ type SignalMappingProjectionHasher struct{}
 // ProjectionHash computes a stable hash for the subset of signal data to deduplicate on.
 func (s *SignalMappingProjectionHasher) ProjectionHash(
 	mappingIdentifier string,
-	signal settings.OtelInputSignal,
+	signal settingsproto.OtelInputSignal,
 	ctx *ExpressionEvalContext,
 	ref *types.ExpressionRefSummary,
 ) string {

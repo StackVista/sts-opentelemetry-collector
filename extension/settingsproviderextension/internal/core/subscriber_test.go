@@ -5,7 +5,7 @@ import (
 	"time"
 
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
-	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/core"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"

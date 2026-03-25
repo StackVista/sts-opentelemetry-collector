@@ -6,13 +6,13 @@ import (
 	"sync"
 
 	stsSettingsApi "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
-	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"go.uber.org/zap"
 )
 
 type SnapshotChange struct {
-	RemovedComponentMappings []stsSettingsModel.OtelComponentMapping
-	RemovedRelationMappings  []stsSettingsModel.OtelRelationMapping
+	RemovedComponentMappings []settingsproto.OtelComponentMapping
+	RemovedRelationMappings  []settingsproto.OtelRelationMapping
 }
 
 type SnapshotManager struct {
@@ -21,10 +21,10 @@ type SnapshotManager struct {
 	cancel  context.CancelFunc
 	stopped chan struct{}
 
-	supportedSignals []stsSettingsModel.OtelInputSignal
+	supportedSignals []settingsproto.OtelInputSignal
 
-	componentMappings map[stsSettingsModel.OtelInputSignal][]stsSettingsModel.OtelComponentMapping
-	relationMappings  map[stsSettingsModel.OtelInputSignal][]stsSettingsModel.OtelRelationMapping
+	componentMappings map[settingsproto.OtelInputSignal][]settingsproto.OtelComponentMapping
+	relationMappings  map[settingsproto.OtelInputSignal][]settingsproto.OtelRelationMapping
 
 	// lifecycle safety
 	started  bool
@@ -35,30 +35,30 @@ type SnapshotManager struct {
 
 type onRemovalsFunc = func(
 	ctx context.Context,
-	componentMappings []stsSettingsModel.OtelComponentMapping,
-	relationMappings []stsSettingsModel.OtelRelationMapping,
+	componentMappings []settingsproto.OtelComponentMapping,
+	relationMappings []settingsproto.OtelRelationMapping,
 )
 
 // SnapshotUpdateListener is notified when mapping snapshots change. Implementors
 // can precompute derived data (e.g., expression reference summaries) asynchronously.
 type SnapshotUpdateListener interface {
 	Update(
-		signals []stsSettingsModel.OtelInputSignal,
-		componentMappings map[stsSettingsModel.OtelInputSignal][]stsSettingsModel.OtelComponentMapping,
-		relationMappings map[stsSettingsModel.OtelInputSignal][]stsSettingsModel.OtelRelationMapping,
+		signals []settingsproto.OtelInputSignal,
+		componentMappings map[settingsproto.OtelInputSignal][]settingsproto.OtelComponentMapping,
+		relationMappings map[settingsproto.OtelInputSignal][]settingsproto.OtelRelationMapping,
 	)
 }
 
 func NewSnapshotManager(
 	logger *zap.Logger,
-	supportedSignals []stsSettingsModel.OtelInputSignal,
+	supportedSignals []settingsproto.OtelInputSignal,
 	observers ...SnapshotUpdateListener,
 ) *SnapshotManager {
 	return &SnapshotManager{
 		logger:            logger,
 		supportedSignals:  supportedSignals,
-		componentMappings: make(map[stsSettingsModel.OtelInputSignal][]stsSettingsModel.OtelComponentMapping),
-		relationMappings:  make(map[stsSettingsModel.OtelInputSignal][]stsSettingsModel.OtelRelationMapping),
+		componentMappings: make(map[settingsproto.OtelInputSignal][]settingsproto.OtelComponentMapping),
+		relationMappings:  make(map[settingsproto.OtelInputSignal][]settingsproto.OtelRelationMapping),
 		observers:         observers,
 	}
 }
@@ -79,8 +79,8 @@ func (s *SnapshotManager) Start(
 
 	s.logger.Info("SnapshotManager subscribed to setting updates")
 	settingUpdatesCh, err := settingsProvider.RegisterForUpdates(
-		stsSettingsModel.SettingTypeOtelComponentMapping,
-		stsSettingsModel.SettingTypeOtelRelationMapping,
+		settingsproto.SettingTypeOtelComponentMapping,
+		settingsproto.SettingTypeOtelRelationMapping,
 	)
 	if err != nil {
 		s.mu.Unlock()
@@ -136,13 +136,13 @@ func (s *SnapshotManager) GetAndUpdateSettingSnapshots(
 	provider stsSettingsApi.StsSettingsProvider,
 	onRemovals onRemovalsFunc,
 ) {
-	newComponentMappings, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelComponentMapping](provider)
+	newComponentMappings, err := stsSettingsApi.GetSettingsAs[settingsproto.OtelComponentMapping](provider)
 	if err != nil {
 		s.logger.Error("failed to get component mappings", zap.Error(err))
 		return
 	}
 
-	newRelationMappings, err := stsSettingsApi.GetSettingsAs[stsSettingsModel.OtelRelationMapping](provider)
+	newRelationMappings, err := stsSettingsApi.GetSettingsAs[settingsproto.OtelRelationMapping](provider)
 	if err != nil {
 		s.logger.Error("failed to get relation mappings", zap.Error(err))
 		return
@@ -155,8 +155,8 @@ func (s *SnapshotManager) GetAndUpdateSettingSnapshots(
 // when mappings have been removed
 func (s *SnapshotManager) Update(
 	ctx context.Context,
-	newComponentMappings []stsSettingsModel.OtelComponentMapping,
-	newRelationMappings []stsSettingsModel.OtelRelationMapping,
+	newComponentMappings []settingsproto.OtelComponentMapping,
+	newRelationMappings []settingsproto.OtelRelationMapping,
 	onRemovals onRemovalsFunc,
 ) {
 	s.mu.Lock()
@@ -177,12 +177,12 @@ func (s *SnapshotManager) Update(
 
 	// Copy current state needed for async ref precomputation
 	observersCopy := append([]SnapshotUpdateListener(nil), s.observers...)
-	signalsCopy := append([]stsSettingsModel.OtelInputSignal(nil), s.supportedSignals...)
-	componentMappingsCopy := make(map[stsSettingsModel.OtelInputSignal][]stsSettingsModel.OtelComponentMapping)
-	relationMappingsCopy := make(map[stsSettingsModel.OtelInputSignal][]stsSettingsModel.OtelRelationMapping)
+	signalsCopy := append([]settingsproto.OtelInputSignal(nil), s.supportedSignals...)
+	componentMappingsCopy := make(map[settingsproto.OtelInputSignal][]settingsproto.OtelComponentMapping)
+	relationMappingsCopy := make(map[settingsproto.OtelInputSignal][]settingsproto.OtelRelationMapping)
 	for _, sig := range signalsCopy {
-		componentMappingsCopy[sig] = append([]stsSettingsModel.OtelComponentMapping(nil), s.componentMappings[sig]...)
-		relationMappingsCopy[sig] = append([]stsSettingsModel.OtelRelationMapping(nil), s.relationMappings[sig]...)
+		componentMappingsCopy[sig] = append([]settingsproto.OtelComponentMapping(nil), s.componentMappings[sig]...)
+		relationMappingsCopy[sig] = append([]settingsproto.OtelRelationMapping(nil), s.relationMappings[sig]...)
 	}
 
 	if len(change.RemovedComponentMappings) > 0 || len(change.RemovedRelationMappings) > 0 {
@@ -201,8 +201,8 @@ func (s *SnapshotManager) Update(
 	}
 }
 
-func flattenMappings[T stsSettingsModel.SettingExtension](
-	mappingsBySignal map[stsSettingsModel.OtelInputSignal][]T,
+func flattenMappings[T settingsproto.SettingExtension](
+	mappingsBySignal map[settingsproto.OtelInputSignal][]T,
 ) []T {
 	seen := make(map[string]struct{})
 	var all []T
@@ -221,7 +221,7 @@ func flattenMappings[T stsSettingsModel.SettingExtension](
 	return all
 }
 
-func filterForSignal[T stsSettingsModel.SettingExtension](mappings []T, signal stsSettingsModel.OtelInputSignal) []T {
+func filterForSignal[T settingsproto.SettingExtension](mappings []T, signal settingsproto.OtelInputSignal) []T {
 	var filtered []T
 	for _, m := range mappings {
 		if slices.Contains(m.GetInputSignals(), signal) {
@@ -232,13 +232,13 @@ func filterForSignal[T stsSettingsModel.SettingExtension](mappings []T, signal s
 }
 
 func (s *SnapshotManager) Current(
-	signal stsSettingsModel.OtelInputSignal,
-) ([]stsSettingsModel.OtelComponentMapping, []stsSettingsModel.OtelRelationMapping) {
+	signal settingsproto.OtelInputSignal,
+) ([]settingsproto.OtelComponentMapping, []settingsproto.OtelRelationMapping) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	comps := append([]stsSettingsModel.OtelComponentMapping(nil), s.componentMappings[signal]...)
-	rels := append([]stsSettingsModel.OtelRelationMapping(nil), s.relationMappings[signal]...)
+	comps := append([]settingsproto.OtelComponentMapping(nil), s.componentMappings[signal]...)
+	rels := append([]settingsproto.OtelRelationMapping(nil), s.relationMappings[signal]...)
 	return comps, rels
 }
 
@@ -249,7 +249,7 @@ func (s *SnapshotManager) Current(
 //
 //	added := DiffSettings(newSettings, oldSettings)
 //	removed := DiffSettings(oldSettings, newSettings)
-func DiffSettings[T stsSettingsModel.SettingExtension](primary, comparison []T) []T {
+func DiffSettings[T settingsproto.SettingExtension](primary, comparison []T) []T {
 	var diff []T
 	for _, candidate := range primary {
 		found := false

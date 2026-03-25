@@ -1,1308 +1,983 @@
+# OpenApi header is included in this file to support code highlighting in VSCode
 openapi: 3.0.3
 info:
-  description: Protocol for distributing settings between different SUSE Observability services
-  version: 0.0.1
-  title: SUSE Observability Settings protocol
-  license:
-    name: "Apache 2.0"
-    url: "https://www.apache.org/licenses/LICENSE-2.0.html"
-  contact:
-    name: SUSE Observability
-    email: suse-observability-ops@suse.com
-    url: "https://www.suse.com/observability/"
-  x-logo:
-    url: "https://raw.githubusercontent.com/StackVista/stackstate-docs/master/resources/logo/StackState-Color-padding.png"
-    href: "#top"
-externalDocs:
-  description: Documentation
-  url: "https://docs.suse.com/"
-paths: {}
+  title: Structures common to settings and api
+  version: "1.0.0"
+
 components:
   schemas:
-    SettingsProtocol:
-      properties:
-        type:
-          type: string
-      oneOf:
-        - $ref: "#/components/schemas/SettingsSnapshotStart"
-        - $ref: "#/components/schemas/SettingsSnapshotStop"
-        - $ref: "#/components/schemas/SettingsEnvelope"
-      discriminator:
-        propertyName: type
-      required:
-        - type
-        - id
-
-    SettingsSnapshotStart:
+    ComponentPresentationQueryBinding:
       type: object
       properties:
-        type:
+        query:
           type: string
-          enum: [SettingsSnapshotStart]
-        id:
-          type: string
-          description: UUID to match snapshot start, stop and envelope
-        settingType:
-          $ref: "#/components/schemas/SettingType"
+          description: 'Stq query that defines to which components does the presentation applies to.'
       required:
-        - type
-        - id
-        - settingType
+        - query
 
-    SettingsSnapshotStop:
+    ComponentPresentationRank:
       type: object
       properties:
-        type:
-          type: string
-          enum: [SettingsSnapshotStop]
-        id:
-          type: string
-          description: UUID to match snapshot start, stop and envelope
+        specificity:
+          type: number
+          format: double
+          description: 'Determines how much of a "specialization" this presentation is. Higher number means more specific. This is used to determine which presentation to use when multiple presentations match.'
       required:
-        - type
-        - id
+        - specificity
 
-    SettingsEnvelope:
+    PresentationDefinition:
       type: object
       properties:
-        type:
+        icon:
           type: string
-          enum: [SettingsEnvelope]
-        id:
-          type: string
-          description: UUID to match snapshot start, stop and envelope
-        setting:
-          $ref: "#/components/schemas/Setting"
-      required:
-        - type
-        - id
-        - setting
+        overview:
+          $ref: "#/components/schemas/PresentationOverview"
+        highlight:
+          $ref: "#/components/schemas/PresentationHighlight"
 
-    # Base types
-
-    SettingType:
-      type: string
-      enum:
-        - NotificationConfiguration
-        - Sync
-        - Monitor
-        - ExternalMonitor
-        - QueryView
-        - EmailNotificationChannel
-        - OpsgenieNotificationChannel
-        - SlackNotificationChannel
-        - TeamsNotificationChannel
-        - WebhookNotificationChannel
-        - OtelComponentMapping
-        - OtelRelationMapping
-
-    Setting:
+    PresentationName:
       type: object
       properties:
-        type:
+        singular:
           type: string
-      oneOf:
-        - $ref: "#/components/schemas/NotificationConfiguration"
-        - $ref: "#/components/schemas/NotificationChannel"
-        - $ref: "#/components/schemas/Sync"
-        - $ref: "#/components/schemas/Monitor"
-        - $ref: "#/components/schemas/ExternalMonitor"
-        - $ref: "#/components/schemas/QueryView"
-        - $ref: "#/components/schemas/OtelComponentMapping"
-        - $ref: "#/components/schemas/OtelRelationMapping"
-      discriminator:
-        propertyName: type
+        plural:
+          type: string
+        title:
+          type: string
       required:
-        - type
-        - id
-        - shard
-        - createdTimeStamp
+        - singular
+        - plural
+        - title
 
-    Shard:
-      type: integer
-      format: int32
-
-    SettingId:
-      type: string
-      description: A Setting is uniquely identified by the combination of type+id
-
-    SettingBase:
+    PresentationOverview:
       type: object
       properties:
-        id:
-          $ref: "#/components/schemas/SettingId"
-        shard:
-          $ref: "#/components/schemas/Shard"
-        createdTimeStamp:
+        name:
+          $ref: "#/components/schemas/PresentationName"
+        mainMenu:
+          $ref: "#/components/schemas/PresentationMainMenu"
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/OverviewColumnDefinition'
+        fixedColumns:
           type: integer
-          format: int64
-          description: The timestamp of when the setting was created.
+      description: |
+        Overview presentation definition. The `columns` field defines the columns to show in the overview table. The `flags` field can be used to enable/disable functionalities.
+        If multiple ComponentPresentations match, columns are merged by `columnId` according to binding rank. Absence of the field means no overview is shown.
       required:
-        - id
-        - shard
-        - createdTimeStamp
-
-    # Notification configurations
-    NotificationConfiguration:
-      allOf:
-        - $ref: "#/components/schemas/SettingBase"
-        - type: object
-          properties:
-            type:
-              type: string
-              enum: [NotificationConfiguration]
-              description: The combination of type+id is a unique identification for a setting
-            name:
-              type: string
-              description: The name of the setting.
-            identifier:
-              type: string
-            notifyOnHealthStates:
-              $ref: "#/components/schemas/NotifyOnOptions"
-            notifyMonitors:
-              type: array
-              items:
-                $ref: "#/components/schemas/MonitorPresentationId"
-              uniqueItems: true
-            notifyMonitorTags:
-              type: array
-              items:
-                type: string
-              uniqueItems: true
-            componentTypes:
-              type: array
-              items:
-                type: string
-              uniqueItems: true
-            componentTags:
-              type: array
-              items:
-                type: string
-              uniqueItems: true
-            status:
-              $ref: "#/components/schemas/NotificationConfigurationStatus"
-            channelIds:
-              type: array
-              items:
-                $ref: "#/components/schemas/NotificationChannelId"
-              uniqueItems: true
-          required:
-            - type
-            - name
-            - notifyOnHealthStates
-            - notifyMonitors
-            - notifyMonitorTags
-            - componentTypes
-            - componentTags
-            - status
-            - channelIds
-
-    NotificationChannelId:
-      type: object
-      oneOf:
-        - $ref: "#/components/schemas/SlackNotificationChannelId"
-        - $ref: "#/components/schemas/WebhookNotificationChannelId"
-        - $ref: "#/components/schemas/OpsgenieNotificationChannelId"
-        - $ref: "#/components/schemas/TeamsNotificationChannelId"
-        - $ref: "#/components/schemas/EmailNotificationChannelId"
-      discriminator:
-        propertyName: type
-      required:
-        - type
-
-    SlackNotificationChannelId:
-      type: object
-      properties:
-        id:
-          type: string
-        type:
-          type: string
-          enum: [SlackNotificationChannelId]
-      required:
-        - id
-        - type
-
-    WebhookNotificationChannelId:
-      type: object
-      properties:
-        id:
-          type: string
-        type:
-          type: string
-          enum: [WebhookNotificationChannelId]
-      required:
-        - id
-        - type
-
-    OpsgenieNotificationChannelId:
-      type: object
-      properties:
-        id:
-          type: string
-        type:
-          type: string
-          enum: [OpsgenieNotificationChannelId]
-      required:
-        - id
-        - type
-
-    TeamsNotificationChannelId:
-      type: object
-      properties:
-        id:
-          type: string
-        type:
-          type: string
-          enum: [TeamsNotificationChannelId]
-      required:
-        - id
-        - type
-
-    EmailNotificationChannelId:
-      type: object
-      properties:
-        id:
-          type: string
-        type:
-          type: string
-          enum: [EmailNotificationChannelId]
-      required:
-        - id
-        - type
-
-    NotificationChannelType:
-      type: string
-      enum:
-        - EmailNotificationChannel
-        - OpsgenieNotificationChannel
-        - SlackNotificationChannel
-        - TeamsNotificationChannel
-        - WebhookNotificationChannel
-
-    NotificationChannel:
-      type: object
-      oneOf:
-        - $ref: "#/components/schemas/EmailNotificationChannel"
-        - $ref: "#/components/schemas/OpsgenieNotificationChannel"
-        - $ref: "#/components/schemas/SlackNotificationChannel"
-        - $ref: "#/components/schemas/TeamsNotificationChannel"
-        - $ref: "#/components/schemas/WebhookNotificationChannel"
-      discriminator:
-        propertyName: type
-      required:
-        - type
-
-    EmailNotificationChannel:
-      allOf:
-        - $ref: "#/components/schemas/SettingBase"
-        - type: object
-          properties:
-            type:
-              type: string
-              enum: [EmailNotificationChannel]
-              description: The combination of type+id is a unique identification for a setting
-            lastUpdateTimestamp:
-              type: integer
-              format: instant
-              description: The timestamp of when the setting was last updated.
-            to:
-              type: array
-              items:
-                type: string
-            cc:
-              type: array
-              items:
-                type: string
-            subjectPrefix:
-              type: string
-          required:
-            - type
-            - lastUpdateTimestamp
-            - to
-            - cc
-    OpsgenieNotificationChannel:
-      allOf:
-        - $ref: "#/components/schemas/SettingBase"
-        - type: object
-          properties:
-            type:
-              type: string
-              enum: [OpsgenieNotificationChannel]
-              description: The combination of type+id is a unique identification for a setting
-            lastUpdateTimestamp:
-              type: integer
-              format: instant
-              description: The timestamp of when the setting was last updated.
-            region:
-              $ref: "#/components/schemas/OpsgenieRegion"
-            genieKey:
-              type: string
-            responders:
-              type: array
-              items:
-                $ref: "#/components/schemas/OpsgenieResponder"
-            priority:
-              $ref: "#/components/schemas/OpsgeniePriority"
-          required:
-            - type
-            - lastUpdateTimestamp
-            - region
-            - genieKey
-            - responders
-            - priority
-
-    OpsgenieRegion:
-      type: string
-      enum: [EU, US]
-
-    OpsgenieResponder:
-      type: object
-      properties:
-        responder:
-          type: string
-        responderType:
-          $ref: "#/components/schemas/OpsgenieResponderType"
-      required:
-        - responder
-        - responderType
-
-    OpsgenieResponderType:
-      type: string
-      enum:
-        - TEAM
-        - USER
-        - SCHEDULE
-        - ESCALATION
-
-    OpsgeniePriority:
-      type: string
-      enum: [P1, P2, P3, P4, P5]
-
-    SlackNotificationChannel:
-      allOf:
-        - $ref: "#/components/schemas/SettingBase"
-        - type: object
-          properties:
-            type:
-              type: string
-              enum: [SlackNotificationChannel]
-              description: The combination of type+id is a unique identification for a setting
-            lastUpdateTimestamp:
-              type: integer
-              format: instant
-              description: The timestamp of when the setting was last updated.
-            accessToken:
-              type: string
-            slackWorkspace:
-              type: string
-            slackChannel:
-              type: string
-            slackChannelId:
-              type: string
-          required:
-            - type
-            - lastUpdateTimestamp
-            - accessToken
-            - slackWorkspace
-
-    TeamsNotificationChannel:
-      allOf:
-        - $ref: "#/components/schemas/SettingBase"
-        - type: object
-          properties:
-            type:
-              type: string
-              enum: [TeamsNotificationChannel]
-              description: The combination of type+id is a unique identification for a setting
-            lastUpdateTimestamp:
-              type: integer
-              format: instant
-              description: The timestamp of when the setting was last updated.
-            url:
-              type: string
-          required:
-            - type
-            - lastUpdateTimestamp
-            - url
-
-    WebhookNotificationChannel:
-      allOf:
-        - $ref: "#/components/schemas/SettingBase"
-        - type: object
-          properties:
-            type:
-              type: string
-              enum: [WebhookNotificationChannel]
-              description: The combination of type+id is a unique identification for a setting
-            lastUpdateTimestamp:
-              type: integer
-              format: instant
-              description: The timestamp of when the setting was last updated.
-            token:
-              type: string
-            url:
-              type: string
-            verifySsl:
-              type: boolean
-            tags:
-              type: object
-              additionalProperties:
-                type: string
-          required:
-            - type
-            - lastUpdateTimestamp
-            - token
-            - url
-            - verifySsl
-            - tags
-
-    # Synchronization
-    Sync:
-      allOf:
-        - $ref: "#/components/schemas/SettingBase"
-        - type: object
-          properties:
-            type:
-              type: string
-              enum: [Sync]
-              description: The combination of type+id is a unique identification for a setting
-            name:
-              type: string
-              description: The name of the setting.
-            componentActions:
-              type: array
-              items:
-                $ref: "#/components/schemas/SyncActionComponent"
-              uniqueItems: true
-            relationActions:
-              type: array
-              items:
-                $ref: "#/components/schemas/SyncActionRelation"
-              uniqueItems: true
-            defaultComponentAction:
-              $ref: "#/components/schemas/SyncActionComponent"
-            defaultRelationAction:
-              $ref: "#/components/schemas/SyncActionRelation"
-            componentIdExtractor:
-              $ref: "#/components/schemas/IdExtractorFunctionBody"
-            relationIdExtractor:
-              $ref: "#/components/schemas/IdExtractorFunctionBody"
-            integrationType:
-              type: string
-            topic:
-              type: string
-            autoExpireElements:
-              type: boolean
-            expireElementsAfterMs:
-              type: integer
-              format: int64
-          required:
-            - type
-            - name
-            - componentActions
-            - relationActions
-            - defaultComponentAction
-            - defaultRelationAction
-            - componentIdExtractor
-            - relationIdExtractor
-            - integrationType
-            - topic
-            - autoExpireElements
-            - expireElementsAfterMs
-    SyncAction:
-      properties:
-        actionType:
-          type: string
-      oneOf:
-        - $ref: "#/components/schemas/SyncActionComponent"
-        - $ref: "#/components/schemas/SyncActionRelation"
-        - $ref: "#/components/schemas/SyncActionCreate"
-        - $ref: "#/components/schemas/SyncActionCreateOnMerge"
-      discriminator:
-        propertyName: actionType
-      required:
-        - actionType
-
-    SyncActionCreate:
-      oneOf:
-        - $ref: "#/components/schemas/SyncActionCreateComponent"
-        - $ref: "#/components/schemas/SyncActionCreateRelation"
-      discriminator:
-        propertyName: actionType
-
-    SyncActionComponent:
-      oneOf:
-        - $ref: "#/components/schemas/SyncActionCreateComponent"
-        - $ref: "#/components/schemas/SyncActionCreateOnMerge"
-      discriminator:
-        propertyName: actionType
-    SyncActionRelation:
-      oneOf:
-        - $ref: "#/components/schemas/SyncActionCreateRelation"
-        - $ref: "#/components/schemas/SyncActionCreateOnMerge"
-      discriminator:
-        propertyName: actionType
-    SyncActionCreateComponent:
-      type: object
-      properties:
-        actionType:
-          type: string
-          enum: [SyncActionCreateComponent]
-        type:
-          type: string
-        mappingFunction:
-          $ref: "#/components/schemas/GroovyFunctionBody"
-        templateFunction:
-          $ref: "#/components/schemas/HandlebarsFunctionBody"
-        mergeStrategy:
-          $ref: "#/components/schemas/MergeStrategy"
-      required:
-        - actionType
-        - type
-        - templateFunction
-        - mergeStrategy
-    SyncActionCreateRelation:
-      type: object
-      properties:
-        actionType:
-          type: string
-          enum: [SyncActionCreateRelation]
-        type:
-          type: string
-        mappingFunction:
-          $ref: "#/components/schemas/GroovyFunctionBody"
-        templateFunction:
-          $ref: "#/components/schemas/HandlebarsFunctionBody"
-        mergeStrategy:
-          $ref: "#/components/schemas/MergeStrategy"
-      required:
-        - actionType
-        - type
-        - templateFunction
-        - mergeStrategy
-    SyncActionCreateOnMerge:
-      type: object
-      properties:
-        actionType:
-          type: string
-          enum: [SyncActionCreateOnMerge]
-        type:
-          type: string
-      required:
-        - actionType
-        - type
-
-    # Monitors and External Monitors
-    Monitor:
-      allOf:
-        - $ref: "#/components/schemas/SettingBase"
-        - type: object
-          properties:
-            type:
-              type: string
-              enum: [Monitor]
-              description: The combination of type+id is a unique identification for a setting
-            name:
-              type: string
-              description: The name of the setting.
-            identifier:
-              type: string
-            functionCall:
-              $ref: "#/components/schemas/MonitorFunctionCall"
-            remediationHint:
-              type: string
-            intervalSeconds:
-              type: integer
-            tags:
-              type: array
-              items:
-                type: string
-              uniqueItems: true
-            status:
-              $ref: "#/components/schemas/MonitorStatus"
-            dummy:
-              type: boolean
-          required:
-            - type
-            - name
-            - functionCall
-            - intervalSeconds
-            - tags
-            - status
-
-    ExternalMonitor:
-      allOf:
-        - $ref: "#/components/schemas/SettingBase"
-        - type: object
-          properties:
-            type:
-              type: string
-              enum: [ExternalMonitor]
-              description: The combination of type+id is a unique identification for a setting
-            name:
-              type: string
-              description: The name of the setting.
-            identifier:
-              type: string
-            healthStreamUrn:
-              type: string
-            remediationHint:
-              type: string
-            tags:
-              type: array
-              items:
-                type: string
-              uniqueItems: true
-          required:
-            - type
-            - name
-            - healthStreamUrn
-            - tags
-
-    MonitorPresentation:
-      type: object
-      oneOf:
-        - $ref: "#/components/schemas/Monitor"
-        - $ref: "#/components/schemas/ExternalMonitor"
-      discriminator:
-        propertyName: type
-      required:
-        - type
-
-    MonitorPresentationId:
-      oneOf:
-        - $ref: "#/components/schemas/MonitorId"
-        - $ref: "#/components/schemas/ExternalMonitorId"
-      discriminator:
-        propertyName: type
-
-    MonitorId:
-      type: object
-      properties:
-        type:
-          type: string
-          enum: [MonitorId]
-        id:
-          type: string
-      required:
-        - type
-        - id
-    ExternalMonitorId:
-      type: object
-      properties:
-        type:
-          type: string
-          enum: [ExternalMonitorId]
-        id:
-          type: string
-      required:
-        - type
-        - id
-
-    FunctionCall:
-      oneOf:
-        - $ref: "#/components/schemas/MonitorFunctionCall"
-      discriminator:
-        propertyName: type
-
-    MonitorFunctionCall:
-      type: object
-      properties:
-        body:
-          $ref: "#/components/schemas/MonitorFunctionBody"
-        arguments:
-          type: object
-          additionalProperties:
-            $ref: "#/components/schemas/MonitorArgument"
-        type:
-          type: string
-          enum: [MonitorFunctionCall]
-      required:
-        - body
-        - arguments
-        - type
-    
-    FunctionBody:
-      properties:
-        functionType:
-          type: string
-      oneOf:
-        - $ref: "#/components/schemas/MonitorFunctionBody"
-        - $ref: "#/components/schemas/IdExtractorFunctionBody"
-        - $ref: "#/components/schemas/HandlebarsFunctionBody"
-        - $ref: "#/components/schemas/GroovyFunctionBody"
-        - $ref: "#/components/schemas/NativeFunctionBody"
-
-      discriminator:
-        propertyName: functionType
-      required:
-        - functionType
-
-    MonitorFunctionBody:
-      oneOf:
-        - $ref: "#/components/schemas/NativeFunctionBody"
-        - $ref: "#/components/schemas/GroovyFunctionBody"
-      discriminator:
-        propertyName: functionType
-    IdExtractorFunctionBody:
-      oneOf:
-        - $ref: "#/components/schemas/NativeFunctionBody"
-        - $ref: "#/components/schemas/GroovyFunctionBody"
-      discriminator:
-        propertyName: functionType
-
-    Argument:
-      properties:
-        argumentType:
-          type: string
-      oneOf:
-        - $ref: "#/components/schemas/MonitorArgument"
-      discriminator:
-        propertyName: argumentType
-      required:
-        - argumentType
-
-    MonitorArgument:
-      oneOf:
-        - $ref: "#/components/schemas/ArgumentBoolean"
-        - $ref: "#/components/schemas/ArgumentDouble"
-        - $ref: "#/components/schemas/ArgumentLong"
-        - $ref: "#/components/schemas/ArgumentString"
-        - $ref: "#/components/schemas/ArgumentTimeWindow"
-        - $ref: "#/components/schemas/ArgumentPromQLMetric"
-        - $ref: "#/components/schemas/ArgumentComparatorWithoutEquality"
-        - $ref: "#/components/schemas/ArgumentFailingHealthState"
-        - $ref: "#/components/schemas/ArgumentTopologyQuery"
-        - $ref: "#/components/schemas/ArgumentTopologyPromQLMetric"
-      discriminator:
-        propertyName: argumentType
-
-    # Queryview
-    QueryView:
-      allOf:
-        - $ref: "#/components/schemas/SettingBase"
-        - type: object
-          properties:
-            type:
-              type: string
-              enum: [QueryView]
-              description: The combination of type+id is a unique identification for a setting
-            name:
-              type: string
-              description: The name of the setting.
-            topologyQuery:
-              type: string
-          required:
-            - type
-            - name
-            - topologyQuery
-
-    # Supporting types
-    NotificationConfigurationStatus:
-      type: string
-      enum: [ENABLED, DISABLED]
-    NotifyOnOptions:
-      type: string
-      enum: [CRITICAL, DEVIATING_AND_CRITICAL]
-    MergeStrategy:
-      type: string
-      enum: [UseTheirs, MergePreferTheirs, MergePreferMine, UseMine]
-    MonitorStatus:
-      type: string
-      enum: [ENABLED, DISABLED]
-    ComparatorWithoutEquality:
-      type: string
-      enum: [LT, LTE, GTE, GT]
-    FailingHealthState:
-      type: string
-      enum: [CRITICAL, DEVIATING, UNKNOWN]
-
-    NativeFunctionBody:
-      type: object
-      properties:
-        functionType:
-          type: string
-          enum: [NativeFunctionBody]
-        name:
-          type: string
-        functionRef:
-          type: string
-      required:
-        - functionType
+        - title
+        - columns
         - name
-        - functionRef
-    GroovyFunctionBody:
-      type: object
-      properties:
-        functionType:
-          type: string
-          enum: [GroovyFunctionBody]
-        name:
-          type: string
-        functionBody:
-          type: string
-      required:
-        - functionType
-        - name
-        - functionBody
-    HandlebarsFunctionBody:
-      type: object
-      properties:
-        functionType:
-          type: string
-          enum: [HandlebarsFunctionBody]
-        name:
-          type: string
-        functionBody:
-          type: string
-      required:
-        - functionType
-        - name
-        - functionBody
 
-    ArgumentBoolean:
+    PresentationMainMenu:
       type: object
       properties:
-        argumentType:
+        group:
           type: string
-          enum: [ArgumentBoolean]
-        value:
-          type: boolean
-      required:
-        - argumentType
-        - value
-    ArgumentDouble:
-      type: object
-      properties:
-        argumentType:
+        icon:
           type: string
-          enum: [ArgumentDouble]
-        value:
+        order:
           type: number
           format: double
       required:
-        - argumentType
-        - value
-    ArgumentLong:
+        - group
+        - order
+
+    OverviewColumnDefinition:
       type: object
       properties:
-        argumentType:
+        columnId:
           type: string
-          enum: [ArgumentLong]
+        title:
+          type: string
+        projection:
+          $ref: "#/components/schemas/ComponentOverviewProjection"
+      required:
+        - columnId
+      description: 'Definition of a column in the overview presentation. The `columnId` field is used to identify the column and merge columns from different presentations. If only the `columnId` is provided, the column will be rendered from the next more specific presentation definition.'
+
+    PresentationHighlight:
+      type: object
+      properties:
+        title:
+          type: string
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/PresentationHighlightField'
+      description: |
+        Highlight presentation definition. The `fields` define the fields to show in the ab. The `flags` field can be used to enable/disable functionalities.
+        If multiple ComponentPresentations match, columns are merged by `columnId` according to binding rank. Absence of the field means no overview is shown.
+      required:
+        - title
+        - fields
+
+    PresentationHighlightField:
+      type: object
+      properties:
+        fieldId:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        order:
+          type: number
+          format: double
+        projection:
+          $ref: "#/components/schemas/ComponentHighlightProjection"
+      required:
+        - fieldId
+        - title
+        - order
+      description: 'Definition of a field in the highlight presentation. The `fieldId` field is used to identify the field and merge fields from different presentations.'
+
+    ComponentHighlightProjection:
+      discriminator:
+        propertyName: _type
+      oneOf:
+        - $ref: '#/components/schemas/HealthProjection'
+        - $ref: '#/components/schemas/MetricProjection'
+        - $ref: '#/components/schemas/ComponentLinkProjection'
+        - $ref: '#/components/schemas/TextProjection'
+        - $ref: '#/components/schemas/NumericProjection'
+        - $ref: '#/components/schemas/DurationProjection'
+        - $ref: '#/components/schemas/RatioProjection'
+        - $ref: '#/components/schemas/ContainerImageProjection'
+        - $ref: '#/components/schemas/MapProjection'
+      description: 'Display type and value for the field.'
+
+    ComponentOverviewProjection:
+      discriminator:
+        propertyName: _type
+      oneOf:
+        - $ref: '#/components/schemas/HealthProjection'
+        - $ref: '#/components/schemas/MetricProjection'
+        - $ref: '#/components/schemas/ComponentLinkProjection'
+        - $ref: '#/components/schemas/TextProjection'
+        - $ref: '#/components/schemas/NumericProjection'
+        - $ref: '#/components/schemas/DurationProjection'
+        - $ref: '#/components/schemas/RatioProjection'
+        - $ref: '#/components/schemas/ContainerImageProjection'
+      description: 'Display type and value for the field.'
+
+    HealthProjection:
+      type: object
+      properties:
+        _type:
+          type: string
+          enum: [HealthProjection]
         value:
-          type: integer
-          format: int64
+          type: string
+          description: 'Cel expression that returns a string that represents a valid HealthState'
       required:
-        - argumentType
+        - _type
         - value
-    ArgumentString:
+    MapProjection:
       type: object
       properties:
-        argumentType:
+        _type:
           type: string
-          enum: [ArgumentString]
+          enum: [MapProjection]
         value:
           type: string
+          description: 'Cel expression that returns a map<string,dyn>'
+        asTags:
+          type: boolean
+          default: true
       required:
-        - argumentType
+        - _type
         - value
-    ArgumentTimeWindow:
+    MetricProjection:
       type: object
       properties:
-        argumentType:
+        _type:
           type: string
-          enum: [ArgumentTimeWindow]
-        valueMs:
+          enum: [MetricProjection]
+        showChart:
+          type: boolean
+        decimalPlaces:
           type: integer
-          format: int64
-      required:
-        - argumentType
-        - valueMs
-    ArgumentPromQLMetric:
-      type: object
-      properties:
-        argumentType:
+        unit:
           type: string
-          enum: [ArgumentPromQLMetric]
         query:
           type: string
-        unit:
-          type: string
-        aliasTemplate:
-          type: string
+          description: "Individual metric query that returns a timeseries for a specific cell."
       required:
-        - argumentType
+        - _type
         - query
-        - unit
-        - aliasTemplate
-    ArgumentComparatorWithoutEquality:
+    ComponentLinkProjection:
       type: object
       properties:
-        argumentType:
+        _type:
           type: string
-          enum: [ArgumentComparatorWithoutEquality]
-        value:
-          $ref: "#/components/schemas/ComparatorWithoutEquality"
+          enum: [ComponentLinkProjection]
+        name:
+          type: string
+          description: 'Cel expression that returns a string that represents the name of the component to link to'
+        identifier:
+          type: string
+          description: 'Cel expression that returns a string that represents the identifier in order to build the link'
       required:
-        - argumentType
-        - value
-    ArgumentFailingHealthState:
+        - _type
+        - name
+        - identifier
+    TextProjection:
       type: object
       properties:
-        argumentType:
+        _type:
           type: string
-          enum: [ArgumentFailingHealthState]
-        value:
-          $ref: "#/components/schemas/FailingHealthState"
-      required:
-        - argumentType
-        - value
-    ArgumentTopologyQuery:
-      type: object
-      properties:
-        argumentType:
-          type: string
-          enum: [ArgumentTopologyQuery]
+          enum: [TextProjection]
         value:
           type: string
+          description: 'Cel expression that returns a string'
+        asTag:
+          type: boolean
+          default: false
+          description: 'Should the value be rendered as a tag or as plain text'
       required:
-        - argumentType
+        - _type
         - value
-    ArgumentTopologyPromQLMetric:
+    NumericProjection:
       type: object
       properties:
-        argumentType:
+        _type:
           type: string
-          enum: [ArgumentTopologyPromQLMetric]
-        topologyQuery:
+          enum: [NumericProjection]
+        value:
           type: string
-        metricQuery:
+          description: 'Cel expression that returns a number'
+        unit:
+          type: string
+          nullable: true
+        decimalPlaces:
+          type: integer
+      required:
+        - _type
+        - value
+    DurationProjection:
+      type: object
+      properties:
+        _type:
+          type: string
+          enum: [DurationProjection]
+        startTime:
+          type: string
+          description: 'Cel expression that returns an ISO8601 formatted timestamp'
+        endTime:
+          type: string
+          description: 'Cel expression that returns an ISO8601 formatted timestamp'
+      required:
+        - _type
+        - startTime
+
+    RatioProjection:
+      type: object
+      description: 'Helps rendering columns that summarize success rates'
+      properties:
+        _type:
+          type: string
+          enum: [RatioProjection]
+        numerator:
+          type: string
+          description: 'Cel expression that returns a number'
+        denominator:
+          type: string
+          description: 'Cel expression that returns a number'
+        status:
+          type: string
+          description: 'Cel expression that returns a string that represents a valid HealthState'
+      required:
+        - _type
+        - numerator
+        - denominator
+
+    ContainerImageProjection:
+      type: object
+      description: 'Helps rendering links for docker images'
+      properties:
+        _type:
+          type: string
+          enum: [ContainerImageProjection]
+        imageId:
+          type: string
+          description: 'Cel expression that returns a string'
+        imageName:
+          type: string
+          description: 'Cel expression that returns a string'
+      required:
+        - _type
+        - imageId
+        - imageName
+
+    ComponentTypeHighlights:
+      properties:
+        namePlural:
+          type: string
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComponentTypeField"
+        about:
+          $ref: "#/components/schemas/ComponentTypeAbout"
+        events:
+          $ref: "#/components/schemas/ComponentTypeEvents"
+        showLogs:
+          type: boolean
+        showLastChange:
+          type: boolean
+        externalComponent:
+          $ref: "#/components/schemas/ComponentTypeExternalComponent"
+        relatedResources:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComponentTypeRelatedResources"
+        metrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComponentHighlightMetrics"
+      required:
+        - namePlural
+        - fields
+        - about
+        - events
+        - showLogs
+        - showLastChange
+        - externalComponent
+        - relatedResources
+        - metrics
+
+    ComponentTypeAbout:
+      properties:
+        fields:
+          type: array
+          items:
+            type: string
+      required:
+        - fields
+    ComponentTypeField:
+      properties:
+        fieldId:
+          type: string
+        label:
+          $ref: "#/components/schemas/ComponentTypeLabel"
+        valueExtractor:
+          $ref: "#/components/schemas/ComponentTypeValueExtractor"
+        display:
+          $ref: "#/components/schemas/ComponentTypeFieldDisplay"
+      required:
+        - fieldId
+        - label
+        - valueExtractor
+        - display
+    ComponentTypeLabel:
+      properties:
+        title:
+          type: string
+        helpBubbleText:
+          type: string
+      required:
+        - title
+    ComponentTypeValueExtractor:
+      discriminator:
+        propertyName: _type
+      oneOf:
+        - $ref: "#/components/schemas/ComponentTypeSource"
+        - $ref: "#/components/schemas/CompositeSource"
+        - $ref: "#/components/schemas/ConstantSource"
+        - $ref: "#/components/schemas/HealthSource"
+        - $ref: "#/components/schemas/IdentifiersSource"
+        - $ref: "#/components/schemas/LastUpdatedTimestampSource"
+        - $ref: "#/components/schemas/NameSource"
+        - $ref: "#/components/schemas/PropertySource"
+        - $ref: "#/components/schemas/TagSource"
+        - $ref: "#/components/schemas/TagsSource"
+    ComponentTypeSource:
+      properties:
+        _type:
+          type: string
+          enum:
+            - ComponentTypeSource
+      required:
+        - _type
+    CompositeSource:
+      properties:
+        _type:
+          type: string
+          enum:
+            - CompositeSource
+        sources:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ComponentTypeValueExtractor"
+      required:
+        - _type
+        - sources
+    ConstantSource:
+      properties:
+        _type:
+          type: string
+          enum:
+            - ConstantSource
+        value:
+          type: string
+      required:
+        - _type
+        - value
+    HealthSource:
+      properties:
+        _type:
+          type: string
+          enum:
+            - HealthSource
+      required:
+        - _type
+    IdentifiersSource:
+      properties:
+        _type:
+          type: string
+          enum:
+            - IdentifiersSource
+      required:
+        - _type
+    LastUpdatedTimestampSource:
+      properties:
+        _type:
+          type: string
+          enum:
+            - LastUpdatedTimestampSource
+      required:
+        - _type
+    NameSource:
+      properties:
+        _type:
+          type: string
+          enum:
+            - NameSource
+      required:
+        - _type
+    PropertySource:
+      properties:
+        _type:
+          type: string
+          enum:
+            - PropertySource
+        key:
+          type: string
+        defaultValue:
+          type: string
+      required:
+        - _type
+        - key
+    TagSource:
+      properties:
+        _type:
+          type: string
+          enum:
+            - TagSource
+        tagName:
+          type: string
+      required:
+        - _type
+        - tagName
+    TagsSource:
+      properties:
+        _type:
+          type: string
+          enum:
+            - TagsSource
+      required:
+        - _type
+    ComponentTypeFieldDisplay:
+      discriminator:
+        propertyName: _type
+      oneOf:
+        - $ref: "#/components/schemas/ComponentLinkDisplay"
+        - $ref: "#/components/schemas/DurationDisplay"
+        - $ref: "#/components/schemas/HealthBadgeDisplay"
+        - $ref: "#/components/schemas/HealthCircleDisplay"
+        - $ref: "#/components/schemas/PromqlDisplay"
+        - $ref: "#/components/schemas/RatioDisplay"
+        - $ref: "#/components/schemas/ReadyStatusDisplay"
+        - $ref: "#/components/schemas/TagDisplay"
+        - $ref: "#/components/schemas/TextDisplay"
+        - $ref: "#/components/schemas/ViewTimeLink"
+      required:
+        - _type
+    ComponentLinkDisplay:
+      properties:
+        _type:
+          type: string
+          enum:
+            - ComponentLinkDisplay
+      required:
+        - _type
+    DurationDisplay:
+      properties:
+        _type:
+          type: string
+          enum:
+            - DurationDisplay
+      required:
+        - _type
+    HealthBadgeDisplay:
+      properties:
+        _type:
+          type: string
+          enum:
+            - HealthBadgeDisplay
+      required:
+        - _type
+    HealthCircleDisplay:
+      properties:
+        _type:
+          type: string
+          enum:
+            - HealthCircleDisplay
+      required:
+        - _type
+    PromqlDisplay:
+      properties:
+        _type:
+          type: string
+          enum:
+            - PromqlDisplay
+      required:
+        - _type
+    RatioDisplay:
+      properties:
+        _type:
+          type: string
+          enum:
+            - RatioDisplay
+      required:
+        - _type
+    ReadyStatusDisplay:
+      properties:
+        _type:
+          type: string
+          enum:
+            - RatioDisplay
+      required:
+        - _type
+    TagDisplay:
+      properties:
+        _type:
+          type: string
+          enum:
+            - TagDisplay
+        singular:
+          type: string
+      required:
+        - _type
+    TextDisplay:
+      properties:
+        _type:
+          type: string
+          enum:
+            - TextDisplay
+      required:
+        - _type
+    ViewTimeLink:
+      properties:
+        _type:
+          type: string
+          enum:
+            - ViewTimeLink
+      required:
+        - _type
+    ComponentTypeEvents:
+      properties:
+        showEvents:
+          type: boolean
+        relatedResourcesTemplate:
+          type: string
+      required:
+        - showEvents
+    ComponentTypeExternalComponent:
+      properties:
+        showConfiguration:
+          type: boolean
+        showStatus:
+          type: boolean
+        externalIdSelector:
+          type: string
+      required:
+        - showConfiguration
+        - showStatus
+        - externalIdSelector
+    ComponentTypeRelatedResources:
+      properties:
+        resourceType:
+          type: string
+        title:
+          type: string
+        stql:
+          type: string
+        hint:
+          type: string
+        viewTypeIdentifier:
+          type: string
+      required:
+        - resourceType
+        - title
+        - stql
+    ComponentHighlightMetrics:
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        bindings:
+          type: array
+          items:
+            type: string
+        defaultExpanded:
+          type: boolean
+      required:
+        - name
+        - bindings
+        - defaultExpanded
+
+    DependencyType:
+      enum:
+        - UNCLASSIFIED
+        - HIERARCHICAL
+        - CONNECTION
+      type: string
+
+    ViewTypeOverview:
+      properties:
+        columns:
+          type: array
+          items:
+            $ref: "#/components/schemas/ViewTypeTableCol"
+      required:
+        - columns
+
+    ViewTypeTableCol:
+      properties:
+        _type:
+          type: string
+      oneOf:
+        - $ref: "#/components/schemas/ViewTypeTableColHealth"
+        - $ref: "#/components/schemas/ViewTypeTableColName"
+        - $ref: "#/components/schemas/ViewTypeTableColText"
+        - $ref: "#/components/schemas/ViewTypeTableColNumber"
+        - $ref: "#/components/schemas/ViewTypeTableColTime"
+        - $ref: "#/components/schemas/ViewTypeTableColDuration"
+        - $ref: "#/components/schemas/ViewTypeTableColComponentType"
+        - $ref: "#/components/schemas/ViewTypeTableColComponentLink"
+        - $ref: "#/components/schemas/ViewTypeTableColReadyStatus"
+        - $ref: "#/components/schemas/ViewTypeTableColContainerImageLink"
+        - $ref: "#/components/schemas/ViewTypeTableColPromql"
+        - $ref: "#/components/schemas/ViewTypeTableColRatio"
+        - $ref: "#/components/schemas/ViewTypeTableColMetricBinding"
+      discriminator:
+        propertyName: _type
+      required:
+        - _type
+
+    ViewTypeTableColHealth:
+      properties:
+        _type:
+          type: string
+          enum: [ViewTypeTableColHealth]
+      required:
+        - _type
+
+    ViewTypeTableColName:
+      properties:
+        _type:
+          type: string
+          enum: [ViewTypeTableColName]
+        title:
+          type: string
+      required:
+        - _type
+        - title
+
+    ViewTypeTableColText:
+      properties:
+        _type:
+          type: string
+          enum: [ViewTypeTableColText]
+        title:
+          type: string
+        path:
+          type: array
+          items:
+            type: string
+        width:
+          type: integer
+          format: int32
+        align:
+          # TBH, only the value "right" is interpreted
+          type: string
+      required:
+        - _type
+        - title
+        - path
+
+    ViewTypeTableColNumber:
+      properties:
+        _type:
+          type: string
+          enum: [ViewTypeTableColNumber]
+        title:
+          type: string
+        path:
+          type: array
+          items:
+            type: string
+        width:
+          type: integer
+          format: int32
+        unit:
+          # TBH, only the value "right" is interpreted
+          type: string
+      required:
+        - _type
+        - title
+        - path
+
+    ViewTypeTableColTime:
+      properties:
+        _type:
+          type: string
+          enum: [ViewTypeTableColTime]
+        title:
+          type: string
+        path:
+          type: array
+          items:
+            type: string
+      required:
+        - _type
+        - title
+        - path
+
+    ViewTypeTableColDuration:
+      properties:
+        _type:
+          type: string
+          enum: [ViewTypeTableColDuration]
+        title:
+          type: string
+        path:
+          type: array
+          items:
+            type: string
+        endDatePath:
+          type: array
+          items:
+            type: string
+      required:
+        - _type
+        - title
+        - path
+
+    ViewTypeTableColComponentType:
+      properties:
+        _type:
+          type: string
+          enum: [ViewTypeTableColComponentType]
+        title:
+          type: string
+        width:
+          type: integer
+          format: int32
+      required:
+        - _type
+        - title
+
+    ViewTypeTableColComponentLink:
+      properties:
+        _type:
+          type: string
+          enum: [ViewTypeTableColComponentLink]
+        title:
+          type: string
+        labelPrefix:
+          type: string
+        pathToIdentifier:
+          type: array
+          items:
+            type: string
+        width:
+          type: integer
+          format: int32
+      required:
+        - _type
+        - title
+        - labelPrefix
+        - pathToIdentifier
+
+    ViewTypeTableColReadyStatus:
+      properties:
+        _type:
+          type: string
+          enum: [ViewTypeTableColComponentReadyStatus]
+        title:
+          type: string
+        readyPath:
+          type: array
+          items:
+            type: string
+        totalPath:
+          type: array
+          items:
+            type: string
+        statusPath:
+          type: array
+          items:
+            type: string
+      required:
+        - _type
+        - title
+        - readyPath
+        - totalPath
+        - statusPath
+
+    ViewTypeTableColContainerImageLink:
+      properties:
+        _type:
+          type: string
+          enum: [ViewTypeTableColContainerImageLink]
+        title:
+          type: string
+        imageIdPath:
+          type: array
+          items:
+            type: string
+        imagePath:
+          type: array
+          items:
+            type: string
+        width:
+          type: integer
+          format: int32
+      required:
+        - _type
+        - title
+        - imageIdPath
+        - imagePath
+
+    ViewTypeTableColPromql:
+      properties:
+        _type:
+          type: string
+          enum: [ViewTypeTableColPromql]
+        title:
+          type: string
+        query:
+          type: string
+        componentIdentifierTemplate:
           type: string
         unit:
           type: string
-        aliasTemplate:
-          type: string
+        width:
+          type: integer
+          format: int32
       required:
-        - argumentType
-        - topologyQuery
-        - metricQuery
-        - unit
-        - aliasTemplate
+        - _type
+        - title
+        - query
+        - componentIdentifierTemplate
 
-    # OTel topology synchronization
+    ViewTypeTableColRatio:
+      properties:
+        _type:
+          type: string
+          enum: [ViewTypeTableColRatio]
+        title:
+          type: string
+        numeratorPath:
+          type: array
+          items:
+            type: string
+        denominatorPath:
+          type: array
+          items:
+            type: string
+      required:
+        - _type
+        - title
+        - numeratorPath
+        - denominatorPath
 
-    OtelMapping:
+    ViewTypeTableColMetricBinding:
+      properties:
+        _type:
+          type: string
+          enum: [ViewTypeTableColMetricBinding]
+        title:
+          type: string
+        metricBindingIdentifier:
+          type: string
+        width:
+          type: integer
+          format: int32
+        onlyTrendLine:
+          type: boolean
+          default: false
+      required:
+        - _type
+        - title
+        - metricBindingIdentifier
+        - onlyTrendLine
+
+    ViewTypeFlagValue:
+      type: string
+      enum:
+        - NoTopologyFilters
+        - CardsLayout
+
+    ViewTypeFilter:
+      properties:
+        _type:
+          type: string
       oneOf:
-        - $ref: "#/components/schemas/OtelComponentMapping"
-        - $ref: "#/components/schemas/OtelRelationMapping"
+        - $ref: "#/components/schemas/LabelPrefixedFilter"
+        - $ref: "#/components/schemas/TopologyFilters"
       discriminator:
-        propertyName: type
-
-    OtelComponentMapping:
-      allOf:
-        - $ref: "#/components/schemas/SettingBase"
-        - type: object
-          properties:
-            type:
-              type: string
-              enum: [OtelComponentMapping]
-              description: The combination of type+id is a unique identification for a setting
-            identifier:
-              type: string
-            name:
-              type: string
-            input:
-              $ref: "#/components/schemas/OtelInput"
-            output:
-              $ref: "#/components/schemas/OtelComponentMappingOutput"
-            vars:
-              type: array
-              items:
-                $ref: "#/components/schemas/OtelVariableMapping"
-            expireAfterMs:
-              type: integer
-              format: int64
-          required:
-            - type
-            - name
-            - identifier
-            - input
-            - output
-            - expireAfterMs
-
-    OtelRelationMapping:
-      allOf:
-        - $ref: "#/components/schemas/SettingBase"
-        - type: object
-          properties:
-            type:
-              type: string
-              enum: [OtelRelationMapping]
-              description: The combination of type+id is a unique identification for a setting
-            identifier:
-              type: string
-            name:
-              type: string
-            input:
-              $ref: "#/components/schemas/OtelInput"
-            output:
-              $ref: "#/components/schemas/OtelRelationMappingOutput"
-            vars:
-              type: array
-              items:
-                $ref: "#/components/schemas/OtelVariableMapping"
-            expireAfterMs:
-              type: integer
-              format: int64
-          required:
-            - type
-            - name
-            - identifier
-            - input
-            - output
-            - expireAfterMs
-
-    OtelInput:
-      type: object
-      description: Combines input signals and conditional resource/scope/metric/span mappings.
-      properties:
-        signal:
-          $ref: "#/components/schemas/OtelInputSignalList"
-        resource:
-          $ref: "#/components/schemas/OtelInputResource"
+        propertyName: _type
       required:
-        - signal
-        - resource
+        - _type
 
-    OtelInputResource:
-      type: object
-      description: |-
-        Defines the conditional mapping at the resource level.
-        If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
+    LabelPrefixedFilter:
       properties:
-        condition:
-          $ref: "#/components/schemas/OtelBooleanExpression"
-        action:
-          $ref: "#/components/schemas/OtelInputConditionAction"
-        scope:
-          $ref: "#/components/schemas/OtelInputScope"
-
-    OtelInputScope:
-      type: object
-      description: |-
-        Defines conditional mapping at the resource -> scope level.
-        If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
-      properties:
-        condition:
-          $ref: "#/components/schemas/OtelBooleanExpression"
-        action:
-          $ref: "#/components/schemas/OtelInputConditionAction"
-        metric:
-          $ref: "#/components/schemas/OtelInputMetric"
-        span:
-          $ref: "#/components/schemas/OtelInputSpan"
-
-    OtelInputMetric:
-      type: object
-      description: |-
-        Defines conditional mapping at the resource -> scope -> metric level.
-        If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
-      properties:
-        condition:
-          $ref: "#/components/schemas/OtelBooleanExpression"
-        action:
-          $ref: "#/components/schemas/OtelInputConditionAction"
-        datapoint:
-          $ref: "#/components/schemas/OtelInputDatapoint"
-
-    OtelInputDatapoint:
-      type: object
-      description: |-
-        Defines conditional mapping at the resource -> scope -> metric -> datapoint level.
-        If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
-      properties:
-        condition:
-          $ref: "#/components/schemas/OtelBooleanExpression"
-        action:
-          $ref: "#/components/schemas/OtelInputConditionAction"
-
-    OtelInputSpan:
-      type: object
-      description: |-
-        Defines conditional mapping at the resource -> scope -> span level.
-        If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
-      properties:
-        condition:
-          $ref: "#/components/schemas/OtelBooleanExpression"
-        action:
-          $ref: "#/components/schemas/OtelInputConditionAction"
-
-    OtelComponentMappingOutput:
-      type: object
-      properties:
-        identifier:
-          $ref: "#/components/schemas/OtelStringExpression"
-        name:
-          $ref: "#/components/schemas/OtelStringExpression"
-        typeName:
-          $ref: "#/components/schemas/OtelStringExpression"
-        typeIdentifier:
-          $ref: "#/components/schemas/OtelStringExpression"
-        layerName:
-          $ref: "#/components/schemas/OtelStringExpression"
-        layerIdentifier:
-          $ref: "#/components/schemas/OtelStringExpression"
-        domainName:
-          $ref: "#/components/schemas/OtelStringExpression"
-        domainIdentifier:
-          $ref: "#/components/schemas/OtelStringExpression"
-        required:
-          $ref: "#/components/schemas/OtelComponentMappingFieldMapping"
-        optional:
-          $ref: "#/components/schemas/OtelComponentMappingFieldMapping"
-      required:
-        - identifier
-        - name
-        - typeName
-        - layerName
-        - domainName
-
-    OtelTagMapping:
-      type: object
-      description: Defines how a tag should be mapped from an input source to an output target, optionally using a regex pattern.
-      properties:
-        source:
-          $ref: "#/components/schemas/OtelAnyExpression"
-          description: When a `pattern` is specified the expression must return a Map, when no `pattern` is specified the expression must return a string.
-        target:
+        _type:
           type: string
-          description: Name of the target tag key to which the value should be mapped.
-        pattern:
+          enum: [LabelPrefixedFilter]
+        prefix:
           type: string
-          description: Optional regex pattern applied to the source value. Capturing groups can be referenced in the target (e.g., ${1}).
-      required:
-        - source
-        - target
-
-    OtelComponentMappingFieldMapping:
-      type: object
-      properties:
-        additionalIdentifiers:
-          type: array
-          items:
-            $ref: "#/components/schemas/OtelStringExpression"
-        version:
-          $ref: "#/components/schemas/OtelStringExpression"
-        tags:
-          type: array
-          items:
-            $ref: "#/components/schemas/OtelTagMapping"
-    
-    OtelRelationMappingOutput:
-      type: object
-      properties:
-        sourceId:
-          $ref: "#/components/schemas/OtelStringExpression"
-        targetId:
-          $ref: "#/components/schemas/OtelStringExpression"
-        typeName:
-          $ref: "#/components/schemas/OtelStringExpression"
-        typeIdentifier:
-          $ref: "#/components/schemas/OtelStringExpression"
-      required:
-        - sourceId
-        - targetId
-        - typeName
-
-    OtelVariableMapping:
-      type: object
-      properties:
         name:
           type: string
-        value:
-          $ref: "#/components/schemas/OtelAnyExpression"
       required:
+        - _type
+        - prefix
         - name
-        - value
 
-    OtelInputConditionAction:
+    TopologyFilters:
+      properties:
+        _type:
+          type: string
+          enum: [TopologyFilters]
+        tabs:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopologyFilterValue"
+      required:
+        - _type
+        - tabs
+
+    TopologyFilterValue:
       type: string
       enum:
-        - CREATE
-        - CONTINUE
-
-    OtelInputSignal:
-      type: string
-      description: |-
-        Signals exported by OpenTelemetry, which determine which data models and
-        attribute maps are available for expression evaluation in an OTel topology
-        mapping.
-
-        Each signal enables access to a specific set of fields and attribute maps
-        coming from the corresponding OTel data pipeline level.
-
-        Fields/attributes available per signal:
-
-          • **TRACES**
-          Provides access to:
-            - `resource.attributes`
-            - `scope.name`, `scope.version`, `scope.attributes`
-            - `span.name`, `span.kind`, `span.statusMessage`, `span.statusCode`, `span.attributes`
-
-          • **METRICS**
-          Provides access to:
-            - `resource.attributes`
-            - `scope.name`, `scope.version`, `scope.attributes`
-            - `metric.name`, `metric.description`, `metric.unit`
-            - `datapoint.attributes`
-
-          • **LOGS**
-          Not yet supported.
-
-        For example, if the signal is `METRICS`, expressions may reference:
-        `resource.attributes["service.name"]`, `scope.attributes["env"]`,
-        `metric.name`, or `datapoint.attributes["status"]`.
-      enum:
+        - TOPOLOGY
+        - EVENTS
         - TRACES
-        - METRICS
-        - LOGS
 
-    OtelInputSignalList:
-      type: array
-      items:
-        $ref: '#/components/schemas/OtelInputSignal'
-      minItems: 1
 
-    OtelStringExpression:
-      type: object
-      description: |-
-        An expression that must produce a string. It must be one of these formats:
-          - A plain string, for example `"this is a plain string"`
-          - A string containing a CEL expression within curly braces `${}`, for example "a string with a cel expression: `${resource.attributes['service.namespace']}"`
-        A string with only a cel expression is also valid as long as it is within a `${}` section, for example `"${resource.attributes['service.namespace']}"`.
-      properties:
-        expression:
-          type: string
-      required:
-        - expression
-
-    OtelAnyExpression:
-      type: object
-      description: |-
-        An expression that can produce any type. It uses the CEL expression within curly braces `${}` syntax.
-        Variables use it to store any type of value. For example, to store a boolean in a variable named  `inTestNamespace` assign 
-        it the expression `"${resource.attributes['service.namespace'] == 'test'}"`. The variable can now be used directly in the conditions like this: `vars.inTestNamespace`.
-      properties:
-        expression:
-          type: string
-      required:
-        - expression
-
-    OtelBooleanExpression:
-      type: object
-      description: A Cel expression that must return a boolean
-      properties:
-        expression:
-          type: string
-      required:
-        - expression

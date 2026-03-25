@@ -10,7 +10,7 @@ import (
 
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 )
 
 var placeholderRegex = regexp.MustCompile(`\$\{(\d+)\}`)
@@ -33,18 +33,18 @@ func NewMapper(
 // MapComponent maps an OTEL span and variables to a TopologyStreamComponent based on the given mapping configuration.
 // It evaluates expressions, constructs a component, and returns it along with any encountered conditionErrsLookup.
 func (me *Mapper) MapComponent(
-	mapping *settings.OtelComponentMapping,
+	mapping *settingsproto.OtelComponentMapping,
 	expressionEvaluator ExpressionEvaluator,
 	expressionEvalCtx *ExpressionEvalContext,
 ) (*topostreamv1.TopologyStreamComponent, []error) {
 	errsToReturn := make([]error, 0)
 
-	evalStr := func(expr settings.OtelStringExpression, field string) string {
+	evalStr := func(expr settingsproto.OtelStringExpression, field string) string {
 		val, err := expressionEvaluator.EvalStringExpression(expr, expressionEvalCtx)
 		errsToReturn = joinError(errsToReturn, err, field, false)
 		return val
 	}
-	evalOptStr := func(expr *settings.OtelStringExpression, field string) *string {
+	evalOptStr := func(expr *settingsproto.OtelStringExpression, field string) *string {
 		val, err := expressionEvaluator.EvalOptionalStringExpression(expr, expressionEvalCtx)
 		errsToReturn = joinError(errsToReturn, err, field, true)
 		return val
@@ -69,7 +69,7 @@ func (me *Mapper) MapComponent(
 	}
 
 	tags := make(map[string]string)
-	processTags := func(tagMappings *[]settings.OtelTagMapping, optional bool) {
+	processTags := func(tagMappings *[]settingsproto.OtelTagMapping, optional bool) {
 		if tagMappings == nil {
 			return
 		}
@@ -118,7 +118,7 @@ func (me *Mapper) MapComponent(
 }
 
 func (me *Mapper) ResolveTagMappings(
-	mappings []settings.OtelTagMapping,
+	mappings []settingsproto.OtelTagMapping,
 	evaluator ExpressionEvaluator,
 	evalCtx *ExpressionEvalContext,
 ) (map[string]string, []error) {
@@ -128,7 +128,9 @@ func (me *Mapper) ResolveTagMappings(
 	for _, m := range mappings {
 		if m.Pattern == nil {
 			// no regex pattern assumes standard string expr evaluation
-			val, err := evaluator.EvalStringExpression(settings.OtelStringExpression{Expression: m.Source.Expression}, evalCtx)
+			val, err := evaluator.EvalStringExpression(
+				settingsproto.OtelStringExpression{Expression: m.Source.Expression}, evalCtx,
+			)
 			if err != nil {
 				errs = append(errs,
 					newCelEvaluationError("failed to evaluate OtelTagMapping source %q: %v", m.Source.Expression, err))
@@ -206,18 +208,18 @@ func (me *Mapper) ResolveTagMappings(
 // MapRelation creates and returns a TopologyStreamRelation based on the provided
 // OtelRelationMapping, span, and variables.
 func (me *Mapper) MapRelation(
-	mapping *settings.OtelRelationMapping,
+	mapping *settingsproto.OtelRelationMapping,
 	expressionEvaluator ExpressionEvaluator,
 	expressionEvalCtx *ExpressionEvalContext,
 ) (*topostreamv1.TopologyStreamRelation, []error) {
 	errors := make([]error, 0)
 
-	evalStr := func(expr settings.OtelStringExpression, field string) string {
+	evalStr := func(expr settingsproto.OtelStringExpression, field string) string {
 		val, err := expressionEvaluator.EvalStringExpression(expr, expressionEvalCtx)
 		errors = joinError(errors, err, field, false)
 		return val
 	}
-	evalOptStr := func(expr *settings.OtelStringExpression, field string) *string {
+	evalOptStr := func(expr *settingsproto.OtelStringExpression, field string) *string {
 		val, err := expressionEvaluator.EvalOptionalStringExpression(expr, expressionEvalCtx)
 		errors = joinError(errors, err, field, true)
 		return val

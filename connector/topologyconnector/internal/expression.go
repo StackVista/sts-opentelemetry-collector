@@ -9,7 +9,7 @@ import (
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/google/cel-go/ext"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 )
 
 // expressionType specifies the expected result type of a CEL expression.
@@ -24,23 +24,23 @@ const (
 
 type ExpressionEvaluator interface {
 	// EvalStringExpression "String" Expressions expect/support the interpolation syntax ${}
-	EvalStringExpression(expr settings.OtelStringExpression, evalCtx *ExpressionEvalContext) (string, error)
-	EvalOptionalStringExpression(expr *settings.OtelStringExpression, evalCtx *ExpressionEvalContext) (*string, error)
+	EvalStringExpression(expr settingsproto.OtelStringExpression, evalCtx *ExpressionEvalContext) (string, error)
+	EvalOptionalStringExpression(expr *settingsproto.OtelStringExpression, evalCtx *ExpressionEvalContext) (*string, error)
 	// EvalBooleanExpression "Boolean" Expressions don't support interpolation, but must be a valid CEL boolean expression
-	EvalBooleanExpression(expr settings.OtelBooleanExpression, evalCtx *ExpressionEvalContext) (bool, error)
+	EvalBooleanExpression(expr settingsproto.OtelBooleanExpression, evalCtx *ExpressionEvalContext) (bool, error)
 	// EvalMapExpression "Map" Expressions expect/support the interpolation syntax ${}
-	EvalMapExpression(expr settings.OtelAnyExpression, evalCtx *ExpressionEvalContext) (map[string]any, error)
+	EvalMapExpression(expr settingsproto.OtelAnyExpression, evalCtx *ExpressionEvalContext) (map[string]any, error)
 	// EvalAnyExpression "Any" Expressions expect/support the interpolation syntax ${}
-	EvalAnyExpression(expr settings.OtelAnyExpression, evalCtx *ExpressionEvalContext) (any, error)
+	EvalAnyExpression(expr settingsproto.OtelAnyExpression, evalCtx *ExpressionEvalContext) (any, error)
 
 	// GetStringExpressionAST returns the parsed AST of a String expression without evaluating it.
-	GetStringExpressionAST(expr settings.OtelStringExpression) (*GetASTResult, error)
+	GetStringExpressionAST(expr settingsproto.OtelStringExpression) (*GetASTResult, error)
 	// GetBooleanExpressionAST returns the parsed AST of a Boolean expression without evaluation.
-	GetBooleanExpressionAST(expr settings.OtelBooleanExpression) (*GetASTResult, error)
+	GetBooleanExpressionAST(expr settingsproto.OtelBooleanExpression) (*GetASTResult, error)
 	// GetMapExpressionAST returns the parsed AST of a Map expression without evaluating it.
-	GetMapExpressionAST(expr settings.OtelAnyExpression) (*GetASTResult, error)
+	GetMapExpressionAST(expr settingsproto.OtelAnyExpression) (*GetASTResult, error)
 	// GetAnyExpressionAST returns the parsed AST of an Any expression without evaluating it.
-	GetAnyExpressionAST(expr settings.OtelAnyExpression) (*GetASTResult, error)
+	GetAnyExpressionAST(expr settingsproto.OtelAnyExpression) (*GetASTResult, error)
 }
 
 type GetASTResult struct {
@@ -153,7 +153,7 @@ func NewCELEvaluator(ctx context.Context, cacheSettings metrics.MeteredCacheSett
 // ---------------------------------------------------------------------------------------------------------------------
 
 func (e *CelEvaluator) EvalStringExpression(
-	expr settings.OtelStringExpression,
+	expr settingsproto.OtelStringExpression,
 	evalCtx *ExpressionEvalContext,
 ) (string, error) {
 	// String literals are returned as-is without CEL evaluation and caching
@@ -171,7 +171,7 @@ func (e *CelEvaluator) EvalStringExpression(
 }
 
 func (e *CelEvaluator) EvalOptionalStringExpression(
-	expr *settings.OtelStringExpression,
+	expr *settingsproto.OtelStringExpression,
 	evalCtx *ExpressionEvalContext,
 ) (*string, error) {
 	if expr == nil {
@@ -187,7 +187,7 @@ func (e *CelEvaluator) EvalOptionalStringExpression(
 }
 
 func (e *CelEvaluator) EvalBooleanExpression(
-	expr settings.OtelBooleanExpression,
+	expr settingsproto.OtelBooleanExpression,
 	evalCtx *ExpressionEvalContext,
 ) (bool, error) {
 	result, err := e.evalOrCached(expr.Expression, BooleanType, rewriteIdentityExpression, evalCtx)
@@ -203,7 +203,7 @@ func (e *CelEvaluator) EvalBooleanExpression(
 }
 
 func (e *CelEvaluator) EvalMapExpression(
-	expr settings.OtelAnyExpression,
+	expr settingsproto.OtelAnyExpression,
 	evalCtx *ExpressionEvalContext,
 ) (map[string]any, error) {
 	val, err := e.evalOrCached(expr.Expression, MapType, rewriteMapExpression, evalCtx)
@@ -219,7 +219,7 @@ func (e *CelEvaluator) EvalMapExpression(
 }
 
 func (e *CelEvaluator) EvalAnyExpression(
-	expr settings.OtelAnyExpression,
+	expr settingsproto.OtelAnyExpression,
 	evalCtx *ExpressionEvalContext,
 ) (any, error) {
 	// String literals are returned as-is without CEL evaluation and caching
@@ -235,7 +235,7 @@ func (e *CelEvaluator) EvalAnyExpression(
 	return val, nil
 }
 
-func (e *CelEvaluator) GetStringExpressionAST(expr settings.OtelStringExpression) (*GetASTResult, error) {
+func (e *CelEvaluator) GetStringExpressionAST(expr settingsproto.OtelStringExpression) (*GetASTResult, error) {
 	// String literals are returned as-is without CEL evaluation and caching
 	if withoutInterpolation(expr.Expression) {
 		return &GetASTResult{literal: ptr(expr.Expression)}, nil
@@ -248,7 +248,7 @@ func (e *CelEvaluator) GetStringExpressionAST(expr settings.OtelStringExpression
 	return &GetASTResult{CheckedAST: ast}, nil
 }
 
-func (e *CelEvaluator) GetBooleanExpressionAST(expr settings.OtelBooleanExpression) (*GetASTResult, error) {
+func (e *CelEvaluator) GetBooleanExpressionAST(expr settingsproto.OtelBooleanExpression) (*GetASTResult, error) {
 	ast, err := e.astOrCached(expr.Expression, BooleanType, rewriteIdentityExpression)
 	if err != nil {
 		return nil, err
@@ -256,7 +256,7 @@ func (e *CelEvaluator) GetBooleanExpressionAST(expr settings.OtelBooleanExpressi
 	return &GetASTResult{CheckedAST: ast}, nil
 }
 
-func (e *CelEvaluator) GetMapExpressionAST(expr settings.OtelAnyExpression) (*GetASTResult, error) {
+func (e *CelEvaluator) GetMapExpressionAST(expr settingsproto.OtelAnyExpression) (*GetASTResult, error) {
 	ast, err := e.astOrCached(expr.Expression, MapType, rewriteMapExpression)
 	if err != nil {
 		return nil, err
@@ -264,7 +264,7 @@ func (e *CelEvaluator) GetMapExpressionAST(expr settings.OtelAnyExpression) (*Ge
 	return &GetASTResult{CheckedAST: ast}, nil
 }
 
-func (e *CelEvaluator) GetAnyExpressionAST(expr settings.OtelAnyExpression) (*GetASTResult, error) {
+func (e *CelEvaluator) GetAnyExpressionAST(expr settingsproto.OtelAnyExpression) (*GetASTResult, error) {
 	ast, err := e.astOrCached(expr.Expression, AnyType, rewriteAnyExpression)
 	if err != nil {
 		return nil, err

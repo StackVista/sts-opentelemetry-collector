@@ -15,7 +15,8 @@ else
 fi
 
 git -C "$CHECKOUT_DIR" checkout "$OPENAPI_VERSION"
-cp "$CHECKOUT_DIR/spec_settings/openapi.yaml" "spec/settings.yaml"
+cp "$CHECKOUT_DIR/spec_settings/openapi.yaml" "spec/openapi.yaml"
+cp "$CHECKOUT_DIR/spec_settings/settings.yaml" "spec/settings.yaml"
 rm -rf "$CHECKOUT_DIR"
 
-go generate ./generated/settings/model.go
+go generate ./generated/settingsproto/... ./generated/settingsschema/...

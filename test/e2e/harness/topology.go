@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"github.com/stretchr/testify/require"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
@@ -138,25 +138,25 @@ func ExtractComponentsAndRelations(
 	return components, relations, errs
 }
 
-func AnyExpr(s string) settings.OtelAnyExpression {
-	return settings.OtelAnyExpression{
+func AnyExpr(s string) settingsproto.OtelAnyExpression {
+	return settingsproto.OtelAnyExpression{
 		Expression: s,
 	}
 }
 
-func StrExpr(s string) settings.OtelStringExpression {
-	return settings.OtelStringExpression{
+func StrExpr(s string) settingsproto.OtelStringExpression {
+	return settingsproto.OtelStringExpression{
 		Expression: s,
 	}
 }
 
-func BoolExpr(s string) settings.OtelBooleanExpression {
-	return settings.OtelBooleanExpression{
+func BoolExpr(s string) settingsproto.OtelBooleanExpression {
+	return settingsproto.OtelBooleanExpression{
 		Expression: s,
 	}
 }
 
-func PtrBoolExpr(s string) *settings.OtelBooleanExpression {
+func PtrBoolExpr(s string) *settingsproto.OtelBooleanExpression {
 	return Ptr(BoolExpr(s))
 }
 

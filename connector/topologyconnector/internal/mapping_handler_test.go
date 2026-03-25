@@ -7,7 +7,7 @@ import (
 
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/internal"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -16,60 +16,60 @@ type mockEvaluator struct {
 	err    error
 }
 
-func (m *mockEvaluator) EvalBooleanExpression(_ settings.OtelBooleanExpression, _ *internal.ExpressionEvalContext) (bool, error) {
+func (m *mockEvaluator) EvalBooleanExpression(_ settingsproto.OtelBooleanExpression, _ *internal.ExpressionEvalContext) (bool, error) {
 	return m.result, m.err
 }
-func (m *mockEvaluator) EvalStringExpression(_ settings.OtelStringExpression, _ *internal.ExpressionEvalContext) (string, error) {
+func (m *mockEvaluator) EvalStringExpression(_ settingsproto.OtelStringExpression, _ *internal.ExpressionEvalContext) (string, error) {
 	return "", nil
 }
-func (m *mockEvaluator) EvalOptionalStringExpression(_ *settings.OtelStringExpression, _ *internal.ExpressionEvalContext) (*string, error) {
+func (m *mockEvaluator) EvalOptionalStringExpression(_ *settingsproto.OtelStringExpression, _ *internal.ExpressionEvalContext) (*string, error) {
 	//nolint:nilnil
 	return nil, nil
 }
-func (m *mockEvaluator) EvalMapExpression(_ settings.OtelAnyExpression, _ *internal.ExpressionEvalContext) (map[string]any, error) {
+func (m *mockEvaluator) EvalMapExpression(_ settingsproto.OtelAnyExpression, _ *internal.ExpressionEvalContext) (map[string]any, error) {
 	//nolint:nilnil
 	return nil, nil
 }
-func (m *mockEvaluator) EvalAnyExpression(_ settings.OtelAnyExpression, _ *internal.ExpressionEvalContext) (any, error) {
-	//nolint:nilnil
-	return nil, nil
-}
-
-func (m *mockEvaluator) GetStringExpressionAST(_ settings.OtelStringExpression) (*internal.GetASTResult, error) {
+func (m *mockEvaluator) EvalAnyExpression(_ settingsproto.OtelAnyExpression, _ *internal.ExpressionEvalContext) (any, error) {
 	//nolint:nilnil
 	return nil, nil
 }
 
-func (m *mockEvaluator) GetBooleanExpressionAST(_ settings.OtelBooleanExpression) (*internal.GetASTResult, error) {
+func (m *mockEvaluator) GetStringExpressionAST(_ settingsproto.OtelStringExpression) (*internal.GetASTResult, error) {
 	//nolint:nilnil
 	return nil, nil
 }
 
-func (m *mockEvaluator) GetMapExpressionAST(_ settings.OtelAnyExpression) (*internal.GetASTResult, error) {
+func (m *mockEvaluator) GetBooleanExpressionAST(_ settingsproto.OtelBooleanExpression) (*internal.GetASTResult, error) {
 	//nolint:nilnil
 	return nil, nil
 }
 
-func (m *mockEvaluator) GetAnyExpressionAST(_ settings.OtelAnyExpression) (*internal.GetASTResult, error) {
+func (m *mockEvaluator) GetMapExpressionAST(_ settingsproto.OtelAnyExpression) (*internal.GetASTResult, error) {
 	//nolint:nilnil
 	return nil, nil
 }
 
-func makeHandler(t *testing.T, eval *mockEvaluator) (*internal.MappingHandler[settings.OtelComponentMapping], *bool) {
+func (m *mockEvaluator) GetAnyExpressionAST(_ settingsproto.OtelAnyExpression) (*internal.GetASTResult, error) {
+	//nolint:nilnil
+	return nil, nil
+}
+
+func makeHandler(t *testing.T, eval *mockEvaluator) (*internal.MappingHandler[settingsproto.OtelComponentMapping], *bool) {
 	t.Helper()
 	executed := false
 
 	mockBaseCtx := internal.BaseContext{
-		Signal:              settings.TRACES,
+		Signal:              settingsproto.TRACES,
 		Evaluator:           eval,
 		CollectionTimestamp: time.Now().UnixMilli(),
 		Results:             &[]internal.MessageWithKey{},
 		MetricsRecorder:     &metrics.NoopConnectorMetricsRecorder{},
 	}
 
-	mockMappingCtx := &internal.MappingContext[settings.OtelComponentMapping]{
+	mockMappingCtx := &internal.MappingContext[settingsproto.OtelComponentMapping]{
 		BaseCtx: mockBaseCtx,
-		Mapping: settings.OtelComponentMapping{}, // empty dummy mapping
+		Mapping: settingsproto.OtelComponentMapping{}, // empty dummy mapping
 	}
 
 	handler := internal.NewMappingHandler(mockMappingCtx)
@@ -88,8 +88,8 @@ func TestHandleVisitLevel_Behavior(t *testing.T) {
 		name           string
 		evalResult     bool
 		evalErr        error
-		action         *settings.OtelInputConditionAction
-		condition      *settings.OtelBooleanExpression
+		action         *settingsproto.OtelInputConditionAction
+		condition      *settingsproto.OtelBooleanExpression
 		expectedResult internal.VisitResult
 		expectExecuted bool
 	}{
@@ -100,35 +100,35 @@ func TestHandleVisitLevel_Behavior(t *testing.T) {
 		{
 			name:           "true condition + CONTINUE => VisitContinue, no execute",
 			evalResult:     true,
-			action:         ptr(settings.CONTINUE),
+			action:         ptr(settingsproto.CONTINUE),
 			expectedResult: internal.VisitContinue,
 		},
 		{
 			name:           "true condition + CREATE => VisitSkip and execute",
 			evalResult:     true,
-			action:         ptr(settings.CREATE),
-			condition:      ptr(settings.OtelBooleanExpression{Expression: `true`}),
+			action:         ptr(settingsproto.CREATE),
+			condition:      ptr(settingsproto.OtelBooleanExpression{Expression: `true`}),
 			expectedResult: internal.VisitSkip,
 			expectExecuted: true,
 		},
 		{
 			name:           "nil condition + CREATE => VisitSkip and execute",
-			action:         ptr(settings.CREATE),
+			action:         ptr(settingsproto.CREATE),
 			expectedResult: internal.VisitSkip,
 			expectExecuted: true,
 		},
 		{
 			name:           "false condition + CREATE => VisitSkip, no execute",
 			evalResult:     false,
-			action:         ptr(settings.CREATE),
-			condition:      ptr(settings.OtelBooleanExpression{Expression: `false`}),
+			action:         ptr(settingsproto.CREATE),
+			condition:      ptr(settingsproto.OtelBooleanExpression{Expression: `false`}),
 			expectedResult: internal.VisitSkip,
 		},
 		{
 			name:           "error during condition => VisitSkip, no execute",
 			evalErr:        assert.AnError,
-			action:         ptr(settings.CREATE),
-			condition:      ptr(settings.OtelBooleanExpression{}),
+			action:         ptr(settingsproto.CREATE),
+			condition:      ptr(settingsproto.OtelBooleanExpression{}),
 			expectedResult: internal.VisitSkip,
 		},
 	}
@@ -154,8 +154,8 @@ func TestHandleTerminalVisit_Behavior(t *testing.T) {
 		name           string
 		evalResult     bool
 		evalErr        error
-		action         *settings.OtelInputConditionAction
-		condition      *settings.OtelBooleanExpression
+		action         *settingsproto.OtelInputConditionAction
+		condition      *settingsproto.OtelBooleanExpression
 		expectExecuted bool
 	}{
 		{
@@ -164,28 +164,28 @@ func TestHandleTerminalVisit_Behavior(t *testing.T) {
 		},
 		{
 			name:           "nil condition + CREATE => executes",
-			action:         ptr(settings.CREATE),
+			action:         ptr(settingsproto.CREATE),
 			expectExecuted: true,
 		},
 		{
 			name:           "true condition + CREATE => executes",
 			evalResult:     true,
-			action:         ptr(settings.CREATE),
-			condition:      ptr(settings.OtelBooleanExpression{Expression: `true`}),
+			action:         ptr(settingsproto.CREATE),
+			condition:      ptr(settingsproto.OtelBooleanExpression{Expression: `true`}),
 			expectExecuted: true,
 		},
 		{
 			name:           "false condition + CREATE => no execute",
 			evalResult:     false,
-			action:         ptr(settings.CREATE),
-			condition:      ptr(settings.OtelBooleanExpression{Expression: `false`}),
+			action:         ptr(settingsproto.CREATE),
+			condition:      ptr(settingsproto.OtelBooleanExpression{Expression: `false`}),
 			expectExecuted: false,
 		},
 		{
 			name:           "error evaluating => no execute",
 			evalErr:        assert.AnError,
-			action:         ptr(settings.CREATE),
-			condition:      ptr(settings.OtelBooleanExpression{}),
+			action:         ptr(settingsproto.CREATE),
+			condition:      ptr(settingsproto.OtelBooleanExpression{}),
 			expectExecuted: false,
 		},
 	}

@@ -25,10 +25,10 @@ go generate ./connector/topologyconnector/generated/topostream/model.go
 1. To update OpenAPI version, you have to past git hash to `extension/settingsproviderextension/settings_version`
 2. Run script `extension/settingsproviderextension/scripts/generate_openapi_model.sh`
 
-The script will download the latest version of OpenAPI schema to `extension/settingsproviderextension/spec` and generate a `settings` model.
-Optionally you can run the following command to generate a `settings` model from OpenAPI schema.
+The script will download the latest version of OpenAPI schema to `extension/settingsproviderextension/spec` and generate `settingsproto` and `settingsschema` models.
+Optionally you can run the following command to generate the models from OpenAPI schemas.
 ```shell
-go generate ./extension/settingsproviderextension/generated/settings/model.go
+go generate ./extension/settingsproviderextension/generated/settingsproto/... ./extension/settingsproviderextension/generated/settingsschema/...
 ```
 
 ## Build collector locally

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	stsSettings "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
-	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	stsSettingsFile "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/provider/file"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.uber.org/zap/zaptest"

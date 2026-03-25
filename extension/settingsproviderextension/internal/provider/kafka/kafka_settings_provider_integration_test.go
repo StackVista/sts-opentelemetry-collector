@@ -19,7 +19,7 @@ import (
 
 	stsSettings "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
-	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"github.com/stretchr/testify/require"
 	testContainersKafka "github.com/testcontainers/testcontainers-go/modules/kafka"
 )

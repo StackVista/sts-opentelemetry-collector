@@ -9,7 +9,7 @@ import (
 	"time"
 
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/ptrace"
@@ -35,7 +35,7 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 	//nolint:govet
 	tests := []struct {
 		name        string
-		mapping     *settings.OtelComponentMapping
+		mapping     *settingsproto.OtelComponentMapping
 		evalContext *ExpressionEvalContext
 		vars        map[string]any
 		want        *topostreamv1.TopologyStreamComponent
@@ -43,8 +43,8 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 	}{
 		{
 			name: "valid mapping with all required fields",
-			mapping: &settings.OtelComponentMapping{
-				Output: settings.OtelComponentMappingOutput{
+			mapping: &settingsproto.OtelComponentMapping{
+				Output: settingsproto.OtelComponentMappingOutput{
 					Identifier:       strExpr(`${resource.attributes["service.name"]}`),
 					Name:             strExpr("${resource.attributes['service.name']}"),
 					TypeName:         strExpr("service"),
@@ -53,8 +53,8 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 					DomainIdentifier: ptr(strExpr(`${vars["namespace"]}`)),
 					LayerName:        strExpr(`backend`),
 					LayerIdentifier:  ptr(strExpr("backend_id")),
-					Optional: &settings.OtelComponentMappingFieldMapping{
-						Tags: &[]settings.OtelTagMapping{
+					Optional: &settingsproto.OtelComponentMappingFieldMapping{
+						Tags: &[]settingsproto.OtelTagMapping{
 							{
 								Source: anyExpr("${span.attributes['priority']}"),
 								Target: "priority",
@@ -69,8 +69,8 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 							},
 						},
 					},
-					Required: &settings.OtelComponentMappingFieldMapping{
-						Tags: &[]settings.OtelTagMapping{
+					Required: &settingsproto.OtelComponentMappingFieldMapping{
+						Tags: &[]settingsproto.OtelTagMapping{
 							{
 								Source: anyExpr("${span.attributes['kind']}"),
 								Target: "kind",
@@ -103,8 +103,8 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 		},
 		{
 			name: "valid mapping with minimal set of properties",
-			mapping: &settings.OtelComponentMapping{
-				Output: settings.OtelComponentMappingOutput{
+			mapping: &settingsproto.OtelComponentMapping{
+				Output: settingsproto.OtelComponentMappingOutput{
 					Identifier: strExpr(`${resource.attributes["service.name"]}`),
 					Name:       strExpr(`${resource.attributes["service.name"]}`),
 					TypeName:   strExpr("service"),
@@ -127,8 +127,8 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 		},
 		{
 			name: "missing required fields",
-			mapping: &settings.OtelComponentMapping{
-				Output: settings.OtelComponentMappingOutput{
+			mapping: &settingsproto.OtelComponentMapping{
+				Output: settingsproto.OtelComponentMappingOutput{
 					Identifier:       strExpr(`${resource.attributes["service.name"]}`),
 					Name:             strExpr(`${span.attributes["non-existing-attr"]}`),
 					TypeName:         strExpr(`service`),
@@ -137,16 +137,16 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 					DomainIdentifier: ptr(strExpr("${vars.namespace}")),
 					LayerName:        strExpr(`backend`),
 					LayerIdentifier:  ptr(strExpr("backend_id")),
-					Optional: &settings.OtelComponentMappingFieldMapping{
-						Tags: &[]settings.OtelTagMapping{
+					Optional: &settingsproto.OtelComponentMappingFieldMapping{
+						Tags: &[]settingsproto.OtelTagMapping{
 							{
 								Source: anyExpr("${span.attributes['priority']}"),
 								Target: "priority",
 							},
 						},
 					},
-					Required: &settings.OtelComponentMappingFieldMapping{
-						Tags: &[]settings.OtelTagMapping{
+					Required: &settingsproto.OtelComponentMappingFieldMapping{
+						Tags: &[]settingsproto.OtelTagMapping{
 							{
 								Source: anyExpr("${span.attributes['kind']}"),
 								Target: "kind",
@@ -168,8 +168,8 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 		},
 		{
 			name: "missing optional fields are ok",
-			mapping: &settings.OtelComponentMapping{
-				Output: settings.OtelComponentMappingOutput{
+			mapping: &settingsproto.OtelComponentMapping{
+				Output: settingsproto.OtelComponentMappingOutput{
 					Identifier:       strExpr(`${resource.attributes["service.name"]}`),
 					Name:             strExpr(`${resource.attributes["service.name"]}`),
 					TypeName:         strExpr(`service`),
@@ -178,20 +178,20 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 					DomainIdentifier: ptr(strExpr(`${span.attributes["non-existing-attr2"]}`)),
 					LayerName:        strExpr(`backend`),
 					LayerIdentifier:  ptr(strExpr(`${span.attributes["non-existing-attr3"]}`)),
-					Optional: &settings.OtelComponentMappingFieldMapping{
-						AdditionalIdentifiers: &[]settings.OtelStringExpression{
+					Optional: &settingsproto.OtelComponentMappingFieldMapping{
+						AdditionalIdentifiers: &[]settingsproto.OtelStringExpression{
 							{Expression: `${resource.attributes["missing"]}`},
 						},
 
-						Tags: &[]settings.OtelTagMapping{
+						Tags: &[]settingsproto.OtelTagMapping{
 							{
 								Source: anyExpr(`${span.attributes["non-existing-attr4"]}`),
 								Target: "priority",
 							},
 						},
 					},
-					Required: &settings.OtelComponentMappingFieldMapping{
-						Tags: &[]settings.OtelTagMapping{
+					Required: &settingsproto.OtelComponentMappingFieldMapping{
+						Tags: &[]settingsproto.OtelTagMapping{
 							{
 								Source: anyExpr("${span.attributes.kind}"),
 								Target: "kind",
@@ -221,8 +221,8 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 		},
 		{
 			name: "optional fields with invalid expression still produce an error",
-			mapping: &settings.OtelComponentMapping{
-				Output: settings.OtelComponentMappingOutput{
+			mapping: &settingsproto.OtelComponentMapping{
+				Output: settingsproto.OtelComponentMappingOutput{
 					Identifier:       strExpr(`${resource.attributes["service.name"]}`),
 					Name:             strExpr(`${resource.attributes.name']}`),
 					TypeName:         strExpr(`service`),
@@ -231,20 +231,20 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 					DomainIdentifier: ptr(strExpr(`${blabla}`)),
 					LayerName:        strExpr(`backend`),
 					LayerIdentifier:  ptr(strExpr(`${non-existing-attr3"]}`)),
-					Optional: &settings.OtelComponentMappingFieldMapping{
-						AdditionalIdentifiers: &[]settings.OtelStringExpression{
+					Optional: &settingsproto.OtelComponentMappingFieldMapping{
+						AdditionalIdentifiers: &[]settingsproto.OtelStringExpression{
 							{Expression: `${uhoh}`},
 						},
 
-						Tags: &[]settings.OtelTagMapping{
+						Tags: &[]settingsproto.OtelTagMapping{
 							{
 								Source: anyExpr(`${span.attributes["nope}`),
 								Target: "priority",
 							},
 						},
 					},
-					Required: &settings.OtelComponentMappingFieldMapping{
-						Tags: &[]settings.OtelTagMapping{
+					Required: &settingsproto.OtelComponentMappingFieldMapping{
+						Tags: &[]settingsproto.OtelTagMapping{
 							{
 								Source: anyExpr("${span.attributes['kind']}"),
 								Target: "kind",
@@ -320,13 +320,13 @@ func TestResolveTagMappings(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		mappings      []settings.OtelTagMapping
+		mappings      []settingsproto.OtelTagMapping
 		want          map[string]string
 		errorContains string
 	}{
 		{
 			name: "simple mapping without pattern",
-			mappings: []settings.OtelTagMapping{
+			mappings: []settingsproto.OtelTagMapping{
 				{
 					Source: anyExpr(`${resource.attributes["service.name"]}`),
 					Target: "service.name",
@@ -343,7 +343,7 @@ func TestResolveTagMappings(t *testing.T) {
 		},
 		{
 			name: "mapping with regex pattern and capture group",
-			mappings: []settings.OtelTagMapping{
+			mappings: []settingsproto.OtelTagMapping{
 				{
 					Source:  anyExpr("${scope.attributes}"),
 					Pattern: ptr("telemetry.sdk.(.*)"),
@@ -358,7 +358,7 @@ func TestResolveTagMappings(t *testing.T) {
 		},
 		{
 			name: "mapping with multiple capture groups",
-			mappings: []settings.OtelTagMapping{
+			mappings: []settingsproto.OtelTagMapping{
 				{
 					Source:  anyExpr("${scope.attributes}"),
 					Pattern: ptr("telemetry.(sdk).(.*)"),
@@ -373,7 +373,7 @@ func TestResolveTagMappings(t *testing.T) {
 		},
 		{
 			name: "mapping with regex that matches nothing",
-			mappings: []settings.OtelTagMapping{
+			mappings: []settingsproto.OtelTagMapping{
 				{
 					Source:  anyExpr("${scope.attributes}"),
 					Pattern: ptr("foo(.*)"),
@@ -384,7 +384,7 @@ func TestResolveTagMappings(t *testing.T) {
 		},
 		{
 			name: "mixed simple and regex mappings",
-			mappings: []settings.OtelTagMapping{
+			mappings: []settingsproto.OtelTagMapping{
 				{
 					Source: anyExpr(`${resource.attributes["service.name"]}`),
 					Target: "service",
@@ -404,7 +404,7 @@ func TestResolveTagMappings(t *testing.T) {
 		},
 		{
 			name: "invalid map source without pattern (string expression expected)",
-			mappings: []settings.OtelTagMapping{
+			mappings: []settingsproto.OtelTagMapping{
 				{
 					Source: anyExpr("${scope.attributes}"),
 					Target: "oops",
@@ -416,7 +416,7 @@ func TestResolveTagMappings(t *testing.T) {
 		// cases for group merge mapping and explicit mapping trying to populate the same key
 		{
 			name: "explicit mapping overrides merged group key",
-			mappings: []settings.OtelTagMapping{
+			mappings: []settingsproto.OtelTagMapping{
 				{
 					// Group mapping injects all scope Attributes with pattern
 					Source:  anyExpr("${scope.attributes}"),
@@ -437,7 +437,7 @@ func TestResolveTagMappings(t *testing.T) {
 		},
 		{
 			name: "merged group mapping does not override explicit key",
-			mappings: []settings.OtelTagMapping{
+			mappings: []settingsproto.OtelTagMapping{
 				{
 					Source: anyExpr("explicit-value"),
 					Target: "otel.lang",
@@ -456,7 +456,7 @@ func TestResolveTagMappings(t *testing.T) {
 		},
 		{
 			name: "explicit mapping overrides merged resource attribute",
-			mappings: []settings.OtelTagMapping{
+			mappings: []settingsproto.OtelTagMapping{
 				{
 					Source:  anyExpr("${resource.attributes}"),
 					Pattern: ptr("(.*)"),
@@ -476,7 +476,7 @@ func TestResolveTagMappings(t *testing.T) {
 		},
 		{
 			name: "merge full attribute map without overrides",
-			mappings: []settings.OtelTagMapping{
+			mappings: []settingsproto.OtelTagMapping{
 				{
 					Source:  anyExpr("${scope.attributes}"),
 					Pattern: ptr("(.*)"),
@@ -491,7 +491,7 @@ func TestResolveTagMappings(t *testing.T) {
 		},
 		{
 			name: "merge filtered attribute map by prefix",
-			mappings: []settings.OtelTagMapping{
+			mappings: []settingsproto.OtelTagMapping{
 				{
 					Source:  anyExpr("${scope.attributes}"),
 					Pattern: ptr("telemetry.sdk.(.*)"),
@@ -506,7 +506,7 @@ func TestResolveTagMappings(t *testing.T) {
 		},
 		{
 			name: "invalid source: not a map with pattern",
-			mappings: []settings.OtelTagMapping{
+			mappings: []settingsproto.OtelTagMapping{
 				{
 					Source:  anyExpr("${resource.attributes['service.name']}"),
 					Pattern: ptr("telemetry.sdk.(.*)"),
@@ -555,7 +555,7 @@ func TestMapping_MapRelation(t *testing.T) {
 	//nolint:govet
 	tests := []struct {
 		name        string
-		mapping     *settings.OtelRelationMapping
+		mapping     *settingsproto.OtelRelationMapping
 		evalContext *ExpressionEvalContext
 		vars        map[string]any
 		want        *topostreamv1.TopologyStreamRelation
@@ -563,8 +563,8 @@ func TestMapping_MapRelation(t *testing.T) {
 	}{
 		{
 			name: "valid relation mapping",
-			mapping: &settings.OtelRelationMapping{
-				Output: settings.OtelRelationMappingOutput{
+			mapping: &settingsproto.OtelRelationMapping{
+				Output: settingsproto.OtelRelationMappingOutput{
 					SourceId:       strExpr(`${resource.attributes["service.name"]}`),
 					TargetId:       strExpr(`database`),
 					TypeName:       strExpr("query"),
@@ -586,8 +586,8 @@ func TestMapping_MapRelation(t *testing.T) {
 		},
 		{
 			name: "missing optional attribute is ok",
-			mapping: &settings.OtelRelationMapping{
-				Output: settings.OtelRelationMappingOutput{
+			mapping: &settingsproto.OtelRelationMapping{
+				Output: settingsproto.OtelRelationMappingOutput{
 					SourceId:       strExpr(`${resource.attributes["service.name"]}`),
 					TargetId:       strExpr(`database`),
 					TypeName:       strExpr("query"),
@@ -609,8 +609,8 @@ func TestMapping_MapRelation(t *testing.T) {
 		},
 		{
 			name: "invalid expression for optional field fails",
-			mapping: &settings.OtelRelationMapping{
-				Output: settings.OtelRelationMappingOutput{
+			mapping: &settingsproto.OtelRelationMapping{
+				Output: settingsproto.OtelRelationMappingOutput{
 					SourceId:       strExpr(`${resource.attributes["service.name"]}`),
 					TargetId:       strExpr(`database`),
 					TypeName:       strExpr("query"),
@@ -624,8 +624,8 @@ func TestMapping_MapRelation(t *testing.T) {
 		},
 		{
 			name: "missing mandatory attributes",
-			mapping: &settings.OtelRelationMapping{
-				Output: settings.OtelRelationMappingOutput{
+			mapping: &settingsproto.OtelRelationMapping{
+				Output: settingsproto.OtelRelationMappingOutput{
 					SourceId: strExpr(`${span.attributes["non-existing"]}`),
 					TargetId: strExpr("database"),
 					TypeName: strExpr(`query`),

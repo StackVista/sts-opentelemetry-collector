@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"time"
 
-	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
 // TestSnapshot is a collection of Kafka records that represent a settings protocol snapshot.
 type TestSnapshot interface {
 	Records(topic string) ([]*kgo.Record, error)
-	Type() stsSettingsModel.SettingType
+	Type() settingsproto.SettingType
 }
 
 // ------------------
@@ -19,12 +19,12 @@ type TestSnapshot interface {
 // ------------------
 
 // newSnapshotStart returns a SettingsSnapshotStart message key and payload
-func newSnapshotStart(settingType stsSettingsModel.SettingType, snapshotID string) (string, []byte, error) {
-	msg := stsSettingsModel.SettingsSnapshotStart{
+func newSnapshotStart(settingType settingsproto.SettingType, snapshotID string) (string, []byte, error) {
+	msg := settingsproto.SettingsSnapshotStart{
 		Id:          snapshotID,
 		SettingType: settingType,
 	}
-	var settingsProtocol stsSettingsModel.SettingsProtocol
+	var settingsProtocol settingsproto.SettingsProtocol
 	if err := settingsProtocol.FromSettingsSnapshotStart(msg); err != nil {
 		return "", nil, fmt.Errorf("failed to convert snapshot start to protocol: %w", err)
 	}
@@ -32,14 +32,14 @@ func newSnapshotStart(settingType stsSettingsModel.SettingType, snapshotID strin
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to marshal protocol: %w", err)
 	}
-	key := fmt.Sprintf("%s:%s", settingType, stsSettingsModel.SettingsSnapshotStartTypeSettingsSnapshotStart)
+	key := fmt.Sprintf("%s:%s", settingType, settingsproto.SettingsSnapshotStartTypeSettingsSnapshotStart)
 	return key, b, nil
 }
 
 // newSnapshotStop returns a SettingsSnapshotStop message key and payload
-func newSnapshotStop(settingType stsSettingsModel.SettingType, snapshotID string) (string, []byte, error) {
-	msg := stsSettingsModel.SettingsSnapshotStop{Id: snapshotID}
-	var proto stsSettingsModel.SettingsProtocol
+func newSnapshotStop(settingType settingsproto.SettingType, snapshotID string) (string, []byte, error) {
+	msg := settingsproto.SettingsSnapshotStop{Id: snapshotID}
+	var proto settingsproto.SettingsProtocol
 	if err := proto.FromSettingsSnapshotStop(msg); err != nil {
 		return "", nil, fmt.Errorf("failed to convert snapshot stop to protocol: %w", err)
 	}
@@ -47,22 +47,22 @@ func newSnapshotStop(settingType stsSettingsModel.SettingType, snapshotID string
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to marshal protocol: %w", err)
 	}
-	key := fmt.Sprintf("%s:%s", settingType, stsSettingsModel.SettingsSnapshotStopTypeSettingsSnapshotStop)
+	key := fmt.Sprintf("%s:%s", settingType, settingsproto.SettingsSnapshotStopTypeSettingsSnapshotStop)
 	return key, b, nil
 }
 
 // newSettingsEnvelope returns a SettingsEnvelope message key and payload
 func newSettingsEnvelope(
-	settingType stsSettingsModel.SettingType,
-	setting stsSettingsModel.Setting,
+	settingType settingsproto.SettingType,
+	setting settingsproto.Setting,
 	settingID,
 	snapshotID string,
 ) (string, []byte, error) {
-	env := stsSettingsModel.SettingsEnvelope{
+	env := settingsproto.SettingsEnvelope{
 		Id:      snapshotID,
 		Setting: setting,
 	}
-	var proto stsSettingsModel.SettingsProtocol
+	var proto settingsproto.SettingsProtocol
 	if err := proto.FromSettingsEnvelope(env); err != nil {
 		return "", nil, fmt.Errorf("failed to convert settings envelope to protocol: %w", err)
 	}
@@ -74,11 +74,11 @@ func newSettingsEnvelope(
 	return key, b, nil
 }
 
-type settingBuilder func() (stsSettingsModel.Setting, string, error)
+type settingBuilder func() (settingsproto.Setting, string, error)
 
 // buildSnapshot wraps the setting snapshot start, envelope(setting1)...envelope(settingN), stop pattern.
 func buildSnapshot(
-	settingType stsSettingsModel.SettingType,
+	settingType settingsproto.SettingType,
 	snapshotID string,
 	topic string,
 	builders ...settingBuilder,
@@ -128,22 +128,22 @@ type OtelComponentMappingSpec struct {
 	MappingID         string
 	MappingIdentifier string
 	Name              string
-	Input             stsSettingsModel.OtelInput
-	Output            stsSettingsModel.OtelComponentMappingOutput
-	Vars              []stsSettingsModel.OtelVariableMapping
+	Input             settingsproto.OtelInput
+	Output            settingsproto.OtelComponentMappingOutput
+	Vars              []settingsproto.OtelVariableMapping
 	ExpireAfterMs     int64
 }
 
-func (s OtelComponentMappingSnapshot) Type() stsSettingsModel.SettingType {
-	return stsSettingsModel.SettingTypeOtelComponentMapping
+func (s OtelComponentMappingSnapshot) Type() settingsproto.SettingType {
+	return settingsproto.SettingTypeOtelComponentMapping
 }
 
 func (s OtelComponentMappingSnapshot) Records(topic string) ([]*kgo.Record, error) {
 	builders := make([]settingBuilder, 0, len(s.Mappings))
 
 	for _, mapping := range s.Mappings {
-		builders = append(builders, func() (stsSettingsModel.Setting, string, error) {
-			component := stsSettingsModel.OtelComponentMapping{
+		builders = append(builders, func() (settingsproto.Setting, string, error) {
+			component := settingsproto.OtelComponentMapping{
 				CreatedTimeStamp: time.Now().Unix(),
 				ExpireAfterMs:    mapping.ExpireAfterMs,
 				Id:               mapping.MappingID,
@@ -152,15 +152,15 @@ func (s OtelComponentMappingSnapshot) Records(topic string) ([]*kgo.Record, erro
 				Input:            mapping.Input,
 				Output:           mapping.Output,
 				Shard:            0,
-				Type:             stsSettingsModel.OtelComponentMappingTypeOtelComponentMapping,
+				Type:             settingsproto.OtelComponentMappingTypeOtelComponentMapping,
 			}
 			if len(mapping.Vars) > 0 {
 				component.Vars = &mapping.Vars
 			}
 
-			var setting stsSettingsModel.Setting
+			var setting settingsproto.Setting
 			if err := setting.FromOtelComponentMapping(component); err != nil {
-				return stsSettingsModel.Setting{}, "", fmt.Errorf("failed to convert component mapping to setting: %w", err)
+				return settingsproto.Setting{}, "", fmt.Errorf("failed to convert component mapping to setting: %w", err)
 			}
 			return setting, mapping.MappingID, nil
 		})
@@ -177,22 +177,22 @@ type OtelRelationMappingSnapshot struct {
 type OtelRelationMappingSpec struct {
 	MappingID         string
 	MappingIdentifier string
-	Input             stsSettingsModel.OtelInput
-	Output            stsSettingsModel.OtelRelationMappingOutput
-	Vars              []stsSettingsModel.OtelVariableMapping
+	Input             settingsproto.OtelInput
+	Output            settingsproto.OtelRelationMappingOutput
+	Vars              []settingsproto.OtelVariableMapping
 	ExpireAfterMs     int64
 }
 
-func (s OtelRelationMappingSnapshot) Type() stsSettingsModel.SettingType {
-	return stsSettingsModel.SettingTypeOtelRelationMapping
+func (s OtelRelationMappingSnapshot) Type() settingsproto.SettingType {
+	return settingsproto.SettingTypeOtelRelationMapping
 }
 
 func (s OtelRelationMappingSnapshot) Records(topic string) ([]*kgo.Record, error) {
 	builders := make([]settingBuilder, 0, len(s.Mappings))
 
 	for _, mapping := range s.Mappings {
-		builders = append(builders, func() (stsSettingsModel.Setting, string, error) {
-			relation := stsSettingsModel.OtelRelationMapping{
+		builders = append(builders, func() (settingsproto.Setting, string, error) {
+			relation := settingsproto.OtelRelationMapping{
 				CreatedTimeStamp: time.Now().Unix(),
 				ExpireAfterMs:    mapping.ExpireAfterMs,
 				Id:               mapping.MappingID,
@@ -200,16 +200,16 @@ func (s OtelRelationMappingSnapshot) Records(topic string) ([]*kgo.Record, error
 				Input:            mapping.Input,
 				Output:           mapping.Output,
 				Shard:            0,
-				Type:             stsSettingsModel.OtelRelationMappingTypeOtelRelationMapping,
+				Type:             settingsproto.OtelRelationMappingTypeOtelRelationMapping,
 			}
 
 			if len(mapping.Vars) > 0 {
 				relation.Vars = &mapping.Vars
 			}
 
-			var setting stsSettingsModel.Setting
+			var setting settingsproto.Setting
 			if err := setting.FromOtelRelationMapping(relation); err != nil {
-				return stsSettingsModel.Setting{}, "", fmt.Errorf("failed to convert relation mapping to setting: %w", err)
+				return settingsproto.Setting{}, "", fmt.Errorf("failed to convert relation mapping to setting: %w", err)
 			}
 			return setting, mapping.MappingID, nil
 		})

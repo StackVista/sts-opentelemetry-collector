@@ -2,7 +2,7 @@ package core
 
 import (
 	"fmt"
-	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 )
 
 type ConverterFunc func(stsSettingsModel.Setting) (any, error)
