@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap/zaptest"
 
-	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 )
 
 type mockSettingsCache struct {

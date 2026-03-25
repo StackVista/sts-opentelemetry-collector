@@ -3,7 +3,7 @@ package internal
 import (
 	"fmt"
 
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 )
 
 // EvalVariables evaluates a list of OtelVariableMapping objects and resolves variable values
@@ -13,7 +13,7 @@ import (
 func EvalVariables(
 	expressionEvaluator ExpressionEvaluator,
 	evalContext *ExpressionEvalContext,
-	vars *[]settings.OtelVariableMapping,
+	vars *[]settingsproto.OtelVariableMapping,
 ) (map[string]any, []error) {
 	result := make(map[string]any)
 	errs := make(map[string]error)

@@ -7,7 +7,7 @@ import (
 
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/internal"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component/componenttest"
 )
@@ -47,7 +47,7 @@ func TestStringExpressionAstWalker_Walk(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res, err := eval.GetStringExpressionAST(settings.OtelStringExpression{Expression: tt.expr})
+			res, err := eval.GetStringExpressionAST(settingsproto.OtelStringExpression{Expression: tt.expr})
 			require.NoError(t, err)
 			walker := internal.NewExpressionAstWalker()
 			walker.Walk(res.CheckedAST.NativeRep().Expr())
@@ -89,7 +89,7 @@ func TestBooleanExpressionAstWalker_Walk(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res, err := eval.GetBooleanExpressionAST(settings.OtelBooleanExpression{Expression: tt.expr})
+			res, err := eval.GetBooleanExpressionAST(settingsproto.OtelBooleanExpression{Expression: tt.expr})
 			require.NoError(t, err)
 			walker := internal.NewExpressionAstWalker()
 			walker.Walk(res.CheckedAST.NativeRep().Expr())
@@ -118,7 +118,7 @@ func TestMapExpressionAstWalker_Walk(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res, err := eval.GetMapExpressionAST(settings.OtelAnyExpression{Expression: tt.expr})
+			res, err := eval.GetMapExpressionAST(settingsproto.OtelAnyExpression{Expression: tt.expr})
 			require.NoError(t, err)
 			walker := internal.NewExpressionAstWalker()
 			walker.Walk(res.CheckedAST.NativeRep().Expr())
@@ -154,7 +154,7 @@ func TestAnyExpressionAstWalker_Walk(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res, err := eval.GetAnyExpressionAST(settings.OtelAnyExpression{Expression: tt.expr})
+			res, err := eval.GetAnyExpressionAST(settingsproto.OtelAnyExpression{Expression: tt.expr})
 			require.NoError(t, err)
 			walker := internal.NewExpressionAstWalker()
 			walker.Walk(res.CheckedAST.NativeRep().Expr())

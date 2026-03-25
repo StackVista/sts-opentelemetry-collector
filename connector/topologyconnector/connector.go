@@ -9,7 +9,7 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter"
 	stsSettingsApi "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -30,7 +30,7 @@ type connectorImpl struct {
 	deduplicator         internal.Deduplicator
 	mapper               *internal.Mapper
 	metricsRecorder      metrics.ConnectorMetricsRecorder
-	supportedSignal      settings.OtelInputSignal
+	supportedSignal      settingsproto.OtelInputSignal
 }
 
 func newConnector(
@@ -44,7 +44,7 @@ func newConnector(
 	eval internal.ExpressionEvaluator,
 	deduplicator internal.Deduplicator,
 	mapper *internal.Mapper,
-	supportedSignal settings.OtelInputSignal,
+	supportedSignal settingsproto.OtelInputSignal,
 ) *connectorImpl {
 	logger.Info("Building topology connector")
 	return &connectorImpl{
@@ -120,7 +120,7 @@ func (p *connectorImpl) ConsumeMetrics(ctx context.Context, metrics pmetric.Metr
 
 	p.metricsRecorder.RecordRequestDuration(
 		ctx, duration,
-		settings.METRICS,
+		settingsproto.METRICS,
 	)
 
 	return nil
@@ -149,7 +149,7 @@ func (p *connectorImpl) ConsumeTraces(ctx context.Context, traceData ptrace.Trac
 
 	p.metricsRecorder.RecordRequestDuration(
 		ctx, duration,
-		settings.TRACES,
+		settingsproto.TRACES,
 	)
 
 	return nil
@@ -157,8 +157,8 @@ func (p *connectorImpl) ConsumeTraces(ctx context.Context, traceData ptrace.Trac
 
 func (p *connectorImpl) handleMappingRemovals(
 	ctx context.Context,
-	removedComponentMappings []settings.OtelComponentMapping,
-	removedRelationMappings []settings.OtelRelationMapping,
+	removedComponentMappings []settingsproto.OtelComponentMapping,
+	removedRelationMappings []settingsproto.OtelRelationMapping,
 ) {
 	if len(removedComponentMappings) == 0 && len(removedRelationMappings) == 0 {
 		return

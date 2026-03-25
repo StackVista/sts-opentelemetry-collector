@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 
@@ -18,11 +18,11 @@ type mockEvalExpressionEvaluator struct {
 	varErrsLookup       map[string]error
 }
 
-func (f *mockEvalExpressionEvaluator) EvalStringExpression(_ settings.OtelStringExpression, _ *ExpressionEvalContext) (string, error) {
+func (f *mockEvalExpressionEvaluator) EvalStringExpression(_ settingsproto.OtelStringExpression, _ *ExpressionEvalContext) (string, error) {
 	return "", nil
 }
 
-func (f *mockEvalExpressionEvaluator) EvalAnyExpression(expr settings.OtelAnyExpression, _ *ExpressionEvalContext) (any, error) {
+func (f *mockEvalExpressionEvaluator) EvalAnyExpression(expr settingsproto.OtelAnyExpression, _ *ExpressionEvalContext) (any, error) {
 	if err, ok := f.varErrsLookup[expr.Expression]; ok {
 		return "", err
 	}
@@ -32,36 +32,36 @@ func (f *mockEvalExpressionEvaluator) EvalAnyExpression(expr settings.OtelAnyExp
 	return "", nil
 }
 
-func (f *mockEvalExpressionEvaluator) EvalOptionalStringExpression(_ *settings.OtelStringExpression, _ *ExpressionEvalContext) (*string, error) {
+func (f *mockEvalExpressionEvaluator) EvalOptionalStringExpression(_ *settingsproto.OtelStringExpression, _ *ExpressionEvalContext) (*string, error) {
 	//nolint:nilnil
 	return nil, nil
 }
 
-func (f *mockEvalExpressionEvaluator) EvalBooleanExpression(_ settings.OtelBooleanExpression, _ *ExpressionEvalContext) (bool, error) {
+func (f *mockEvalExpressionEvaluator) EvalBooleanExpression(_ settingsproto.OtelBooleanExpression, _ *ExpressionEvalContext) (bool, error) {
 	return false, nil
 }
 
-func (f *mockEvalExpressionEvaluator) EvalMapExpression(_ settings.OtelAnyExpression, _ *ExpressionEvalContext) (map[string]any, error) {
+func (f *mockEvalExpressionEvaluator) EvalMapExpression(_ settingsproto.OtelAnyExpression, _ *ExpressionEvalContext) (map[string]any, error) {
 	//nolint:nilnil
 	return nil, nil
 }
 
-func (f *mockEvalExpressionEvaluator) GetStringExpressionAST(_ settings.OtelStringExpression) (*GetASTResult, error) {
+func (f *mockEvalExpressionEvaluator) GetStringExpressionAST(_ settingsproto.OtelStringExpression) (*GetASTResult, error) {
 	//nolint:nilnil
 	return nil, nil
 }
 
-func (f *mockEvalExpressionEvaluator) GetBooleanExpressionAST(_ settings.OtelBooleanExpression) (*GetASTResult, error) {
+func (f *mockEvalExpressionEvaluator) GetBooleanExpressionAST(_ settingsproto.OtelBooleanExpression) (*GetASTResult, error) {
 	//nolint:nilnil
 	return nil, nil
 }
 
-func (f *mockEvalExpressionEvaluator) GetMapExpressionAST(_ settings.OtelAnyExpression) (*GetASTResult, error) {
+func (f *mockEvalExpressionEvaluator) GetMapExpressionAST(_ settingsproto.OtelAnyExpression) (*GetASTResult, error) {
 	//nolint:nilnil
 	return nil, nil
 }
 
-func (f *mockEvalExpressionEvaluator) GetAnyExpressionAST(_ settings.OtelAnyExpression) (*GetASTResult, error) {
+func (f *mockEvalExpressionEvaluator) GetAnyExpressionAST(_ settingsproto.OtelAnyExpression) (*GetASTResult, error) {
 	//nolint:nilnil
 	return nil, nil
 }
@@ -70,12 +70,12 @@ type pair struct {
 	name, expr string
 }
 
-func varMappings(pairs ...pair) []settings.OtelVariableMapping {
-	mappings := make([]settings.OtelVariableMapping, len(pairs))
+func varMappings(pairs ...pair) []settingsproto.OtelVariableMapping {
+	mappings := make([]settingsproto.OtelVariableMapping, len(pairs))
 	for i, p := range pairs {
-		mappings[i] = settings.OtelVariableMapping{
+		mappings[i] = settingsproto.OtelVariableMapping{
 			Name:  p.name,
-			Value: settings.OtelAnyExpression{Expression: p.expr},
+			Value: settingsproto.OtelAnyExpression{Expression: p.expr},
 		}
 	}
 	return mappings
@@ -89,7 +89,7 @@ func TestEvalVariables(t *testing.T) {
 
 	tests := []struct {
 		name                string
-		vars                []settings.OtelVariableMapping
+		vars                []settingsproto.OtelVariableMapping
 		varExpressionLookup map[string]any
 		varErrsLookup       map[string]error
 		want                map[string]any
@@ -103,7 +103,7 @@ func TestEvalVariables(t *testing.T) {
 		},
 		{
 			name:      "empty variables",
-			vars:      []settings.OtelVariableMapping{},
+			vars:      []settingsproto.OtelVariableMapping{},
 			want:      map[string]any{},
 			expectErr: nil,
 		},

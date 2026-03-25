@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/mohae/deepcopy"
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
-	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"go.uber.org/zap"
 	"reflect"
 	"sync"

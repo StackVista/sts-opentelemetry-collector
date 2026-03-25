@@ -3,13 +3,13 @@ package topologyconnector_test
 import (
 	"context"
 	"reflect"
-	sort "sort"
+	"sort"
 	"testing"
 
 	topologyConnector "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/internal"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.uber.org/zap/zaptest"
@@ -114,19 +114,19 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentAndRelation(t *testing.T
 	refManager := topologyConnector.NewExpressionRefManager(logger, eval)
 
 	// Build a component mapping with vars and outputs referencing various inputs
-	comp := settings.OtelComponentMapping{
+	comp := settingsproto.OtelComponentMapping{
 		Identifier: "comp-1",
-		Input: settings.OtelInput{
-			Signal: settings.OtelInputSignalList{settings.METRICS},
+		Input: settingsproto.OtelInput{
+			Signal: settingsproto.OtelInputSignalList{settingsproto.METRICS},
 		},
-		Output: settings.OtelComponentMappingOutput{
+		Output: settingsproto.OtelComponentMappingOutput{
 			Identifier: sExpr("id-${resource.attributes['service.name']}-${vars.ns}"),
 			Name:       sExpr("name-${vars.ns}"),
 			TypeName:   sExpr("type"),
 			LayerName:  sExpr("layer-${datapoint.attributes['kind']}"),
 
-			Required: &settings.OtelComponentMappingFieldMapping{
-				Tags: &[]settings.OtelTagMapping{
+			Required: &settingsproto.OtelComponentMappingFieldMapping{
+				Tags: &[]settingsproto.OtelTagMapping{
 					{
 						Source:  aExpr("${span.attributes}"),
 						Pattern: ptr("service.\\(.*)"),
@@ -135,40 +135,40 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentAndRelation(t *testing.T
 				},
 			},
 		},
-		Vars: &[]settings.OtelVariableMapping{
+		Vars: &[]settingsproto.OtelVariableMapping{
 			{Name: "ns", Value: aExpr("${span.name}")},
 			{Name: "scopeName", Value: aExpr("${scope.name}")},
 		},
 	}
 
 	// Relation mapping referencing span attributes
-	rel := settings.OtelRelationMapping{
+	rel := settingsproto.OtelRelationMapping{
 		Identifier: "rel-1",
-		Input: settings.OtelInput{
-			Signal: settings.OtelInputSignalList{settings.TRACES},
+		Input: settingsproto.OtelInput{
+			Signal: settingsproto.OtelInputSignalList{settingsproto.TRACES},
 		},
-		Output: settings.OtelRelationMappingOutput{
+		Output: settingsproto.OtelRelationMappingOutput{
 			SourceId: sExpr("${resource.attributes['src']}"),
 			TargetId: sExpr("${span.attributes['dst']}"),
 			TypeName: sExpr("rel"),
 		},
 	}
 
-	signals := []settings.OtelInputSignal{settings.METRICS, settings.TRACES}
-	compBySig := map[settings.OtelInputSignal][]settings.OtelComponentMapping{
-		settings.METRICS: {comp},
-		settings.TRACES:  {},
+	signals := []settingsproto.OtelInputSignal{settingsproto.METRICS, settingsproto.TRACES}
+	compBySig := map[settingsproto.OtelInputSignal][]settingsproto.OtelComponentMapping{
+		settingsproto.METRICS: {comp},
+		settingsproto.TRACES:  {},
 	}
-	relBySig := map[settings.OtelInputSignal][]settings.OtelRelationMapping{
-		settings.METRICS: {},
-		settings.TRACES:  {rel},
+	relBySig := map[settingsproto.OtelInputSignal][]settingsproto.OtelRelationMapping{
+		settingsproto.METRICS: {},
+		settingsproto.TRACES:  {rel},
 	}
 
 	// Exercise Update and then verify Current for each signal
 	refManager.Update(signals, compBySig, relBySig)
 
 	// Metrics signal -> component expressionRefSummaries
-	compRefs := refManager.Current(settings.METRICS, "comp-1")
+	compRefs := refManager.Current(settingsproto.METRICS, "comp-1")
 	require.NotNil(t, compRefs)
 	require.ElementsMatch(t, []string{"kind"}, compRefs.Datapoint.AttributeKeys)
 	require.True(t, compRefs.Span.AllAttributes)
@@ -177,7 +177,7 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentAndRelation(t *testing.T
 	require.ElementsMatch(t, []string{"service.name"}, compRefs.Resource.AttributeKeys)
 
 	// Traces signal -> relation expressionRefSummaries
-	relRefs := refManager.Current(settings.TRACES, "rel-1")
+	relRefs := refManager.Current(settingsproto.TRACES, "rel-1")
 	require.NotNil(t, relRefs)
 	require.ElementsMatch(t, []string{"src"}, relRefs.Resource.AttributeKeys)
 	require.ElementsMatch(t, []string{"dst"}, relRefs.Span.AttributeKeys)
@@ -190,12 +190,12 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentWithResourceOnlyExpressi
 	refManager := topologyConnector.NewExpressionRefManager(logger, eval)
 
 	// Build a component mapping with vars and outputs referencing various inputs
-	comp := settings.OtelComponentMapping{
+	comp := settingsproto.OtelComponentMapping{
 		Identifier: "comp-1",
-		Input: settings.OtelInput{
-			Signal: settings.OtelInputSignalList{settings.METRICS},
+		Input: settingsproto.OtelInput{
+			Signal: settingsproto.OtelInputSignalList{settingsproto.METRICS},
 		},
-		Output: settings.OtelComponentMappingOutput{
+		Output: settingsproto.OtelComponentMappingOutput{
 			Identifier: sExpr("id-${resource.attributes['service.name']}"),
 			Name:       sExpr("name"),
 			TypeName:   sExpr("type"),
@@ -203,15 +203,15 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentWithResourceOnlyExpressi
 		},
 	}
 
-	signals := []settings.OtelInputSignal{settings.METRICS}
-	compBySig := map[settings.OtelInputSignal][]settings.OtelComponentMapping{
-		settings.METRICS: {comp},
+	signals := []settingsproto.OtelInputSignal{settingsproto.METRICS}
+	compBySig := map[settingsproto.OtelInputSignal][]settingsproto.OtelComponentMapping{
+		settingsproto.METRICS: {comp},
 	}
-	relBySig := make(map[settings.OtelInputSignal][]settings.OtelRelationMapping)
+	relBySig := make(map[settingsproto.OtelInputSignal][]settingsproto.OtelRelationMapping)
 
 	refManager.Update(signals, compBySig, relBySig)
 
-	compRefs := refManager.Current(settings.METRICS, "comp-1")
+	compRefs := refManager.Current(settingsproto.METRICS, "comp-1")
 	require.NotNil(t, compRefs)
 	require.Empty(t, compRefs.Datapoint)
 	require.Empty(t, compRefs.Span)
@@ -223,7 +223,7 @@ func TestExpressionRefManager_Current_NilForUnknownSignal(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	refManager := topologyConnector.NewExpressionRefManager(logger, eval)
 
-	cur := refManager.Current(settings.TRACES, "")
+	cur := refManager.Current(settingsproto.TRACES, "")
 	require.Nil(t, cur)
 }
 
@@ -232,14 +232,14 @@ func TestExpressionRefManager_Current_NilForUnknownComp(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	refManager := topologyConnector.NewExpressionRefManager(logger, eval)
 
-	signals := []settings.OtelInputSignal{settings.METRICS}
-	compBySig := map[settings.OtelInputSignal][]settings.OtelComponentMapping{
-		settings.METRICS: {},
+	signals := []settingsproto.OtelInputSignal{settingsproto.METRICS}
+	compBySig := map[settingsproto.OtelInputSignal][]settingsproto.OtelComponentMapping{
+		settingsproto.METRICS: {},
 	}
-	relBySig := make(map[settings.OtelInputSignal][]settings.OtelRelationMapping)
+	relBySig := make(map[settingsproto.OtelInputSignal][]settingsproto.OtelRelationMapping)
 	refManager.Update(signals, compBySig, relBySig)
 
-	cur := refManager.Current(settings.METRICS, "comp-1")
+	cur := refManager.Current(settingsproto.METRICS, "comp-1")
 	require.Nil(t, cur)
 }
 
@@ -248,26 +248,26 @@ func TestExpressionRefManager_InvalidExpressionsAreIgnored(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	refManager := topologyConnector.NewExpressionRefManager(logger, eval)
 
-	comp := settings.OtelComponentMapping{
+	comp := settingsproto.OtelComponentMapping{
 		Identifier: "bad-comp",
-		Input: settings.OtelInput{
-			Signal: settings.OtelInputSignalList{settings.METRICS},
+		Input: settingsproto.OtelInput{
+			Signal: settingsproto.OtelInputSignalList{settingsproto.METRICS},
 		},
-		Output: settings.OtelComponentMappingOutput{
+		Output: settingsproto.OtelComponentMappingOutput{
 			Identifier: sExpr("${this is not valid CEL"),
 			Name:       sExpr("${also bad"),
 		},
 	}
 
 	refManager.Update(
-		[]settings.OtelInputSignal{settings.METRICS},
-		map[settings.OtelInputSignal][]settings.OtelComponentMapping{
-			settings.METRICS: {comp},
+		[]settingsproto.OtelInputSignal{settingsproto.METRICS},
+		map[settingsproto.OtelInputSignal][]settingsproto.OtelComponentMapping{
+			settingsproto.METRICS: {comp},
 		},
 		nil,
 	)
 
-	cur := refManager.Current(settings.METRICS, "bad-comp")
+	cur := refManager.Current(settingsproto.METRICS, "bad-comp")
 	require.Nil(t, cur, "invalid expressions should produce no summaries")
 }
 
@@ -276,31 +276,31 @@ func TestExpressionRefManager_OptionalFieldsAreLenient(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	refManager := topologyConnector.NewExpressionRefManager(logger, eval)
 
-	comp := settings.OtelComponentMapping{
+	comp := settingsproto.OtelComponentMapping{
 		Identifier: "comp",
-		Input: settings.OtelInput{
-			Signal: settings.OtelInputSignalList{settings.METRICS},
+		Input: settingsproto.OtelInput{
+			Signal: settingsproto.OtelInputSignalList{settingsproto.METRICS},
 		},
-		Output: settings.OtelComponentMappingOutput{
+		Output: settingsproto.OtelComponentMappingOutput{
 			Identifier: sExpr("${resource.attributes['ok']}"),
-			Optional: &settings.OtelComponentMappingFieldMapping{
-				AdditionalIdentifiers: &[]settings.OtelStringExpression{sExpr("${invalid")},
+			Optional: &settingsproto.OtelComponentMappingFieldMapping{
+				AdditionalIdentifiers: &[]settingsproto.OtelStringExpression{sExpr("${invalid")},
 			},
 		},
-		Vars: &[]settings.OtelVariableMapping{
+		Vars: &[]settingsproto.OtelVariableMapping{
 			{Name: "ns", Value: aExpr("${span.attributes['ns']}")},
 		},
 	}
 
 	refManager.Update(
-		[]settings.OtelInputSignal{settings.METRICS},
-		map[settings.OtelInputSignal][]settings.OtelComponentMapping{
-			settings.METRICS: {comp},
+		[]settingsproto.OtelInputSignal{settingsproto.METRICS},
+		map[settingsproto.OtelInputSignal][]settingsproto.OtelComponentMapping{
+			settingsproto.METRICS: {comp},
 		},
 		nil,
 	)
 
-	compRefs := refManager.Current(settings.METRICS, "comp")
+	compRefs := refManager.Current(settingsproto.METRICS, "comp")
 	require.NotNil(t, compRefs)
 	require.ElementsMatch(t, []string{"ns"}, compRefs.Span.AttributeKeys)
 }
@@ -311,18 +311,18 @@ func TestExpressionRefManager_UpdateReplacesState(t *testing.T) {
 	refManager := topologyConnector.NewExpressionRefManager(logger, eval)
 
 	refManager.Update(
-		[]settings.OtelInputSignal{settings.METRICS},
+		[]settingsproto.OtelInputSignal{settingsproto.METRICS},
 		nil,
 		nil,
 	)
 
 	refManager.Update(
-		[]settings.OtelInputSignal{},
+		[]settingsproto.OtelInputSignal{},
 		nil,
 		nil,
 	)
 
-	require.Nil(t, refManager.Current(settings.METRICS, ""))
+	require.Nil(t, refManager.Current(settingsproto.METRICS, ""))
 }
 
 func TestComponentMappingFieldsCoverage(t *testing.T) {
@@ -330,7 +330,7 @@ func TestComponentMappingFieldsCoverage(t *testing.T) {
 		assertStructFieldCoverage(
 			t,
 			"OtelComponentMapping",
-			reflect.TypeOf(settings.OtelComponentMapping{}),
+			reflect.TypeOf(settingsproto.OtelComponentMapping{}),
 			append(
 				ExpectedComponentMappingFields.TopLevelWalked,
 				ExpectedComponentMappingFields.TopLevelSkipped...,
@@ -343,7 +343,7 @@ func TestComponentMappingFieldsCoverage(t *testing.T) {
 		assertStructFieldCoverage(
 			t,
 			"OtelComponentMappingOutput",
-			reflect.TypeOf(settings.OtelComponentMappingOutput{}),
+			reflect.TypeOf(settingsproto.OtelComponentMappingOutput{}),
 			ExpectedComponentMappingFields.Output,
 			"Add walking logic in collectRefsForComponent and update ExpectedComponentMappingFields.Output,\n"+
 				"or document why this field should be intentionally skipped.",
@@ -354,7 +354,7 @@ func TestComponentMappingFieldsCoverage(t *testing.T) {
 		assertStructFieldCoverage(
 			t,
 			"OtelComponentMappingFieldMapping",
-			reflect.TypeOf(settings.OtelComponentMappingFieldMapping{}),
+			reflect.TypeOf(settingsproto.OtelComponentMappingFieldMapping{}),
 			ExpectedComponentMappingFields.FieldMapping,
 			"Add walking logic for Optional/Required fields in collectRefsForComponent\n"+
 				"or document why this field should be intentionally skipped.",
@@ -367,7 +367,7 @@ func TestRelationMappingFieldsCoverage(t *testing.T) {
 		assertStructFieldCoverage(
 			t,
 			"OtelRelationMapping",
-			reflect.TypeOf(settings.OtelRelationMapping{}),
+			reflect.TypeOf(settingsproto.OtelRelationMapping{}),
 			append(
 				ExpectedRelationMappingFields.TopLevelWalked,
 				ExpectedRelationMappingFields.TopLevelSkipped...,
@@ -379,7 +379,7 @@ func TestRelationMappingFieldsCoverage(t *testing.T) {
 	assertStructFieldCoverage(
 		t,
 		"OtelRelationMappingOutput",
-		reflect.TypeOf(settings.OtelRelationMappingOutput{}),
+		reflect.TypeOf(settingsproto.OtelRelationMappingOutput{}),
 		ExpectedRelationMappingFields.Output,
 		"Add walking logic in collectRefsForRelation or update the expected field list.",
 	)
@@ -464,12 +464,12 @@ func getStructFieldNames(t reflect.Type) []string {
 	return fields
 }
 
-func sExpr(s string) settings.OtelStringExpression {
-	return settings.OtelStringExpression{Expression: s}
+func sExpr(s string) settingsproto.OtelStringExpression {
+	return settingsproto.OtelStringExpression{Expression: s}
 }
 
-func aExpr(s string) settings.OtelAnyExpression {
-	return settings.OtelAnyExpression{Expression: s}
+func aExpr(s string) settingsproto.OtelAnyExpression {
+	return settingsproto.OtelAnyExpression{Expression: s}
 }
 
 func ptr[T any](v T) *T { return &v }

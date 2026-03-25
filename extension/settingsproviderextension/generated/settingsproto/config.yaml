@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/HEAD/configuration-schema.json
+package: settingsproto
+output: model.gen.go
+generate:
+  models: true
+output-options:
+  skip-prune: true
+import-mapping:
+  settings.yaml: github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsschema

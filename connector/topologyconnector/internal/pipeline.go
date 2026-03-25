@@ -5,7 +5,7 @@ import (
 
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.uber.org/zap"
@@ -18,8 +18,8 @@ func ConvertSpanToTopologyStreamMessage(
 	deduplicator Deduplicator,
 	mapper *Mapper,
 	traceData ptrace.Traces,
-	componentMappings []settings.OtelComponentMapping,
-	relationMappings []settings.OtelRelationMapping,
+	componentMappings []settingsproto.OtelComponentMapping,
+	relationMappings []settingsproto.OtelRelationMapping,
 	collectionTimestampMs int64,
 	metricsRecorder metrics.ConnectorMetricsRecorder,
 ) []MessageWithKey {
@@ -29,7 +29,7 @@ func ConvertSpanToTopologyStreamMessage(
 		ctx,
 		logger,
 		traceTraverser,
-		settings.TRACES,
+		settingsproto.TRACES,
 		eval,
 		deduplicator,
 		mapper,
@@ -47,8 +47,8 @@ func ConvertMetricsToTopologyStreamMessage(
 	deduplicator Deduplicator,
 	mapper *Mapper,
 	metricData pmetric.Metrics,
-	componentMappings []settings.OtelComponentMapping,
-	relationMappings []settings.OtelRelationMapping,
+	componentMappings []settingsproto.OtelComponentMapping,
+	relationMappings []settingsproto.OtelRelationMapping,
 	collectionTimestampMs int64,
 	metricsRecorder metrics.ConnectorMetricsRecorder,
 ) []MessageWithKey {
@@ -58,7 +58,7 @@ func ConvertMetricsToTopologyStreamMessage(
 		ctx,
 		logger,
 		metricsTraverser,
-		settings.METRICS,
+		settingsproto.METRICS,
 		eval,
 		deduplicator,
 		mapper,
@@ -73,12 +73,12 @@ func convertSignalDataToTopologyStreamMessage(
 	ctx context.Context,
 	logger *zap.Logger,
 	traverser SignalTraverser,
-	signal settings.OtelInputSignal,
+	signal settingsproto.OtelInputSignal,
 	eval ExpressionEvaluator,
 	deduplicator Deduplicator,
 	mapper *Mapper,
-	componentMappings []settings.OtelComponentMapping,
-	relationMappings []settings.OtelRelationMapping,
+	componentMappings []settingsproto.OtelComponentMapping,
+	relationMappings []settingsproto.OtelRelationMapping,
 	collectionTimestampMs int64,
 	metricsRecorder metrics.ConnectorMetricsRecorder,
 ) []MessageWithKey {
@@ -95,7 +95,7 @@ func convertSignalDataToTopologyStreamMessage(
 	}
 
 	for _, componentMapping := range componentMappings {
-		mappingCtx := &MappingContext[settings.OtelComponentMapping]{
+		mappingCtx := &MappingContext[settingsproto.OtelComponentMapping]{
 			BaseCtx: baseCtx,
 			Mapping: componentMapping,
 		}
@@ -104,7 +104,7 @@ func convertSignalDataToTopologyStreamMessage(
 	}
 
 	for _, relationMapping := range relationMappings {
-		mappingCtx := &MappingContext[settings.OtelRelationMapping]{
+		mappingCtx := &MappingContext[settingsproto.OtelRelationMapping]{
 			BaseCtx: baseCtx,
 			Mapping: relationMapping,
 		}
@@ -120,7 +120,7 @@ func convertSignalDataToTopologyStreamMessage(
 func logResultSummary(
 	logger *zap.Logger,
 	results []MessageWithKey,
-	signal settings.OtelInputSignal,
+	signal settingsproto.OtelInputSignal,
 ) {
 	if !logger.Core().Enabled(zap.DebugLevel) {
 		return
@@ -157,8 +157,8 @@ func logResultSummary(
 func ConvertMappingRemovalsToTopologyStreamMessage(
 	ctx context.Context,
 	logger *zap.Logger,
-	componentMappings []settings.OtelComponentMapping,
-	relationMappings []settings.OtelRelationMapping,
+	componentMappings []settingsproto.OtelComponentMapping,
+	relationMappings []settingsproto.OtelRelationMapping,
 	metricsRecorder metrics.ConnectorMetricsRecorder,
 ) []MessageWithKey {
 	result := make([]MessageWithKey, 0)
@@ -178,11 +178,11 @@ func ConvertMappingRemovalsToTopologyStreamMessage(
 
 	if componentMappingsRemoved > 0 {
 		metricsRecorder.IncMappingsRemoved(ctx, int64(componentMappingsRemoved),
-			settings.SettingTypeOtelComponentMapping)
+			settingsproto.SettingTypeOtelComponentMapping)
 	}
 	if relationMappingsRemoved > 0 {
 		metricsRecorder.IncMappingsRemoved(ctx, int64(relationMappingsRemoved),
-			settings.SettingTypeOtelRelationMapping)
+			settingsproto.SettingTypeOtelRelationMapping)
 	}
 
 	logger.Debug(

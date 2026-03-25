@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/internal"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/connector"
 	"go.opentelemetry.io/collector/consumer"
@@ -53,7 +53,7 @@ func (f *connectorFactory) initSharedState(
 
 		expressionRefManager := NewExpressionRefManager(logger, evaluator)
 		snapshotManager := NewSnapshotManager(
-			logger, []settings.OtelInputSignal{settings.TRACES, settings.METRICS}, expressionRefManager,
+			logger, []settingsproto.OtelInputSignal{settingsproto.TRACES, settingsproto.METRICS}, expressionRefManager,
 		)
 
 		f.celEvaluator = evaluator
@@ -139,7 +139,7 @@ func (f *connectorFactory) createTracesToLogsConnector(
 		f.celEvaluator,
 		f.deduplicator,
 		f.mapper,
-		settings.TRACES,
+		settingsproto.TRACES,
 	), nil
 }
 
@@ -169,6 +169,6 @@ func (f *connectorFactory) createMetricsToLogsConnector(
 		f.celEvaluator,
 		f.deduplicator,
 		f.mapper,
-		settings.METRICS,
+		settingsproto.METRICS,
 	), nil
 }

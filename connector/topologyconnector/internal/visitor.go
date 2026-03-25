@@ -3,7 +3,7 @@ package internal
 import (
 	"context"
 
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 )
 
 type VisitResult int
@@ -41,12 +41,12 @@ type MappingVisitor interface {
 	VisitSpan(ctx context.Context, evalCtx *ExpressionEvalContext)
 }
 
-type GenericMappingVisitor[T settings.SettingExtension] struct {
+type GenericMappingVisitor[T settingsproto.SettingExtension] struct {
 	handler    *MappingHandler[T]
 	mappingCtx *MappingContext[T]
 }
 
-func NewGenericMappingVisitor[T settings.SettingExtension](
+func NewGenericMappingVisitor[T settingsproto.SettingExtension](
 	mappingCtx *MappingContext[T],
 ) *GenericMappingVisitor[T] {
 	return &GenericMappingVisitor[T]{

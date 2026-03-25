@@ -8,11 +8,11 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/types"
 
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 )
 
 // MappingHandler evaluates mapping conditions and triggers mapping execution.
-type MappingHandler[T settings.SettingExtension] struct {
+type MappingHandler[T settingsproto.SettingExtension] struct {
 	MappingCtx *MappingContext[T]
 
 	// ExecuteMappingFunc is called to execute the mapping.
@@ -22,7 +22,7 @@ type MappingHandler[T settings.SettingExtension] struct {
 }
 
 // NewMappingHandler creates a new handler. In production, ExecuteMappingFunc defaults to MappingCtx.ExecuteMapping
-func NewMappingHandler[T settings.SettingExtension](ctx *MappingContext[T]) *MappingHandler[T] {
+func NewMappingHandler[T settingsproto.SettingExtension](ctx *MappingContext[T]) *MappingHandler[T] {
 	h := &MappingHandler[T]{MappingCtx: ctx}
 	h.ExecuteMappingFunc = ctx.ExecuteMapping
 	return h
@@ -31,8 +31,8 @@ func NewMappingHandler[T settings.SettingExtension](ctx *MappingContext[T]) *Map
 func (h *MappingHandler[T]) HandleVisitLevel(
 	ctx context.Context,
 	evalCtx *ExpressionEvalContext,
-	action *settings.OtelInputConditionAction,
-	condition *settings.OtelBooleanExpression,
+	action *settingsproto.OtelInputConditionAction,
+	condition *settingsproto.OtelBooleanExpression,
 ) VisitResult {
 	ok := h.evaluateCondition(evalCtx, condition)
 
@@ -41,16 +41,16 @@ func (h *MappingHandler[T]) HandleVisitLevel(
 	}
 
 	// Default: CONTINUE if action not provided
-	act := settings.CONTINUE
+	act := settingsproto.CONTINUE
 	if action != nil {
 		act = *action
 	}
 
 	switch act {
-	case settings.CREATE:
+	case settingsproto.CREATE:
 		h.ExecuteMappingFunc(ctx, evalCtx)
 		return VisitSkip
-	case settings.CONTINUE:
+	case settingsproto.CONTINUE:
 		return VisitContinue
 	default:
 		return VisitSkip
@@ -61,18 +61,18 @@ func (h *MappingHandler[T]) HandleVisitLevel(
 func (h *MappingHandler[T]) HandleTerminalVisit(
 	ctx context.Context,
 	evalCtx *ExpressionEvalContext,
-	action *settings.OtelInputConditionAction,
-	condition *settings.OtelBooleanExpression,
+	action *settingsproto.OtelInputConditionAction,
+	condition *settingsproto.OtelBooleanExpression,
 ) {
 	ok := h.evaluateCondition(evalCtx, condition)
 
 	// Default: CONTINUE if action not provided
-	act := settings.CONTINUE
+	act := settingsproto.CONTINUE
 	if action != nil {
 		act = *action
 	}
 
-	if ok && act == settings.CREATE {
+	if ok && act == settingsproto.CREATE {
 		h.ExecuteMappingFunc(ctx, evalCtx)
 	}
 }
@@ -80,7 +80,7 @@ func (h *MappingHandler[T]) HandleTerminalVisit(
 // evaluateCondition checks a condition safely with defaults.
 func (h *MappingHandler[T]) evaluateCondition(
 	evalCtx *ExpressionEvalContext,
-	condition *settings.OtelBooleanExpression,
+	condition *settingsproto.OtelBooleanExpression,
 ) bool {
 	// Default: true if condition not provided
 	if condition == nil {
@@ -97,7 +97,7 @@ func (h *MappingHandler[T]) evaluateCondition(
 
 // BaseContext contains shared dependencies used by all mapping contexts.
 type BaseContext struct {
-	Signal                 settings.OtelInputSignal
+	Signal                 settingsproto.OtelInputSignal
 	Mapper                 *Mapper
 	Evaluator              ExpressionEvaluator
 	Deduplicator           Deduplicator
@@ -108,7 +108,7 @@ type BaseContext struct {
 }
 
 // MappingContext binds a specific mapping (component or relation) to its runtime (dependency) context.
-type MappingContext[T settings.SettingExtension] struct {
+type MappingContext[T settingsproto.SettingExtension] struct {
 	BaseCtx BaseContext
 	Mapping T
 }
@@ -128,9 +128,9 @@ func (v *MappingContext[T]) ExecuteMapping(
 	}
 
 	switch mapping := any(v.Mapping).(type) {
-	case settings.OtelComponentMapping:
+	case settingsproto.OtelComponentMapping:
 		v.handleComponent(ctx, evalCtx, mapping)
-	case settings.OtelRelationMapping:
+	case settingsproto.OtelRelationMapping:
 		v.handleRelation(ctx, evalCtx, mapping)
 	default:
 	}
@@ -139,7 +139,7 @@ func (v *MappingContext[T]) ExecuteMapping(
 func (v *MappingContext[T]) handleComponent(
 	ctx context.Context,
 	evalCtx *ExpressionEvalContext,
-	mapping settings.OtelComponentMapping,
+	mapping settingsproto.OtelComponentMapping,
 ) {
 	componentMappingStart := time.Now()
 
@@ -157,14 +157,14 @@ func (v *MappingContext[T]) handleComponent(
 				},
 			),
 		)
-		v.BaseCtx.MetricsRecorder.IncTopologyProduced(ctx, 1, settings.SettingTypeOtelComponentMapping, v.BaseCtx.Signal)
+		v.BaseCtx.MetricsRecorder.IncTopologyProduced(ctx, 1, settingsproto.SettingTypeOtelComponentMapping, v.BaseCtx.Signal)
 	}
 	if errs != nil {
 		*v.BaseCtx.Results = append(
 			*v.BaseCtx.Results,
 			*ErrorsToMessageWithKey(&errs, mapping, v.BaseCtx.CollectionTimestamp),
 		)
-		v.BaseCtx.MetricsRecorder.IncMappingErrors(ctx, 1, settings.SettingTypeOtelComponentMapping, v.BaseCtx.Signal)
+		v.BaseCtx.MetricsRecorder.IncMappingErrors(ctx, 1, settingsproto.SettingTypeOtelComponentMapping, v.BaseCtx.Signal)
 	}
 
 	componentMappingDuration := time.Since(componentMappingStart)
@@ -172,7 +172,7 @@ func (v *MappingContext[T]) handleComponent(
 		ctx,
 		componentMappingDuration,
 		v.BaseCtx.Signal,
-		settings.SettingTypeOtelComponentMapping,
+		settingsproto.SettingTypeOtelComponentMapping,
 		v.Mapping.GetIdentifier(),
 	)
 }
@@ -180,7 +180,7 @@ func (v *MappingContext[T]) handleComponent(
 func (v *MappingContext[T]) handleRelation(
 	ctx context.Context,
 	evalCtx *ExpressionEvalContext,
-	mapping settings.OtelRelationMapping,
+	mapping settingsproto.OtelRelationMapping,
 ) {
 	relation, errs := convertToRelation(v.BaseCtx.Evaluator, v.BaseCtx.Mapper, evalCtx, &mapping)
 	if relation != nil {
@@ -192,14 +192,14 @@ func (v *MappingContext[T]) handleRelation(
 				func() []*topostreamv1.TopologyStreamRelation { return []*topostreamv1.TopologyStreamRelation{relation} },
 			),
 		)
-		v.BaseCtx.MetricsRecorder.IncTopologyProduced(ctx, 1, settings.SettingTypeOtelRelationMapping, v.BaseCtx.Signal)
+		v.BaseCtx.MetricsRecorder.IncTopologyProduced(ctx, 1, settingsproto.SettingTypeOtelRelationMapping, v.BaseCtx.Signal)
 	}
 	if errs != nil {
 		*v.BaseCtx.Results = append(
 			*v.BaseCtx.Results,
 			*ErrorsToMessageWithKey(&errs, mapping, v.BaseCtx.CollectionTimestamp),
 		)
-		v.BaseCtx.MetricsRecorder.IncMappingErrors(ctx, 1, settings.SettingTypeOtelRelationMapping, v.BaseCtx.Signal)
+		v.BaseCtx.MetricsRecorder.IncMappingErrors(ctx, 1, settingsproto.SettingTypeOtelRelationMapping, v.BaseCtx.Signal)
 	}
 }
 
@@ -207,7 +207,7 @@ func convertToComponent(
 	expressionEvaluator ExpressionEvaluator,
 	mapper *Mapper,
 	evalContext *ExpressionEvalContext,
-	mapping *settings.OtelComponentMapping,
+	mapping *settingsproto.OtelComponentMapping,
 ) (*topostreamv1.TopologyStreamComponent, []error) {
 	// at this point, we've done the condition filtering and can proceed to evaluate variables
 	evaluatedVars, errs := EvalVariables(expressionEvaluator, evalContext, mapping.Vars)
@@ -227,7 +227,7 @@ func convertToRelation(
 	expressionEvaluator ExpressionEvaluator,
 	mapper *Mapper,
 	evalContext *ExpressionEvalContext,
-	mapping *settings.OtelRelationMapping,
+	mapping *settingsproto.OtelRelationMapping,
 ) (*topostreamv1.TopologyStreamRelation, []error) {
 	// at this point, we've done the condition filtering and can proceed to evaluate variables
 	evaluatedVars, errs := EvalVariables(expressionEvaluator, evalContext, mapping.Vars)

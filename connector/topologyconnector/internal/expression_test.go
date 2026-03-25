@@ -9,7 +9,7 @@ import (
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component/componenttest"
@@ -222,7 +222,7 @@ func TestEvalStringExpression(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := eval.EvalStringExpression(
-				settings.OtelStringExpression{Expression: tt.expr},
+				settingsproto.OtelStringExpression{Expression: tt.expr},
 				&ctx,
 			)
 
@@ -300,7 +300,7 @@ func TestEvalBooleanExpression(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := eval.EvalBooleanExpression(
-				settings.OtelBooleanExpression{Expression: tt.expr},
+				settingsproto.OtelBooleanExpression{Expression: tt.expr},
 				&ctx,
 			)
 
@@ -324,7 +324,7 @@ func TestEvalOptionalStringExpression(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		expr     *settings.OtelStringExpression
+		expr     *settingsproto.OtelStringExpression
 		expected *string
 	}{
 		{
@@ -334,7 +334,7 @@ func TestEvalOptionalStringExpression(t *testing.T) {
 		},
 		{
 			name:     "non-nil expression returns string",
-			expr:     &settings.OtelStringExpression{Expression: "static-string"},
+			expr:     &settingsproto.OtelStringExpression{Expression: "static-string"},
 			expected: ptr("static-string"),
 		},
 	}
@@ -354,13 +354,13 @@ func TestEvalMapExpression(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		expr        settings.OtelAnyExpression
+		expr        settingsproto.OtelAnyExpression
 		want        map[string]any
 		expectError string
 	}{
 		{
 			name: "pure map reference span.attributes",
-			expr: settings.OtelAnyExpression{Expression: "${span.attributes}"},
+			expr: settingsproto.OtelAnyExpression{Expression: "${span.attributes}"},
 			want: map[string]any{
 				"http.method":      "GET",
 				"http.status_code": int64(200),
@@ -372,7 +372,7 @@ func TestEvalMapExpression(t *testing.T) {
 		},
 		{
 			name: "pure map reference resource.attributes",
-			expr: settings.OtelAnyExpression{Expression: "${resource.attributes}"},
+			expr: settingsproto.OtelAnyExpression{Expression: "${resource.attributes}"},
 			want: map[string]any{
 				"cloud.provider": "aws",
 				"service.name":   "cart-service",
@@ -386,7 +386,7 @@ func TestEvalMapExpression(t *testing.T) {
 		},
 		{
 			name: "pure map reference scope.attributes",
-			expr: settings.OtelAnyExpression{Expression: "${scope.attributes}"},
+			expr: settingsproto.OtelAnyExpression{Expression: "${scope.attributes}"},
 			want: map[string]any{
 				"otel.scope.name":    "io.opentelemetry.instrumentation.http",
 				"otel.scope.Version": "1.2.3",
@@ -394,38 +394,38 @@ func TestEvalMapExpression(t *testing.T) {
 		},
 		{
 			name: "Map literal",
-			expr: settings.OtelAnyExpression{Expression: "${{'key': 'value'}}"},
+			expr: settingsproto.OtelAnyExpression{Expression: "${{'key': 'value'}}"},
 			want: map[string]any{
 				"key": "value",
 			},
 		},
 		{
 			name:        "invalid: not a pure map reference",
-			expr:        settings.OtelAnyExpression{Expression: "foo-${span.attributes}"},
+			expr:        settingsproto.OtelAnyExpression{Expression: "foo-${span.attributes}"},
 			want:        nil,
 			expectError: `foo-${span.attributes}" is not a valid map expression`,
 		},
 		{
 			name:        "invalid: literal string",
-			expr:        settings.OtelAnyExpression{Expression: `"just a string"`},
+			expr:        settingsproto.OtelAnyExpression{Expression: `"just a string"`},
 			want:        nil,
 			expectError: `expression "\"just a string\"" is not a valid map expression`,
 		},
 		{
 			name:        "invalid: empty interpolation",
-			expr:        settings.OtelAnyExpression{Expression: "${}"},
+			expr:        settingsproto.OtelAnyExpression{Expression: "${}"},
 			want:        nil,
 			expectError: `empty interpolation at pos 0`,
 		},
 		{
 			name:        "invalid: keys are not strings",
-			expr:        settings.OtelAnyExpression{Expression: "${{true: 'value'}}"},
+			expr:        settingsproto.OtelAnyExpression{Expression: "${{true: 'value'}}"},
 			want:        nil,
 			expectError: "cannot convert key of type '*internal.CelEvaluationError' to string: true",
 		},
 		{
 			name:        "unsupported type returns error",
-			expr:        settings.OtelAnyExpression{Expression: `${'test'}`}, // a string type that can be statically checked
+			expr:        settingsproto.OtelAnyExpression{Expression: `${'test'}`}, // a string type that can be statically checked
 			expectError: `expected map type, got: string, for expression '${'test'}'`,
 		},
 	}
@@ -544,7 +544,7 @@ func TestEvalAnyExpression(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := eval.EvalAnyExpression(
-				settings.OtelAnyExpression{Expression: tt.expr},
+				settingsproto.OtelAnyExpression{Expression: tt.expr},
 				&ctx,
 			)
 
@@ -565,7 +565,7 @@ func TestBoolEvalTypeMismatch(t *testing.T) {
 	ctx := makeContext(false, false)
 
 	// String expression but evaluated with boolean
-	_, err := eval.EvalBooleanExpression(settings.OtelBooleanExpression{Expression: `resource.attributes["cloud.provider"]`}, &ctx)
+	_, err := eval.EvalBooleanExpression(settingsproto.OtelBooleanExpression{Expression: `resource.attributes["cloud.provider"]`}, &ctx)
 	require.Error(t, err)
 }
 
@@ -574,7 +574,7 @@ func TestStringEvalTypeMismatch(t *testing.T) {
 	ctx := makeContext(false, false)
 
 	// Bool expression but evaluated with string
-	_, err := eval.EvalStringExpression(settings.OtelStringExpression{Expression: `${resource.attributes["cloud.provider"] == "aws"}`}, &ctx)
+	_, err := eval.EvalStringExpression(settingsproto.OtelStringExpression{Expression: `${resource.attributes["cloud.provider"] == "aws"}`}, &ctx)
 	require.Error(t, err)
 }
 
@@ -582,7 +582,7 @@ func TestNoDatapointError(t *testing.T) {
 	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 	ctx := makeContext(false, false)
 
-	_, err := eval.EvalStringExpression(settings.OtelStringExpression{Expression: `${datapoint.attributes["http.method"]}`}, &ctx)
+	_, err := eval.EvalStringExpression(settingsproto.OtelStringExpression{Expression: `${datapoint.attributes["http.method"]}`}, &ctx)
 	assert.Equal(t, err.Error(), "no such attribute(s): datapoint")
 }
 
@@ -590,14 +590,14 @@ func TestNoSpanError(t *testing.T) {
 	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 	ctx := makeContext(false, false)
 
-	_, err := eval.EvalStringExpression(settings.OtelStringExpression{Expression: `${span.attributes["http.method"]}`}, &ctx)
+	_, err := eval.EvalStringExpression(settingsproto.OtelStringExpression{Expression: `${span.attributes["http.method"]}`}, &ctx)
 	assert.Equal(t, err.Error(), "no such attribute(s): span")
 }
 
 func TestCelEvaluator_GetStringExpressionAST_WithLiteral(t *testing.T) {
 	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 
-	res, err := eval.GetStringExpressionAST(settings.OtelStringExpression{Expression: `hello`})
+	res, err := eval.GetStringExpressionAST(settingsproto.OtelStringExpression{Expression: `hello`})
 	require.NoError(t, err)
 	require.Nil(t, res.CheckedAST)
 	assert.Equal(t, *res.literal, "hello")
@@ -606,7 +606,7 @@ func TestCelEvaluator_GetStringExpressionAST_WithLiteral(t *testing.T) {
 func TestAstCacheReuse(t *testing.T) {
 	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 
-	expr := settings.OtelBooleanExpression{Expression: `span.attributes["retries"] == 2`}
+	expr := settingsproto.OtelBooleanExpression{Expression: `span.attributes["retries"] == 2`}
 
 	_, err := eval.GetBooleanExpressionAST(expr)
 	require.NoError(t, err)
@@ -617,7 +617,7 @@ func TestAstCacheReuse(t *testing.T) {
 	require.Equal(t, 1, eval.cacheSize()) // still one entry
 
 	// different expression should increase cache size
-	other := settings.OtelBooleanExpression{Expression: `span.attributes["retries"] == 10`}
+	other := settingsproto.OtelBooleanExpression{Expression: `span.attributes["retries"] == 10`}
 	_, err = eval.GetBooleanExpressionAST(other)
 	require.NoError(t, err)
 	require.Equal(t, 2, eval.cacheSize())
@@ -627,7 +627,7 @@ func TestEvalCacheReuse(t *testing.T) {
 	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 	ctx := makeContext(true, false)
 
-	expr := settings.OtelBooleanExpression{Expression: `span.attributes["retries"] == 2`}
+	expr := settingsproto.OtelBooleanExpression{Expression: `span.attributes["retries"] == 2`}
 
 	_, err := eval.EvalBooleanExpression(expr, &ctx)
 	require.NoError(t, err)
@@ -638,7 +638,7 @@ func TestEvalCacheReuse(t *testing.T) {
 	require.Equal(t, 1, eval.cacheSize()) // still one entry
 
 	// different expression should increase cache size
-	other := settings.OtelBooleanExpression{Expression: `span.attributes["retries"] == 10`}
+	other := settingsproto.OtelBooleanExpression{Expression: `span.attributes["retries"] == 10`}
 	_, err = eval.EvalBooleanExpression(other, &ctx)
 	require.NoError(t, err)
 	require.Equal(t, 2, eval.cacheSize())
@@ -649,7 +649,7 @@ func TestEvalCacheEvictionBySize(t *testing.T) {
 	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(2, 1*time.Minute))
 	ctx := makeContext(true, true)
 
-	exprs := []settings.OtelBooleanExpression{
+	exprs := []settingsproto.OtelBooleanExpression{
 		{Expression: `span.attributes["retries"] == 1`},
 		{Expression: `span.attributes["retries"] == 2`},
 		{Expression: `span.attributes["retries"] == 3`}, // this should evict one of the earlier ones
@@ -668,7 +668,7 @@ func TestEvalCacheExpiryByTTL(t *testing.T) {
 	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 200*time.Millisecond))
 	ctx := makeContext(true, true)
 
-	expr := settings.OtelBooleanExpression{Expression: `span.attributes["http.method"] == "GET"`}
+	expr := settingsproto.OtelBooleanExpression{Expression: `span.attributes["http.method"] == "GET"`}
 
 	_, err := eval.EvalBooleanExpression(expr, &ctx)
 	require.NoError(t, err)

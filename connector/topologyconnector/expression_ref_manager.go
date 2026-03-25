@@ -7,7 +7,7 @@ import (
 	"github.com/google/cel-go/cel"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/internal"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/types"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"go.uber.org/zap"
 )
 
@@ -18,12 +18,12 @@ import (
 // Missing or invalid expressions simply result in fewer extracted references.
 type ExpressionRefManager interface {
 	Update(
-		signals []settings.OtelInputSignal,
-		componentMappings map[settings.OtelInputSignal][]settings.OtelComponentMapping,
-		relationMappings map[settings.OtelInputSignal][]settings.OtelRelationMapping,
+		signals []settingsproto.OtelInputSignal,
+		componentMappings map[settingsproto.OtelInputSignal][]settingsproto.OtelComponentMapping,
+		relationMappings map[settingsproto.OtelInputSignal][]settingsproto.OtelRelationMapping,
 	)
 
-	Current(signal settings.OtelInputSignal, mappingIdentifier string) *types.ExpressionRefSummary
+	Current(signal settingsproto.OtelInputSignal, mappingIdentifier string) *types.ExpressionRefSummary
 }
 
 type DefaultExpressionRefManager struct {
@@ -32,7 +32,7 @@ type DefaultExpressionRefManager struct {
 
 	mu sync.RWMutex
 	// signal -> mappingIdentifier -> summary
-	expressionRefSummaries map[settings.OtelInputSignal]map[string]*types.ExpressionRefSummary
+	expressionRefSummaries map[settingsproto.OtelInputSignal]map[string]*types.ExpressionRefSummary
 }
 
 func NewExpressionRefManager(
@@ -43,7 +43,7 @@ func NewExpressionRefManager(
 		logger:    logger,
 		evaluator: evaluator,
 		expressionRefSummaries: make(
-			map[settings.OtelInputSignal]map[string]*types.ExpressionRefSummary,
+			map[settingsproto.OtelInputSignal]map[string]*types.ExpressionRefSummary,
 		),
 	}
 }
@@ -51,14 +51,14 @@ func NewExpressionRefManager(
 // Update walks the CEL ASTs of mapping expressions to precompute referenced vars and attribute keys used by mappings
 // for each signal.
 func (p *DefaultExpressionRefManager) Update(
-	signals []settings.OtelInputSignal,
-	componentMappings map[settings.OtelInputSignal][]settings.OtelComponentMapping,
-	relationMappings map[settings.OtelInputSignal][]settings.OtelRelationMapping,
+	signals []settingsproto.OtelInputSignal,
+	componentMappings map[settingsproto.OtelInputSignal][]settingsproto.OtelComponentMapping,
+	relationMappings map[settingsproto.OtelInputSignal][]settingsproto.OtelRelationMapping,
 ) {
 	p.logger.Debug("ExpressionRefManager processing snapshot update",
 		zap.Int("signal_count", len(signals)))
 
-	summariesBySignalUpdate := make(map[settings.OtelInputSignal]map[string]*types.ExpressionRefSummary)
+	summariesBySignalUpdate := make(map[settingsproto.OtelInputSignal]map[string]*types.ExpressionRefSummary)
 
 	for _, sig := range signals {
 		summariesBySignal := make(map[string]*types.ExpressionRefSummary)
@@ -90,7 +90,7 @@ func (p *DefaultExpressionRefManager) Update(
 }
 
 func (p *DefaultExpressionRefManager) countTotalRefs(
-	refs map[settings.OtelInputSignal]map[string]*types.ExpressionRefSummary,
+	refs map[settingsproto.OtelInputSignal]map[string]*types.ExpressionRefSummary,
 ) int {
 	count := 0
 	for _, m := range refs {
@@ -100,7 +100,7 @@ func (p *DefaultExpressionRefManager) countTotalRefs(
 }
 
 func (p *DefaultExpressionRefManager) Current(
-	signal settings.OtelInputSignal, mappingIdentifier string,
+	signal settingsproto.OtelInputSignal, mappingIdentifier string,
 ) *types.ExpressionRefSummary {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -114,7 +114,7 @@ func (p *DefaultExpressionRefManager) Current(
 }
 
 func (p *DefaultExpressionRefManager) collectRefsForComponent(
-	m *settings.OtelComponentMapping,
+	m *settingsproto.OtelComponentMapping,
 ) *types.ExpressionRefSummary {
 	agg := newExpressionRefAggregator(p.logger)
 
@@ -144,7 +144,7 @@ func (p *DefaultExpressionRefManager) collectRefsForComponent(
 
 func (p *DefaultExpressionRefManager) collectRefsForComponentFieldMapping(
 	agg *expressionRefAggregator,
-	componentFieldMapping *settings.OtelComponentMappingFieldMapping,
+	componentFieldMapping *settingsproto.OtelComponentMappingFieldMapping,
 ) {
 	if componentFieldMapping != nil {
 		if componentFieldMapping.AdditionalIdentifiers != nil {
@@ -164,7 +164,7 @@ func (p *DefaultExpressionRefManager) collectRefsForComponentFieldMapping(
 }
 
 func (p *DefaultExpressionRefManager) collectRefsForRelation(
-	m *settings.OtelRelationMapping,
+	m *settingsproto.OtelRelationMapping,
 ) *types.ExpressionRefSummary {
 	agg := newExpressionRefAggregator(p.logger)
 
@@ -233,7 +233,7 @@ func newExpressionRefAggregator(logger *zap.Logger) *expressionRefAggregator {
 
 func (r *expressionRefAggregator) walkString(
 	eval internal.ExpressionEvaluator,
-	expr settings.OtelStringExpression,
+	expr settingsproto.OtelStringExpression,
 ) {
 	astRes, err := eval.GetStringExpressionAST(expr)
 	if err != nil || astRes == nil || astRes.CheckedAST == nil {
@@ -245,7 +245,7 @@ func (r *expressionRefAggregator) walkString(
 
 func (r *expressionRefAggregator) walkOptionalString(
 	eval internal.ExpressionEvaluator,
-	expr *settings.OtelStringExpression,
+	expr *settingsproto.OtelStringExpression,
 ) {
 	if expr == nil {
 		return
@@ -255,7 +255,7 @@ func (r *expressionRefAggregator) walkOptionalString(
 
 func (r *expressionRefAggregator) walkAny(
 	eval internal.ExpressionEvaluator,
-	expr settings.OtelAnyExpression,
+	expr settingsproto.OtelAnyExpression,
 ) {
 	astRes, err := eval.GetAnyExpressionAST(expr)
 	if err != nil || astRes == nil || astRes.CheckedAST == nil {

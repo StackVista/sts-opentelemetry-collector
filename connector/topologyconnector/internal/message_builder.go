@@ -6,7 +6,7 @@ import (
 	"time"
 
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
-	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settings"
+	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 )
 
 // ShardCount is the number of shards to use for the topology stream.
@@ -19,7 +19,7 @@ type MessageWithKey struct {
 
 func OutputToMessageWithKey(
 	output topostreamv1.ComponentOrRelation,
-	mapping settings.SettingExtension,
+	mapping settingsproto.SettingExtension,
 	collectionTimestampMs int64,
 	toComponents func() []*topostreamv1.TopologyStreamComponent,
 	toRelations func() []*topostreamv1.TopologyStreamRelation,
@@ -46,7 +46,7 @@ func OutputToMessageWithKey(
 
 func ErrorsToMessageWithKey(
 	errs *[]error,
-	mapping settings.SettingExtension,
+	mapping settingsproto.SettingExtension,
 	collectionTimestampMs int64,
 ) *MessageWithKey {
 	streamErrors := make([]*topostreamv1.TopoStreamError, len(*errs))
@@ -75,7 +75,7 @@ func ErrorsToMessageWithKey(
 }
 
 func RemovalToMessageWithKey(
-	mapping settings.SettingExtension,
+	mapping settingsproto.SettingExtension,
 ) []MessageWithKey {
 	messages := make([]MessageWithKey, 0)
 	now := time.Now().UnixMilli()
