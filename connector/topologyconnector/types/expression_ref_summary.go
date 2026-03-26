@@ -34,15 +34,16 @@ func (e EntityRefSummary) HasRefs() bool {
 // ExpressionRefSummary summarizes which inputs to include in the projection for a mapping.
 // Resource attributes and Scope fields are always included entirely.
 type ExpressionRefSummary struct {
-	Datapoint EntityRefSummary
 	Span      EntityRefSummary
+	Log       EntityRefSummary
+	Datapoint EntityRefSummary
 	Metric    EntityRefSummary
 	Scope     EntityRefSummary
 	Resource  EntityRefSummary
 }
 
 // NewExpressionRefSummary Constructor ensures all slices are sorted deterministically
-func NewExpressionRefSummary(datapoint, span, metric, scope, resource EntityRefSummary) *ExpressionRefSummary {
+func NewExpressionRefSummary(span, log, datapoint, metric, scope, resource EntityRefSummary) *ExpressionRefSummary {
 	sortStrings := func(s []string) []string {
 		if len(s) == 0 {
 			return nil
@@ -52,24 +53,22 @@ func NewExpressionRefSummary(datapoint, span, metric, scope, resource EntityRefS
 		return c
 	}
 
-	datapoint.AttributeKeys = sortStrings(datapoint.AttributeKeys)
-	datapoint.FieldKeys = sortStrings(datapoint.FieldKeys)
+	sortEntity := func(e *EntityRefSummary) {
+		e.AttributeKeys = sortStrings(e.AttributeKeys)
+		e.FieldKeys = sortStrings(e.FieldKeys)
+	}
 
-	span.AttributeKeys = sortStrings(span.AttributeKeys)
-	span.FieldKeys = sortStrings(span.FieldKeys)
-
-	metric.AttributeKeys = sortStrings(metric.AttributeKeys)
-	metric.FieldKeys = sortStrings(metric.FieldKeys)
-
-	scope.AttributeKeys = sortStrings(scope.AttributeKeys)
-	scope.FieldKeys = sortStrings(scope.FieldKeys)
-
-	resource.AttributeKeys = sortStrings(resource.AttributeKeys)
-	resource.FieldKeys = sortStrings(resource.FieldKeys)
+	sortEntity(&log)
+	sortEntity(&span)
+	sortEntity(&datapoint)
+	sortEntity(&metric)
+	sortEntity(&scope)
+	sortEntity(&resource)
 
 	return &ExpressionRefSummary{
-		Datapoint: datapoint,
 		Span:      span,
+		Log:       log,
+		Datapoint: datapoint,
 		Metric:    metric,
 		Scope:     scope,
 		Resource:  resource,

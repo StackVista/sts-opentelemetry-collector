@@ -116,7 +116,7 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentAndRelation(t *testing.T
 	refManager := topologyConnector.NewExpressionRefManager(logger, eval)
 
 	// Build a component mapping with vars and outputs referencing various inputs
-	comp := settingsproto.OtelComponentMapping{
+	comp1 := settingsproto.OtelComponentMapping{
 		Identifier: "comp-1",
 		Input: settingsproto.OtelInput{
 			Signal: settingsproto.OtelInputSignalList{settingsproto.METRICS},
@@ -143,6 +143,30 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentAndRelation(t *testing.T
 		},
 	}
 
+	comp2 := settingsproto.OtelComponentMapping{
+		Identifier: "comp-2",
+		Input: settingsproto.OtelInput{
+			Signal: settingsproto.OtelInputSignalList{settingsproto.LOGS},
+		},
+		Output: settingsproto.OtelComponentMappingOutput{
+			Identifier: sExpr("${resource.attributes['service.name']}"),
+			Name:       sExpr("name"),
+			TypeName:   sExpr("type"),
+			LayerName:  sExpr("layer"),
+			Required: &settingsproto.OtelComponentMappingFieldMapping{
+				Configuration: &settingsproto.OtelAnyExpression{
+					Expression: "${pick(log.body, ['metadata', 'spec'])}",
+				},
+				Tags: &[]settingsproto.OtelTagMapping{
+					{
+						Source: aExpr("${log.attributes['my-attr']}"),
+						Target: "my-attr",
+					},
+				},
+			},
+		},
+	}
+
 	// Relation mapping referencing span attributes
 	rel := settingsproto.OtelRelationMapping{
 		Identifier: "rel-1",
@@ -156,10 +180,11 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentAndRelation(t *testing.T
 		},
 	}
 
-	signals := []settingsproto.OtelInputSignal{settingsproto.METRICS, settingsproto.TRACES}
+	signals := []settingsproto.OtelInputSignal{settingsproto.METRICS, settingsproto.TRACES, settingsproto.LOGS}
 	compBySig := map[settingsproto.OtelInputSignal][]settingsproto.OtelComponentMapping{
-		settingsproto.METRICS: {comp},
+		settingsproto.METRICS: {comp1},
 		settingsproto.TRACES:  {},
+		settingsproto.LOGS:    {comp2},
 	}
 	relBySig := map[settingsproto.OtelInputSignal][]settingsproto.OtelRelationMapping{
 		settingsproto.METRICS: {},
@@ -176,6 +201,13 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentAndRelation(t *testing.T
 	require.True(t, compRefs.Span.AllAttributes)
 	require.ElementsMatch(t, []string{"name"}, compRefs.Span.FieldKeys)
 	require.ElementsMatch(t, []string{"name"}, compRefs.Scope.FieldKeys)
+	require.ElementsMatch(t, []string{"service.name"}, compRefs.Resource.AttributeKeys)
+
+	// Logs signal -> component expressionRefSummaries
+	compRefs = refManager.Current(settingsproto.LOGS, "comp-2")
+	require.NotNil(t, compRefs)
+	require.ElementsMatch(t, []string{"body"}, compRefs.Log.FieldKeys)
+	require.ElementsMatch(t, []string{"my-attr"}, compRefs.Log.AttributeKeys)
 	require.ElementsMatch(t, []string{"service.name"}, compRefs.Resource.AttributeKeys)
 
 	// Traces signal -> relation expressionRefSummaries
@@ -229,7 +261,7 @@ func TestExpressionRefManager_Current_NilForUnknownSignal(t *testing.T) {
 	require.Nil(t, cur)
 }
 
-func TestExpressionRefManager_Current_NilForUnknownComp(t *testing.T) {
+func TestExpressionRefManager_Current_NilForUnknownComponent(t *testing.T) {
 	eval := newTestCELEvaluator(t)
 	logger := zaptest.NewLogger(t)
 	refManager := topologyConnector.NewExpressionRefManager(logger, eval)

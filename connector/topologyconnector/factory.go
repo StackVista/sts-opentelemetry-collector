@@ -53,7 +53,7 @@ func (f *connectorFactory) initSharedState(
 
 		expressionRefManager := NewExpressionRefManager(logger, evaluator)
 		snapshotManager := NewSnapshotManager(
-			logger, []settingsproto.OtelInputSignal{settingsproto.TRACES, settingsproto.METRICS}, expressionRefManager,
+			logger, []settingsproto.OtelInputSignal{settingsproto.TRACES, settingsproto.METRICS, settingsproto.LOGS}, expressionRefManager,
 		)
 
 		f.celEvaluator = evaluator

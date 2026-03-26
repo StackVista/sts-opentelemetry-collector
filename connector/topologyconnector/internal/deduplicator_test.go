@@ -16,8 +16,9 @@ import (
 
 func TestProjectionHash_DeterministicOverAttributeOrder(t *testing.T) {
 	ref := types.NewExpressionRefSummary(
-		types.EntityRefSummary{AttributeKeys: []string{"x", "y"}},
 		types.EntityRefSummary{},
+		types.EntityRefSummary{},
+		types.EntityRefSummary{AttributeKeys: []string{"x", "y"}},
 		types.EntityRefSummary{},
 		types.EntityRefSummary{},
 		types.EntityRefSummary{},
@@ -62,6 +63,7 @@ func TestProjectionHash_DeterministicOverAttributeOrder(t *testing.T) {
 
 func TestProjectionHash_SliceOrderMatters(t *testing.T) {
 	ref := types.NewExpressionRefSummary(
+		types.EntityRefSummary{},
 		types.EntityRefSummary{},
 		types.EntityRefSummary{},
 		types.EntityRefSummary{},
@@ -112,6 +114,7 @@ func TestProjectionHash_NilVsMissing(t *testing.T) {
 		types.EntityRefSummary{},
 		types.EntityRefSummary{},
 		types.EntityRefSummary{},
+		types.EntityRefSummary{},
 		types.EntityRefSummary{AttributeKeys: []string{"a"}},
 	)
 	refSummaries := newExpressionRefSummaryForSignal(settingsproto.METRICS, "m1", *ref)
@@ -132,8 +135,9 @@ func TestProjectionHash_NilVsMissing(t *testing.T) {
 
 func TestShouldSend_KeyChangesWhenReferencedInputChanges(t *testing.T) {
 	ref := types.NewExpressionRefSummary(
-		types.EntityRefSummary{AttributeKeys: []string{"kind"}},
 		types.EntityRefSummary{},
+		types.EntityRefSummary{},
+		types.EntityRefSummary{AttributeKeys: []string{"kind"}},
 		types.EntityRefSummary{AttributeKeys: []string{"unit"}},
 		types.EntityRefSummary{},
 		types.EntityRefSummary{},
@@ -163,6 +167,7 @@ func TestShouldSend_KeyChangesWhenReferencedInputChanges(t *testing.T) {
 
 func TestShouldSend_UnreferencedInputDoesNotChangeKey(t *testing.T) {
 	ref := types.NewExpressionRefSummary(
+		types.EntityRefSummary{},
 		types.EntityRefSummary{},
 		types.EntityRefSummary{},
 		types.EntityRefSummary{},

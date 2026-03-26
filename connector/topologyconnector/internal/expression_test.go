@@ -644,3 +644,106 @@ func TestEvalCacheExpiryByTTL(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, eval.cacheSize()) // still 1, but it was recompiled after expiry
 }
+
+func makeLogContext() ExpressionEvalContext {
+	logBodyMap := map[string]any{
+		"metadata":      map[string]any{"name": "my-pod", "namespace": "default"},
+		"spec":          map[string]any{"replicas": int64(3)},
+		"status":        map[string]any{"phase": "Running"},
+		"managedFields": []any{"field1", "field2"},
+	}
+	log := NewLog("test-log", "INFO", "9", map[string]any{"app": "test"}, "", "", "")
+	log.SetFormattedBody(logBodyMap)
+	return ExpressionEvalContext{
+		Scope:    NewScope("test-scope", "1.0", map[string]any{}),
+		Resource: NewResource(map[string]any{"service.name": "test-svc"}),
+		Log:      log,
+		Vars:     map[string]any{},
+	}
+}
+
+func TestEvalMapExpression_PickOmit(t *testing.T) {
+	eval, err := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
+	require.NoError(t, err)
+
+	logCtx := makeLogContext()
+
+	tests := []struct {
+		name        string
+		expr        string
+		want        map[string]any
+		expectError string
+	}{
+		{
+			name: "pick: returns only specified keys that are present",
+			expr: "${pick(log.body, ['metadata', 'spec'])}",
+			want: map[string]any{
+				"metadata": map[string]any{"name": "my-pod", "namespace": "default"},
+				"spec":     map[string]any{"replicas": int64(3)},
+			},
+		},
+		{
+			name: "pick: silently ignores absent keys",
+			expr: "${pick(log.body, ['metadata', 'nonexistent'])}",
+			want: map[string]any{
+				"metadata": map[string]any{"name": "my-pod", "namespace": "default"},
+			},
+		},
+		{
+			name: "pick: empty key list returns empty map",
+			expr: "${pick(log.body, [])}",
+			want: map[string]any{},
+		},
+		{
+			name: "pick: all-absent keys returns empty map",
+			expr: "${pick(log.body, ['foo', 'bar'])}",
+			want: map[string]any{},
+		},
+		{
+			name: "omit: removes specified keys",
+			expr: "${omit(log.body, ['status', 'managedFields'])}",
+			want: map[string]any{
+				"metadata": map[string]any{"name": "my-pod", "namespace": "default"},
+				"spec":     map[string]any{"replicas": int64(3)},
+			},
+		},
+		{
+			name: "omit: absent keys leave the map unchanged",
+			expr: "${omit(log.body, ['nonexistent'])}",
+			want: map[string]any{
+				"metadata":      map[string]any{"name": "my-pod", "namespace": "default"},
+				"spec":          map[string]any{"replicas": int64(3)},
+				"status":        map[string]any{"phase": "Running"},
+				"managedFields": []any{"field1", "field2"},
+			},
+		},
+		{
+			name: "omit: empty key list returns full map",
+			expr: "${omit(log.body, [])}",
+			want: map[string]any{
+				"metadata":      map[string]any{"name": "my-pod", "namespace": "default"},
+				"spec":          map[string]any{"replicas": int64(3)},
+				"status":        map[string]any{"phase": "Running"},
+				"managedFields": []any{"field1", "field2"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := eval.EvalMapExpression(
+				settingsproto.OtelAnyExpression{Expression: tt.expr},
+				&logCtx,
+			)
+
+			if tt.expectError != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.expectError)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}

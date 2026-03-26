@@ -216,8 +216,9 @@ func newEntityFieldSelector() entityFieldSelector {
 type expressionRefAggregator struct {
 	logger *zap.Logger
 
-	datapoint entityFieldSelector
 	span      entityFieldSelector
+	log       entityFieldSelector
+	datapoint entityFieldSelector
 	metric    entityFieldSelector
 	scope     entityFieldSelector
 	resource  entityFieldSelector
@@ -228,8 +229,9 @@ type expressionRefAggregator struct {
 func newExpressionRefAggregator(logger *zap.Logger) *expressionRefAggregator {
 	return &expressionRefAggregator{
 		logger:       logger,
-		datapoint:    newEntityFieldSelector(),
 		span:         newEntityFieldSelector(),
+		log:          newEntityFieldSelector(),
+		datapoint:    newEntityFieldSelector(),
 		metric:       newEntityFieldSelector(),
 		scope:        newEntityFieldSelector(),
 		resource:     newEntityFieldSelector(),
@@ -305,11 +307,14 @@ func (r *expressionRefAggregator) walkAST(checked *cel.Ast) {
 
 	for _, ref := range walker.GetReferences() {
 		switch ref.Root {
-		case "datapoint":
-			r.walkAttributeRef(&r.datapoint, ref)
-
 		case "span":
 			r.walkAttributeRef(&r.span, ref)
+
+		case "log":
+			r.walkAttributeRef(&r.log, ref)
+
+		case "datapoint":
+			r.walkAttributeRef(&r.datapoint, ref)
 
 		case "metric":
 			r.walkAttributeRef(&r.metric, ref)
@@ -364,8 +369,9 @@ func (r *expressionRefAggregator) toSummary() *types.ExpressionRefSummary {
 	}
 
 	return types.NewExpressionRefSummary(
-		selectorToSummary(r.datapoint),
 		selectorToSummary(r.span),
+		selectorToSummary(r.log),
+		selectorToSummary(r.datapoint),
 		selectorToSummary(r.metric),
 		selectorToSummary(r.scope),
 		selectorToSummary(r.resource),

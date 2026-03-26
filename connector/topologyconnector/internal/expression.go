@@ -151,7 +151,7 @@ func (ec *ExpressionEvalContext) CloneWithVariables(vars map[string]any) *Expres
 }
 
 func NewCELEvaluator(ctx context.Context, cacheSettings metrics.MeteredCacheSettings) (*CelEvaluator, error) {
-	env, err := cel.NewEnv(
+	envOpts := []cel.EnvOption{
 		cel.Variable("span", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("log", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("datapoint", cel.MapType(cel.StringType, cel.DynType)),
@@ -160,7 +160,9 @@ func NewCELEvaluator(ctx context.Context, cacheSettings metrics.MeteredCacheSett
 		cel.Variable("resource", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("vars", cel.MapType(cel.StringType, cel.DynType)),
 		ext.Strings(), // enables string manipulation functions
-	)
+	}
+	envOpts = append(envOpts, celCustomFunctions()...)
+	env, err := cel.NewEnv(envOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CEL environment: %w", err)
 	}
