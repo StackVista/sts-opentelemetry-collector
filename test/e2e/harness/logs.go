@@ -2,6 +2,7 @@ package harness
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -69,7 +70,14 @@ func BuildAndSendLogs(ctx context.Context, logger *zap.Logger, endpoint string, 
 	for _, logSpec := range spec.LogRecords {
 		record := log.Record{}
 		record.SetTimestamp(time.Now())
-		record.SetBody(log.StringValue(fmt.Sprintf("%v", logSpec.Body)))
+		record.SetEventName(logSpec.EventName)
+
+		// Convert body to JSON bytes to preserve structure as a map
+		bodyBytes, err := json.Marshal(logSpec.Body)
+		if err != nil {
+			return fmt.Errorf("failed to marshal log body to JSON: %w", err)
+		}
+		record.SetBody(log.BytesValue(bodyBytes))
 
 		// Add attributes if provided
 		if logSpec.Attributes != nil && len(logSpec.Attributes) > 0 {

@@ -1,5 +1,9 @@
 package internal
 
+import (
+	"encoding/json"
+)
+
 // -----------------------------
 // Intermediate OTel model types used to cache relevant data for expressions at various levels.
 // -----------------------------
@@ -107,15 +111,25 @@ type Log struct {
 }
 
 // NewLog constructs a Log from a log record's data. The second return value is false
-// if body is not a structured map, in which case the log should be skipped.
+// if body is not a structured map or JSON-encoded bytes, in which case the log should be skipped.
 // This ensures only logs with structured bodies (parsed/provided by receivers) are processed.
 func NewLog(
 	name string, body any, attrs map[string]any,
 ) (*Log, bool) {
-	bodyMap, ok := body.(map[string]any)
-	if !ok {
+	var bodyMap map[string]any
+
+	// Try to use body as a map directly
+	if m, ok := body.(map[string]any); ok {
+		bodyMap = m
+	} else if b, ok := body.([]byte); ok {
+		// Try to unmarshal JSON bytes
+		if err := json.Unmarshal(b, &bodyMap); err != nil {
+			return nil, false
+		}
+	} else {
 		return nil, false
 	}
+
 	return &Log{
 		cachedMap: map[string]any{
 			"name":       name,

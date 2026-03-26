@@ -2,12 +2,13 @@ package core
 
 import (
 	"fmt"
+	"reflect"
+	"sync"
+
 	"github.com/mohae/deepcopy"
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"go.uber.org/zap"
-	"reflect"
-	"sync"
 )
 
 type SettingEntry struct {
@@ -159,8 +160,10 @@ func (s *DefaultSettingsCache) UpdateSettingsForType(
 	s.settingsByType[settingType] = validEntries
 	s.settingsLock.Unlock()
 
-	// Only notify if we have valid changes
-	if changed && len(validEntries) > 0 {
+	// Notify if entries have changed (including transitions to/from empty state).
+	// concreteSettingsChanged() already checks length differences, so we don't need
+	// to further filter by len(validEntries) > 0.
+	if changed {
 		s.subscriptionService.Notify(settingType)
 	}
 }

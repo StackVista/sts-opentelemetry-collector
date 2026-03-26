@@ -159,6 +159,7 @@ func logResultSummary(
 	components := 0
 	relations := 0
 	mappingErrs := 0
+	var errors []*topostreamv1.TopoStreamError
 
 	for _, result := range results {
 		payload := result.Message.GetPayload()
@@ -173,6 +174,7 @@ func logResultSummary(
 		components += len(data.Components)
 		relations += len(data.Relations)
 		mappingErrs += len(data.Errors)
+		errors = append(errors, data.Errors...)
 	}
 
 	logger.Debug(
@@ -182,6 +184,17 @@ func logResultSummary(
 		zap.Int("relations", relations),
 		zap.Int("mappingErrs", mappingErrs),
 	)
+
+	if mappingErrs > 0 {
+		errMessages := make([]string, 0, len(errors))
+		for _, err := range errors {
+			errMessages = append(errMessages, err.GetMessage())
+		}
+		logger.Debug(
+			"Mapping errors encountered",
+			zap.Strings("errors", errMessages),
+		)
+	}
 }
 
 func ConvertMappingRemovalsToTopologyStreamMessage(

@@ -7,6 +7,7 @@ import (
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"e2e/harness"
 )
@@ -111,6 +112,9 @@ func TestLogToOtelTopology_ErrorReturnedOnIncorrectMappingConfig(t *testing.T) {
 }
 
 func TestLogToOtelTopology_RemovesMappingsWhenOmittedFromNextSnapshot(t *testing.T) {
+	//t.Skip("Known limitation: settings extension doesn't notify snapshot manager when mappings are removed (empty snapshot). " +
+	//	"This requires architectural changes to the notification system to properly handle state transitions to empty.")
+
 	env := harness.SetupTopologyTest(t, 1, false)
 	defer env.Cleanup()
 
@@ -131,29 +135,35 @@ func TestLogToOtelTopology_RemovesMappingsWhenOmittedFromNextSnapshot(t *testing
 	require.Len(t, components, 1, "expected 1 component (policy server)")
 	require.Len(t, relations, 2, "expected 2 relations from initial mappings")
 
-	// Now publish new snapshots with ONLY the component mapping (remove the relation mapping)
-	// This verifies that the system respects the removal of mappings from settings
-	// We must explicitly publish an empty relation mapping snapshot to remove the old one
-	// Note: The settings extension does not currently notify the snapshot manager when
-	// an empty snapshot is published (optimization: no change in effective state).
-	// See: https://github.com/StackVista/sts-opentelemetry-collector/issues/[TODO]
+	// Now publish new snapshots with only the component mapping (remove the relation mapping)
+	// This would remove the relation mapping from being applied to new logs
 	env.PublishSettingSnapshots(
 		t,
 		otelComponentMappingSnapshot(policyServerComponent),
 		otelRelationMappingSnapshot(), // Empty snapshot to remove old relation mappings
 	)
 
-	// Send the same logs again
-	// Note: Due to the settings extension not notifying on empty snapshots, the relation
-	// mappings remain active and will still generate relations from matching logs
+	// First, check that TopologyStreamRemove messages are sent for the removed mappings
+	recs = env.ConsumeTopologyRecords(t, 4) // 4 shards
+	foundRemovals := 0
+	for _, rec := range recs {
+		var msg topostreamv1.TopologyStreamMessage
+		require.NoError(t, proto.Unmarshal(rec.Value, &msg))
+
+		if rm := msg.GetTopologyStreamRemove(); rm != nil {
+			foundRemovals++
+			require.Contains(t, rm.RemovalCause, "Setting with identifier")
+		}
+	}
+	require.Equal(t, 4, foundRemovals, "expected removal messages")
+
+	// Send the same logs again; since the relation mapping is gone, no new relations should be created
 	sendLogs(t, env)
 	recs = env.ConsumeTopologyRecords(t, 3)
 	components, relations, errs = harness.ExtractComponentsAndRelations(t, recs)
 	require.Len(t, errs, 0)
 	require.Len(t, components, 1, "policy-server component still exists")
-	// TODO: Change this expectation to 0 once the settings extension properly notifies
-	// on empty snapshots, allowing mapping removals to work as intended
-	require.Len(t, relations, 2, "relations still generated due to mapping not being removed")
+	require.Len(t, relations, 0, "no new relations without the relation mapping")
 }
 
 // sendLogs builds log data and calls harness.BuildAndSendLogs.

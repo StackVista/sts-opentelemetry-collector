@@ -282,6 +282,28 @@ func TestSettingsCache_Update_MixedAddUpdateDeleteTriggersAllNotifications(t *te
 	}
 }
 
+func TestSettingsCache_UpdateSettingsForType_EmptySnapshotTriggersNotification(t *testing.T) {
+	subscriptionService := &mockSubscriberHub{}
+	cache := newSettingsCache(t, subscriptionService)
+
+	// custom type with converter
+	typeA := stsSettingsModel.SettingType("A")
+	entry := NewSettingEntry(stsSettingsModel.Setting{Type: string(typeA)})
+	registerConverter(typeA, func(_ stsSettingsModel.Setting) (any, error) { return "A", nil })
+
+	// seed cache with an entry
+	cache.UpdateSettingsForType(typeA, []SettingEntry{entry})
+
+	subscriptionService.notified = nil
+
+	// update with empty entries (snapshot becomes void)
+	cache.UpdateSettingsForType(typeA, []SettingEntry{})
+
+	if len(subscriptionService.notified) != 1 || subscriptionService.notified[0] != typeA {
+		t.Errorf("expected notification when setting type entries are cleared to empty, got: %v", subscriptionService.notified)
+	}
+}
+
 func equalSlicesSorted(a, b []stsSettingsModel.SettingType) bool {
 	if len(a) != len(b) {
 		return false
