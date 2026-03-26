@@ -81,6 +81,7 @@ func NewFactory() connector.Factory {
 		createDefaultConfig,
 		connector.WithTracesToLogs(globalFactory.createTracesToLogsConnector, component.StabilityLevelAlpha),
 		connector.WithMetricsToLogs(globalFactory.createMetricsToLogsConnector, component.StabilityLevelAlpha),
+		connector.WithLogsToLogs(globalFactory.createLogsToLogsConnector, component.StabilityLevelAlpha),
 	)
 }
 
@@ -170,5 +171,35 @@ func (f *connectorFactory) createMetricsToLogsConnector(
 		f.deduplicator,
 		f.mapper,
 		settingsproto.METRICS,
+	), nil
+}
+
+func (f *connectorFactory) createLogsToLogsConnector(
+	ctx context.Context,
+	params connector.Settings,
+	cfg component.Config,
+	nextConsumer consumer.Logs,
+) (connector.Logs, error) {
+	typedCfg, ok := cfg.(*Config)
+	if !ok {
+		return nil, fmt.Errorf("invalid config type: %T", cfg)
+	}
+
+	if err := f.initSharedState(ctx, params.Logger, params.TelemetrySettings, typedCfg); err != nil {
+		return nil, err
+	}
+
+	return newConnector(
+		ctx,
+		*typedCfg,
+		params.Logger,
+		params.TelemetrySettings,
+		nextConsumer,
+		f.snapshotManager,
+		f.expressionRefManager,
+		f.celEvaluator,
+		f.deduplicator,
+		f.mapper,
+		settingsproto.LOGS,
 	), nil
 }

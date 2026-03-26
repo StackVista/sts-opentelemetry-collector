@@ -31,10 +31,16 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      exporters: [topology, debug] # so we can see spans exported
+      exporters: [topology, debug] # debug exporter so we can see spans exported
+
     metrics:
       receivers: [otlp]
       exporters: [topology, debug]
+
     logs:
+      receivers: [otlp]
+      exporters: [topology, debug] # debug exporter so we can see logs exported
+
+    logs/topology:
       receivers: [topology]
       exporters: [sts_kafka_exporter]

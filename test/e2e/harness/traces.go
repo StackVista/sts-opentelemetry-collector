@@ -28,9 +28,9 @@ type TraceSpec struct {
 	Spans              []SpanSpec
 }
 
-// BuildAndSendTrace constructs a trace with the given resource + spans and sends it to the endpoint
+// BuildAndSendTrace constructs a trace with the given resource + spans and sends it to the grpc OTLP endpoint
 func BuildAndSendTrace(ctx context.Context, logger *zap.Logger, endpoint string, spec TraceSpec) error {
-	// TODO: when we do get to a place where we spin up multiple collector instances, we can update this function to:
+	// NOTE: when we get to a place where we spin up multiple collector instances, we can update this function to:
 	// - accept a slice of endpoints (collector grpc OTLP endpoints)
 	// - with some load balancing strategy (e.g. round-robin), send spans to the endpoints
 	// - cache a trace exporter/provider per endpoint to prevent re-creating them

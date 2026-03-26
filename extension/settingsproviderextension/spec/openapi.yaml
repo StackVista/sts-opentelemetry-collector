@@ -1162,24 +1162,10 @@ components:
         Defines conditional mapping at the resource -> scope -> log level.
         If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
       properties:
-        format:
-          $ref: "#/components/schemas/OtelInputLogFormat"
         condition:
           $ref: "#/components/schemas/OtelBooleanExpression"
         action:
           $ref: "#/components/schemas/OtelInputConditionAction"
-
-    OtelInputLogFormat:
-      type: string
-      description: |-
-        Defines the log body format for the resource -> scope -> log level. 
-        JSON and YAML formats allow parsing the log body into attributes using the specified format, while PLAIN_TEXT keeps the log body as a single string attribute. AUTO lets the system automatically detect the format of the log body - JSON -> YAML -> PLAIN_TEXT.
-        Default is AUTO.
-      enum:
-        - JSON
-        - YAML
-        - PLAIN_TEXT
-        - AUTO
 
     OtelComponentMappingOutput:
       type: object
@@ -1316,7 +1302,7 @@ components:
           Provides access to:
             - `resource.attributes`
             - `scope.name`, `scope.version`, `scope.attributes`
-            - `log.eventName`, `log.severityNumber`, `log.severityText`, `log.attributes`, `log.body`, `log.traceId`, `log.spanId`
+            - `log.eventName`, `log.attributes`, `log.body`
 
         For example, if the signal is `METRICS`, expressions may reference:
         `resource.attributes["service.name"]`, `scope.attributes["env"]`,

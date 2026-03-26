@@ -236,14 +236,6 @@ const (
 	CREATE   OtelInputConditionAction = "CREATE"
 )
 
-// Defines values for OtelInputLogFormat.
-const (
-	AUTO      OtelInputLogFormat = "AUTO"
-	JSON      OtelInputLogFormat = "JSON"
-	PLAINTEXT OtelInputLogFormat = "PLAIN_TEXT"
-	YAML      OtelInputLogFormat = "YAML"
-)
-
 // Defines values for OtelInputSignal.
 const (
 	LOGS    OtelInputSignal = "LOGS"
@@ -984,17 +976,7 @@ type OtelInputLog struct {
 
 	// Condition A Cel expression that must return a boolean
 	Condition *OtelBooleanExpression `json:"condition,omitempty"`
-
-	// Format Defines the log body format for the resource -> scope -> log level.
-	// JSON and YAML formats allow parsing the log body into attributes using the specified format, while PLAIN_TEXT keeps the log body as a single string attribute. AUTO lets the system automatically detect the format of the log body - JSON -> YAML -> PLAIN_TEXT.
-	// Default is AUTO.
-	Format *OtelInputLogFormat `json:"format,omitempty"`
 }
-
-// OtelInputLogFormat Defines the log body format for the resource -> scope -> log level.
-// JSON and YAML formats allow parsing the log body into attributes using the specified format, while PLAIN_TEXT keeps the log body as a single string attribute. AUTO lets the system automatically detect the format of the log body - JSON -> YAML -> PLAIN_TEXT.
-// Default is AUTO.
-type OtelInputLogFormat string
 
 // OtelInputMetric Defines conditional mapping at the resource -> scope -> metric level.
 // If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
@@ -1079,7 +1061,7 @@ type OtelInputScope struct {
 //
 //   - `scope.name`, `scope.version`, `scope.attributes`
 //
-//   - `log.eventName`, `log.severityNumber`, `log.severityText`, `log.attributes`, `log.body`, `log.traceId`, `log.spanId`
+//   - `log.eventName`, `log.attributes`, `log.body`
 //
 // For example, if the signal is `METRICS`, expressions may reference:
 // `resource.attributes["service.name"]`, `scope.attributes["env"]`,

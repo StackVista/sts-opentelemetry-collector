@@ -295,6 +295,20 @@ func (t *TracesTraverser) Traverse(ctx context.Context, mappingVisitor MappingVi
 	}
 }
 
+// ------------------------
+// Log traversal
+// ------------------------
+
+// LogTraverser provides a visitor-based traversal over OpenTelemetry log data.
+// It caches models/structs resembling the Otel data at various levels to avoid repeated conversions and reduce
+// allocation overhead during traversal.
+//
+// Fields:
+//
+//	logData - the raw plog.Logs to traverse
+//	resources  - caches resources by resourceIndex
+//	scopes     - caches scopes by [resourceIndex, scopeIndex]
+//	logs       - caches logs by [resourceIndex, scopeIndex, logIndex]
 type LogTraverser struct {
 	logData plog.Logs
 
@@ -330,23 +344,22 @@ func (l *LogTraverser) scope(resourceIdx, scopeIdx int, scopes plog.ScopeLogsSli
 	return s
 }
 
-func (l *LogTraverser) log(resourceIdx, scopeIdx, logIdx int, logs plog.LogRecordSlice) *Log {
+func (l *LogTraverser) log(resourceIdx, scopeIdx, logIdx int, logs plog.LogRecordSlice) (*Log, bool) {
 	key := [3]int{resourceIdx, scopeIdx, logIdx}
 	if cached, ok := l.logs.Load(key); ok {
-		return cached
+		return cached, true
 	}
 	logRecord := logs.At(logIdx)
-	log := NewLog(
+	log, ok := NewLog(
 		logRecord.EventName(),
-		logRecord.SeverityNumber().String(),
-		logRecord.SeverityText(),
+		logRecord.Body().AsRaw(),
 		logRecord.Attributes().AsRaw(),
-		logRecord.Body().AsString(),
-		logRecord.TraceID().String(),
-		logRecord.SpanID().String(),
 	)
+	if !ok {
+		return nil, false
+	}
 	l.logs.Store(key, log)
-	return log
+	return log, true
 }
 
 func (l *LogTraverser) Traverse(ctx context.Context, mappingVisitor MappingVisitor) {
@@ -371,7 +384,11 @@ func (l *LogTraverser) Traverse(ctx context.Context, mappingVisitor MappingVisit
 
 			logRecords := sl.LogRecords()
 			for logIdx := 0; logIdx < logRecords.Len(); logIdx++ {
-				log := l.log(resourceIdx, scopeIdx, logIdx, logRecords)
+				log, ok := l.log(resourceIdx, scopeIdx, logIdx, logRecords)
+				if !ok {
+					continue
+				}
+
 				logCtx := NewLogEvalContext(log, scope, resource)
 				mappingVisitor.VisitLog(ctx, logCtx)
 			}

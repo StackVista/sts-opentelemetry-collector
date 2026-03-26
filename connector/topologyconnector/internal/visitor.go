@@ -102,13 +102,5 @@ func (v *GenericMappingVisitor[T]) VisitLog(ctx context.Context, evalCtx *Expres
 		return
 	}
 	logInput := scopeInput.Log
-
-	// Format the log body according to the mapping's format specification.
-	// Only format if the body hasn't been formatted yet (avoids redundant formatting across mappings).
-	if evalCtx.Log != nil && logInput.Format != nil && !evalCtx.Log.IsFormatted() {
-		formattedBody := FormatLogBody(evalCtx.Log.Body(), logInput.Format)
-		evalCtx.Log.SetFormattedBody(formattedBody)
-	}
-
 	v.handler.HandleTerminalVisit(ctx, evalCtx, logInput.Action, logInput.Condition)
 }

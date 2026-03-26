@@ -103,46 +103,26 @@ func (d *Datapoint) ToMap() map[string]any {
 }
 
 type Log struct {
-	rawBody   string         // Immutable original raw body
-	cachedMap map[string]any // For ToMap, body field is updated to formatted version
+	cachedMap map[string]any
 }
 
+// NewLog constructs a Log from a log record's data. The second return value is false
+// if body is not a structured map, in which case the log should be skipped.
+// This ensures only logs with structured bodies (parsed/provided by receivers) are processed.
 func NewLog(
-	name, severityNumber, severityText string, attrs map[string]any, bodyRaw string, traceId, spanId string,
-) *Log {
+	name string, body any, attrs map[string]any,
+) (*Log, bool) {
+	bodyMap, ok := body.(map[string]any)
+	if !ok {
+		return nil, false
+	}
 	return &Log{
-		rawBody: bodyRaw,
 		cachedMap: map[string]any{
-			"name":           name,
-			"severityNumber": severityNumber,
-			"severityText":   severityText,
-			"attributes":     attrs,
-			"body":           bodyRaw,
-			"traceId":        traceId,
-			"spanId":         spanId,
+			"name":       name,
+			"body":       bodyMap,
+			"attributes": attrs,
 		},
-	}
-}
-
-// Body returns the raw log body string (immutable).
-func (l *Log) Body() string {
-	return l.rawBody
-}
-
-// IsFormatted checks if the body in cachedMap has been formatted (differs from raw).
-func (l *Log) IsFormatted() bool {
-	current := l.cachedMap["body"]
-	// If current body is the raw string by value, it hasn't been formatted
-	if str, ok := current.(string); ok && str == l.rawBody {
-		return false
-	}
-	return true
-}
-
-// SetFormattedBody updates the body in cachedMap to the formatted version,
-// making it available to CEL expressions through ToMap().
-func (l *Log) SetFormattedBody(formatted any) {
-	l.cachedMap["body"] = formatted
+	}, true
 }
 
 func (l *Log) ToMap() map[string]any {

@@ -28,7 +28,7 @@ type MetricSpec struct {
 	Gauges             []GaugeSpec
 }
 
-// BuildAndSendMetrics constructs metrics and sends them to the endpoint
+// BuildAndSendMetrics constructs metrics and sends them to the grpc OTLP endpoint
 func BuildAndSendMetrics(ctx context.Context, logger *zap.Logger, endpoint string, spec MetricSpec) error {
 	exp, err := otlpmetricgrpc.New(ctx,
 		otlpmetricgrpc.WithEndpoint(strings.TrimPrefix(endpoint, "http://")),
