@@ -120,15 +120,15 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentAndRelation(t *testing.T
 			Signal: settingsproto.OtelInputSignalList{settingsproto.METRICS},
 		},
 		Output: settingsproto.OtelComponentMappingOutput{
-			Identifier: sExpr("id-${resource.attributes['service.name']}-${vars.ns}"),
-			Name:       sExpr("name-${vars.ns}"),
-			TypeName:   sExpr("type"),
-			LayerName:  sExpr("layer-${datapoint.attributes['kind']}"),
+			Identifier: sExpr("\"id-\" + resource.attributes['service.name'] + \"-\" + vars.ns"),
+			Name:       sExpr("\"name-\" + vars.ns"),
+			TypeName:   sExpr("'type'"),
+			LayerName:  sExpr("\"layer-\" + datapoint.attributes['kind']"),
 
 			Required: &settingsproto.OtelComponentMappingFieldMapping{
 				Tags: &[]settingsproto.OtelTagMapping{
 					{
-						Source:  aExpr("${span.attributes}"),
+						Source:  aExpr("span.attributes"),
 						Pattern: ptr("service.\\(.*)"),
 						Target:  "service.${1}",
 					},
@@ -136,8 +136,8 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentAndRelation(t *testing.T
 			},
 		},
 		Vars: &[]settingsproto.OtelVariableMapping{
-			{Name: "ns", Value: aExpr("${span.name}")},
-			{Name: "scopeName", Value: aExpr("${scope.name}")},
+			{Name: "ns", Value: aExpr("span.name")},
+			{Name: "scopeName", Value: aExpr("scope.name")},
 		},
 	}
 
@@ -148,9 +148,9 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentAndRelation(t *testing.T
 			Signal: settingsproto.OtelInputSignalList{settingsproto.TRACES},
 		},
 		Output: settingsproto.OtelRelationMappingOutput{
-			SourceId: sExpr("${resource.attributes['src']}"),
-			TargetId: sExpr("${span.attributes['dst']}"),
-			TypeName: sExpr("rel"),
+			SourceId: sExpr("resource.attributes['src']"),
+			TargetId: sExpr("span.attributes['dst']"),
+			TypeName: sExpr("'rel'"),
 		},
 	}
 
@@ -196,10 +196,10 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentWithResourceOnlyExpressi
 			Signal: settingsproto.OtelInputSignalList{settingsproto.METRICS},
 		},
 		Output: settingsproto.OtelComponentMappingOutput{
-			Identifier: sExpr("id-${resource.attributes['service.name']}"),
-			Name:       sExpr("name"),
-			TypeName:   sExpr("type"),
-			LayerName:  sExpr("layer"),
+			Identifier: sExpr("\"id-\" + resource.attributes['service.name']"),
+			Name:       sExpr("'name'"),
+			TypeName:   sExpr("'type'"),
+			LayerName:  sExpr("'layer'"),
 		},
 	}
 
@@ -254,8 +254,8 @@ func TestExpressionRefManager_InvalidExpressionsAreIgnored(t *testing.T) {
 			Signal: settingsproto.OtelInputSignalList{settingsproto.METRICS},
 		},
 		Output: settingsproto.OtelComponentMappingOutput{
-			Identifier: sExpr("${this is not valid CEL"),
-			Name:       sExpr("${also bad"),
+			Identifier: sExpr("this is not valid CEL"),
+			Name:       sExpr("also bad"),
 		},
 	}
 
@@ -282,13 +282,13 @@ func TestExpressionRefManager_OptionalFieldsAreLenient(t *testing.T) {
 			Signal: settingsproto.OtelInputSignalList{settingsproto.METRICS},
 		},
 		Output: settingsproto.OtelComponentMappingOutput{
-			Identifier: sExpr("${resource.attributes['ok']}"),
+			Identifier: sExpr("resource.attributes['ok']"),
 			Optional: &settingsproto.OtelComponentMappingFieldMapping{
-				AdditionalIdentifiers: &[]settingsproto.OtelStringExpression{sExpr("${invalid")},
+				AdditionalIdentifiers: &[]settingsproto.OtelStringExpression{sExpr("invalid")},
 			},
 		},
 		Vars: &[]settingsproto.OtelVariableMapping{
-			{Name: "ns", Value: aExpr("${span.attributes['ns']}")},
+			{Name: "ns", Value: aExpr("span.attributes['ns']")},
 		},
 	}
 

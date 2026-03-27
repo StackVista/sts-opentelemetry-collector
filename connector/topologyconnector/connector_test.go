@@ -637,15 +637,15 @@ func createSimpleTraceComponentMapping(id string) settingsproto.OtelComponentMap
 			},
 		},
 		Output: settingsproto.OtelComponentMappingOutput{
-			Identifier: strExpr("${resource.attributes[\"service.instance.id\"]}"),
-			Name:       strExpr(`${resource.attributes["service.name"]}`),
-			TypeName:   strExpr("service-instance"),
-			DomainName: strExpr(`${resource.attributes["service.namespace"]}`),
-			LayerName:  strExpr("backend"),
+			Identifier: strExpr("resource.attributes[\"service.instance.id\"]"),
+			Name:       strExpr(`resource.attributes["service.name"]`),
+			TypeName:   strExpr("'service-instance'"),
+			DomainName: strExpr(`resource.attributes["service.namespace"]`),
+			LayerName:  strExpr("'backend'"),
 			Required: &settingsproto.OtelComponentMappingFieldMapping{
 				Tags: &[]settingsproto.OtelTagMapping{
 					{
-						Source: anyExpr(`${span.attributes["http.status_code"]}`),
+						Source: anyExpr(`span.attributes["http.status_code"]`),
 						Target: "status_code",
 					},
 				},
@@ -673,9 +673,9 @@ func createSimpleTraceRelationMapping(id string) settingsproto.OtelRelationMappi
 			},
 		},
 		Output: settingsproto.OtelRelationMappingOutput{
-			SourceId: strExpr(`${resource.attributes["service.name"]}`),
-			TargetId: strExpr(`${span.attributes["service.name"]}`),
-			TypeName: strExpr("http-request"),
+			SourceId: strExpr(`resource.attributes["service.name"]`),
+			TargetId: strExpr(`span.attributes["service.name"]`),
+			TypeName: strExpr("'http-request'"),
 		},
 	}
 }
@@ -701,15 +701,15 @@ func createSimpleMetricComponentMapping(id string) settingsproto.OtelComponentMa
 			},
 		},
 		Output: settingsproto.OtelComponentMappingOutput{
-			Identifier: strExpr("${resource.attributes[\"service.instance.id\"]}"),
-			Name:       strExpr(`${resource.attributes["service.name"]}`),
-			TypeName:   strExpr("service-instance"),
-			DomainName: strExpr(`${resource.attributes["service.namespace"]}`),
-			LayerName:  strExpr("backend"),
+			Identifier: strExpr("resource.attributes[\"service.instance.id\"]"),
+			Name:       strExpr(`resource.attributes["service.name"]`),
+			TypeName:   strExpr("'service-instance'"),
+			DomainName: strExpr(`resource.attributes["service.namespace"]`),
+			LayerName:  strExpr("'backend'"),
 			Required: &settingsproto.OtelComponentMappingFieldMapping{
 				Tags: &[]settingsproto.OtelTagMapping{
 					{
-						Source: anyExpr(`${datapoint.attributes["http.status_code"]}`),
+						Source: anyExpr(`datapoint.attributes["http.status_code"]`),
 						Target: "status_code",
 					},
 				},
@@ -739,9 +739,9 @@ func createSimpleMetricRelationMapping(id string) settingsproto.OtelRelationMapp
 			},
 		},
 		Output: settingsproto.OtelRelationMappingOutput{
-			SourceId: strExpr(`${resource.attributes["service.name"]}`),
-			TargetId: strExpr(`${datapoint.attributes["service.name"]}`),
-			TypeName: strExpr("http-request"),
+			SourceId: strExpr(`resource.attributes["service.name"]`),
+			TargetId: strExpr(`datapoint.attributes["service.name"]`),
+			TypeName: strExpr("'http-request'"),
 		},
 	}
 }

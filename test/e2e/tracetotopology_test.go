@@ -84,10 +84,10 @@ func TestTraceToOtelTopology_UpdateComponentAndRelationMappings(t *testing.T) {
 	assertRelations(t, relations)
 
 	// Update the settings
-	newVersion := "1.2.4"
+	newVersion := "'1.2.4'"
 
 	// Component: update name + add tag
-	component.Output.Name = harness.StrExpr("checkout-service-updated")
+	component.Output.Name = harness.StrExpr("'checkout-service-updated'")
 	if component.Output.Required.Tags == nil {
 		component.Output.Required.Tags = &[]settingsproto.OtelTagMapping{}
 	}
@@ -97,7 +97,7 @@ func TestTraceToOtelTopology_UpdateComponentAndRelationMappings(t *testing.T) {
 	})
 
 	// Relation: update name
-	relation.Output.TypeName = harness.StrExpr("http-request-updated")
+	relation.Output.TypeName = harness.StrExpr("'http-request-updated'")
 
 	env.PublishSettingSnapshots(
 		t,
@@ -132,7 +132,7 @@ func TestTraceToOtelTopology_ErrorReturnedOnIncorrectMappingConfig(t *testing.T)
 
 	component := otelComponentMappingSpecCheckoutService()
 	// modify base component mapping to have an invalid expression
-	component.Output.Name = harness.StrExpr("${resource.attributes}") // a map reference where a string expression is required
+	component.Output.Name = harness.StrExpr("resource.attributes") // a map reference where a string expression is required
 	env.PublishSettingSnapshots(t, otelComponentMappingSnapshot(component))
 
 	sendTraces(t, env)
@@ -146,7 +146,7 @@ func TestTraceToOtelTopology_ErrorReturnedOnIncorrectMappingConfig(t *testing.T)
 	require.Contains(
 		t,
 		errs[0].Message, // all the errors should be the same
-		"expected string type, got: map(string, dyn), for expression '${resource.attributes}'",
+		"expected string type, got: map(string, dyn), for expression 'resource.attributes'",
 		"expected error on incorrect mapping config",
 	)
 }
@@ -334,10 +334,10 @@ func otelComponentMappingSpecCheckoutService() *harness.OtelComponentMappingSpec
 			Condition: harness.PtrBoolExpr(`resource.attributes["service.name"] == "checkout-service"`),
 		},
 		settingsproto.OtelVariableMapping{
-			Name: "name", Value: harness.AnyExpr(`${resource.attributes["service.name"]}`),
+			Name: "name", Value: harness.AnyExpr(`resource.attributes["service.name"]`),
 		},
 		settingsproto.OtelVariableMapping{
-			Name: "instanceId", Value: harness.AnyExpr(`${resource.attributes["service.name"]}`),
+			Name: "instanceId", Value: harness.AnyExpr(`resource.attributes["service.name"]`),
 		},
 	)
 }
@@ -353,10 +353,10 @@ func otelComponentMappingSpecPeerService(peerService string) *harness.OtelCompon
 			},
 		},
 		settingsproto.OtelVariableMapping{
-			Name: "name", Value: harness.AnyExpr(`${"net.peer.name" in span.attributes ? span.attributes["net.peer.name"] : resource.attributes["service.name"]}`),
+			Name: "name", Value: harness.AnyExpr(`"net.peer.name" in span.attributes ? span.attributes["net.peer.name"] : resource.attributes["service.name"]`),
 		},
 		settingsproto.OtelVariableMapping{
-			Name: "instanceId", Value: harness.AnyExpr(`${"net.peer.name" in span.attributes ? span.attributes["net.peer.name"] : resource.attributes["service.name"]}`),
+			Name: "instanceId", Value: harness.AnyExpr(`"net.peer.name" in span.attributes ? span.attributes["net.peer.name"] : resource.attributes["service.name"]`),
 		},
 	)
 }
@@ -374,18 +374,18 @@ func otelComponentMappingSpec(otelInputResource settingsproto.OtelInputResource,
 			Resource: otelInputResource,
 		},
 		Output: settingsproto.OtelComponentMappingOutput{
-			Identifier: harness.StrExpr("${vars.instanceId}"),
-			Name:       harness.StrExpr(`${vars.name}`),
-			TypeName:   harness.StrExpr("service-instance"),
-			DomainName: harness.StrExpr(`${resource.attributes["service.namespace"]}`),
-			LayerName:  harness.StrExpr("backend"),
+			Identifier: harness.StrExpr("vars.instanceId"),
+			Name:       harness.StrExpr(`vars.name`),
+			TypeName:   harness.StrExpr("'service-instance'"),
+			DomainName: harness.StrExpr(`resource.attributes["service.namespace"]`),
+			LayerName:  harness.StrExpr("'backend'"),
 			Required: &settingsproto.OtelComponentMappingFieldMapping{
 				AdditionalIdentifiers: &[]settingsproto.OtelStringExpression{
-					{Expression: `${resource.attributes["k8s.pod.name"]}`},
+					{Expression: `resource.attributes["k8s.pod.name"]`},
 				},
 				Tags: &[]settingsproto.OtelTagMapping{
 					{
-						Source: harness.AnyExpr(`${resource.attributes["host.name"]}`),
+						Source: harness.AnyExpr(`resource.attributes["host.name"]`),
 						Target: "host",
 					},
 				},
@@ -421,9 +421,9 @@ func otelRelationMappingSpec() *harness.OtelRelationMappingSpec {
 			},
 		},
 		Output: settingsproto.OtelRelationMappingOutput{
-			SourceId: harness.StrExpr(`${span.attributes["client.address"]}`),
-			TargetId: harness.StrExpr(`${span.attributes["server.address"]}`),
-			TypeName: harness.StrExpr("http-request"),
+			SourceId: harness.StrExpr(`span.attributes["client.address"]`),
+			TargetId: harness.StrExpr(`span.attributes["server.address"]`),
+			TypeName: harness.StrExpr("'http-request'"),
 		},
 	}
 }
