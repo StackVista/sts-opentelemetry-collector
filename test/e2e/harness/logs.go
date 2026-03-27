@@ -52,7 +52,7 @@ func BuildAndSendLogs(ctx context.Context, logger *zap.Logger, endpoint string, 
 		_ = loggerProvider.Shutdown(shutdownCtx)
 	}()
 
-	scopeName := "e2e-test"
+	scopeName := e2eTestNamespace
 	var scopeVersion string
 	if name, ok := spec.ScopeAttributes["otel.scope.name"]; ok {
 		scopeName = name
@@ -80,7 +80,7 @@ func BuildAndSendLogs(ctx context.Context, logger *zap.Logger, endpoint string, 
 		record.SetBody(log.BytesValue(bodyBytes))
 
 		// Add attributes if provided
-		if logSpec.Attributes != nil && len(logSpec.Attributes) > 0 {
+		if len(logSpec.Attributes) > 0 {
 			logAttrs := convertToLogAttributes(logSpec.Attributes)
 			record.AddAttributes(logAttrs...)
 		}

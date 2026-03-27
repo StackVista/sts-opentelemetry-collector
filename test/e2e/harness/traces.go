@@ -58,7 +58,7 @@ func BuildAndSendTrace(ctx context.Context, logger *zap.Logger, endpoint string,
 
 	otel.SetTracerProvider(tp)
 
-	scopeName := "e2e-test"
+	scopeName := e2eTestNamespace
 	var scopeVersion string
 	if name, ok := spec.ScopeAttributes["otel.scope.name"]; ok {
 		scopeName = name

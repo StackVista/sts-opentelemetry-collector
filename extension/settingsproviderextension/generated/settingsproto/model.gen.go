@@ -459,9 +459,13 @@ type ComponentPresentation struct {
 	Binding externalRef0.ComponentPresentationQueryBinding `json:"binding"`
 
 	// CreatedTimeStamp The timestamp of when the setting was created.
-	CreatedTimeStamp int64                               `json:"createdTimeStamp"`
-	Definition       externalRef0.PresentationDefinition `json:"definition"`
-	Description      *string                             `json:"description,omitempty"`
+	CreatedTimeStamp int64 `json:"createdTimeStamp"`
+
+	// Definition Component presentation definition.
+	// If multiple ComponentPresentations match, `filters` are merged by filter identity with the most specific presentation winning.
+	// Absence of the field keeps legacy behavior (for example, ViewType-based filters) unchanged.
+	Definition  externalRef0.PresentationDefinition `json:"definition"`
+	Description *string                             `json:"description,omitempty"`
 
 	// Id A Setting is uniquely identified by the combination of type+id
 	Id         SettingId                               `json:"id"`

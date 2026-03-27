@@ -32,6 +32,16 @@ components:
           type: string
         overview:
           $ref: "#/components/schemas/PresentationOverview"
+        highlight:
+          $ref: "#/components/schemas/PresentationHighlight"
+        filters:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComponentPresentationFilter"
+      description: |
+        Component presentation definition.
+        If multiple ComponentPresentations match, `filters` are merged by filter identity with the most specific presentation winning.
+        Absence of the field keeps legacy behavior (for example, ViewType-based filters) unchanged.
 
     PresentationName:
       type: object
@@ -46,6 +56,17 @@ components:
         - singular
         - plural
         - title
+
+    FilterName:
+      type: object
+      properties:
+        singular:
+          type: string
+        plural:
+          type: string
+      required:
+        - singular
+        - plural
 
     PresentationOverview:
       type: object
@@ -64,7 +85,6 @@ components:
         Overview presentation definition. The `columns` field defines the columns to show in the overview table. The `flags` field can be used to enable/disable functionalities.
         If multiple ComponentPresentations match, columns are merged by `columnId` according to binding rank. Absence of the field means no overview is shown.
       required:
-        - title
         - columns
         - name
 
@@ -90,31 +110,109 @@ components:
         title:
           type: string
         projection:
-          $ref: "#/components/schemas/OverviewColumnProjection"
+          $ref: "#/components/schemas/ComponentOverviewProjection"
       required:
         - columnId
       description: 'Definition of a column in the overview presentation. The `columnId` field is used to identify the column and merge columns from different presentations. If only the `columnId` is provided, the column will be rendered from the next more specific presentation definition.'
 
-    OverviewColumnProjection:
+    PresentationHighlight:
+      type: object
+      properties:
+        title:
+          type: string
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/PresentationHighlightField'
+      description: |
+        Highlight presentation definition. The `fields` define the fields to show in the ab. The `flags` field can be used to enable/disable functionalities.
+        If multiple ComponentPresentations match, columns are merged by `columnId` according to binding rank. Absence of the field means no overview is shown.
+      required:
+        - title
+        - fields
+
+    PresentationHighlightField:
+      type: object
+      properties:
+        fieldId:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        order:
+          type: number
+          format: double
+        projection:
+          $ref: "#/components/schemas/ComponentHighlightProjection"
+      required:
+        - fieldId
+        - title
+        - order
+      description: 'Definition of a field in the highlight presentation. The `fieldId` field is used to identify the field and merge fields from different presentations.'
+
+    ComponentHighlightProjection:
       discriminator:
         propertyName: _type
       oneOf:
-        - $ref: '#/components/schemas/MetricChartProjection'
-        - $ref: '#/components/schemas/ComponentLinkProjection'
         - $ref: '#/components/schemas/HealthProjection'
+        - $ref: '#/components/schemas/MetricProjection'
+        - $ref: '#/components/schemas/ComponentLinkProjection'
         - $ref: '#/components/schemas/TextProjection'
         - $ref: '#/components/schemas/NumericProjection'
         - $ref: '#/components/schemas/DurationProjection'
-        - $ref: '#/components/schemas/ReadyStatusProjection'
+        - $ref: '#/components/schemas/RatioProjection'
         - $ref: '#/components/schemas/ContainerImageProjection'
-      description: 'Display type and value for the column.'
+        - $ref: '#/components/schemas/MapProjection'
+      description: 'Display type and value for the field.'
 
-    MetricChartProjection:
+    ComponentOverviewProjection:
+      discriminator:
+        propertyName: _type
+      oneOf:
+        - $ref: '#/components/schemas/HealthProjection'
+        - $ref: '#/components/schemas/MetricProjection'
+        - $ref: '#/components/schemas/ComponentLinkProjection'
+        - $ref: '#/components/schemas/TextProjection'
+        - $ref: '#/components/schemas/NumericProjection'
+        - $ref: '#/components/schemas/DurationProjection'
+        - $ref: '#/components/schemas/RatioProjection'
+        - $ref: '#/components/schemas/ContainerImageProjection'
+      description: 'Display type and value for the field.'
+
+    HealthProjection:
       type: object
       properties:
         _type:
           type: string
-          enum: [MetricChartProjection]
+          enum: [HealthProjection]
+        value:
+          type: string
+          description: 'Cel expression that returns a string that represents a valid HealthState'
+      required:
+        - _type
+        - value
+    MapProjection:
+      type: object
+      properties:
+        _type:
+          type: string
+          enum: [MapProjection]
+        value:
+          type: string
+          description: 'Cel expression that returns a map<string,dyn>'
+        asTags:
+          type: boolean
+          default: true
+      required:
+        - _type
+        - value
+    MetricProjection:
+      type: object
+      properties:
+        _type:
+          type: string
+          enum: [MetricProjection]
         showChart:
           type: boolean
         decimalPlaces:
@@ -136,25 +234,13 @@ components:
         name:
           type: string
           description: 'Cel expression that returns a string that represents the name of the component to link to'
-        componentIdentifier:
+        identifier:
           type: string
-          description: 'Cel expression that returns a string that represents the componentIdentifier in order to build the link'
+          description: 'Cel expression that returns a string that represents the identifier in order to build the link'
       required:
         - _type
         - name
-        - componentIdentifier
-    HealthProjection:
-      type: object
-      properties:
-        _type:
-          type: string
-          enum: [HealthProjection]
-        value:
-          type: string
-          description: 'Cel expression that returns a string that represents a valid HealthState'
-      required:
-        - _type
-        - value
+        - identifier
     TextProjection:
       type: object
       properties:
@@ -164,6 +250,10 @@ components:
         value:
           type: string
           description: 'Cel expression that returns a string'
+        asTag:
+          type: boolean
+          default: false
+          description: 'Should the value be rendered as a tag or as plain text'
       required:
         - _type
         - value
@@ -190,35 +280,37 @@ components:
         _type:
           type: string
           enum: [DurationProjection]
-        startDate:
+        startTime:
           type: string
-          description: 'Cel expression that returns a date'
-        endDate:
+          description: 'Cel expression that returns an ISO8601 formatted timestamp'
+        endTime:
           type: string
-          description: 'Cel expression that returns a date'
+          description: 'Cel expression that returns an ISO8601 formatted timestamp'
       required:
         - _type
-        - startDate
-    ReadyStatusProjection:
+        - startTime
+
+    RatioProjection:
       type: object
-      description: 'Helps rendering columns as Ready containers for K8s pods or Completions for K8s jobs'
+      description: 'Helps rendering columns that summarize success rates'
       properties:
         _type:
           type: string
-          enum: [ReadyStatusProjection]
-        readyNumber:
+          enum: [RatioProjection]
+        numerator:
           type: string
           description: 'Cel expression that returns a number'
-        totalNumber:
+        denominator:
           type: string
           description: 'Cel expression that returns a number'
-        readyStatus:
+        status:
           type: string
           description: 'Cel expression that returns a string that represents a valid HealthState'
       required:
         - _type
-        - readyNumber
-        - totalNumber
+        - numerator
+        - denominator
+
     ContainerImageProjection:
       type: object
       description: 'Helps rendering links for docker images'
@@ -859,6 +951,55 @@ components:
       enum:
         - NoTopologyFilters
         - CardsLayout
+
+    ComponentPresentationFilter:
+      type: object
+      properties:
+        filterId:
+          type: string
+          description: |
+            Stable identity used for deduplication and cross-stackpack compatibility.
+        displayName:
+          $ref: "#/components/schemas/FilterName"
+        menuSection:
+          type: string
+          description: |
+            Label to group filters in the UI.
+        filter:
+          $ref: "#/components/schemas/ComponentPresentationFilterDefinition"
+      required:
+        - filterId
+      description: |
+        Filter definition for ComponentPresentation.
+        When only `filterId` is provided, the filter references a definition from a less specific presentation.
+        Merge semantics for matching ComponentPresentations:
+        1) The most specific matching ComponentPresentation's filter list determines which `filterId`s are active.
+           Only filters whose `filterId` appears in that list are rendered.
+        2) For each active `filterId`, scalar fields (`displayName`, `menuSection`, `filter`, etc.) are resolved by
+           falling back through less specific presentations that define the same `filterId`, most specific value wins.
+        3) Array position determines display order: earlier items are primary (filter bar),
+           later items are secondary ("More" section).
+
+    ComponentPresentationFilterDefinition:
+      oneOf:
+        - $ref: "#/components/schemas/TagFilter"
+      discriminator:
+        propertyName: _type
+
+    TagFilter:
+      type: object
+      properties:
+        _type:
+          type: string
+          enum: [TagFilter]
+        tagKey:
+          type: string
+          description: Tag key used for filtering and value lookup.
+      required:
+        - _type
+        - tagKey
+      description: |
+        Tag-based filter. Uses indexed tags via `tagKey`.
 
     ViewTypeFilter:
       properties:

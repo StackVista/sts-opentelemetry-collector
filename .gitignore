@@ -2,3 +2,5 @@
 dev-config.yaml
 
 .claude
+# TODO: remove
+test/log-mappings/

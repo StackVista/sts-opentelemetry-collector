@@ -111,9 +111,6 @@ func TestLogToOtelTopology_ErrorReturnedOnIncorrectMappingConfig(t *testing.T) {
 }
 
 func TestLogToOtelTopology_RemovesMappingsWhenOmittedFromNextSnapshot(t *testing.T) {
-	//t.Skip("Known limitation: settings extension doesn't notify snapshot manager when mappings are removed (empty snapshot). " +
-	//	"This requires architectural changes to the notification system to properly handle state transitions to empty.")
-
 	env := harness.SetupTopologyTest(t, 1, false)
 	defer env.Cleanup()
 
