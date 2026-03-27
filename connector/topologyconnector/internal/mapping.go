@@ -11,6 +11,7 @@ import (
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 var placeholderRegex = regexp.MustCompile(`\$\{(\d+)\}`)
@@ -47,6 +48,14 @@ func (me *Mapper) MapComponent(
 	evalOptStr := func(expr *settingsproto.OtelStringExpression, field string) *string {
 		val, err := expressionEvaluator.EvalOptionalStringExpression(expr, expressionEvalCtx)
 		errsToReturn = joinError(errsToReturn, err, field, true)
+		return val
+	}
+	evalAnyExpr := func(expr *settingsproto.OtelAnyExpression, field string, ignoreErrors bool) interface{} {
+		if expr == nil {
+			return nil
+		}
+		val, err := expressionEvaluator.EvalAnyExpression(*expr, expressionEvalCtx)
+		errsToReturn = joinError(errsToReturn, err, field, ignoreErrors)
 		return val
 	}
 
@@ -97,6 +106,41 @@ func (me *Mapper) MapComponent(
 		}
 	}
 
+	var resourceDefinition *structpb.Struct
+	var statusData *structpb.Struct
+
+	// Process Required field mappings (priority: Required > Optional)
+	if mapping.Output.Required != nil {
+		if mapping.Output.Required.Configuration != nil {
+			configVal := evalAnyExpr(mapping.Output.Required.Configuration, "required.configuration", false)
+			if configVal != nil {
+				resourceDefinition = toStructValue(configVal)
+			}
+		}
+		if mapping.Output.Required.Status != nil {
+			statusVal := evalAnyExpr(mapping.Output.Required.Status, "required.status", false)
+			if statusVal != nil {
+				statusData = toStructValue(statusVal)
+			}
+		}
+	}
+
+	// Process Optional field mappings (only if Required didn't set them)
+	if mapping.Output.Optional != nil {
+		if mapping.Output.Optional.Configuration != nil && resourceDefinition == nil {
+			configVal := evalAnyExpr(mapping.Output.Optional.Configuration, "optional.configuration", true)
+			if configVal != nil {
+				resourceDefinition = toStructValue(configVal)
+			}
+		}
+		if mapping.Output.Optional.Status != nil && statusData == nil {
+			statusVal := evalAnyExpr(mapping.Output.Optional.Status, "optional.status", true)
+			if statusVal != nil {
+				statusData = toStructValue(statusVal)
+			}
+		}
+	}
+
 	result := topostreamv1.TopologyStreamComponent{
 		ExternalId:         identifier,
 		Identifiers:        allIdentifiers,
@@ -107,8 +151,8 @@ func (me *Mapper) MapComponent(
 		LayerIdentifier:    evalOptStr(mapping.Output.LayerIdentifier, "layerIdentifier"),
 		DomainName:         evalStr(mapping.Output.DomainName, "domainName"),
 		DomainIdentifier:   evalOptStr(mapping.Output.DomainIdentifier, "domainIdentifier"),
-		ResourceDefinition: nil,
-		StatusData:         nil,
+		ResourceDefinition: resourceDefinition,
+		StatusData:         statusData,
 		Tags:               tagsList,
 	}
 	if len(errsToReturn) > 0 {
@@ -241,6 +285,37 @@ func (me *Mapper) MapRelation(
 		return nil, errors
 	}
 	return &result, nil
+}
+
+// toStructValue converts a value (typically map[string]interface{}) to a protobuf Struct.
+// This is used to populate ResourceDefinition and StatusData from CEL expression results.
+// It handles both map[string]interface{} and map[ref.Val]ref.Val (from CEL evaluations).
+func toStructValue(val interface{}) *structpb.Struct {
+	if val == nil {
+		return nil
+	}
+
+	// Try direct map[string]interface{} first
+	if mapVal, ok := val.(map[string]interface{}); ok {
+		return convertMapToStruct(mapVal)
+	}
+
+	// Handle map[ref.Val]ref.Val from CEL (use the existing mapify logic)
+	mapVal, mapifyErr := mapify(val)
+	if mapifyErr != nil {
+		return nil
+	}
+
+	return convertMapToStruct(mapVal)
+}
+
+// convertMapToStruct converts a map[string]interface{} to a protobuf Struct.
+func convertMapToStruct(mapVal map[string]interface{}) *structpb.Struct {
+	pbStruct, err := structpb.NewStruct(mapVal)
+	if err != nil {
+		return nil
+	}
+	return pbStruct
 }
 
 func stringifyTagValue(value interface{}) (string, error) {

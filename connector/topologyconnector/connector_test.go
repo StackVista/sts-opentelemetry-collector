@@ -810,16 +810,16 @@ func createSimpleMetricRelationMapping(id string) settingsproto.OtelRelationMapp
 func testResourceLogsWithAttributes(attrs map[string]interface{}) plog.Logs {
 	logs := plog.NewLogs()
 	rl := logs.ResourceLogs().AppendEmpty()
-	rl.Resource().Attributes().FromRaw(map[string]any{
+	rl.Resource().Attributes().FromRaw(map[string]any{ //nolint:errcheck
 		"k8s.cluster.name":   "test-cluster",
 		"k8s.namespace.name": "kubewarden",
 		"service.name":       "kubewarden",
 	})
 	sl := rl.ScopeLogs().AppendEmpty()
 	lr := sl.LogRecords().AppendEmpty()
-	lr.SetTimestamp(pcommon.Timestamp(uint64(time.Now().UnixNano())))
+	lr.SetTimestamp(pcommon.Timestamp(uint64(time.Now().UnixNano()))) //nolint:gosec
 	// Body is a structured map representing a Kubernetes object.
-	lr.Body().SetEmptyMap().FromRaw(map[string]any{
+	lr.Body().SetEmptyMap().FromRaw(map[string]any{ //nolint:errcheck
 		"apiVersion": "policies.kubewarden.io/v1",
 		"kind":       "PolicyServer",
 		"metadata": map[string]any{
@@ -829,7 +829,7 @@ func testResourceLogsWithAttributes(attrs map[string]interface{}) plog.Logs {
 			"version": "1.0.0",
 		},
 	})
-	lr.Attributes().FromRaw(attrs)
+	lr.Attributes().FromRaw(attrs) //nolint:errcheck
 	return logs
 }
 

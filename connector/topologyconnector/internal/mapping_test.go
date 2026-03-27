@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func TestMappingSpan_MapComponent(t *testing.T) {
@@ -42,7 +43,7 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 		expectErr   []error
 	}{
 		{
-			name: "valid mapping with all required fields",
+			name: "valid mapping with all required fields and Configuration/Status fields",
 			mapping: &settingsproto.OtelComponentMapping{
 				Output: settingsproto.OtelComponentMappingOutput{
 					Identifier:       strExpr(`resource.attributes["service.name"]`),
@@ -70,6 +71,8 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 						},
 					},
 					Required: &settingsproto.OtelComponentMappingFieldMapping{
+						Configuration: ptr(anyExpr("${omit(span.attributes, ['priority'])}")),
+						Status:        ptr(anyExpr("${pick(span.attributes, ['priority', 'kind'])}")),
 						Tags: &[]settingsproto.OtelTagMapping{
 							{
 								Source: anyExpr("span.attributes['kind']"),
@@ -98,6 +101,19 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 				LayerName:        "backend",
 				LayerIdentifier:  ptr("backend_id"),
 				Tags:             []string{"priority:urgent", "kind:licence", "amount:1000", "scopeName:kamon", "resourceName:microservice"},
+				ResourceDefinition: &structpb.Struct{
+					Fields: map[string]*structpb.Value{
+						"kind":     structpb.NewStringValue("licence"),
+						"amount":   structpb.NewNumberValue(1000),
+						"env.name": structpb.NewStringValue("prod"),
+					},
+				},
+				StatusData: &structpb.Struct{
+					Fields: map[string]*structpb.Value{
+						"priority": structpb.NewStringValue("urgent"),
+						"kind":     structpb.NewStringValue("licence"),
+					},
+				},
 			},
 			expectErr: nil,
 		},

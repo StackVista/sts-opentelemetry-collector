@@ -12,7 +12,6 @@ import (
 	"e2e/harness"
 )
 
-// TODO: exercise the pick/format helper functions
 func TestLogToOtelTopology_CreateComponentAndRelationMappings(t *testing.T) {
 	env := harness.SetupTopologyTest(t, 1, false)
 	defer env.Cleanup()
@@ -175,9 +174,67 @@ func sendLogs(t *testing.T, env *harness.TopologyTestEnv) {
 }
 
 // logSpecWithPolicyServerAndPolicy creates a log spec representing Kubewarden policy server and policy logs.
-// Bodies are structured maps (Kubernetes objects) as provided by a proper receiver; the mapping engine
-// does not parse string bodies.
 func logSpecWithPolicyServerAndPolicy() *harness.LogSpec {
+	policyServerSpec := map[string]interface{}{
+		"image":              "ghcr.io/kubewarden/policy-server:v1.33.1",
+		"replicas":           1,
+		"serviceAccountName": "policy-server",
+		"env": []interface{}{
+			map[string]interface{}{
+				"name":  "KUBEWARDEN_LOG_LEVEL",
+				"value": "info",
+			},
+		},
+	}
+
+	policyServerStatus := map[string]interface{}{
+		"conditions": []interface{}{
+			map[string]interface{}{
+				"lastTransitionTime": "2026-03-27T08:54:33Z",
+				"message":            "",
+				"reason":             "ReconciliationSucceeded",
+				"status":             "True",
+				"type":               "DeploymentReconciled",
+			},
+		},
+	}
+
+	clusterPolicySpec := map[string]interface{}{
+		"backgroundAudit": true,
+		"mode":            "protect",
+		"module":          "ghcr.io/kubewarden/policies/user-group-psp:v0.4.9",
+		"mutating":        false,
+		"policyServer":    "default",
+		"timeoutSeconds":  10,
+		"rules": []interface{}{
+			map[string]interface{}{
+				"apiGroups":   []interface{}{""},
+				"apiVersions": []interface{}{"v1"},
+				"operations":  []interface{}{"CREATE", "UPDATE"},
+				"resources":   []interface{}{"pods"},
+			},
+		},
+		"settings": map[string]interface{}{
+			"run_as_user": map[string]interface{}{
+				"rule": "MustRunAsNonRoot",
+			},
+		},
+	}
+
+	clusterPolicyStatus := map[string]interface{}{
+		"conditions": []interface{}{
+			map[string]interface{}{
+				"lastTransitionTime": "2026-03-27T09:03:52Z",
+				"message":            "The policy webhook has been created",
+				"reason":             "PolicyActive",
+				"status":             "True",
+				"type":               "PolicyActive",
+			},
+		},
+		"mode":         "protect",
+		"policyStatus": "active",
+	}
+
 	return &harness.LogSpec{
 		ResourceAttributes: map[string]string{
 			"k8s.cluster.name":   "production",
@@ -197,9 +254,8 @@ func logSpecWithPolicyServerAndPolicy() *harness.LogSpec {
 					"metadata": map[string]interface{}{
 						"name": "default",
 					},
-					"spec": map[string]interface{}{
-						"version": "1.0.0",
-					},
+					"spec":   policyServerSpec,
+					"status": policyServerStatus,
 				},
 				Attributes: map[string]interface{}{
 					"k8s.resource.kind":      "PolicyServer",
@@ -235,9 +291,8 @@ func logSpecWithPolicyServerAndPolicy() *harness.LogSpec {
 					"metadata": map[string]interface{}{
 						"name": "cluster-wide-policy",
 					},
-					"spec": map[string]interface{}{
-						"policyServer": "default",
-					},
+					"spec":   clusterPolicySpec,
+					"status": clusterPolicyStatus,
 				},
 				Attributes: map[string]interface{}{
 					"k8s.resource.kind":        "ClusterAdmissionPolicy",
@@ -258,6 +313,28 @@ func assertLogComponents(t *testing.T, components map[string]*topostreamv1.Topol
 		require.Equal(t, "policy server", c.TypeName)
 		require.Equal(t, "Control Plane", c.LayerName)
 		require.Equal(t, "Kubernetes", c.DomainName)
+
+		// Verify configuration is populated with omit and does not contain status
+		require.NotNil(t, c.ResourceDefinition, "configuration should be populated via omit(log.body, ['status'])")
+		configFields := c.ResourceDefinition.GetFields()
+		require.Contains(t, configFields, "spec", "omit should have preserved all fields except status")
+		require.NotContains(t, configFields, "status", "omit should have removed status field")
+
+		specMap := configFields["spec"].GetStructValue()
+		require.NotNil(t, specMap)
+		specFields := specMap.GetFields()
+		require.Contains(t, specFields, "image")
+		require.Contains(t, specFields, "replicas")
+
+		// Verify status is populated with pick and contains only status
+		require.NotNil(t, c.StatusData, "status should be populated via pick(log.body, ['status'])")
+		statusFields := c.StatusData.GetFields()
+		require.Contains(t, statusFields, "status", "pick should have created a status wrapper")
+
+		statusStatusMap := statusFields["status"].GetStructValue()
+		require.NotNil(t, statusStatusMap)
+		statusStatusFields := statusStatusMap.GetFields()
+		require.Contains(t, statusStatusFields, "conditions", "status should contain conditions")
 	}
 }
 
@@ -290,7 +367,6 @@ func assertLogRelations(t *testing.T, relations map[string]*topostreamv1.Topolog
 	}
 }
 
-// otelLogComponentMappingSpecPolicyServer creates a component mapping for Kubewarden PolicyServer
 func otelLogComponentMappingSpecPolicyServer() *harness.OtelComponentMappingSpec {
 	return &harness.OtelComponentMappingSpec{
 		MappingID:         "log-comp-policy-server",
@@ -328,11 +404,14 @@ func otelLogComponentMappingSpecPolicyServer() *harness.OtelComponentMappingSpec
 			TypeName:   harness.StrExpr("policy server"),
 			LayerName:  harness.StrExpr("Control Plane"),
 			DomainName: harness.StrExpr("Kubernetes"),
+			Required: &settingsproto.OtelComponentMappingFieldMapping{
+				Configuration: harness.Ptr(harness.AnyExpr(`${omit(log.body, ['status'])}`)),
+				Status:        harness.Ptr(harness.AnyExpr(`${pick(log.body, ['status'])}`)),
+			},
 		},
 	}
 }
 
-// otelLogRelationMappingSpecPolicyEnforcedByServer creates a relation mapping for policy enforced by server
 func otelLogRelationMappingSpecPolicyEnforcedByServer() *harness.OtelRelationMappingSpec {
 	return &harness.OtelRelationMappingSpec{
 		MappingID:         "log-rel-policy-enforced-by-server",

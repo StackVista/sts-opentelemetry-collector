@@ -68,7 +68,10 @@ func celOmitImpl(mapVal, listVal ref.Val) ref.Val {
 	it := mapper.Iterator()
 	for it.HasNext() == types.True {
 		keyVal := it.Next()
-		s := keyVal.(types.String)
+		s, ok := keyVal.(types.String)
+		if !ok {
+			return types.WrapErr(fmt.Errorf("omit: key must be a string, got %T", keyVal))
+		}
 		if _, shouldOmit := omitSet[string(s)]; !shouldOmit {
 			val, _ := mapper.Find(keyVal)
 			result[keyVal] = val
