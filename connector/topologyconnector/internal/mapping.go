@@ -288,8 +288,6 @@ func (me *Mapper) MapRelation(
 }
 
 // toStructValue converts a value (typically map[string]interface{}) to a protobuf Struct.
-// This is used to populate ResourceDefinition and StatusData from CEL expression results.
-// It handles both map[string]interface{} and map[ref.Val]ref.Val (from CEL evaluations).
 func toStructValue(val interface{}) *structpb.Struct {
 	if val == nil {
 		return nil

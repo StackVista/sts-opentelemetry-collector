@@ -161,8 +161,6 @@ func (s *DefaultSettingsCache) UpdateSettingsForType(
 	s.settingsLock.Unlock()
 
 	// Notify if entries have changed (including transitions to/from empty state).
-	// concreteSettingsChanged() already checks length differences, so we don't need
-	// to further filter by len(validEntries) > 0.
 	if changed {
 		s.subscriptionService.Notify(settingType)
 	}

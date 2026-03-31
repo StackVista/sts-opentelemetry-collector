@@ -652,10 +652,7 @@ func makeLogContext() ExpressionEvalContext {
 		"status":        map[string]any{"phase": "Running"},
 		"managedFields": []any{"field1", "field2"},
 	}
-	log, ok := NewLog("test-log", logBodyMap, map[string]any{"app": "test"})
-	if !ok {
-		panic("failed to create log with structured body")
-	}
+	log := NewLog("test-log", logBodyMap, map[string]any{"app": "test"})
 	return ExpressionEvalContext{
 		Scope:    NewScope("test-scope", "1.0", map[string]any{}),
 		Resource: NewResource(map[string]any{"service.name": "test-svc"}),

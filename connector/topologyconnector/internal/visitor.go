@@ -30,9 +30,9 @@ const (
 //
 // Example traversal order:
 //
-//		Metrics: Resource -> Scope -> Metric -> Datapoint
-//		Traces:  Resource -> Scope -> Span
-//	 Logs:    Resource -> Scope -> Log
+//	Metrics: Resource -> Scope -> Metric -> Datapoint
+//	Traces:  Resource -> Scope -> Span
+//	Logs:    Resource -> Scope -> Log
 type MappingVisitor interface {
 	VisitResource(ctx context.Context, evalCtx *ExpressionEvalContext) VisitResult
 	VisitScope(ctx context.Context, evalCtx *ExpressionEvalContext) VisitResult

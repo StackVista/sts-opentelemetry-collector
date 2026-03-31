@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/json"
+	"fmt"
 )
 
 // -----------------------------
@@ -110,33 +111,40 @@ type Log struct {
 	cachedMap map[string]any
 }
 
-// NewLog constructs a Log from a log record's data. The second return value is false
-// if body is not a structured map or JSON-encoded bytes, in which case the log should be skipped.
-// This ensures only logs with structured bodies (parsed/provided by receivers) are processed.
+// NewLog constructs a Log from a log record's data. The body is stored as-is:
+// - If it's a structured map, it's used directly
+// - If it's JSON bytes, it's unmarshaled to a map
+// - Otherwise (including unstructured text), it's stored unparsed
 func NewLog(
 	name string, body any, attrs map[string]any,
-) (*Log, bool) {
-	var bodyMap map[string]any
+) *Log {
+	var processedBody any
 
 	// Try to use body as a map directly
 	if m, ok := body.(map[string]any); ok {
-		bodyMap = m
+		processedBody = m
 	} else if b, ok := body.([]byte); ok {
-		// Try to unmarshal JSON bytes
+		// Try to unmarshal JSON bytes, fall back to string if not valid JSON
+		var bodyMap map[string]any
 		if err := json.Unmarshal(b, &bodyMap); err != nil {
-			return nil, false
+			processedBody = string(b)
+		} else {
+			processedBody = bodyMap
 		}
+	} else if s, ok := body.(string); ok {
+		processedBody = s
 	} else {
-		return nil, false
+		// For other types, convert to string representation
+		processedBody = fmt.Sprintf("%v", body)
 	}
 
 	return &Log{
 		cachedMap: map[string]any{
 			"name":       name,
-			"body":       bodyMap,
+			"body":       processedBody,
 			"attributes": attrs,
 		},
-	}, true
+	}
 }
 
 func (l *Log) ToMap() map[string]any {

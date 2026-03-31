@@ -265,6 +265,7 @@ func (t *TracesTraverser) span(resourceIdx, scopeIdx, spanIdx int, spans ptrace.
 	return s
 }
 
+//nolint:dupl
 func (t *TracesTraverser) Traverse(ctx context.Context, mappingVisitor MappingVisitor) {
 	resourceSpans := t.traces.ResourceSpans()
 	for resourceIdx := 0; resourceIdx < resourceSpans.Len(); resourceIdx++ {
@@ -344,24 +345,22 @@ func (l *LogTraverser) scope(resourceIdx, scopeIdx int, scopes plog.ScopeLogsSli
 	return s
 }
 
-func (l *LogTraverser) log(resourceIdx, scopeIdx, logIdx int, logs plog.LogRecordSlice) (*Log, bool) {
+func (l *LogTraverser) log(resourceIdx, scopeIdx, logIdx int, logs plog.LogRecordSlice) *Log {
 	key := [3]int{resourceIdx, scopeIdx, logIdx}
 	if cached, ok := l.logs.Load(key); ok {
-		return cached, true
+		return cached
 	}
 	logRecord := logs.At(logIdx)
-	log, ok := NewLog(
+	log := NewLog(
 		logRecord.EventName(),
 		logRecord.Body().AsRaw(),
 		logRecord.Attributes().AsRaw(),
 	)
-	if !ok {
-		return nil, false
-	}
 	l.logs.Store(key, log)
-	return log, true
+	return log
 }
 
+//nolint:dupl
 func (l *LogTraverser) Traverse(ctx context.Context, mappingVisitor MappingVisitor) {
 	resourceLogs := l.logData.ResourceLogs()
 	for resourceIdx := 0; resourceIdx < resourceLogs.Len(); resourceIdx++ {
@@ -384,11 +383,7 @@ func (l *LogTraverser) Traverse(ctx context.Context, mappingVisitor MappingVisit
 
 			logRecords := sl.LogRecords()
 			for logIdx := 0; logIdx < logRecords.Len(); logIdx++ {
-				log, ok := l.log(resourceIdx, scopeIdx, logIdx, logRecords)
-				if !ok {
-					continue
-				}
-
+				log := l.log(resourceIdx, scopeIdx, logIdx, logRecords)
 				logCtx := NewLogEvalContext(log, scope, resource)
 				mappingVisitor.VisitLog(ctx, logCtx)
 			}
