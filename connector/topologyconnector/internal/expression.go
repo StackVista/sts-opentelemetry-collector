@@ -423,7 +423,7 @@ func (e *CelEvaluator) evaluateProgram(prog cel.Program, ctx *ExpressionEvalCont
 		runtimeVars["scope"] = ctx.Scope.ToMap()
 	}
 
-	// To get the best error messages, the metric/datapoint/span should not be set at all
+	// To get the best error messages, the metric/datapoint/span/log should not be set at all
 	// if they are not defined
 	if ctx.Metric != nil {
 		runtimeVars["metric"] = ctx.Metric.ToMap()

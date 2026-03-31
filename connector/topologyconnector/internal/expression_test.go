@@ -675,7 +675,7 @@ func TestEvalMapExpression_PickOmit(t *testing.T) {
 	}{
 		{
 			name: "pick: returns only specified keys that are present",
-			expr: "${pick(log.body, ['metadata', 'spec'])}",
+			expr: "pick(log.body, ['metadata', 'spec'])",
 			want: map[string]any{
 				"metadata": map[string]any{"name": "my-pod", "namespace": "default"},
 				"spec":     map[string]any{"replicas": int64(3)},
@@ -683,24 +683,24 @@ func TestEvalMapExpression_PickOmit(t *testing.T) {
 		},
 		{
 			name: "pick: silently ignores absent keys",
-			expr: "${pick(log.body, ['metadata', 'nonexistent'])}",
+			expr: "pick(log.body, ['metadata', 'nonexistent'])",
 			want: map[string]any{
 				"metadata": map[string]any{"name": "my-pod", "namespace": "default"},
 			},
 		},
 		{
 			name: "pick: empty key list returns empty map",
-			expr: "${pick(log.body, [])}",
+			expr: "pick(log.body, [])",
 			want: map[string]any{},
 		},
 		{
 			name: "pick: all-absent keys returns empty map",
-			expr: "${pick(log.body, ['foo', 'bar'])}",
+			expr: "pick(log.body, ['foo', 'bar'])",
 			want: map[string]any{},
 		},
 		{
 			name: "omit: removes specified keys",
-			expr: "${omit(log.body, ['status', 'managedFields'])}",
+			expr: "omit(log.body, ['status', 'managedFields'])",
 			want: map[string]any{
 				"metadata": map[string]any{"name": "my-pod", "namespace": "default"},
 				"spec":     map[string]any{"replicas": int64(3)},
@@ -708,7 +708,7 @@ func TestEvalMapExpression_PickOmit(t *testing.T) {
 		},
 		{
 			name: "omit: absent keys leave the map unchanged",
-			expr: "${omit(log.body, ['nonexistent'])}",
+			expr: "omit(log.body, ['nonexistent'])",
 			want: map[string]any{
 				"metadata":      map[string]any{"name": "my-pod", "namespace": "default"},
 				"spec":          map[string]any{"replicas": int64(3)},
@@ -718,7 +718,7 @@ func TestEvalMapExpression_PickOmit(t *testing.T) {
 		},
 		{
 			name: "omit: empty key list returns full map",
-			expr: "${omit(log.body, [])}",
+			expr: "omit(log.body, [])",
 			want: map[string]any{
 				"metadata":      map[string]any{"name": "my-pod", "namespace": "default"},
 				"spec":          map[string]any{"replicas": int64(3)},

@@ -91,7 +91,7 @@ func TestLogToOtelTopology_ErrorReturnedOnIncorrectMappingConfig(t *testing.T) {
 
 	component := otelLogComponentMappingSpecPolicyServer()
 	// modify base component mapping to have an invalid expression
-	component.Output.Name = harness.StrExpr(`${log.attributes}`) // a map reference where a string expression is required
+	component.Output.Name = harness.StrExpr(`log.attributes`) // a map reference where a string expression is required
 	env.PublishSettingSnapshots(t, otelComponentMappingSnapshot(component))
 
 	sendLogs(t, env)
@@ -388,22 +388,22 @@ func otelLogComponentMappingSpecPolicyServer() *harness.OtelComponentMappingSpec
 		Vars: []settingsproto.OtelVariableMapping{
 			{
 				Name:  "serverName",
-				Value: harness.AnyExpr(`${log.attributes["k8s.resource.name"]}`),
+				Value: harness.AnyExpr(`log.attributes["k8s.resource.name"]`),
 			},
 			{
 				Name:  "clusterName",
-				Value: harness.AnyExpr(`${resource.attributes["k8s.cluster.name"]}`),
+				Value: harness.AnyExpr(`resource.attributes["k8s.cluster.name"]`),
 			},
 		},
 		Output: settingsproto.OtelComponentMappingOutput{
-			Identifier: harness.StrExpr(`urn:kubewarden:cluster/${vars.clusterName}:policyserver/${vars.serverName}`),
-			Name:       harness.StrExpr(`${vars.serverName}`),
-			TypeName:   harness.StrExpr("policy server"),
-			LayerName:  harness.StrExpr("Control Plane"),
-			DomainName: harness.StrExpr("Kubernetes"),
+			Identifier: harness.StrExpr(`"urn:kubewarden:cluster/" + vars.clusterName + ":policyserver/" + vars.serverName`),
+			Name:       harness.StrExpr(`vars.serverName`),
+			TypeName:   harness.StrExpr("'policy server'"),
+			LayerName:  harness.StrExpr("'Control Plane'"),
+			DomainName: harness.StrExpr("'Kubernetes'"),
 			Required: &settingsproto.OtelComponentMappingFieldMapping{
-				Configuration: harness.Ptr(harness.AnyExpr(`${omit(log.body, ['status'])}`)),
-				Status:        harness.Ptr(harness.AnyExpr(`${pick(log.body, ['status'])}`)),
+				Configuration: harness.Ptr(harness.AnyExpr(`omit(log.body, ['status'])`)),
+				Status:        harness.Ptr(harness.AnyExpr(`pick(log.body, ['status'])`)),
 			},
 		},
 	}
@@ -435,31 +435,31 @@ func otelLogRelationMappingSpecPolicyEnforcedByServer() *harness.OtelRelationMap
 		Vars: []settingsproto.OtelVariableMapping{
 			{
 				Name:  "policyName",
-				Value: harness.AnyExpr(`${log.attributes["k8s.resource.name"]}`),
+				Value: harness.AnyExpr(`log.attributes["k8s.resource.name"]`),
 			},
 			{
 				Name:  "policyKind",
-				Value: harness.AnyExpr(`${log.attributes["k8s.resource.kind"]}`),
+				Value: harness.AnyExpr(`log.attributes["k8s.resource.kind"]`),
 			},
 			{
 				Name:  "serverName",
-				Value: harness.AnyExpr(`${log.attributes["kubewarden.policy_server"]}`),
+				Value: harness.AnyExpr(`log.attributes["kubewarden.policy_server"]`),
 			},
 			{
 				Name:  "clusterName",
-				Value: harness.AnyExpr(`${resource.attributes["k8s.cluster.name"]}`),
+				Value: harness.AnyExpr(`resource.attributes["k8s.cluster.name"]`),
 			},
 			{
 				Name:  "namespace",
-				Value: harness.AnyExpr(`${resource.attributes["k8s.namespace.name"]}`),
+				Value: harness.AnyExpr(`resource.attributes["k8s.namespace.name"]`),
 			},
 		},
 		Output: settingsproto.OtelRelationMappingOutput{
 			SourceId: harness.StrExpr(
-				`${vars.policyKind == "ClusterAdmissionPolicy" ? "urn:kubewarden:cluster/" + vars.clusterName + ":clusteradmissionpolicy/" + vars.policyName : "urn:kubewarden:cluster/" + vars.clusterName + ":namespace/" + vars.namespace + ":admissionpolicy/" + vars.policyName}`,
+				`vars.policyKind == "ClusterAdmissionPolicy" ? "urn:kubewarden:cluster/" + vars.clusterName + ":clusteradmissionpolicy/" + vars.policyName : "urn:kubewarden:cluster/" + vars.clusterName + ":namespace/" + vars.namespace + ":admissionpolicy/" + vars.policyName`,
 			),
-			TargetId: harness.StrExpr(`urn:kubewarden:cluster/${vars.clusterName}:policyserver/${vars.serverName}`),
-			TypeName: harness.StrExpr("enforced by"),
+			TargetId: harness.StrExpr(`'urn:kubewarden:cluster/' + vars.clusterName + ':policyserver/' + vars.serverName`),
+			TypeName: harness.StrExpr("'enforced by'"),
 		},
 	}
 }
