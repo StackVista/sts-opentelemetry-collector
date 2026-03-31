@@ -57,10 +57,10 @@ func TestMetricToOtelTopology_UpdateComponentAndRelationMappings(t *testing.T) {
 	assertMetricRelations(t, relations)
 
 	// Update the settings
-	newVersion := "2.0.0"
+	newVersion := "'2.0.0'"
 
 	// Component: update name + add tag
-	serviceComponent.Output.Name = harness.StrExpr("billing-service-updated")
+	serviceComponent.Output.Name = harness.StrExpr("'billing-service-updated'")
 	if serviceComponent.Output.Required == nil {
 		serviceComponent.Output.Required = &settingsproto.OtelComponentMappingFieldMapping{}
 	}
@@ -73,7 +73,7 @@ func TestMetricToOtelTopology_UpdateComponentAndRelationMappings(t *testing.T) {
 	})
 
 	// Relation: update type name
-	relation.Output.TypeName = harness.StrExpr("calls-updated")
+	relation.Output.TypeName = harness.StrExpr("'calls-updated'")
 
 	env.PublishSettingSnapshots(
 		t,
@@ -108,7 +108,7 @@ func TestMetricToOtelTopology_ErrorReturnedOnIncorrectMappingConfig(t *testing.T
 
 	component := otelComponentMappingSpecForService()
 	// modify base component mapping to have an invalid expression
-	component.Output.Name = harness.StrExpr(`${resource.attributes}`) // a map reference where a string expression is required
+	component.Output.Name = harness.StrExpr(`resource.attributes`) // a map reference where a string expression is required
 	env.PublishSettingSnapshots(t, otelComponentMappingSnapshot(component))
 
 	sendMetrics(t, env)
@@ -122,7 +122,7 @@ func TestMetricToOtelTopology_ErrorReturnedOnIncorrectMappingConfig(t *testing.T
 	require.Contains(
 		t,
 		errs[0].Message, // all the errors should be the same
-		"expected string type, got: map(string, dyn), for expression '${resource.attributes}'",
+		"expected string type, got: map(string, dyn), for expression 'resource.attributes'",
 		"expected error on incorrect mapping config",
 	)
 }
@@ -247,11 +247,11 @@ func otelComponentMappingSpecForService() *harness.OtelComponentMappingSpec {
 			},
 		},
 		Output: settingsproto.OtelComponentMappingOutput{
-			Identifier: harness.StrExpr(`urn:service:${resource.attributes["service.name"]}`),
-			Name:       harness.StrExpr(`${resource.attributes["service.name"]}`),
-			TypeName:   harness.StrExpr("service"),
-			DomainName: harness.StrExpr(`${resource.attributes["service.namespace"]}`),
-			LayerName:  harness.StrExpr("backend"),
+			Identifier: harness.StrExpr(`"urn:service:" + resource.attributes["service.name"]`),
+			Name:       harness.StrExpr(`resource.attributes["service.name"]`),
+			TypeName:   harness.StrExpr("'service'"),
+			DomainName: harness.StrExpr(`resource.attributes["service.namespace"]`),
+			LayerName:  harness.StrExpr("'backend'"),
 		},
 	}
 }
@@ -278,11 +278,11 @@ func otelComponentMappingSpecForQueue() *harness.OtelComponentMappingSpec {
 			},
 		},
 		Output: settingsproto.OtelComponentMappingOutput{
-			Identifier: harness.StrExpr(`urn:queue:${resource.attributes["service.name"]}:${datapoint.attributes["queue.name"]}`),
-			Name:       harness.StrExpr(`${datapoint.attributes["queue.name"]}`),
-			TypeName:   harness.StrExpr("queue"),
-			DomainName: harness.StrExpr(`${resource.attributes["service.namespace"]}`),
-			LayerName:  harness.StrExpr("backend"),
+			Identifier: harness.StrExpr(`"urn:queue:" + resource.attributes["service.name"] + ":" + datapoint.attributes["queue.name"]`),
+			Name:       harness.StrExpr(`datapoint.attributes["queue.name"]`),
+			TypeName:   harness.StrExpr("'queue'"),
+			DomainName: harness.StrExpr(`resource.attributes["service.namespace"]`),
+			LayerName:  harness.StrExpr("'backend'"),
 		},
 	}
 }
@@ -308,9 +308,9 @@ func otelRelationMappingSpecForMetrics() *harness.OtelRelationMappingSpec {
 			},
 		},
 		Output: settingsproto.OtelRelationMappingOutput{
-			SourceId: harness.StrExpr(`urn:service:${datapoint.attributes["client.service"]}`),
-			TargetId: harness.StrExpr(`urn:service:${datapoint.attributes["server.service"]}`),
-			TypeName: harness.StrExpr("calls"),
+			SourceId: harness.StrExpr(`"urn:service:" + datapoint.attributes["client.service"]`),
+			TargetId: harness.StrExpr(`"urn:service:" + datapoint.attributes["server.service"]`),
+			TypeName: harness.StrExpr("'calls'"),
 		},
 	}
 }

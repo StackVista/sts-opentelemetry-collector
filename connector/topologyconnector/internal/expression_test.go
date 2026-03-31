@@ -94,128 +94,113 @@ func TestEvalStringExpression(t *testing.T) {
 	}{
 		{
 			name:     "simple string",
-			expr:     "static string",
+			expr:     "'static string'",
 			expected: "static string",
 		},
 		{
-			name:     "simple string with quotes",
+			name:     "simple string with quotes (CEL string literal)",
 			expr:     "'static string'",
-			expected: "'static string'",
+			expected: "static string",
 		},
 		{
-			name:     "simple string with double quotes",
+			name:     "simple string with double quotes (CEL string literal)",
 			expr:     `"static string"`,
-			expected: `"static string"`,
+			expected: "static string",
 		},
 		{
-			name:     "empty string",
-			expr:     "",
-			expected: "",
+			name:        "empty string",
+			expr:        "",
+			errContains: "mismatched input",
 		},
 		{
 			name:     "support resource Attributes",
-			expr:     `${resource.attributes["service.name"]}`,
+			expr:     `resource.attributes["service.name"]`,
 			expected: "cart-service",
 		},
 		{
 			name:     "support Attributes access (with single quotes)",
-			expr:     "${resource.attributes['service.name']}",
+			expr:     "resource.attributes['service.name']",
 			expected: "cart-service",
 		},
 		{
 			name:     "support nested Attributes access",
-			expr:     "${resource.attributes.env}",
+			expr:     "resource.attributes.env",
 			expected: "dev",
 		},
 		{
 			name:     "support span Attributes",
-			expr:     `${span.attributes["http.method"]}`,
+			expr:     `span.attributes["http.method"]`,
 			expected: "GET",
 		},
 		{
 			name:     "support metric fields",
-			expr:     `${metric.name}`,
+			expr:     `metric.name`,
 			expected: "traces_service_graph_request_total",
 		},
 		{
 			name:     "support scope Attributes",
-			expr:     `${scope.attributes["otel.scope.name"]}`,
+			expr:     `scope.attributes["otel.scope.name"]`,
 			expected: "io.opentelemetry.instrumentation.http",
 		},
 		{
 			name:     "support custom vars",
-			expr:     `${vars.namespace}`,
+			expr:     `vars.namespace`,
 			expected: "test",
 		},
 		{
 			name:        "missing attribute key returns error",
-			expr:        `${resource.attributes["not-existing-attr"]}`,
+			expr:        `resource.attributes["not-existing-attr"]`,
 			errContains: "no such key",
 		},
 		{
 			name:     "coerce int to string",
-			expr:     `${span.attributes["retries"]}`,
+			expr:     `span.attributes["retries"]`,
 			expected: "5",
 		},
 		{
 			name:        "not coerce boolean to string",
-			expr:        `${true}`,
+			expr:        `true`,
 			errContains: "cannot convert 'bool' to 'string'",
 		},
 		{
 			name:        "string type validation fails on span object",
-			expr:        `${span}`, // object, not string
-			errContains: "expected string type, got: map(string, dyn), for expression '${span}'",
+			expr:        `span`,
+			errContains: "expected string type, got: map(string, dyn), for expression 'span'",
 		},
 		{
 			name:        "string type validation fails on span attributes map",
-			expr:        `${span.attributes}`, // whole map, not string
-			errContains: "expected string type, got: map(string, dyn), for expression '${span.attributes}'",
+			expr:        `span.attributes`,
+			errContains: "expected string type, got: map(string, dyn), for expression 'span.attributes'",
 		},
 		{
-			name:     "support string interpolation with vars",
-			expr:     `service-${resource.attributes["env"]}`,
+			name:     "support string concatenation with vars",
+			expr:     `"service-" + resource.attributes["env"]`,
 			expected: "service-dev",
 		},
 		{
-			name:     "support string interpolation with resource Attributes",
-			expr:     `ns-${resource.attributes["service.name"]}`,
+			name:     "support string concatenation with resource Attributes",
+			expr:     `"ns-" + resource.attributes["service.name"]`,
 			expected: "ns-cart-service",
 		},
 		{
-			name:     "multiple interpolations at once",
-			expr:     `ns-${resource.attributes["service.name"]}-${vars.namespace}-${resource.attributes["service.name"].matches(R'cart-.*') ? 'cart' : 'not-cart'}-end`,
+			name:     "multiple concatenations at once",
+			expr:     `"ns-" + resource.attributes["service.name"] + "-" + vars.namespace + "-" + (resource.attributes["service.name"].matches(R'cart-.*') ? 'cart' : 'not-cart') + "-end"`,
 			expected: "ns-cart-service-test-cart-end",
 		},
 		{
-			name:     "interpolation at start and end of expression",
-			expr:     `${vars.namespace}/${resource.attributes["service.name"]}`,
+			name:     "concatenation at start and end of expression",
+			expr:     `vars.namespace + "/" + resource.attributes["service.name"]`,
 			expected: "test/cart-service",
 		},
 		{
 			name:     "another complex expression",
-			expr:     `${resource.attributes["service.name"].matches(R'cart-.*') ? ( span.attributes["http.status_code"] < 400 ? 'good-cart' : 'bad-cart' ) : 'not-cart'}`,
+			expr:     `resource.attributes["service.name"].matches(R'cart-.*') ? ( span.attributes["http.status_code"] < 400 ? 'good-cart' : 'bad-cart' ) : 'not-cart'`,
 			expected: "good-cart",
 		},
 		{
 			name:     "support key existence checks",
-			expr:     `${'service.name' in resource.attributes ? 'yes' : 'no'}`,
+			expr:     `'service.name' in resource.attributes ? 'yes' : 'no'`,
 			expected: "yes",
-		},
-		{
-			name:        "fail on unterminated interpolation",
-			expr:        `"foo-${vars["env"]"`, // missing closing }
-			errContains: "unterminated interpolation",
-		},
-		{
-			name:        "fail on empty interpolation",
-			expr:        `foo-${}`,
-			errContains: "empty interpolation",
-		},
-		{
-			name:        "fail with expression marker in wrapped expression",
-			expr:        `${ ${span.attributes["http.status_code"]} }`,
-			errContains: "nested interpolation not allowed at pos",
 		},
 	}
 
@@ -334,7 +319,7 @@ func TestEvalOptionalStringExpression(t *testing.T) {
 		},
 		{
 			name:     "non-nil expression returns string",
-			expr:     &settingsproto.OtelStringExpression{Expression: "static-string"},
+			expr:     &settingsproto.OtelStringExpression{Expression: "'static-string'"},
 			expected: ptr("static-string"),
 		},
 	}
@@ -360,7 +345,7 @@ func TestEvalMapExpression(t *testing.T) {
 	}{
 		{
 			name: "pure map reference span.attributes",
-			expr: settingsproto.OtelAnyExpression{Expression: "${span.attributes}"},
+			expr: settingsproto.OtelAnyExpression{Expression: "span.attributes"},
 			want: map[string]any{
 				"http.method":      "GET",
 				"http.status_code": int64(200),
@@ -372,7 +357,7 @@ func TestEvalMapExpression(t *testing.T) {
 		},
 		{
 			name: "pure map reference resource.attributes",
-			expr: settingsproto.OtelAnyExpression{Expression: "${resource.attributes}"},
+			expr: settingsproto.OtelAnyExpression{Expression: "resource.attributes"},
 			want: map[string]any{
 				"cloud.provider": "aws",
 				"service.name":   "cart-service",
@@ -386,7 +371,7 @@ func TestEvalMapExpression(t *testing.T) {
 		},
 		{
 			name: "pure map reference scope.attributes",
-			expr: settingsproto.OtelAnyExpression{Expression: "${scope.attributes}"},
+			expr: settingsproto.OtelAnyExpression{Expression: "scope.attributes"},
 			want: map[string]any{
 				"otel.scope.name":    "io.opentelemetry.instrumentation.http",
 				"otel.scope.Version": "1.2.3",
@@ -394,39 +379,15 @@ func TestEvalMapExpression(t *testing.T) {
 		},
 		{
 			name: "Map literal",
-			expr: settingsproto.OtelAnyExpression{Expression: "${{'key': 'value'}}"},
+			expr: settingsproto.OtelAnyExpression{Expression: "{'key': 'value'}"},
 			want: map[string]any{
 				"key": "value",
 			},
 		},
 		{
-			name:        "invalid: not a pure map reference",
-			expr:        settingsproto.OtelAnyExpression{Expression: "foo-${span.attributes}"},
-			want:        nil,
-			expectError: `foo-${span.attributes}" is not a valid map expression`,
-		},
-		{
-			name:        "invalid: literal string",
-			expr:        settingsproto.OtelAnyExpression{Expression: `"just a string"`},
-			want:        nil,
-			expectError: `expression "\"just a string\"" is not a valid map expression`,
-		},
-		{
-			name:        "invalid: empty interpolation",
-			expr:        settingsproto.OtelAnyExpression{Expression: "${}"},
-			want:        nil,
-			expectError: `empty interpolation at pos 0`,
-		},
-		{
-			name:        "invalid: keys are not strings",
-			expr:        settingsproto.OtelAnyExpression{Expression: "${{true: 'value'}}"},
-			want:        nil,
-			expectError: "cannot convert key of type '*internal.CelEvaluationError' to string: true",
-		},
-		{
 			name:        "unsupported type returns error",
-			expr:        settingsproto.OtelAnyExpression{Expression: `${'test'}`}, // a string type that can be statically checked
-			expectError: `expected map type, got: string, for expression '${'test'}'`,
+			expr:        settingsproto.OtelAnyExpression{Expression: `'test'`},
+			expectError: `expected map type, got: string, for expression ''test''`,
 		},
 	}
 
@@ -461,17 +422,17 @@ func TestEvalAnyExpression(t *testing.T) {
 	}{
 		{
 			name:     "simple string",
-			expr:     "static string",
+			expr:     "'static string'",
 			expected: "static string",
 		},
 		{
 			name:     "support array attribute",
-			expr:     `${resource.attributes["process.command_args"]}`,
+			expr:     `resource.attributes["process.command_args"]`,
 			expected: []any{"java", "-jar", "app.jar"},
 		},
 		{
 			name: "support map attribute",
-			expr: `${resource.attributes["deployment"]}`,
+			expr: `resource.attributes["deployment"]`,
 			expected: map[string]any{
 				"env":    "prod",
 				"region": "eu-west-1",
@@ -479,65 +440,60 @@ func TestEvalAnyExpression(t *testing.T) {
 		},
 		{
 			name:     "support int Attributes",
-			expr:     `${span.attributes["http.status_code"]}`,
+			expr:     `span.attributes["http.status_code"]`,
 			expected: int64(200),
 		},
 		{
 			name:     "support boolean Attributes",
-			expr:     `${span.attributes["sampled"]}`,
+			expr:     `span.attributes["sampled"]`,
 			expected: true,
 		},
 		{
 			name:     "support doubles",
-			expr:     `${span.attributes["pi"]}`,
+			expr:     `span.attributes["pi"]`,
 			expected: 3.14,
 		},
 		{
 			name:     "support int literal",
-			expr:     "${42}",
+			expr:     "42",
 			expected: int64(42),
 		},
 		{
 			name:     "support double literal",
-			expr:     "${3.14}",
+			expr:     "3.14",
 			expected: 3.14,
 		},
 		{
 			name:     "support bool literal",
-			expr:     "${true}",
+			expr:     "true",
 			expected: true,
 		},
 		{
 			name:     "support slice literal",
-			expr:     "${['foo', 'bar']}",
+			expr:     "['foo', 'bar']",
 			expected: []ref.Val{types.String("foo"), types.String("bar")},
 		},
 		{
 			name: "support map literal",
-			expr: "${{'foo': 'bar'}}",
+			expr: "{'foo': 'bar'}",
 			expected: map[ref.Val]ref.Val{
 				types.String("foo"): types.String("bar"),
 			},
 		},
 		{
 			name:        "missing attribute key returns error",
-			expr:        `${resource.attributes["not-existing-attr"]}`,
+			expr:        `resource.attributes["not-existing-attr"]`,
 			errContains: "no such key",
 		},
 		{
-			name:     "support string interpolation",
-			expr:     `service-${resource.attributes["env"]}`,
+			name:     "support string concatenation",
+			expr:     `"service-" + resource.attributes["env"]`,
 			expected: "service-dev",
 		},
 		{
-			name:     "complex string interpolation",
-			expr:     `ns-${resource.attributes["service.name"]}-${vars.namespace}`,
+			name:     "complex string concatenation",
+			expr:     `"ns-" + resource.attributes["service.name"] + "-" + vars.namespace`,
 			expected: "ns-cart-service-test",
-		},
-		{
-			name:        "fail on unterminated interpolation",
-			expr:        `"foo-${vars["env"]"`, // missing closing }
-			errContains: "unterminated interpolation",
 		},
 	}
 
@@ -574,7 +530,7 @@ func TestStringEvalTypeMismatch(t *testing.T) {
 	ctx := makeContext(false, false)
 
 	// Bool expression but evaluated with string
-	_, err := eval.EvalStringExpression(settingsproto.OtelStringExpression{Expression: `${resource.attributes["cloud.provider"] == "aws"}`}, &ctx)
+	_, err := eval.EvalStringExpression(settingsproto.OtelStringExpression{Expression: `resource.attributes["cloud.provider"] == "aws"`}, &ctx)
 	require.Error(t, err)
 }
 
@@ -582,7 +538,7 @@ func TestNoDatapointError(t *testing.T) {
 	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 	ctx := makeContext(false, false)
 
-	_, err := eval.EvalStringExpression(settingsproto.OtelStringExpression{Expression: `${datapoint.attributes["http.method"]}`}, &ctx)
+	_, err := eval.EvalStringExpression(settingsproto.OtelStringExpression{Expression: `datapoint.attributes["http.method"]`}, &ctx)
 	assert.Equal(t, err.Error(), "no such attribute(s): datapoint")
 }
 
@@ -590,17 +546,24 @@ func TestNoSpanError(t *testing.T) {
 	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 	ctx := makeContext(false, false)
 
-	_, err := eval.EvalStringExpression(settingsproto.OtelStringExpression{Expression: `${span.attributes["http.method"]}`}, &ctx)
+	_, err := eval.EvalStringExpression(settingsproto.OtelStringExpression{Expression: `span.attributes["http.method"]`}, &ctx)
 	assert.Equal(t, err.Error(), "no such attribute(s): span")
 }
 
-func TestCelEvaluator_GetStringExpressionAST_WithLiteral(t *testing.T) {
+func TestCelEvaluator_GetStringExpressionAST_UnquotedLiteralIsError(t *testing.T) {
 	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 
-	res, err := eval.GetStringExpressionAST(settingsproto.OtelStringExpression{Expression: `hello`})
+	_, err := eval.GetStringExpressionAST(settingsproto.OtelStringExpression{Expression: `hello`})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "undeclared reference to 'hello'")
+}
+
+func TestCelEvaluator_GetStringExpressionAST_QuotedLiteral(t *testing.T) {
+	eval, _ := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
+
+	res, err := eval.GetStringExpressionAST(settingsproto.OtelStringExpression{Expression: `'hello'`})
 	require.NoError(t, err)
-	require.Nil(t, res.CheckedAST)
-	assert.Equal(t, *res.literal, "hello")
+	require.NotNil(t, res.CheckedAST)
 }
 
 func TestAstCacheReuse(t *testing.T) {

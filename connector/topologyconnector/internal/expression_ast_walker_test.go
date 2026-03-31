@@ -20,14 +20,14 @@ func TestStringExpressionAstWalker_Walk(t *testing.T) {
 	}{
 		{
 			name: "simple field access",
-			expr: `${scope.name}`,
+			expr: `scope.name`,
 			wantRefs: []internal.Reference{
 				{Root: "scope", Path: []string{"name"}},
 			},
 		},
 		{
 			name: "mixed resource/vars/datapoint attrs usage",
-			expr: `ns-${resource.attributes["service.name"]}-${vars.namespace}-${datapoint.attributes["connection_type"]}`,
+			expr: `"ns-" + resource.attributes["service.name"] + "-" + vars.namespace + "-" + datapoint.attributes["connection_type"]`,
 			wantRefs: []internal.Reference{
 				{Root: "resource", Path: []string{"attributes", "service.name"}},
 				{Root: "vars", Path: []string{"namespace"}},
@@ -36,7 +36,7 @@ func TestStringExpressionAstWalker_Walk(t *testing.T) {
 		},
 		{
 			name: "span attribute select",
-			expr: `${span.attributes["http.status_code"]}`,
+			expr: `span.attributes["http.status_code"]`,
 			wantRefs: []internal.Reference{
 				{Root: "span", Path: []string{"attributes", "http.status_code"}},
 			},
@@ -107,7 +107,7 @@ func TestMapExpressionAstWalker_Walk(t *testing.T) {
 	}{
 		{
 			name: "map field access",
-			expr: `${resource.attributes}`,
+			expr: `resource.attributes`,
 			wantRefs: []internal.Reference{
 				{Root: "resource", Path: []string{"attributes"}},
 			},
@@ -136,14 +136,14 @@ func TestAnyExpressionAstWalker_Walk(t *testing.T) {
 	}{
 		{
 			name: "simple field equality",
-			expr: `${scope.name == "foo"}`,
+			expr: `scope.name == "foo"`,
 			wantRefs: []internal.Reference{
 				{Root: "scope", Path: []string{"name"}},
 			},
 		},
 		{
 			name: "simple field access",
-			expr: `${scope.name}`,
+			expr: `scope.name`,
 			wantRefs: []internal.Reference{
 				{Root: "scope", Path: []string{"name"}},
 			},
