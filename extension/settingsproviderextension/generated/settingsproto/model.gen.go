@@ -842,9 +842,9 @@ type OpsgenieResponder struct {
 // OpsgenieResponderType defines model for OpsgenieResponderType.
 type OpsgenieResponderType string
 
-// OtelAnyExpression An expression that can produce any type. It uses the CEL expression within curly braces `${}` syntax.
+// OtelAnyExpression An expression that can produce any type.
 // Variables use it to store any type of value. For example, to store a boolean in a variable named  `inTestNamespace` assign
-// it the expression `"${resource.attributes['service.namespace'] == 'test'}"`. The variable can now be used directly in the conditions like this: `vars.inTestNamespace`.
+// it the expression `resource.attributes['service.namespace'] == 'test'`. The variable can now be used directly in the conditions like this: `vars.inTestNamespace`.
 type OtelAnyExpression struct {
 	Expression string `json:"expression"`
 }
@@ -882,21 +882,20 @@ type OtelComponentMappingType string
 type OtelComponentMappingFieldMapping struct {
 	AdditionalIdentifiers *[]OtelStringExpression `json:"additionalIdentifiers,omitempty"`
 
-	// Configuration An expression that can produce any type. It uses the CEL expression within curly braces `${}` syntax.
+	// Configuration An expression that can produce any type.
 	// Variables use it to store any type of value. For example, to store a boolean in a variable named  `inTestNamespace` assign
-	// it the expression `"${resource.attributes['service.namespace'] == 'test'}"`. The variable can now be used directly in the conditions like this: `vars.inTestNamespace`.
+	// it the expression `resource.attributes['service.namespace'] == 'test'`. The variable can now be used directly in the conditions like this: `vars.inTestNamespace`.
 	Configuration *OtelAnyExpression `json:"configuration,omitempty"`
 
-	// Status An expression that can produce any type. It uses the CEL expression within curly braces `${}` syntax.
+	// Status An expression that can produce any type.
 	// Variables use it to store any type of value. For example, to store a boolean in a variable named  `inTestNamespace` assign
-	// it the expression `"${resource.attributes['service.namespace'] == 'test'}"`. The variable can now be used directly in the conditions like this: `vars.inTestNamespace`.
+	// it the expression `resource.attributes['service.namespace'] == 'test'`. The variable can now be used directly in the conditions like this: `vars.inTestNamespace`.
 	Status *OtelAnyExpression `json:"status,omitempty"`
 	Tags   *[]OtelTagMapping  `json:"tags,omitempty"`
 
 	// Version An expression that must produce a string. It must be one of these formats:
 	//   - A plain string, for example `"this is a plain string"`
-	//   - A string containing a CEL expression within curly braces `${}`, for example "a string with a cel expression: `${resource.attributes['service.namespace']}"`
-	// A string with only a cel expression is also valid as long as it is within a `${}` section, for example `"${resource.attributes['service.namespace']}"`.
+	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
 	Version *OtelStringExpression `json:"version,omitempty"`
 }
 
@@ -904,52 +903,44 @@ type OtelComponentMappingFieldMapping struct {
 type OtelComponentMappingOutput struct {
 	// DomainIdentifier An expression that must produce a string. It must be one of these formats:
 	//   - A plain string, for example `"this is a plain string"`
-	//   - A string containing a CEL expression within curly braces `${}`, for example "a string with a cel expression: `${resource.attributes['service.namespace']}"`
-	// A string with only a cel expression is also valid as long as it is within a `${}` section, for example `"${resource.attributes['service.namespace']}"`.
+	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
 	DomainIdentifier *OtelStringExpression `json:"domainIdentifier,omitempty"`
 
 	// DomainName An expression that must produce a string. It must be one of these formats:
 	//   - A plain string, for example `"this is a plain string"`
-	//   - A string containing a CEL expression within curly braces `${}`, for example "a string with a cel expression: `${resource.attributes['service.namespace']}"`
-	// A string with only a cel expression is also valid as long as it is within a `${}` section, for example `"${resource.attributes['service.namespace']}"`.
+	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
 	DomainName OtelStringExpression `json:"domainName"`
 
 	// Identifier An expression that must produce a string. It must be one of these formats:
 	//   - A plain string, for example `"this is a plain string"`
-	//   - A string containing a CEL expression within curly braces `${}`, for example "a string with a cel expression: `${resource.attributes['service.namespace']}"`
-	// A string with only a cel expression is also valid as long as it is within a `${}` section, for example `"${resource.attributes['service.namespace']}"`.
+	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
 	Identifier OtelStringExpression `json:"identifier"`
 
 	// LayerIdentifier An expression that must produce a string. It must be one of these formats:
 	//   - A plain string, for example `"this is a plain string"`
-	//   - A string containing a CEL expression within curly braces `${}`, for example "a string with a cel expression: `${resource.attributes['service.namespace']}"`
-	// A string with only a cel expression is also valid as long as it is within a `${}` section, for example `"${resource.attributes['service.namespace']}"`.
+	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
 	LayerIdentifier *OtelStringExpression `json:"layerIdentifier,omitempty"`
 
 	// LayerName An expression that must produce a string. It must be one of these formats:
 	//   - A plain string, for example `"this is a plain string"`
-	//   - A string containing a CEL expression within curly braces `${}`, for example "a string with a cel expression: `${resource.attributes['service.namespace']}"`
-	// A string with only a cel expression is also valid as long as it is within a `${}` section, for example `"${resource.attributes['service.namespace']}"`.
+	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
 	LayerName OtelStringExpression `json:"layerName"`
 
 	// Name An expression that must produce a string. It must be one of these formats:
 	//   - A plain string, for example `"this is a plain string"`
-	//   - A string containing a CEL expression within curly braces `${}`, for example "a string with a cel expression: `${resource.attributes['service.namespace']}"`
-	// A string with only a cel expression is also valid as long as it is within a `${}` section, for example `"${resource.attributes['service.namespace']}"`.
+	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
 	Name     OtelStringExpression              `json:"name"`
 	Optional *OtelComponentMappingFieldMapping `json:"optional,omitempty"`
 	Required *OtelComponentMappingFieldMapping `json:"required,omitempty"`
 
 	// TypeIdentifier An expression that must produce a string. It must be one of these formats:
 	//   - A plain string, for example `"this is a plain string"`
-	//   - A string containing a CEL expression within curly braces `${}`, for example "a string with a cel expression: `${resource.attributes['service.namespace']}"`
-	// A string with only a cel expression is also valid as long as it is within a `${}` section, for example `"${resource.attributes['service.namespace']}"`.
+	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
 	TypeIdentifier *OtelStringExpression `json:"typeIdentifier,omitempty"`
 
 	// TypeName An expression that must produce a string. It must be one of these formats:
 	//   - A plain string, for example `"this is a plain string"`
-	//   - A string containing a CEL expression within curly braces `${}`, for example "a string with a cel expression: `${resource.attributes['service.namespace']}"`
-	// A string with only a cel expression is also valid as long as it is within a `${}` section, for example `"${resource.attributes['service.namespace']}"`.
+	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
 	TypeName OtelStringExpression `json:"typeName"`
 }
 
@@ -1117,34 +1108,28 @@ type OtelRelationMappingType string
 type OtelRelationMappingOutput struct {
 	// SourceId An expression that must produce a string. It must be one of these formats:
 	//   - A plain string, for example `"this is a plain string"`
-	//   - A string containing a CEL expression within curly braces `${}`, for example "a string with a cel expression: `${resource.attributes['service.namespace']}"`
-	// A string with only a cel expression is also valid as long as it is within a `${}` section, for example `"${resource.attributes['service.namespace']}"`.
+	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
 	SourceId OtelStringExpression `json:"sourceId"`
 
 	// TargetId An expression that must produce a string. It must be one of these formats:
 	//   - A plain string, for example `"this is a plain string"`
-	//   - A string containing a CEL expression within curly braces `${}`, for example "a string with a cel expression: `${resource.attributes['service.namespace']}"`
-	// A string with only a cel expression is also valid as long as it is within a `${}` section, for example `"${resource.attributes['service.namespace']}"`.
+	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
 	TargetId OtelStringExpression `json:"targetId"`
 
 	// TypeIdentifier An expression that must produce a string. It must be one of these formats:
 	//   - A plain string, for example `"this is a plain string"`
-	//   - A string containing a CEL expression within curly braces `${}`, for example "a string with a cel expression: `${resource.attributes['service.namespace']}"`
-	// A string with only a cel expression is also valid as long as it is within a `${}` section, for example `"${resource.attributes['service.namespace']}"`.
+	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
 	TypeIdentifier *OtelStringExpression `json:"typeIdentifier,omitempty"`
 
 	// TypeName An expression that must produce a string. It must be one of these formats:
 	//   - A plain string, for example `"this is a plain string"`
-	//   - A string containing a CEL expression within curly braces `${}`, for example "a string with a cel expression: `${resource.attributes['service.namespace']}"`
-	// A string with only a cel expression is also valid as long as it is within a `${}` section, for example `"${resource.attributes['service.namespace']}"`.
+	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
 	TypeName OtelStringExpression `json:"typeName"`
 }
 
 // OtelStringExpression An expression that must produce a string. It must be one of these formats:
 //   - A plain string, for example `"this is a plain string"`
-//   - A string containing a CEL expression within curly braces `${}`, for example "a string with a cel expression: `${resource.attributes['service.namespace']}"`
-//
-// A string with only a cel expression is also valid as long as it is within a `${}` section, for example `"${resource.attributes['service.namespace']}"`.
+//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
 type OtelStringExpression struct {
 	Expression string `json:"expression"`
 }
@@ -1154,9 +1139,9 @@ type OtelTagMapping struct {
 	// Pattern Optional regex pattern applied to the source value. Capturing groups can be referenced in the target (e.g., ${1}).
 	Pattern *string `json:"pattern,omitempty"`
 
-	// Source An expression that can produce any type. It uses the CEL expression within curly braces `${}` syntax.
+	// Source An expression that can produce any type.
 	// Variables use it to store any type of value. For example, to store a boolean in a variable named  `inTestNamespace` assign
-	// it the expression `"${resource.attributes['service.namespace'] == 'test'}"`. The variable can now be used directly in the conditions like this: `vars.inTestNamespace`.
+	// it the expression `resource.attributes['service.namespace'] == 'test'`. The variable can now be used directly in the conditions like this: `vars.inTestNamespace`.
 	Source OtelAnyExpression `json:"source"`
 
 	// Target Name of the target tag key to which the value should be mapped.
@@ -1167,9 +1152,9 @@ type OtelTagMapping struct {
 type OtelVariableMapping struct {
 	Name string `json:"name"`
 
-	// Value An expression that can produce any type. It uses the CEL expression within curly braces `${}` syntax.
+	// Value An expression that can produce any type.
 	// Variables use it to store any type of value. For example, to store a boolean in a variable named  `inTestNamespace` assign
-	// it the expression `"${resource.attributes['service.namespace'] == 'test'}"`. The variable can now be used directly in the conditions like this: `vars.inTestNamespace`.
+	// it the expression `resource.attributes['service.namespace'] == 'test'`. The variable can now be used directly in the conditions like this: `vars.inTestNamespace`.
 	Value OtelAnyExpression `json:"value"`
 }
 

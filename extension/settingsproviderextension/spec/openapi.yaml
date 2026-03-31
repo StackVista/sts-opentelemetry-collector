@@ -1323,8 +1323,7 @@ components:
       description: |-
         An expression that must produce a string. It must be one of these formats:
           - A plain string, for example `"this is a plain string"`
-          - A string containing a CEL expression within curly braces `${}`, for example "a string with a cel expression: `${resource.attributes['service.namespace']}"`
-        A string with only a cel expression is also valid as long as it is within a `${}` section, for example `"${resource.attributes['service.namespace']}"`.
+          - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
       properties:
         expression:
           type: string
@@ -1334,9 +1333,9 @@ components:
     OtelAnyExpression:
       type: object
       description: |-
-        An expression that can produce any type. It uses the CEL expression within curly braces `${}` syntax.
+        An expression that can produce any type. 
         Variables use it to store any type of value. For example, to store a boolean in a variable named  `inTestNamespace` assign
-        it the expression `"${resource.attributes['service.namespace'] == 'test'}"`. The variable can now be used directly in the conditions like this: `vars.inTestNamespace`.
+        it the expression `resource.attributes['service.namespace'] == 'test'`. The variable can now be used directly in the conditions like this: `vars.inTestNamespace`.
       properties:
         expression:
           type: string
