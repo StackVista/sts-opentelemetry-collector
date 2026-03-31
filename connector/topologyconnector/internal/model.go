@@ -18,6 +18,10 @@ type Resource struct {
 }
 
 func NewResource(attrs map[string]any) *Resource {
+	// Strip internal routing attributes that must never be exposed as topology component tags/labels.
+	delete(attrs, "sts_api_key")
+	delete(attrs, "client_sts_api_key")
+	delete(attrs, "server_sts_api_key")
 	return &Resource{
 		cachedMap: map[string]any{
 			"attributes": attrs,
