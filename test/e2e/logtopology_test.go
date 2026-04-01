@@ -53,10 +53,10 @@ func TestLogToOtelTopology_UpdateComponentAndRelationMappings(t *testing.T) {
 
 	// Update the settings
 	// Component: update name
-	policyServerComponent.Output.Name = harness.StrExpr("policy-server-updated")
+	policyServerComponent.Output.Name = harness.StrExpr("'policy-server-updated'")
 
 	// Relation: update type name
-	policyRelation.Output.TypeName = harness.StrExpr("enforced-by-updated")
+	policyRelation.Output.TypeName = harness.StrExpr("'enforced-by-updated'")
 
 	env.PublishSettingSnapshots(
 		t,

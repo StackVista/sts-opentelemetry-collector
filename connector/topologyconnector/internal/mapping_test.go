@@ -71,8 +71,8 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 						},
 					},
 					Required: &settingsproto.OtelComponentMappingFieldMapping{
-						Configuration: ptr(anyExpr("${omit(span.attributes, ['priority'])}")),
-						Status:        ptr(anyExpr("${pick(span.attributes, ['priority', 'kind'])}")),
+						Configuration: ptr(anyExpr("omit(span.attributes, ['priority'])")),
+						Status:        ptr(anyExpr("pick(span.attributes, ['priority', 'kind'])")),
 						Tags: &[]settingsproto.OtelTagMapping{
 							{
 								Source: anyExpr("span.attributes['kind']"),

@@ -149,17 +149,17 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentAndRelation(t *testing.T
 			Signal: settingsproto.OtelInputSignalList{settingsproto.LOGS},
 		},
 		Output: settingsproto.OtelComponentMappingOutput{
-			Identifier: sExpr("${resource.attributes['service.name']}"),
+			Identifier: sExpr("resource.attributes['service.name']"),
 			Name:       sExpr("name"),
 			TypeName:   sExpr("type"),
 			LayerName:  sExpr("layer"),
 			Required: &settingsproto.OtelComponentMappingFieldMapping{
 				Configuration: &settingsproto.OtelAnyExpression{
-					Expression: "${pick(log.body, ['metadata', 'spec'])}",
+					Expression: "pick(log.body, ['metadata', 'spec'])",
 				},
 				Tags: &[]settingsproto.OtelTagMapping{
 					{
-						Source: aExpr("${log.attributes['my-attr']}"),
+						Source: aExpr("log.attributes['my-attr']"),
 						Target: "my-attr",
 					},
 				},

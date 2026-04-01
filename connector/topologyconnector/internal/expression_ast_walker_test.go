@@ -172,28 +172,28 @@ func TestPickOmitExpressionAstWalker_Walk(t *testing.T) {
 	}{
 		{
 			name: "pick(log.body, [...]) extracts log.body reference",
-			expr: "${pick(log.body, ['metadata', 'spec'])}",
+			expr: "pick(log.body, ['metadata', 'spec'])",
 			wantRefs: []internal.Reference{
 				{Root: "log", Path: []string{"body"}},
 			},
 		},
 		{
 			name: "omit(log.body, [...]) extracts log.body reference",
-			expr: "${omit(log.body, ['status'])}",
+			expr: "omit(log.body, ['status'])",
 			wantRefs: []internal.Reference{
 				{Root: "log", Path: []string{"body"}},
 			},
 		},
 		{
 			name: "pick(resource.attributes, [...]) extracts resource.attributes reference",
-			expr: "${pick(resource.attributes, ['service.name'])}",
+			expr: "pick(resource.attributes, ['service.name'])",
 			wantRefs: []internal.Reference{
 				{Root: "resource", Path: []string{"attributes"}},
 			},
 		},
 		{
 			name: "omit(span.attributes, [...]) extracts span.attributes reference",
-			expr: "${omit(span.attributes, ['http.method'])}",
+			expr: "omit(span.attributes, ['http.method'])",
 			wantRefs: []internal.Reference{
 				{Root: "span", Path: []string{"attributes"}},
 			},
