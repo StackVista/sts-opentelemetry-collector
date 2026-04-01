@@ -94,7 +94,7 @@ func TestExporter_pushLogsData(t *testing.T) {
 	t.Run("test check resource metadata", func(t *testing.T) {
 		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
 			if strings.HasPrefix(query, "INSERT") {
-				require.Equal(t, "https://opentelemetry.io/schemas/1.4.0", values[8])
+				require.Equal(t, "https://opentelemetry.io/schemas/1.7.0", values[8])
 				require.Equal(t, map[string]string{
 					"service.name": "test-service",
 				}, values[9])
