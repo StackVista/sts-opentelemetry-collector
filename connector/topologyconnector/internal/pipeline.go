@@ -6,6 +6,7 @@ import (
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
+	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.uber.org/zap"
@@ -59,6 +60,35 @@ func ConvertMetricsToTopologyStreamMessage(
 		logger,
 		metricsTraverser,
 		settingsproto.METRICS,
+		eval,
+		deduplicator,
+		mapper,
+		componentMappings,
+		relationMappings,
+		collectionTimestampMs,
+		metricsRecorder,
+	)
+}
+
+func ConvertLogToTopologyStreamMessage(
+	ctx context.Context,
+	logger *zap.Logger,
+	eval ExpressionEvaluator,
+	deduplicator Deduplicator,
+	mapper *Mapper,
+	logData plog.Logs,
+	componentMappings []settingsproto.OtelComponentMapping,
+	relationMappings []settingsproto.OtelRelationMapping,
+	collectionTimestampMs int64,
+	metricsRecorder metrics.ConnectorMetricsRecorder,
+) []MessageWithKey {
+	logsTraverser := NewLogTraverser(logData)
+
+	return convertSignalDataToTopologyStreamMessage(
+		ctx,
+		logger,
+		logsTraverser,
+		settingsproto.LOGS,
 		eval,
 		deduplicator,
 		mapper,
@@ -129,6 +159,7 @@ func logResultSummary(
 	components := 0
 	relations := 0
 	mappingErrs := 0
+	var errors []*topostreamv1.TopoStreamError
 
 	for _, result := range results {
 		payload := result.Message.GetPayload()
@@ -143,6 +174,7 @@ func logResultSummary(
 		components += len(data.Components)
 		relations += len(data.Relations)
 		mappingErrs += len(data.Errors)
+		errors = append(errors, data.Errors...)
 	}
 
 	logger.Debug(
@@ -152,6 +184,17 @@ func logResultSummary(
 		zap.Int("relations", relations),
 		zap.Int("mappingErrs", mappingErrs),
 	)
+
+	if mappingErrs > 0 {
+		errMessages := make([]string, 0, len(errors))
+		for _, err := range errors {
+			errMessages = append(errMessages, err.GetMessage())
+		}
+		logger.Debug(
+			"Mapping errors encountered",
+			zap.Strings("errors", errMessages),
+		)
+	}
 }
 
 func ConvertMappingRemovalsToTopologyStreamMessage(

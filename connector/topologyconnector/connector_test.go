@@ -89,7 +89,7 @@ func newConnectorEnv(t *testing.T, signal settingsproto.OtelInputSignal) *connec
 	)
 	expressionRefManager := NewExpressionRefManager(logger, celEvaluator)
 	snapshotManager := NewSnapshotManager(
-		logger, []settingsproto.OtelInputSignal{settingsproto.TRACES, settingsproto.METRICS}, expressionRefManager,
+		logger, []settingsproto.OtelInputSignal{settingsproto.TRACES, settingsproto.METRICS, settingsproto.LOGS}, expressionRefManager,
 	)
 	mapper := internal.NewMapper(
 		ctx,
@@ -492,6 +492,64 @@ func TestConnectorConsumeMetrics(t *testing.T) {
 	})
 }
 
+func TestConnectorConsumeLogs(t *testing.T) {
+	connectorEnv := newConnectorEnv(t, settingsproto.LOGS)
+	provider := NewMockStsSettingsProvider(
+		[]settingsproto.OtelComponentMapping{
+			createSimpleLogComponentMapping(),
+		},
+		[]settingsproto.OtelRelationMapping{
+			createSimpleLogRelationMapping(),
+		},
+	)
+
+	var extensions = map[component.ID]component.Component{
+		component.MustNewID(stsSettingsApi.Type.String()): provider,
+	}
+	host := &mockHost{ext: extensions}
+	err := connectorEnv.connector.Start(connectorEnv.ctx, host)
+	require.NoError(t, err)
+
+	t.Run("skip logs which don't match component conditions", func(t *testing.T) {
+		connectorEnv.logsConsumer.Reset()
+
+		// Send a log that doesn't match the component condition (not a PolicyServer)
+		logs := testResourceLogsWithAttributes(map[string]interface{}{
+			"k8s.resource.kind": "Pod",
+			"k8s.resource.name": "test-pod",
+		})
+
+		assert.Equal(t, 0, connectorEnv.logsConsumer.LogRecordCount())
+
+		err := connectorEnv.connector.ConsumeLogs(connectorEnv.ctx, logs)
+		require.NoError(t, err)
+
+		assert.Equal(t, 0, connectorEnv.logsConsumer.LogRecordCount())
+		assert.Empty(t, connectorEnv.logsConsumer.AllLogs())
+	})
+
+	t.Run("consume logs matching component and relation mappings", func(t *testing.T) {
+		connectorEnv.logsConsumer.Reset()
+
+		// Send a log that matches the PolicyServer component condition
+		policyServerLogs := testResourceLogsWithAttributes(map[string]interface{}{
+			"k8s.resource.kind":      "PolicyServer",
+			"k8s.resource.api_group": "policies.kubewarden.io",
+			"k8s.resource.name":      "default",
+		})
+
+		err := connectorEnv.connector.ConsumeLogs(connectorEnv.ctx, policyServerLogs)
+		require.NoError(t, err)
+
+		// Should produce one component log record
+		logCount := connectorEnv.logsConsumer.LogRecordCount()
+		require.Greater(t, logCount, 0)
+
+		allLogs := connectorEnv.logsConsumer.AllLogs()
+		require.NotEmpty(t, allLogs)
+	})
+}
+
 func TestPublishTopologyMessagesAsLogs(t *testing.T) {
 	connectorEnv := newConnectorEnv(t, settingsproto.METRICS)
 
@@ -742,6 +800,96 @@ func createSimpleMetricRelationMapping(id string) settingsproto.OtelRelationMapp
 			SourceId: strExpr(`resource.attributes["service.name"]`),
 			TargetId: strExpr(`datapoint.attributes["service.name"]`),
 			TypeName: strExpr("'http-request'"),
+		},
+	}
+}
+
+// testResourceLogsWithAttributes creates a plog.Logs with a single log record containing the provided attributes
+// The log body is a structured map (e.g., a Kubernetes object). The mapping engine only processes structured bodies;
+// string bodies from receivers should be parsed upstream (e.g., with a json_parser in the collector pipeline).
+func testResourceLogsWithAttributes(attrs map[string]interface{}) plog.Logs {
+	logs := plog.NewLogs()
+	rl := logs.ResourceLogs().AppendEmpty()
+	rl.Resource().Attributes().FromRaw(map[string]any{ //nolint:errcheck
+		"k8s.cluster.name":   "test-cluster",
+		"k8s.namespace.name": "kubewarden",
+		"service.name":       "kubewarden",
+	})
+	sl := rl.ScopeLogs().AppendEmpty()
+	lr := sl.LogRecords().AppendEmpty()
+	lr.SetTimestamp(pcommon.Timestamp(uint64(time.Now().UnixNano()))) //nolint:gosec
+	// Body is a structured map representing a Kubernetes object.
+	lr.Body().SetEmptyMap().FromRaw(map[string]any{ //nolint:errcheck
+		"apiVersion": "policies.kubewarden.io/v1",
+		"kind":       "PolicyServer",
+		"metadata": map[string]any{
+			"name": "default",
+		},
+		"spec": map[string]any{
+			"version": "1.0.0",
+		},
+	})
+	lr.Attributes().FromRaw(attrs) //nolint:errcheck
+	return logs
+}
+
+func createSimpleLogComponentMapping() settingsproto.OtelComponentMapping {
+	return settingsproto.OtelComponentMapping{
+		Id:            "log-comp-policy-server",
+		Identifier:    "urn:stackpack:kubewarden:shared:otel-component-mapping:policy-server",
+		Name:          "Kubewarden Policy Server",
+		ExpireAfterMs: 300000,
+		Input: settingsproto.OtelInput{
+			Signal: settingsproto.OtelInputSignalList{
+				settingsproto.LOGS,
+			},
+			Resource: settingsproto.OtelInputResource{
+				Scope: &settingsproto.OtelInputScope{
+					Log: &settingsproto.OtelInputLog{
+						Action: ptr(settingsproto.CREATE),
+						Condition: ptr(boolExpr(
+							`log.attributes["k8s.resource.kind"] == "PolicyServer" && log.attributes["k8s.resource.api_group"] == "policies.kubewarden.io"`,
+						)),
+					},
+				},
+			},
+		},
+		Output: settingsproto.OtelComponentMappingOutput{
+			Identifier: strExpr(`urn:kubewarden:cluster/test:policyserver/${log.attributes["k8s.resource.name"]}`),
+			Name:       strExpr(`${log.attributes["k8s.resource.name"]}`),
+			TypeName:   strExpr("policy server"),
+			LayerName:  strExpr("Control Plane"),
+			DomainName: strExpr("Kubernetes"),
+		},
+	}
+}
+
+func createSimpleLogRelationMapping() settingsproto.OtelRelationMapping {
+	return settingsproto.OtelRelationMapping{
+		Id:            "log-rel-policy-enforced-by-server",
+		Identifier:    "urn:stackpack:kubewarden:shared:otel-relation-mapping:policy-enforced-by-server",
+		ExpireAfterMs: 300000,
+		Input: settingsproto.OtelInput{
+			Signal: settingsproto.OtelInputSignalList{
+				settingsproto.LOGS,
+			},
+			Resource: settingsproto.OtelInputResource{
+				Scope: &settingsproto.OtelInputScope{
+					Log: &settingsproto.OtelInputLog{
+						Action: ptr(settingsproto.CREATE),
+						Condition: ptr(boolExpr(
+							`log.attributes["k8s.resource.api_group"] == "policies.kubewarden.io" && ` +
+								`log.attributes["k8s.resource.kind"] == "AdmissionPolicy" && ` +
+								`log.attributes["kubewarden.policy_server"] != null`,
+						)),
+					},
+				},
+			},
+		},
+		Output: settingsproto.OtelRelationMappingOutput{
+			SourceId: strExpr(`urn:kubewarden:cluster/test:namespace/kubewarden:admissionpolicy/${log.attributes["k8s.resource.name"]}`),
+			TargetId: strExpr(`urn:kubewarden:cluster/test:policyserver/${log.attributes["kubewarden.policy_server"]}`),
+			TypeName: strExpr("enforced by"),
 		},
 	}
 }

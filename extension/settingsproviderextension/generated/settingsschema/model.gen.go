@@ -143,6 +143,11 @@ const (
 	TagDisplayTypeTagDisplay TagDisplayType = "TagDisplay"
 )
 
+// Defines values for TagFilterType.
+const (
+	TagFilterTypeTagFilter TagFilterType = "TagFilter"
+)
+
 // Defines values for TagSourceType.
 const (
 	TagSourceTypeTagSource TagSourceType = "TagSource"
@@ -291,6 +296,31 @@ type ComponentOverviewProjection struct {
 	union json.RawMessage
 }
 
+// ComponentPresentationFilter Filter definition for ComponentPresentation.
+// When only `filterId` is provided, the filter references a definition from a less specific presentation.
+// Merge semantics for matching ComponentPresentations:
+//  1. The most specific matching ComponentPresentation's filter list determines which `filterId`s are active.
+//     Only filters whose `filterId` appears in that list are rendered.
+//  2. For each active `filterId`, scalar fields (`displayName`, `menuSection`, `filter`, etc.) are resolved by
+//     falling back through less specific presentations that define the same `filterId`, most specific value wins.
+//  3. Array position determines display order: earlier items are primary (filter bar),
+//     later items are secondary ("More" section).
+type ComponentPresentationFilter struct {
+	DisplayName *FilterName                            `json:"displayName,omitempty"`
+	Filter      *ComponentPresentationFilterDefinition `json:"filter,omitempty"`
+
+	// FilterId Stable identity used for deduplication and cross-stackpack compatibility.
+	FilterId string `json:"filterId"`
+
+	// MenuSection Label to group filters in the UI.
+	MenuSection *string `json:"menuSection,omitempty"`
+}
+
+// ComponentPresentationFilterDefinition defines model for ComponentPresentationFilterDefinition.
+type ComponentPresentationFilterDefinition struct {
+	union json.RawMessage
+}
+
 // ComponentPresentationQueryBinding defines model for ComponentPresentationQueryBinding.
 type ComponentPresentationQueryBinding struct {
 	// Query Stq query that defines to which components does the presentation applies to.
@@ -432,6 +462,12 @@ type DurationProjection struct {
 // DurationProjectionType defines model for DurationProjection.Type.
 type DurationProjectionType string
 
+// FilterName defines model for FilterName.
+type FilterName struct {
+	Plural   string `json:"plural"`
+	Singular string `json:"singular"`
+}
+
 // HealthBadgeDisplay defines model for HealthBadgeDisplay.
 type HealthBadgeDisplay struct {
 	Type HealthBadgeDisplayType `json:"_type"`
@@ -549,8 +585,12 @@ type OverviewColumnDefinition struct {
 	Title      *string                      `json:"title,omitempty"`
 }
 
-// PresentationDefinition defines model for PresentationDefinition.
+// PresentationDefinition Component presentation definition.
+// If multiple ComponentPresentations match, `filters` are merged by filter identity with the most specific presentation winning.
+// Absence of the field keeps legacy behavior (for example, ViewType-based filters) unchanged.
 type PresentationDefinition struct {
+	Filters *[]ComponentPresentationFilter `json:"filters,omitempty"`
+
 	// Highlight Highlight presentation definition. The `fields` define the fields to show in the ab. The `flags` field can be used to enable/disable functionalities.
 	// If multiple ComponentPresentations match, columns are merged by `columnId` according to binding rank. Absence of the field means no overview is shown.
 	Highlight *PresentationHighlight `json:"highlight,omitempty"`
@@ -661,6 +701,17 @@ type TagDisplay struct {
 
 // TagDisplayType defines model for TagDisplay.Type.
 type TagDisplayType string
+
+// TagFilter Tag-based filter. Uses indexed tags via `tagKey`.
+type TagFilter struct {
+	Type TagFilterType `json:"_type"`
+
+	// TagKey Tag key used for filtering and value lookup.
+	TagKey string `json:"tagKey"`
+}
+
+// TagFilterType defines model for TagFilter.Type.
+type TagFilterType string
 
 // TagSource defines model for TagSource.
 type TagSource struct {
@@ -1449,6 +1500,65 @@ func (t ComponentOverviewProjection) MarshalJSON() ([]byte, error) {
 }
 
 func (t *ComponentOverviewProjection) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsTagFilter returns the union data inside the ComponentPresentationFilterDefinition as a TagFilter
+func (t ComponentPresentationFilterDefinition) AsTagFilter() (TagFilter, error) {
+	var body TagFilter
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTagFilter overwrites any union data inside the ComponentPresentationFilterDefinition as the provided TagFilter
+func (t *ComponentPresentationFilterDefinition) FromTagFilter(v TagFilter) error {
+	v.Type = "TagFilter"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTagFilter performs a merge with any union data inside the ComponentPresentationFilterDefinition, using the provided TagFilter
+func (t *ComponentPresentationFilterDefinition) MergeTagFilter(v TagFilter) error {
+	v.Type = "TagFilter"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t ComponentPresentationFilterDefinition) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"_type"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t ComponentPresentationFilterDefinition) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "TagFilter":
+		return t.AsTagFilter()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t ComponentPresentationFilterDefinition) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *ComponentPresentationFilterDefinition) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }

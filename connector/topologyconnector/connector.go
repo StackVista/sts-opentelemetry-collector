@@ -155,6 +155,35 @@ func (p *connectorImpl) ConsumeTraces(ctx context.Context, traceData ptrace.Trac
 	return nil
 }
 
+func (p *connectorImpl) ConsumeLogs(ctx context.Context, logs plog.Logs) error {
+	start := time.Now()
+	collectionTimestampMs := start.UnixMilli()
+
+	componentMappings, relationMappings := p.snapshotManager.Current(p.supportedSignal)
+	messages := internal.ConvertLogToTopologyStreamMessage(
+		ctx,
+		p.logger,
+		p.eval,
+		p.deduplicator,
+		p.mapper,
+		logs,
+		componentMappings,
+		relationMappings,
+		collectionTimestampMs,
+		p.metricsRecorder,
+	)
+
+	duration := time.Since(start)
+	p.publishMessagesAsLogs(ctx, messages)
+
+	p.metricsRecorder.RecordRequestDuration(
+		ctx, duration,
+		settingsproto.LOGS,
+	)
+
+	return nil
+}
+
 func (p *connectorImpl) handleMappingRemovals(
 	ctx context.Context,
 	removedComponentMappings []settingsproto.OtelComponentMapping,

@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
@@ -264,6 +265,7 @@ func (t *TracesTraverser) span(resourceIdx, scopeIdx, spanIdx int, spans ptrace.
 	return s
 }
 
+//nolint:dupl
 func (t *TracesTraverser) Traverse(ctx context.Context, mappingVisitor MappingVisitor) {
 	resourceSpans := t.traces.ResourceSpans()
 	for resourceIdx := 0; resourceIdx < resourceSpans.Len(); resourceIdx++ {
@@ -289,6 +291,101 @@ func (t *TracesTraverser) Traverse(ctx context.Context, mappingVisitor MappingVi
 				span := t.span(resourceIdx, scopeIdx, spanIdx, spans)
 				spanCtx := NewSpanEvalContext(span, scope, resource)
 				mappingVisitor.VisitSpan(ctx, spanCtx)
+			}
+		}
+	}
+}
+
+// ------------------------
+// Log traversal
+// ------------------------
+
+// LogTraverser provides a visitor-based traversal over OpenTelemetry log data.
+// It caches models/structs resembling the Otel data at various levels to avoid repeated conversions and reduce
+// allocation overhead during traversal.
+//
+// Fields:
+//
+//	logData - the raw plog.Logs to traverse
+//	resources  - caches resources by resourceIndex
+//	scopes     - caches scopes by [resourceIndex, scopeIndex]
+//	logs       - caches logs by [resourceIndex, scopeIndex, logIndex]
+type LogTraverser struct {
+	logData plog.Logs
+
+	resources objectCache[int, *Resource] // map[int]Resource
+	scopes    objectCache[[2]int, *Scope] // map[[2]int]Scope
+	logs      objectCache[[3]int, *Log]   // map[[3]int]Log
+}
+
+func NewLogTraverser(logData plog.Logs) *LogTraverser {
+	return &LogTraverser{
+		logData: logData,
+	}
+}
+
+func (l *LogTraverser) resource(resourceIdx int, resources plog.ResourceLogsSlice) *Resource {
+	if cached, ok := l.resources.Load(resourceIdx); ok {
+		return cached
+	}
+	attrs := resources.At(resourceIdx).Resource().Attributes().AsRaw()
+	r := NewResource(attrs)
+	l.resources.Store(resourceIdx, r)
+	return r
+}
+
+func (l *LogTraverser) scope(resourceIdx, scopeIdx int, scopes plog.ScopeLogsSlice) *Scope {
+	key := [2]int{resourceIdx, scopeIdx}
+	if cached, ok := l.scopes.Load(key); ok {
+		return cached
+	}
+	scope := scopes.At(scopeIdx).Scope()
+	s := NewScope(scope.Name(), scope.Version(), scope.Attributes().AsRaw())
+	l.scopes.Store(key, s)
+	return s
+}
+
+func (l *LogTraverser) log(resourceIdx, scopeIdx, logIdx int, logs plog.LogRecordSlice) *Log {
+	key := [3]int{resourceIdx, scopeIdx, logIdx}
+	if cached, ok := l.logs.Load(key); ok {
+		return cached
+	}
+	logRecord := logs.At(logIdx)
+	log := NewLog(
+		logRecord.EventName(),
+		logRecord.Body().AsRaw(),
+		logRecord.Attributes().AsRaw(),
+	)
+	l.logs.Store(key, log)
+	return log
+}
+
+//nolint:dupl
+func (l *LogTraverser) Traverse(ctx context.Context, mappingVisitor MappingVisitor) {
+	resourceLogs := l.logData.ResourceLogs()
+	for resourceIdx := 0; resourceIdx < resourceLogs.Len(); resourceIdx++ {
+		rl := resourceLogs.At(resourceIdx)
+		resource := l.resource(resourceIdx, resourceLogs)
+		resourceCtx := NewLogEvalContext(nil, nil, resource)
+
+		if mappingVisitor.VisitResource(ctx, resourceCtx) == VisitSkip {
+			continue
+		}
+
+		scopeLogs := rl.ScopeLogs()
+		for scopeIdx := 0; scopeIdx < scopeLogs.Len(); scopeIdx++ {
+			sl := scopeLogs.At(scopeIdx)
+			scope := l.scope(resourceIdx, scopeIdx, scopeLogs)
+			scopeCtx := NewLogEvalContext(nil, scope, resource)
+			if mappingVisitor.VisitScope(ctx, scopeCtx) == VisitSkip {
+				continue
+			}
+
+			logRecords := sl.LogRecords()
+			for logIdx := 0; logIdx < logRecords.Len(); logIdx++ {
+				log := l.log(resourceIdx, scopeIdx, logIdx, logRecords)
+				logCtx := NewLogEvalContext(log, scope, resource)
+				mappingVisitor.VisitLog(ctx, logCtx)
 			}
 		}
 	}

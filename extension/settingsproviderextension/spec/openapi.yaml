@@ -1118,6 +1118,8 @@ components:
           $ref: "#/components/schemas/OtelInputMetric"
         span:
           $ref: "#/components/schemas/OtelInputSpan"
+        log:
+          $ref: "#/components/schemas/OtelInputLog"
 
     OtelInputMetric:
       type: object
@@ -1147,6 +1149,17 @@ components:
       type: object
       description: |-
         Defines conditional mapping at the resource -> scope -> span level.
+        If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
+      properties:
+        condition:
+          $ref: "#/components/schemas/OtelBooleanExpression"
+        action:
+          $ref: "#/components/schemas/OtelInputConditionAction"
+
+    OtelInputLog:
+      type: object
+      description: |-
+        Defines conditional mapping at the resource -> scope -> log level.
         If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
       properties:
         condition:
@@ -1214,6 +1227,18 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/OtelTagMapping"
+        configuration:
+          $ref: "#/components/schemas/OtelAnyExpression"
+          description: >
+            A CEL expression that resolves to a map representing the full configuration of the component. The result is stored and displayed as-is. Typically maps
+            to the entire input object (e.g. `log.body`) or a sub-object such as `log.body['spec']`. Use the `omit()` helper to exclude keys that should
+            not be part of the configuration (e.g. `omit(log.body, ['status', 'managedFields'])`). Or, inversely, use the `pick()` helper to only include specific keys (e.g. `pick(log.body, ['spec'])`).
+        status:
+          $ref: "#/components/schemas/OtelAnyExpression"
+          description: >
+            A CEL expression that resolves to a map representing the current status of the component. The result is stored and displayed as-is, separate from the configuration. 
+            Typically maps to a status sub-object of the input (e.g. `log.body['status']`). 
+            Note: component health state (CLEAR / DEVIATING / CRITICAL) is not derived from this field — it is determined downstream by monitors configured on the component.
 
     OtelRelationMappingOutput:
       type: object
@@ -1274,7 +1299,10 @@ components:
             - `datapoint.attributes`
 
           • **LOGS**
-          Not yet supported.
+          Provides access to:
+            - `resource.attributes`
+            - `scope.name`, `scope.version`, `scope.attributes`
+            - `log.eventName`, `log.attributes`, `log.body`
 
         For example, if the signal is `METRICS`, expressions may reference:
         `resource.attributes["service.name"]`, `scope.attributes["env"]`,
@@ -1295,8 +1323,7 @@ components:
       description: |-
         An expression that must produce a string. It must be one of these formats:
           - A plain string, for example `"this is a plain string"`
-          - A string containing a CEL expression within curly braces `${}`, for example "a string with a cel expression: `${resource.attributes['service.namespace']}"`
-        A string with only a cel expression is also valid as long as it is within a `${}` section, for example `"${resource.attributes['service.namespace']}"`.
+          - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
       properties:
         expression:
           type: string
@@ -1306,9 +1333,9 @@ components:
     OtelAnyExpression:
       type: object
       description: |-
-        An expression that can produce any type. It uses the CEL expression within curly braces `${}` syntax.
+        An expression that can produce any type. 
         Variables use it to store any type of value. For example, to store a boolean in a variable named  `inTestNamespace` assign
-        it the expression `"${resource.attributes['service.namespace'] == 'test'}"`. The variable can now be used directly in the conditions like this: `vars.inTestNamespace`.
+        it the expression `resource.attributes['service.namespace'] == 'test'`. The variable can now be used directly in the conditions like this: `vars.inTestNamespace`.
       properties:
         expression:
           type: string

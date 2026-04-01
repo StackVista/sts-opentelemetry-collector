@@ -1282,7 +1282,7 @@ func TestPipeline_Deduplication(t *testing.T) {
 		settingsproto.METRICS: {
 			"urn:otel-component-mapping:dedup-metrics-comp": types.NewExpressionRefSummary(
 				types.EntityRefSummary{}, types.EntityRefSummary{}, types.EntityRefSummary{},
-				types.EntityRefSummary{}, types.EntityRefSummary{},
+				types.EntityRefSummary{}, types.EntityRefSummary{}, types.EntityRefSummary{},
 			),
 		},
 	}

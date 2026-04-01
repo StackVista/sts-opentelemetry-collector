@@ -34,6 +34,14 @@ components:
           $ref: "#/components/schemas/PresentationOverview"
         highlight:
           $ref: "#/components/schemas/PresentationHighlight"
+        filters:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComponentPresentationFilter"
+      description: |
+        Component presentation definition.
+        If multiple ComponentPresentations match, `filters` are merged by filter identity with the most specific presentation winning.
+        Absence of the field keeps legacy behavior (for example, ViewType-based filters) unchanged.
 
     PresentationName:
       type: object
@@ -48,6 +56,17 @@ components:
         - singular
         - plural
         - title
+
+    FilterName:
+      type: object
+      properties:
+        singular:
+          type: string
+        plural:
+          type: string
+      required:
+        - singular
+        - plural
 
     PresentationOverview:
       type: object
@@ -66,7 +85,6 @@ components:
         Overview presentation definition. The `columns` field defines the columns to show in the overview table. The `flags` field can be used to enable/disable functionalities.
         If multiple ComponentPresentations match, columns are merged by `columnId` according to binding rank. Absence of the field means no overview is shown.
       required:
-        - title
         - columns
         - name
 
@@ -933,6 +951,55 @@ components:
       enum:
         - NoTopologyFilters
         - CardsLayout
+
+    ComponentPresentationFilter:
+      type: object
+      properties:
+        filterId:
+          type: string
+          description: |
+            Stable identity used for deduplication and cross-stackpack compatibility.
+        displayName:
+          $ref: "#/components/schemas/FilterName"
+        menuSection:
+          type: string
+          description: |
+            Label to group filters in the UI.
+        filter:
+          $ref: "#/components/schemas/ComponentPresentationFilterDefinition"
+      required:
+        - filterId
+      description: |
+        Filter definition for ComponentPresentation.
+        When only `filterId` is provided, the filter references a definition from a less specific presentation.
+        Merge semantics for matching ComponentPresentations:
+        1) The most specific matching ComponentPresentation's filter list determines which `filterId`s are active.
+           Only filters whose `filterId` appears in that list are rendered.
+        2) For each active `filterId`, scalar fields (`displayName`, `menuSection`, `filter`, etc.) are resolved by
+           falling back through less specific presentations that define the same `filterId`, most specific value wins.
+        3) Array position determines display order: earlier items are primary (filter bar),
+           later items are secondary ("More" section).
+
+    ComponentPresentationFilterDefinition:
+      oneOf:
+        - $ref: "#/components/schemas/TagFilter"
+      discriminator:
+        propertyName: _type
+
+    TagFilter:
+      type: object
+      properties:
+        _type:
+          type: string
+          enum: [TagFilter]
+        tagKey:
+          type: string
+          description: Tag key used for filtering and value lookup.
+      required:
+        - _type
+        - tagKey
+      description: |
+        Tag-based filter. Uses indexed tags via `tagKey`.
 
     ViewTypeFilter:
       properties:

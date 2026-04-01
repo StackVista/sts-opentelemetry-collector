@@ -32,6 +32,7 @@ const (
 //
 //	Metrics: Resource -> Scope -> Metric -> Datapoint
 //	Traces:  Resource -> Scope -> Span
+//	Logs:    Resource -> Scope -> Log
 type MappingVisitor interface {
 	VisitResource(ctx context.Context, evalCtx *ExpressionEvalContext) VisitResult
 	VisitScope(ctx context.Context, evalCtx *ExpressionEvalContext) VisitResult
@@ -39,6 +40,7 @@ type MappingVisitor interface {
 	VisitMetric(ctx context.Context, evalCtx *ExpressionEvalContext) VisitResult
 	VisitDatapoint(ctx context.Context, evalCtx *ExpressionEvalContext)
 	VisitSpan(ctx context.Context, evalCtx *ExpressionEvalContext)
+	VisitLog(ctx context.Context, evalCtx *ExpressionEvalContext)
 }
 
 type GenericMappingVisitor[T settingsproto.SettingExtension] struct {
@@ -93,4 +95,13 @@ func (v *GenericMappingVisitor[T]) VisitSpan(ctx context.Context, evalCtx *Expre
 	}
 	spanInput := scopeInput.Span
 	v.handler.HandleTerminalVisit(ctx, evalCtx, spanInput.Action, spanInput.Condition)
+}
+
+func (v *GenericMappingVisitor[T]) VisitLog(ctx context.Context, evalCtx *ExpressionEvalContext) {
+	scopeInput := v.mappingCtx.Mapping.GetInput().Resource.Scope
+	if scopeInput == nil || scopeInput.Log == nil {
+		return
+	}
+	logInput := scopeInput.Log
+	v.handler.HandleTerminalVisit(ctx, evalCtx, logInput.Action, logInput.Condition)
 }

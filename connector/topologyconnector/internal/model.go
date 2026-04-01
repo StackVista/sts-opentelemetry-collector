@@ -1,5 +1,10 @@
 package internal
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
 // -----------------------------
 // Intermediate OTel model types used to cache relevant data for expressions at various levels.
 // -----------------------------
@@ -46,7 +51,7 @@ func (s *Scope) ToMap() map[string]any {
 }
 
 type Span struct {
-	// not storing individuals fields on the struct as we don't need them (at the moment),
+	// not storing individual fields on the struct as we don't need them (at the moment),
 	// so they'll just use unnecessary memory
 
 	cachedMap map[string]any
@@ -100,4 +105,48 @@ func NewDatapoint(attrs map[string]any) *Datapoint {
 
 func (d *Datapoint) ToMap() map[string]any {
 	return d.cachedMap
+}
+
+type Log struct {
+	cachedMap map[string]any
+}
+
+// NewLog constructs a Log from a log record's data. The body is stored as-is:
+// - If it's a structured map, it's used directly
+// - If it's JSON bytes, it's unmarshaled to a map
+// - Otherwise (including unstructured text), it's stored unparsed
+func NewLog(
+	name string, body any, attrs map[string]any,
+) *Log {
+	var processedBody any
+
+	// Try to use body as a map directly
+	if m, ok := body.(map[string]any); ok {
+		processedBody = m
+	} else if b, ok := body.([]byte); ok {
+		// Try to unmarshal JSON bytes, fall back to string if not valid JSON
+		var bodyMap map[string]any
+		if err := json.Unmarshal(b, &bodyMap); err != nil {
+			processedBody = string(b)
+		} else {
+			processedBody = bodyMap
+		}
+	} else if s, ok := body.(string); ok {
+		processedBody = s
+	} else {
+		// For other types, convert to string representation
+		processedBody = fmt.Sprintf("%v", body)
+	}
+
+	return &Log{
+		cachedMap: map[string]any{
+			"name":       name,
+			"body":       processedBody,
+			"attributes": attrs,
+		},
+	}
+}
+
+func (l *Log) ToMap() map[string]any {
+	return l.cachedMap
 }
