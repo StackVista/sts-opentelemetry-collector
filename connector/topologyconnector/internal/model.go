@@ -13,11 +13,19 @@ type OtelDataType interface {
 	ToMap() map[string]any
 }
 
+func stripSensitiveAttributes(attrs map[string]any) {
+	// Strip internal routing attributes that must never be exposed as topology component tags/labels.
+	delete(attrs, "sts_api_key")
+	delete(attrs, "client_sts_api_key")
+	delete(attrs, "server_sts_api_key")
+}
+
 type Resource struct {
 	cachedMap map[string]any
 }
 
 func NewResource(attrs map[string]any) *Resource {
+	stripSensitiveAttributes(attrs)
 	return &Resource{
 		cachedMap: map[string]any{
 			"attributes": attrs,
@@ -58,6 +66,7 @@ type Span struct {
 }
 
 func NewSpan(name, kind, statusCode, statusMessage string, attrs map[string]any) *Span {
+	stripSensitiveAttributes(attrs)
 	return &Span{
 		cachedMap: map[string]any{
 			"name":          name,
@@ -96,6 +105,7 @@ type Datapoint struct {
 }
 
 func NewDatapoint(attrs map[string]any) *Datapoint {
+	stripSensitiveAttributes(attrs)
 	return &Datapoint{
 		cachedMap: map[string]any{
 			"attributes": attrs,
@@ -118,6 +128,8 @@ type Log struct {
 func NewLog(
 	name string, body any, attrs map[string]any,
 ) *Log {
+	stripSensitiveAttributes(attrs)
+
 	var processedBody any
 
 	// Try to use body as a map directly
