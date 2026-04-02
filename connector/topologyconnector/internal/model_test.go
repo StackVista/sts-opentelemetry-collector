@@ -140,3 +140,80 @@ func TestNewResource_stripsSensitiveAttributes(t *testing.T) {
 	_, hasServerKey := attributes["server_sts_api_key"]
 	require.False(t, hasServerKey, "server_sts_api_key should be stripped from resource attributes")
 }
+
+func TestNewSpan_stripsSensitiveAttributes(t *testing.T) {
+	attrs := map[string]any{
+		"http.method":        "GET",
+		"http.status_code":   200,
+		"sts_api_key":        "SECRET_KEY",
+		"client_sts_api_key": "CLIENT_SECRET",
+		"server_sts_api_key": "SERVER_SECRET",
+	}
+
+	span := internal.NewSpan("test_span", "client", "OK", "", attrs)
+	spanMap := span.ToMap()
+	attributes, ok := spanMap["attributes"].(map[string]any)
+	require.True(t, ok, "attributes should be a map[string]any")
+
+	require.Equal(t, "GET", attributes["http.method"])
+	require.Equal(t, 200, attributes["http.status_code"])
+
+	_, hasAPIKey := attributes["sts_api_key"]
+	require.False(t, hasAPIKey, "sts_api_key should be stripped from span attributes")
+
+	_, hasClientKey := attributes["client_sts_api_key"]
+	require.False(t, hasClientKey, "client_sts_api_key should be stripped from span attributes")
+
+	_, hasServerKey := attributes["server_sts_api_key"]
+	require.False(t, hasServerKey, "server_sts_api_key should be stripped from span attributes")
+}
+
+func TestNewDatapoint_stripsSensitiveAttributes(t *testing.T) {
+	attrs := map[string]any{
+		"cpu":                "0.5",
+		"sts_api_key":        "SECRET_KEY",
+		"client_sts_api_key": "CLIENT_SECRET",
+		"server_sts_api_key": "SERVER_SECRET",
+	}
+
+	datapoint := internal.NewDatapoint(attrs)
+	datapointMap := datapoint.ToMap()
+	attributes, ok := datapointMap["attributes"].(map[string]any)
+	require.True(t, ok, "attributes should be a map[string]any")
+
+	require.Equal(t, "0.5", attributes["cpu"])
+
+	_, hasAPIKey := attributes["sts_api_key"]
+	require.False(t, hasAPIKey, "sts_api_key should be stripped from datapoint attributes")
+
+	_, hasClientKey := attributes["client_sts_api_key"]
+	require.False(t, hasClientKey, "client_sts_api_key should be stripped from datapoint attributes")
+
+	_, hasServerKey := attributes["server_sts_api_key"]
+	require.False(t, hasServerKey, "server_sts_api_key should be stripped from datapoint attributes")
+}
+
+func TestNewLog_stripsSensitiveAttributes(t *testing.T) {
+	attrs := map[string]any{
+		"log.level":          "info",
+		"sts_api_key":        "SECRET_KEY",
+		"client_sts_api_key": "CLIENT_SECRET",
+		"server_sts_api_key": "SERVER_SECRET",
+	}
+
+	log := internal.NewLog("test_log", "log message", attrs)
+	logMap := log.ToMap()
+	attributes, ok := logMap["attributes"].(map[string]any)
+	require.True(t, ok, "attributes should be a map[string]any")
+
+	require.Equal(t, "info", attributes["log.level"])
+
+	_, hasAPIKey := attributes["sts_api_key"]
+	require.False(t, hasAPIKey, "sts_api_key should be stripped from log attributes")
+
+	_, hasClientKey := attributes["client_sts_api_key"]
+	require.False(t, hasClientKey, "client_sts_api_key should be stripped from log attributes")
+
+	_, hasServerKey := attributes["server_sts_api_key"]
+	require.False(t, hasServerKey, "server_sts_api_key should be stripped from log attributes")
+}
