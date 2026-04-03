@@ -216,6 +216,60 @@ func TestShouldSend_RefreshAfterThreshold(t *testing.T) {
 	require.True(t, send3)
 }
 
+func TestProjectionHash_DifferentLogBodiesProduceDifferentHashes(t *testing.T) {
+	ref := types.NewExpressionRefSummary(
+		types.EntityRefSummary{},
+		types.EntityRefSummary{FieldKeys: []string{"body"}}, // Log refs body
+		types.EntityRefSummary{},
+		types.EntityRefSummary{},
+		types.EntityRefSummary{},
+		types.EntityRefSummary{},
+	)
+	refSummaries := newExpressionRefSummaryForSignal(settingsproto.LOGS, "m1", *ref)
+	d := newDedup(t, 0.5, refSummaries)
+
+	ctx1 := &ExpressionEvalContext{
+		Resource: NewResource(map[string]any{"k8s.cluster.name": "test"}),
+		Log:      NewLog("event1", map[string]any{"kind": "WorkloadPolicy", "metadata": map[string]any{"name": "policy-a"}}, nil),
+	}
+	ctx2 := &ExpressionEvalContext{
+		Resource: NewResource(map[string]any{"k8s.cluster.name": "test"}),
+		Log:      NewLog("event2", map[string]any{"kind": "WorkloadPolicy", "metadata": map[string]any{"name": "policy-b"}}, nil),
+	}
+
+	h1 := d.hasher.ProjectionHash("m1", settingsproto.LOGS, ctx1, ref)
+	h2 := d.hasher.ProjectionHash("m1", settingsproto.LOGS, ctx2, ref)
+	require.NotEqual(t, h1, h2, "different log bodies must produce different hashes")
+}
+
+func TestShouldSend_DifferentLogRecordsNotDeduplicated(t *testing.T) {
+	ref := types.NewExpressionRefSummary(
+		types.EntityRefSummary{},
+		types.EntityRefSummary{FieldKeys: []string{"body"}},
+		types.EntityRefSummary{},
+		types.EntityRefSummary{},
+		types.EntityRefSummary{},
+		types.EntityRefSummary{},
+	)
+	refSummaries := newExpressionRefSummaryForSignal(settingsproto.LOGS, "m1", *ref)
+	d := newDedup(t, 0.5, refSummaries)
+
+	ctx1 := &ExpressionEvalContext{
+		Resource: NewResource(map[string]any{"k8s.cluster.name": "test"}),
+		Log:      NewLog("event1", map[string]any{"kind": "WorkloadPolicy", "metadata": map[string]any{"name": "policy-a"}}, nil),
+	}
+	ctx2 := &ExpressionEvalContext{
+		Resource: NewResource(map[string]any{"k8s.cluster.name": "test"}),
+		Log:      NewLog("event2", map[string]any{"kind": "WorkloadPolicy", "metadata": map[string]any{"name": "policy-b"}}, nil),
+	}
+
+	send1 := d.ShouldSend("m1", settingsproto.LOGS, ctx1, time.Minute)
+	require.True(t, send1, "first log record should be sent")
+
+	send2 := d.ShouldSend("m1", settingsproto.LOGS, ctx2, time.Minute)
+	require.True(t, send2, "second log record with different body should also be sent")
+}
+
 func testCacheSettings() metrics.MeteredCacheSettings {
 	return metrics.MeteredCacheSettings{
 		Size:              100,
