@@ -260,6 +260,12 @@ func (s *SignalMappingProjectionHasher) ProjectionHash(
 	}
 	mustWrite(h, separator)
 
+	// Log attributes and body (only referenced)
+	if ctx.Log != nil && ref != nil && ref.Log.HasRefs() {
+		hashSelectedEntityFields(h, ctx.Log.ToMap(), ref.Log, 'L')
+	}
+	mustWrite(h, separator)
+
 	return hex.EncodeToString(h.Sum(nil))
 }
 
