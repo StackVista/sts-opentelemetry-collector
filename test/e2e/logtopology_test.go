@@ -3,6 +3,7 @@ package e2e
 
 import (
 	"testing"
+	"time"
 
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
@@ -29,6 +30,35 @@ func TestLogToOtelTopology_CreateComponentAndRelationMappings(t *testing.T) {
 
 	assertLogComponents(t, components)
 	assertLogRelations(t, relations)
+}
+
+func TestLogToOtelTopology_CreateComponentAndRelationMappings_DeduplicationEnabled(t *testing.T) {
+	env := harness.SetupTopologyTest(t, 1, true)
+	defer env.Cleanup()
+
+	env.PublishSettingSnapshots(
+		t,
+		otelComponentMappingSnapshot(otelLogComponentMappingSpecPolicyServer()),
+		otelRelationMappingSnapshot(otelLogRelationMappingSpecPolicyEnforcedByServer()),
+	)
+	sendLogs(t, env)
+
+	recs := env.ConsumeTopologyRecords(t, 4)
+	components, relations, errs := harness.ExtractComponentsAndRelations(t, recs)
+	require.Len(t, errs, 0)
+
+	assertLogComponents(t, components)
+	assertLogRelations(t, relations)
+
+	// send logs again (same input) - should not produce any new topology records
+	sendLogs(t, env)
+
+	recs, err := env.Kafka.TopologyConsumer.ConsumeTopology(env.Ctx, 4, time.Second*5)
+	require.NoError(t, err)
+	components, relations, errs = harness.ExtractComponentsAndRelations(t, recs)
+	require.Len(t, errs, 0)
+	require.Len(t, components, 0)
+	require.Len(t, relations, 0)
 }
 
 func TestLogToOtelTopology_UpdateComponentAndRelationMappings(t *testing.T) {
