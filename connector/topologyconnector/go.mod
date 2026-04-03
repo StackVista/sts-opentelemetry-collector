@@ -3,7 +3,7 @@ module github.com/stackvista/sts-opentelemetry-collector/connector/topologyconne
 go 1.25.3
 
 require (
-	github.com/google/cel-go v0.26.1
+	github.com/google/cel-go v0.27.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/oapi-codegen/oapi-codegen/v2 v2.4.1
 	github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter v0.0.0-20251024135550-777ec0cf14f2
@@ -22,7 +22,7 @@ require (
 )
 
 require (
-	cel.dev/expr v0.24.0 // indirect
+	cel.dev/expr v0.25.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect

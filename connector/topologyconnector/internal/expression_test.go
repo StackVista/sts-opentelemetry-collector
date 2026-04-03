@@ -661,6 +661,79 @@ func makeLogContext() ExpressionEvalContext {
 	}
 }
 
+func TestEvalStringExpression_TypeConversionWithDynamicTypes(t *testing.T) {
+	eval, err := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
+	require.NoError(t, err)
+
+	ctx := makeContext(true, true)
+
+	tests := []struct {
+		name        string
+		expr        string
+		expected    string
+		errContains string
+	}{
+		{
+			name:     "string attribute with bracket notation",
+			expr:     `"prefix:" + span.attributes["http.method"]`,
+			expected: "prefix:GET",
+		},
+		{
+			name:     "string attribute with dot notation",
+			expr:     `"prefix:" + resource.attributes.env`,
+			expected: "prefix:dev",
+		},
+		{
+			name:        "int attribute fails without cast (bracket notation requires OptionalTypes)",
+			expr:        `"status:" + span.attributes["http.status_code"]`,
+			errContains: "no such overload",
+		},
+		{
+			name:     "int attribute with string() cast (bracket notation)",
+			expr:     `"status:" + string(span.attributes["http.status_code"])`,
+			expected: "status:200",
+		},
+		{
+			name:     "int attribute with string(int()) double cast (explicit type)",
+			expr:     `"status:" + string(int(span.attributes["http.status_code"]))`,
+			expected: "status:200",
+		},
+		{
+			name:     "float attribute with string() cast (bracket notation)",
+			expr:     `"pi=" + string(span.attributes["pi"])`,
+			expected: "pi=3.14",
+		},
+		{
+			name:     "boolean attribute with string() cast (bracket notation)",
+			expr:     `"sampled=" + string(span.attributes["sampled"])`,
+			expected: "sampled=true",
+		},
+		{
+			name:     "concatenate multiple types (string, int, float, bool)",
+			expr:     `resource.attributes["service.name"] + ":" + string(span.attributes["http.status_code"]) + ":" + string(span.attributes["pi"]) + ":" + string(span.attributes["sampled"])`,
+			expected: "cart-service:200:3.14:true",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := eval.EvalStringExpression(
+				settingsproto.OtelStringExpression{Expression: tt.expr},
+				&ctx,
+			)
+
+			if tt.errContains != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.errContains)
+				return
+			}
+
+			require.NoError(t, err, "expression: %s", tt.expr)
+			require.Equal(t, tt.expected, result, "expression: %s", tt.expr)
+		})
+	}
+}
+
 func TestEvalMapExpression_PickOmit(t *testing.T) {
 	eval, err := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, 30*time.Second))
 	require.NoError(t, err)

@@ -159,7 +159,15 @@ func NewCELEvaluator(ctx context.Context, cacheSettings metrics.MeteredCacheSett
 		cel.Variable("scope", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("resource", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("vars", cel.MapType(cel.StringType, cel.DynType)),
-		ext.Strings(), // enables string manipulation functions
+		cel.Variable("test_int", cel.IntType),
+		// NOTE: The OptionalTypes library enables type conversion of values accessed via bracket notation map indexing.
+		// When accessing map values with brackets (e.g., span.attributes["key"]), the returned value has type 'dyn'.
+		// Without OptionalTypes, string() conversion fails:
+		// - string(span.attributes["http.status_code"]) -> "no such overload: string(int)"
+		// With OptionalTypes, the index operator properly handles dyn types, enabling string conversion and concatenation.
+		// Note: Dot notation (span.attributes.key) works without OptionalTypes, but bracket notation requires it.
+		cel.OptionalTypes(),
+		ext.Strings(), // enables string manipulation functions (matches, startsWith, endsWith, etc.)
 	}
 	envOpts = append(envOpts, celCustomFunctions()...)
 	env, err := cel.NewEnv(envOpts...)
