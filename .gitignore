@@ -5,3 +5,4 @@ dev-config.yaml
 .trivy-cache/
 # TODO: remove
 test/log-mappings/
+docs/
