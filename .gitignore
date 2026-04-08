@@ -6,3 +6,4 @@ dev-config.yaml
 # TODO: remove
 test/log-mappings/
 docs/
+examples/
