@@ -26,6 +26,8 @@ receivers:
   - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.138.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.138.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sobjectsreceiver v0.138.0
+  - gomod: github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver v0.0.0
+    path: ./receiver/k8scrdreceiver
 
 extensions:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.138.0
