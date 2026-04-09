@@ -1,13 +1,16 @@
 package k8scrdreceiver
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
 
+	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
@@ -125,4 +128,25 @@ func buildCRDLogRecord(
 // formatGVRKey returns a unique key for a GroupVersionResource.
 func formatGVRKey(gvr schema.GroupVersionResource) string {
 	return fmt.Sprintf("%s/%s/%s", gvr.Group, gvr.Version, gvr.Resource)
+}
+
+// isPermissionDenied checks if an error is a Kubernetes RBAC permission denied error
+func isPermissionDenied(err error) bool {
+	return apierrors.IsForbidden(err) || apierrors.IsUnauthorized(err)
+}
+
+// emitLog builds and sends a log record to the consumer.
+// This is the unified emit helper used by both pull and watch modes.
+func emitLog(
+	ctx context.Context,
+	cons consumer.Logs,
+	obj *unstructured.Unstructured,
+	eventType watch.EventType,
+	buildLogFn func(*unstructured.Unstructured, watch.EventType, time.Time) (plog.Logs, error),
+) error {
+	logs, err := buildLogFn(obj, eventType, time.Now())
+	if err != nil {
+		return err
+	}
+	return cons.ConsumeLogs(ctx, logs)
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"k8s.io/client-go/dynamic"
 )
@@ -15,6 +16,22 @@ const (
 	DiscoveryModeAPIGroups DiscoveryMode = "api_groups"
 	DiscoveryModeAll       DiscoveryMode = "all"
 )
+
+// PullConfig configures pull mode for periodic CRD/CR collection
+type PullConfig struct {
+	// Enabled determines if pull mode is active
+	Enabled bool `mapstructure:"enabled"`
+	// Interval for pull mode - how often to list all CRDs/CRs (default: 1h, min: 1m)
+	Interval time.Duration `mapstructure:"interval"`
+}
+
+// WatchConfig configures watch mode for real-time CRD/CR updates
+type WatchConfig struct {
+	// Enabled determines if watch mode is active
+	Enabled bool `mapstructure:"enabled"`
+	// IncludeInitialState emits existing CRs on startup
+	IncludeInitialState bool `mapstructure:"include_initial_state"`
+}
 
 // APIGroupFilters defines inclusion and exclusion patterns for API groups
 type APIGroupFilters struct {
@@ -31,13 +48,29 @@ type APIGroupFilters struct {
 
 // Config defines configuration for the k8scrd receiver
 type Config struct {
-	APIConfig           APIConfig        `mapstructure:",squash"`
-	DiscoveryMode       DiscoveryMode    `mapstructure:"discovery_mode"`
-	APIGroupFilters     *APIGroupFilters `mapstructure:"api_group_filters"`
-	IncludeInitialState bool             `mapstructure:"include_initial_state"`
+	APIConfig       APIConfig        `mapstructure:",squash"`
+	Pull            PullConfig       `mapstructure:"pull"`
+	Watch           WatchConfig      `mapstructure:"watch"`
+	DiscoveryMode   DiscoveryMode    `mapstructure:"discovery_mode"`
+	APIGroupFilters *APIGroupFilters `mapstructure:"api_group_filters"`
 }
 
 func (c *Config) Validate() error {
+	// Validate that at least one mode is enabled
+	if !c.Pull.Enabled && !c.Watch.Enabled {
+		return errors.New("at least one mode (pull or watch) must be enabled")
+	}
+
+	// Pull mode validations
+	if c.Pull.Enabled {
+		if c.Pull.Interval == 0 {
+			return errors.New("pull interval is required when pull mode is enabled")
+		}
+		if c.Pull.Interval < 1*time.Minute {
+			return errors.New("pull interval must be at least 1 minute")
+		}
+	}
+
 	if c.DiscoveryMode == "" {
 		c.DiscoveryMode = DiscoveryModeAPIGroups
 	}

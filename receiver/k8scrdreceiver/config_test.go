@@ -3,6 +3,7 @@ package k8scrdreceiver
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,6 +19,10 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "valid config with api_groups mode",
 			config: &Config{
+				Watch: WatchConfig{
+					Enabled:             true,
+					IncludeInitialState: true,
+				},
 				DiscoveryMode: DiscoveryModeAPIGroups,
 				APIGroupFilters: &APIGroupFilters{
 					Include: []string{"*"},
@@ -29,6 +34,9 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "valid config with all mode",
 			config: &Config{
+				Watch: WatchConfig{
+					Enabled: true,
+				},
 				DiscoveryMode: DiscoveryModeAll,
 			},
 			wantErr: false,
@@ -36,6 +44,9 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "valid config with specific API groups",
 			config: &Config{
+				Watch: WatchConfig{
+					Enabled: true,
+				},
 				DiscoveryMode: DiscoveryModeAPIGroups,
 				APIGroupFilters: &APIGroupFilters{
 					Include: []string{"policies.kubewarden.io", "*.suse.com"},
@@ -47,6 +58,9 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "empty include patterns",
 			config: &Config{
+				Watch: WatchConfig{
+					Enabled: true,
+				},
 				DiscoveryMode: DiscoveryModeAPIGroups,
 				APIGroupFilters: &APIGroupFilters{
 					Include: []string{},
@@ -59,6 +73,9 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "invalid discovery mode",
 			config: &Config{
+				Watch: WatchConfig{
+					Enabled: true,
+				},
 				DiscoveryMode: "invalid",
 			},
 			wantErr: true,
@@ -70,6 +87,9 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "empty discovery mode defaults to api_groups",
 			config: &Config{
+				Watch: WatchConfig{
+					Enabled: true,
+				},
 				DiscoveryMode: "",
 			},
 			wantErr: false,
@@ -77,8 +97,115 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "nil api_group_filters gets default",
 			config: &Config{
+				Watch: WatchConfig{
+					Enabled: true,
+				},
 				DiscoveryMode:   DiscoveryModeAPIGroups,
 				APIGroupFilters: nil,
+			},
+			wantErr: false,
+		},
+		{
+			name: "watch mode only (valid)",
+			config: &Config{
+				Watch: WatchConfig{
+					Enabled:             true,
+					IncludeInitialState: true,
+				},
+				DiscoveryMode: DiscoveryModeAPIGroups,
+				APIGroupFilters: &APIGroupFilters{
+					Include: []string{"*"},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "pull mode only (valid)",
+			config: &Config{
+				Pull: PullConfig{
+					Enabled:  true,
+					Interval: 5 * time.Minute,
+				},
+				DiscoveryMode: DiscoveryModeAPIGroups,
+				APIGroupFilters: &APIGroupFilters{
+					Include: []string{"*"},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "both pull and watch enabled (valid)",
+			config: &Config{
+				Pull: PullConfig{
+					Enabled:  true,
+					Interval: 15 * time.Minute,
+				},
+				Watch: WatchConfig{
+					Enabled:             true,
+					IncludeInitialState: true,
+				},
+				DiscoveryMode: DiscoveryModeAPIGroups,
+				APIGroupFilters: &APIGroupFilters{
+					Include: []string{"*"},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "neither pull nor watch enabled (error)",
+			config: &Config{
+				Pull: PullConfig{
+					Enabled: false,
+				},
+				Watch: WatchConfig{
+					Enabled: false,
+				},
+				DiscoveryMode: DiscoveryModeAPIGroups,
+			},
+			wantErr: true,
+			errMsg:  "at least one mode (pull or watch) must be enabled",
+		},
+		{
+			name: "pull mode without interval (error)",
+			config: &Config{
+				Pull: PullConfig{
+					Enabled:  true,
+					Interval: 0,
+				},
+				DiscoveryMode: DiscoveryModeAPIGroups,
+				APIGroupFilters: &APIGroupFilters{
+					Include: []string{"*"},
+				},
+			},
+			wantErr: true,
+			errMsg:  "pull interval is required",
+		},
+		{
+			name: "pull mode with interval too short (error)",
+			config: &Config{
+				Pull: PullConfig{
+					Enabled:  true,
+					Interval: 30 * time.Second,
+				},
+				DiscoveryMode: DiscoveryModeAPIGroups,
+				APIGroupFilters: &APIGroupFilters{
+					Include: []string{"*"},
+				},
+			},
+			wantErr: true,
+			errMsg:  "pull interval must be at least 1 minute",
+		},
+		{
+			name: "pull mode with minimum interval (valid)",
+			config: &Config{
+				Pull: PullConfig{
+					Enabled:  true,
+					Interval: 1 * time.Minute,
+				},
+				DiscoveryMode: DiscoveryModeAPIGroups,
+				APIGroupFilters: &APIGroupFilters{
+					Include: []string{"*"},
+				},
 			},
 			wantErr: false,
 		},
@@ -185,6 +312,9 @@ func TestShouldWatchAPIGroup(t *testing.T) {
 		{
 			name: "all mode watches everything",
 			config: &Config{
+				Watch: WatchConfig{
+					Enabled: true,
+				},
 				DiscoveryMode: DiscoveryModeAll,
 			},
 			apiGroup: "anything.io",
@@ -193,6 +323,9 @@ func TestShouldWatchAPIGroup(t *testing.T) {
 		{
 			name: "wildcard includes everything",
 			config: &Config{
+				Watch: WatchConfig{
+					Enabled: true,
+				},
 				DiscoveryMode: DiscoveryModeAPIGroups,
 				APIGroupFilters: &APIGroupFilters{
 					Include: []string{"*"},
@@ -204,6 +337,9 @@ func TestShouldWatchAPIGroup(t *testing.T) {
 		{
 			name: "exact match included",
 			config: &Config{
+				Watch: WatchConfig{
+					Enabled: true,
+				},
 				DiscoveryMode: DiscoveryModeAPIGroups,
 				APIGroupFilters: &APIGroupFilters{
 					Include: []string{"policies.kubewarden.io"},
@@ -215,6 +351,9 @@ func TestShouldWatchAPIGroup(t *testing.T) {
 		{
 			name: "exact match not included",
 			config: &Config{
+				Watch: WatchConfig{
+					Enabled: true,
+				},
 				DiscoveryMode: DiscoveryModeAPIGroups,
 				APIGroupFilters: &APIGroupFilters{
 					Include: []string{"policies.kubewarden.io"},
@@ -226,6 +365,9 @@ func TestShouldWatchAPIGroup(t *testing.T) {
 		{
 			name: "subdomain wildcard match",
 			config: &Config{
+				Watch: WatchConfig{
+					Enabled: true,
+				},
 				DiscoveryMode: DiscoveryModeAPIGroups,
 				APIGroupFilters: &APIGroupFilters{
 					Include: []string{"*.suse.com"},
@@ -237,6 +379,9 @@ func TestShouldWatchAPIGroup(t *testing.T) {
 		{
 			name: "excluded group not watched",
 			config: &Config{
+				Watch: WatchConfig{
+					Enabled: true,
+				},
 				DiscoveryMode: DiscoveryModeAPIGroups,
 				APIGroupFilters: &APIGroupFilters{
 					Include: []string{"*"},
@@ -249,6 +394,9 @@ func TestShouldWatchAPIGroup(t *testing.T) {
 		{
 			name: "excluded wildcard pattern",
 			config: &Config{
+				Watch: WatchConfig{
+					Enabled: true,
+				},
 				DiscoveryMode: DiscoveryModeAPIGroups,
 				APIGroupFilters: &APIGroupFilters{
 					Include: []string{"*.example.com"},
@@ -261,6 +409,9 @@ func TestShouldWatchAPIGroup(t *testing.T) {
 		{
 			name: "multiple include patterns",
 			config: &Config{
+				Watch: WatchConfig{
+					Enabled: true,
+				},
 				DiscoveryMode: DiscoveryModeAPIGroups,
 				APIGroupFilters: &APIGroupFilters{
 					Include: []string{
