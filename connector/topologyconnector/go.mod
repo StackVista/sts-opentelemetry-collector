@@ -1,9 +1,11 @@
 module github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector
 
-go 1.25.3
+go 1.25.8
 
 require (
+	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/google/cel-go v0.27.0
+	github.com/google/go-cmp v0.7.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/oapi-codegen/oapi-codegen/v2 v2.4.1
 	github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter v0.0.0-20251024135550-777ec0cf14f2
@@ -63,7 +65,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/shirou/gopsutil/v4 v4.25.9 // indirect
 	github.com/speakeasy-api/openapi-overlay v0.9.0 // indirect
-	github.com/stoewer/go-strcase v1.3.1 // indirect
 	github.com/testcontainers/testcontainers-go/modules/kafka v0.39.0 // indirect
 	github.com/twmb/franz-go v1.20.1 // indirect
 	github.com/twmb/franz-go/pkg/kadm v1.17.1 // indirect

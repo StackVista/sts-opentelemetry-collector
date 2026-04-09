@@ -1,6 +1,6 @@
 module github.com/stackvista/sts-opentelemetry-collector/processor/stsusageprocessor
 
-go 1.25.3
+go 1.25.8
 
 require (
 	github.com/stretchr/testify v1.11.1
