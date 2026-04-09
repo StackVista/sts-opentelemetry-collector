@@ -27,16 +27,12 @@ func TestIsPermissionDenied(t *testing.T) {
 		},
 		{
 			name: "unauthorized error",
-			err: apierrors.NewUnauthorized(
-				"user is not authorized",
-			),
+			err:  apierrors.NewUnauthorized("user is not authorized"),
 			want: true,
 		},
 		{
 			name: "other status error",
-			err: apierrors.NewInternalError(
-				errors.New("internal server error"),
-			),
+			err:  apierrors.NewInternalError(errors.New("internal server error")),
 			want: false,
 		},
 		{
@@ -58,5 +54,3 @@ func TestIsPermissionDenied(t *testing.T) {
 		})
 	}
 }
-
-// Forbidden resource tracking tests have been moved to forbidden_tracker_test.go

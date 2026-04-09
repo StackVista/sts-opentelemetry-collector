@@ -3,6 +3,7 @@ package k8scrdreceiver
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
@@ -28,8 +29,15 @@ func createDefaultConfig() component.Config {
 		APIConfig: APIConfig{
 			AuthType: AuthTypeServiceAccount,
 		},
-		DiscoveryMode:       DiscoveryModeAPIGroups,
-		IncludeInitialState: true, // Emit existing CRs on startup by default
+		Pull: PullConfig{
+			Enabled:  true,
+			Interval: 1 * time.Hour,
+		},
+		Watch: WatchConfig{
+			Enabled:             true,
+			IncludeInitialState: true,
+		},
+		DiscoveryMode: DiscoveryModeAPIGroups,
 		APIGroupFilters: &APIGroupFilters{
 			Include: []string{"*"}, // Watch all API groups by default
 			Exclude: []string{},
