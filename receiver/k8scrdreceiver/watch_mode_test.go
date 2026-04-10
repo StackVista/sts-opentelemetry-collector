@@ -58,8 +58,9 @@ func TestWatchMode_HandleCRDAdded(t *testing.T) {
 
 	crd := makeTestCRD("test.example.com", "example.com", "TestResource", "testresources")
 
-	err := wm.handleCRDAdded(crd)
+	shouldEmit, err := wm.handleCRDAdded(crd)
 	require.NoError(t, err)
+	assert.True(t, shouldEmit, "should emit log for added CRD")
 
 	// Verify a CR watcher was started
 	wm.mu.Lock()
@@ -85,8 +86,9 @@ func TestWatchMode_HandleCRDAdded_SkipsFilteredGroup(t *testing.T) {
 
 	crd := makeTestCRD("excluded.crd", "excluded.com", "Excluded", "excludes")
 
-	err := wm.handleCRDAdded(crd)
+	shouldEmit, err := wm.handleCRDAdded(crd)
 	require.NoError(t, err)
+	assert.False(t, shouldEmit, "should not emit log for filtered group")
 
 	// No CR watcher should be started
 	wm.mu.Lock()
@@ -97,10 +99,18 @@ func TestWatchMode_HandleCRDAdded_SkipsFilteredGroup(t *testing.T) {
 func TestWatchMode_HandleCRDDeleted(t *testing.T) {
 	crGVR := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "testresources"}
 
+	config := &Config{
+		Watch:         WatchConfig{Enabled: true},
+		DiscoveryMode: DiscoveryModeAPIGroups,
+		APIGroupFilters: &APIGroupFilters{
+			Include: []string{"example.com"},
+			Exclude: []string{},
+		},
+	}
+	require.NoError(t, config.Validate())
+
 	sink := &consumertest.LogsSink{}
-	wm := newTestWatchMode(newFakeClient(), sink, &Config{
-		Watch: WatchConfig{Enabled: true},
-	})
+	wm := newTestWatchMode(newFakeClient(), sink, config)
 	wm.ctx = context.Background()
 	wm.stopCh = make(chan struct{})
 
@@ -113,8 +123,9 @@ func TestWatchMode_HandleCRDDeleted(t *testing.T) {
 
 	crd := makeTestCRD("test.example.com", "example.com", "TestResource", "testresources")
 
-	err := wm.handleCRDDeleted(crd)
+	shouldEmit, err := wm.handleCRDDeleted(crd)
 	require.NoError(t, err)
+	assert.True(t, shouldEmit, "should emit log for deleted CRD")
 
 	// CR watcher should be removed
 	wm.mu.Lock()
@@ -337,8 +348,8 @@ func TestWatchMode_ListInitialCRDs_RespectsFilters(t *testing.T) {
 	err := wm.listInitialCRDs(crdGVR)
 	require.NoError(t, err)
 
-	// Both CRDs should emit logs (all CRDs are emitted regardless of filter)
-	assert.Equal(t, 2, sink.LogRecordCount(), "expected 2 CRD logs emitted")
+	// Only the allowed CRD should emit a log (API group filter applies to CRDs too)
+	assert.Equal(t, 1, sink.LogRecordCount(), "expected 1 CRD log emitted")
 
 	// Only allowed group should have a CR watcher
 	wm.mu.Lock()

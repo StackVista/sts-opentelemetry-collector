@@ -115,7 +115,12 @@ func (m *pullMode) performPull() error {
 	for i := range crdList.Items {
 		crd := &crdList.Items[i]
 
-		// Emit CRD log (all CRDs are emitted regardless of API group filters)
+		// Check API group filters before emitting CRD or listing CRs
+		apiGroup, _, _ := unstructured.NestedString(crd.Object, "spec", "group")
+		if !m.config.shouldWatchAPIGroup(apiGroup) {
+			continue
+		}
+
 		if err := emitLog(m.ctx, m.consumer, crd, watch.Added, buildCRDLogRecord); err != nil {
 			m.settings.Logger.Error("Failed to emit CRD log",
 				zap.String("name", crd.GetName()),
@@ -123,13 +128,7 @@ func (m *pullMode) performPull() error {
 			)
 		}
 
-		// Check API group filters before listing CRs
-		apiGroup, _, _ := unstructured.NestedString(crd.Object, "spec", "group")
-		if !m.config.shouldWatchAPIGroup(apiGroup) {
-			continue
-		}
-
-		if err := m.pullCRsForCRD(crd); err != nil {
+		if err := m.pullAndEmitCRsForCRD(crd); err != nil {
 			m.settings.Logger.Error("Failed to pull CRs for CRD",
 				zap.String("name", crd.GetName()),
 				zap.Error(err),
@@ -141,7 +140,7 @@ func (m *pullMode) performPull() error {
 	return nil
 }
 
-func (m *pullMode) pullCRsForCRD(crdObj *unstructured.Unstructured) error {
+func (m *pullMode) pullAndEmitCRsForCRD(crdObj *unstructured.Unstructured) error {
 	var crd apiextensionsv1.CustomResourceDefinition
 	if err := convertUnstructuredToCRD(crdObj, &crd); err != nil {
 		return fmt.Errorf("failed to convert to CRD: %w", err)
