@@ -83,7 +83,7 @@ func TestWatchMode_HandleCRDAdded_SkipsFilteredGroup(t *testing.T) {
 	wm := newTestWatchMode(newFakeClient(), sink, config)
 	wm.ctx = context.Background()
 
-	crd := makeTestCRD("excluded.crd", "excluded.com", "Excluded", "excludeds")
+	crd := makeTestCRD("excluded.crd", "excluded.com", "Excluded", "excludes")
 
 	err := wm.handleCRDAdded(crd)
 	require.NoError(t, err)
@@ -234,7 +234,7 @@ func TestWatchMode_HandleCRDModified_SkipsFilteredGroup(t *testing.T) {
 	wm := newTestWatchMode(newFakeClient(), sink, config)
 	wm.ctx = context.Background()
 
-	crd := makeTestCRD("excluded.crd", "excluded.com", "Excluded", "excludeds")
+	crd := makeTestCRD("excluded.crd", "excluded.com", "Excluded", "excludes")
 
 	shouldEmit, err := wm.handleCRDModified(crd)
 	require.NoError(t, err)
@@ -350,9 +350,9 @@ func TestWatchMode_ListInitialCRDs_RespectsFilters(t *testing.T) {
 }
 
 func TestWatchMode_ListInitialCRs(t *testing.T) {
-	crGVR := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "tests"}
-	cr1 := makeTestCR("cr-1", "example.com", "Test", "v1")
-	cr2 := makeTestCR("cr-2", "example.com", "Test", "v1")
+	crGVR := schema.GroupVersionResource{Group: "example.com", Version: "v2", Resource: "tests"}
+	cr1 := makeTestCR("cr-1", "example.com", "Test", "v2")
+	cr2 := makeTestCR("cr-2", "example.com", "Test", "v2")
 
 	client := newFakeClient().
 		withList(crGVR, &unstructured.UnstructuredList{

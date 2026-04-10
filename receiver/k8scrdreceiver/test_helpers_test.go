@@ -122,17 +122,8 @@ func (w *fakeWatcher) Stop() {
 	}
 }
 
-// send sends an event to the watcher channel. Returns false if the watcher was stopped.
-func (w *fakeWatcher) send(event watch.Event) bool {
-	select {
-	case w.ch <- event:
-		return true
-	case <-w.stopCh:
-		return false
-	}
-}
-
 // CRD GVR used across tests
+// nolint:gochecknoglobals
 var crdGVR = schema.GroupVersionResource{
 	Group:    "apiextensions.k8s.io",
 	Version:  "v1",

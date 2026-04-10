@@ -397,7 +397,7 @@ func assertLogRelations(t *testing.T, relations map[string]*topostreamv1.Topolog
 func otelLogComponentMappingSpecPolicyServer() *harness.OtelComponentMappingSpec {
 	return &harness.OtelComponentMappingSpec{
 		MappingID:         "log-comp-policy-server",
-		MappingIdentifier: "urn:stackpack:kubewarden:shared:otel-component-mapping:policy-server",
+		MappingIdentifier: "urn:stackpack:kubewarden:otel-component-mapping:policy-server",
 		Name:              "Kubewarden Policy Server",
 		ExpireAfterMs:     900000,
 		Input: settingsproto.OtelInput{
@@ -442,7 +442,7 @@ func otelLogComponentMappingSpecPolicyServer() *harness.OtelComponentMappingSpec
 func otelLogRelationMappingSpecPolicyEnforcedByServer() *harness.OtelRelationMappingSpec {
 	return &harness.OtelRelationMappingSpec{
 		MappingID:         "log-rel-policy-enforced-by-server",
-		MappingIdentifier: "urn:stackpack:kubewarden:shared:otel-relation-mapping:policy-enforced-by-server",
+		MappingIdentifier: "urn:stackpack:kubewarden:otel-relation-mapping:policy-enforced-by-server",
 		ExpireAfterMs:     900000,
 		Input: settingsproto.OtelInput{
 			Signal: settingsproto.OtelInputSignalList{
