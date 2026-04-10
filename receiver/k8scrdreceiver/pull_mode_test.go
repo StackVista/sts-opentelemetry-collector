@@ -72,19 +72,19 @@ func TestPullMode_EmitLog(t *testing.T) {
 }
 
 func TestPullMode_PullCRsForCRD_RespectsFilters(t *testing.T) {
-	crd := makeTestCRD("test-crd", "example.com", "TestResource", "testresources")
-	cr1 := makeTestCR("test-cr-1", "example.com", "TestResource", "v1")
-	cr2 := makeTestCR("test-cr-2", "example.com", "TestResource", "v1")
+	crd := makeTestCRD("test-crd", "test.com", "TestResource", "testresources")
+	cr1 := makeTestCR("test-cr-1", "test.com", "TestResource", "v1")
+	cr2 := makeTestCR("test-cr-2", "test.com", "TestResource", "v1")
 
 	client := newFakeClient().
-		withList(schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "testresources"}, &unstructured.UnstructuredList{
+		withList(schema.GroupVersionResource{Group: "test.com", Version: "v1", Resource: "testresources"}, &unstructured.UnstructuredList{
 			Items: []unstructured.Unstructured{*cr1, *cr2},
 		})
 
 	config := &Config{
 		DiscoveryMode: DiscoveryModeAPIGroups,
 		APIGroupFilters: &APIGroupFilters{
-			Include: []string{"example.com"},
+			Include: []string{"test.com"},
 		},
 	}
 
@@ -122,4 +122,3 @@ func TestPullMode_PullCRsForCRD_HandlesPermissionDenied(t *testing.T) {
 	shouldRetry, _ := pm.forbiddenTracker.shouldRetry(gvr)
 	assert.False(t, shouldRetry, "resource should be marked as forbidden")
 }
-
