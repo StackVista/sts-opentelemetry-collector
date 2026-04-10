@@ -56,7 +56,6 @@ type Config struct {
 }
 
 func (c *Config) Validate() error {
-	// Validate that at least one mode is enabled
 	if !c.Pull.Enabled && !c.Watch.Enabled {
 		return errors.New("at least one mode (pull or watch) must be enabled")
 	}

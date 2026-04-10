@@ -58,8 +58,8 @@ func TestPullMode_PerformPull(t *testing.T) {
 	err := pm.performPull()
 	require.NoError(t, err)
 
-	// 2 CRDs (all emitted) + 2 CRs (from included group only) = 4
-	assert.Equal(t, 4, sink.LogRecordCount())
+	// 1 CRD (from included group only) + 2 CRs = 3
+	assert.Equal(t, 3, sink.LogRecordCount())
 }
 
 func TestPullMode_EmitLog(t *testing.T) {
@@ -92,7 +92,7 @@ func TestPullMode_PullCRsForCRD_RespectsFilters(t *testing.T) {
 	pm := newTestPullMode(client, sink, config)
 	pm.ctx = context.Background()
 
-	err := pm.pullCRsForCRD(crd)
+	err := pm.pullAndEmitCRsForCRD(crd)
 	require.NoError(t, err)
 	assert.Equal(t, 2, sink.LogRecordCount())
 }
@@ -114,7 +114,7 @@ func TestPullMode_PullCRsForCRD_HandlesPermissionDenied(t *testing.T) {
 	pm := newTestPullMode(client, sink, &Config{})
 	pm.ctx = context.Background()
 
-	err := pm.pullCRsForCRD(crd)
+	err := pm.pullAndEmitCRsForCRD(crd)
 	require.NoError(t, err)
 	assert.Equal(t, 0, sink.LogRecordCount())
 

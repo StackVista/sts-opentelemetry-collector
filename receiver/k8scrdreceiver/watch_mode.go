@@ -240,9 +240,9 @@ func (m *watchMode) processCRDEvents() error {
 func (m *watchMode) handleCRDEvent(obj *unstructured.Unstructured, eventType watch.EventType) (bool, error) {
 	switch eventType {
 	case watch.Added:
-		return true, m.handleCRDAdded(obj)
+		return m.handleCRDAdded(obj)
 	case watch.Deleted:
-		return true, m.handleCRDDeleted(obj)
+		return m.handleCRDDeleted(obj)
 	case watch.Modified:
 		return m.handleCRDModified(obj)
 	case watch.Error:
@@ -252,10 +252,10 @@ func (m *watchMode) handleCRDEvent(obj *unstructured.Unstructured, eventType wat
 	}
 }
 
-func (m *watchMode) handleCRDAdded(crdObj *unstructured.Unstructured) error {
+func (m *watchMode) handleCRDAdded(crdObj *unstructured.Unstructured) (bool, error) {
 	apiGroup, found, err := unstructured.NestedString(crdObj.Object, "spec", "group")
 	if err != nil || !found {
-		return fmt.Errorf("failed to extract API group from CRD: %w", err)
+		return false, fmt.Errorf("failed to extract API group from CRD: %w", err)
 	}
 
 	if !m.config.shouldWatchAPIGroup(apiGroup) {
@@ -263,17 +263,17 @@ func (m *watchMode) handleCRDAdded(crdObj *unstructured.Unstructured) error {
 			zap.String("name", crdObj.GetName()),
 			zap.String("group", apiGroup),
 		)
-		return nil
+		return false, nil
 	}
 
 	var crd apiextensionsv1.CustomResourceDefinition
 	if err := convertUnstructuredToCRD(crdObj, &crd); err != nil {
-		return fmt.Errorf("failed to convert to CRD: %w", err)
+		return false, fmt.Errorf("failed to convert to CRD: %w", err)
 	}
 
 	storageVersion := getStorageVersion(&crd)
 	if storageVersion == "" {
-		return fmt.Errorf("no storage version found for CRD %s", crd.Name)
+		return false, fmt.Errorf("no storage version found for CRD %s", crd.Name)
 	}
 
 	gvr := schema.GroupVersionResource{
@@ -287,7 +287,7 @@ func (m *watchMode) handleCRDAdded(crdObj *unstructured.Unstructured) error {
 			zap.String("gvr", formatGVRKey(gvr)),
 			zap.Duration("retry_in", retryIn),
 		)
-		return nil
+		return false, nil
 	}
 
 	m.settings.Logger.Info("Starting CR watcher for new CRD",
@@ -297,13 +297,25 @@ func (m *watchMode) handleCRDAdded(crdObj *unstructured.Unstructured) error {
 		zap.String("resource", crd.Spec.Names.Plural),
 	)
 
-	return m.startCRWatcher(gvr)
+	if err := m.startCRWatcher(gvr); err != nil {
+		return true, err
+	}
+	return true, nil
 }
 
-func (m *watchMode) handleCRDDeleted(crdObj *unstructured.Unstructured) error {
+func (m *watchMode) handleCRDDeleted(crdObj *unstructured.Unstructured) (bool, error) {
+	apiGroup, found, err := unstructured.NestedString(crdObj.Object, "spec", "group")
+	if err != nil || !found {
+		return false, fmt.Errorf("failed to extract API group from CRD: %w", err)
+	}
+
+	if !m.config.shouldWatchAPIGroup(apiGroup) {
+		return false, nil
+	}
+
 	var crd apiextensionsv1.CustomResourceDefinition
 	if err := convertUnstructuredToCRD(crdObj, &crd); err != nil {
-		return fmt.Errorf("failed to convert to CRD: %w", err)
+		return false, fmt.Errorf("failed to convert to CRD: %w", err)
 	}
 
 	storageVersion := getStorageVersion(&crd)
@@ -322,7 +334,10 @@ func (m *watchMode) handleCRDDeleted(crdObj *unstructured.Unstructured) error {
 
 	m.forbiddenTracker.clear(gvr)
 
-	return m.stopCRWatcher(gvr)
+	if err := m.stopCRWatcher(gvr); err != nil {
+		return true, err
+	}
+	return true, nil
 }
 
 // handleCRDModified detects storage version changes on CRD modifications.
@@ -361,7 +376,7 @@ func (m *watchMode) handleCRDModified(crdObj *unstructured.Unstructured) (bool, 
 	for key, crw := range m.crWatchers {
 		if crw.gvr.Group == crd.Spec.Group && crw.gvr.Resource == crd.Spec.Names.Plural {
 			if key == newKey {
-				// Version unchanged — nothing to do
+				// Version unchanged
 				m.mu.Unlock()
 				return true, nil
 			}
