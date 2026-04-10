@@ -96,8 +96,12 @@ func TestWatchMode_HandleCRDAdded_SkipsFilteredGroup(t *testing.T) {
 	wm.mu.Unlock()
 }
 
-func TestWatchMode_HandleCRDDeleted(t *testing.T) {
-	crGVR := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "testresources"}
+// newWatchModeWithExistingCRWatcher creates a watchMode with example.com API group filter
+// and a pre-populated CR watcher for the given GVR.
+func newWatchModeWithExistingCRWatcher(
+	t *testing.T, gvr schema.GroupVersionResource,
+) *watchMode {
+	t.Helper()
 
 	config := &Config{
 		Watch:         WatchConfig{Enabled: true},
@@ -114,12 +118,18 @@ func TestWatchMode_HandleCRDDeleted(t *testing.T) {
 	wm.ctx = context.Background()
 	wm.stopCh = make(chan struct{})
 
-	// Pre-populate a CR watcher
-	wm.crWatchers[formatGVRKey(crGVR)] = &crWatcher{
-		gvr:     crGVR,
+	wm.crWatchers[formatGVRKey(gvr)] = &crWatcher{
+		gvr:     gvr,
 		watcher: newFakeWatcher(),
 		stopCh:  make(chan struct{}),
 	}
+
+	return wm
+}
+
+func TestWatchMode_HandleCRDDeleted(t *testing.T) {
+	crGVR := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "testresources"}
+	wm := newWatchModeWithExistingCRWatcher(t, crGVR)
 
 	crd := makeTestCRD("test.example.com", "example.com", "TestResource", "testresources")
 
@@ -193,28 +203,7 @@ func TestWatchMode_HandleCRDModified_VersionChange(t *testing.T) {
 
 func TestWatchMode_HandleCRDModified_NoVersionChange(t *testing.T) {
 	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "testresources"}
-
-	config := &Config{
-		Watch:         WatchConfig{Enabled: true},
-		DiscoveryMode: DiscoveryModeAPIGroups,
-		APIGroupFilters: &APIGroupFilters{
-			Include: []string{"example.com"},
-			Exclude: []string{},
-		},
-	}
-	require.NoError(t, config.Validate())
-
-	sink := &consumertest.LogsSink{}
-	wm := newTestWatchMode(newFakeClient(), sink, config)
-	wm.ctx = context.Background()
-	wm.stopCh = make(chan struct{})
-
-	// Pre-populate watcher
-	wm.crWatchers[formatGVRKey(gvr)] = &crWatcher{
-		gvr:     gvr,
-		watcher: newFakeWatcher(),
-		stopCh:  make(chan struct{}),
-	}
+	wm := newWatchModeWithExistingCRWatcher(t, gvr)
 
 	// CRD modified but storage version unchanged
 	crd := makeTestCRD("test.example.com", "example.com", "TestResource", "testresources")
