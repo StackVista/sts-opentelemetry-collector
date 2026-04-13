@@ -10,6 +10,7 @@ import (
 
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/ststopologyexporter/internal/metadata"
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
@@ -58,7 +59,7 @@ func createMetricsExporter(
 		cfg,
 		exp.ConsumeMetrics,
 		exporterhelper.WithTimeout(c.TimeoutSettings),
-		exporterhelper.WithQueue(c.QueueSettings),
+		exporterhelper.WithQueue(configoptional.Some(c.QueueSettings)),
 		exporterhelper.WithCapabilities(processorCapabilities),
 	)
 }
@@ -85,7 +86,7 @@ func createTracesExporter(
 		cfg,
 		exporter.ConsumeTraces,
 		exporterhelper.WithTimeout(c.TimeoutSettings),
-		exporterhelper.WithQueue(c.QueueSettings),
+		exporterhelper.WithQueue(configoptional.Some(c.QueueSettings)),
 		exporterhelper.WithCapabilities(processorCapabilities),
 	)
 }

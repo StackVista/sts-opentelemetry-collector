@@ -12,6 +12,7 @@ import (
 	"fmt"
 
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/config/configretry"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
@@ -75,7 +76,7 @@ func createLogsExporter(
 		exporterhelper.WithStart(exporter.Start),
 		exporterhelper.WithShutdown(exporter.Shutdown),
 		exporterhelper.WithTimeout(c.TimeoutSettings),
-		exporterhelper.WithQueue(c.QueueSettings),
+		exporterhelper.WithQueue(configoptional.Some(c.QueueSettings)),
 		exporterhelper.WithRetry(c.BackOffConfig),
 	)
 }
@@ -105,7 +106,7 @@ func createTracesExporter(
 		exporterhelper.WithStart(exporter.Start),
 		exporterhelper.WithShutdown(exporter.Shutdown),
 		exporterhelper.WithTimeout(c.TimeoutSettings),
-		exporterhelper.WithQueue(c.QueueSettings),
+		exporterhelper.WithQueue(configoptional.Some(c.QueueSettings)),
 		exporterhelper.WithRetry(c.BackOffConfig),
 	)
 }
@@ -133,7 +134,7 @@ func createMetricExporter(
 		exporterhelper.WithStart(exporter.Start),
 		exporterhelper.WithShutdown(exporter.Shutdown),
 		exporterhelper.WithTimeout(c.TimeoutSettings),
-		exporterhelper.WithQueue(c.QueueSettings),
+		exporterhelper.WithQueue(configoptional.Some(c.QueueSettings)),
 		exporterhelper.WithRetry(c.BackOffConfig),
 	)
 }
