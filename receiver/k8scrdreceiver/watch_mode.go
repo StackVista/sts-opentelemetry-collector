@@ -78,7 +78,10 @@ func (m *watchMode) Start(ctx context.Context) error {
 	m.stopCh = make(chan struct{})
 
 	if !m.config.Pull.Enabled {
-		m.settings.Logger.Warn("Watch mode without pull mode: resources that fail due to insufficient RBAC permissions will not be retried automatically. Enable pull mode for periodic retry of forbidden resources.")
+		m.settings.Logger.Warn(
+			"Watch mode without pull mode: resources that fail due to insufficient RBAC permissions will not be " +
+				"retried automatically. Enable pull mode for periodic retry of forbidden resources.",
+		)
 	}
 
 	return m.startCRDWatcher()
@@ -483,7 +486,7 @@ func (m *watchMode) startCRWatcher(gvr schema.GroupVersionResource) error {
 		}
 	}
 
-	// Run CR watch loop in background (no retry — CRD watcher manages CR watcher lifecycle)
+	// Run CR watch loop in background with retry on channel closure
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
@@ -518,20 +521,74 @@ func (m *watchMode) listInitialCRs(gvr schema.GroupVersionResource) error {
 	return nil
 }
 
-// runCRWatchLoop reads CR events and emits logs. No retry — if the channel closes,
-// the loop exits and the CRD watcher will manage recreation if needed.
+// runCRWatchLoop reads CR events and emits logs, with retry on channel closure.
+// Uses exponential backoff to recreate the watcher when the channel closes unexpectedly.
 func (m *watchMode) runCRWatchLoop(gvr schema.GroupVersionResource, watcher watch.Interface, stopCh chan struct{}) {
+	key := formatGVRKey(gvr)
+	backoff := initialBackoff
+
+	for {
+		if err := m.processCREvents(gvr, watcher, stopCh); err != nil {
+			m.settings.Logger.Warn("CR watcher stopped, will retry",
+				zap.String("gvr", key),
+				zap.Error(err),
+				zap.Duration("backoff", backoff),
+			)
+
+			select {
+			case <-stopCh:
+				return
+			case <-m.ctx.Done():
+				return
+			case <-time.After(backoff):
+				backoff = min(backoff*2, maxBackoff)
+
+				newWatcher, err := m.client.Resource(gvr).Watch(m.ctx, metav1.ListOptions{})
+				if err != nil {
+					m.settings.Logger.Error("Failed to recreate CR watcher",
+						zap.String("gvr", key),
+						zap.Error(err),
+					)
+					continue
+				}
+
+				// Update the watcher reference in the map so external Stop() calls
+				// close the correct watcher.
+				m.mu.Lock()
+				crw, exists := m.crWatchers[key]
+				if !exists {
+					// Entry was removed (CRD deleted) while we were retrying — stop.
+					m.mu.Unlock()
+					newWatcher.Stop()
+					return
+				}
+				crw.watcher = newWatcher
+				m.mu.Unlock()
+
+				watcher = newWatcher
+				m.settings.Logger.Info("CR watcher recreated successfully", zap.String("gvr", key))
+				continue
+			}
+		}
+		return // Clean exit (stopCh closed)
+	}
+}
+
+// processCREvents reads from a CR watcher channel and emits logs for each event.
+// Returns nil on clean shutdown (stopCh closed), error on channel closure.
+func (m *watchMode) processCREvents(
+	gvr schema.GroupVersionResource, watcher watch.Interface, stopCh chan struct{},
+) error {
 	key := formatGVRKey(gvr)
 
 	for {
 		select {
 		case <-stopCh:
-			return
+			return nil
 
 		case event, ok := <-watcher.ResultChan():
 			if !ok {
-				m.settings.Logger.Warn("CR watcher channel closed", zap.String("gvr", key))
-				return
+				return fmt.Errorf("CR watcher channel closed for %s", key)
 			}
 
 			obj, ok := event.Object.(*unstructured.Unstructured)

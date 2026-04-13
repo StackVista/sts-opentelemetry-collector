@@ -22,6 +22,10 @@ type fakeResource struct {
 	listError  error
 	watcher    watch.Interface
 	watchError error
+
+	// watcherQueue allows returning different watchers on successive Watch() calls.
+	// When set, watchers are dequeued in order; once empty, falls back to watcher field.
+	watcherQueue []watch.Interface
 }
 
 func newFakeClient() *fakeClient {
@@ -48,6 +52,13 @@ func (f *fakeClient) withWatcher(gvr schema.GroupVersionResource, w watch.Interf
 	key := formatGVRKey(gvr)
 	r := f.getOrCreate(key)
 	r.watcher = w
+	return f
+}
+
+func (f *fakeClient) withWatcherQueue(gvr schema.GroupVersionResource, watchers ...watch.Interface) *fakeClient {
+	key := formatGVRKey(gvr)
+	r := f.getOrCreate(key)
+	r.watcherQueue = watchers
 	return f
 }
 
@@ -90,6 +101,11 @@ func (f *fakeResourceClient) List(_ context.Context, _ metav1.ListOptions) (*uns
 func (f *fakeResourceClient) Watch(_ context.Context, _ metav1.ListOptions) (watch.Interface, error) {
 	if f.res.watchError != nil {
 		return nil, f.res.watchError
+	}
+	if len(f.res.watcherQueue) > 0 {
+		w := f.res.watcherQueue[0]
+		f.res.watcherQueue = f.res.watcherQueue[1:]
+		return w, nil
 	}
 	if f.res.watcher != nil {
 		return f.res.watcher, nil

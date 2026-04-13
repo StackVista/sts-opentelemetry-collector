@@ -16,6 +16,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/watch"
 )
 
 func newTestWatchMode(client k8sClient, sink *consumertest.LogsSink, config *Config) *watchMode {
@@ -394,6 +395,135 @@ func TestWatchMode_ListInitialCRs_PermissionDenied(t *testing.T) {
 
 	shouldRetry, _ := wm.forbiddenTracker.shouldRetry(crGVR)
 	assert.False(t, shouldRetry, "should be marked as forbidden")
+}
+
+func TestWatchMode_CRWatcherRetriesOnChannelClose(t *testing.T) {
+	crGVR := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "testresources"}
+
+	// First watcher will have its channel closed to simulate failure.
+	// Second watcher is the reconnected one that receives an event.
+	firstWatcher := newFakeWatcher()
+	secondWatcher := newFakeWatcher()
+
+	client := newFakeClient().
+		withWatcherQueue(crGVR, firstWatcher, secondWatcher).
+		withList(crGVR, &unstructured.UnstructuredList{})
+
+	config := &Config{
+		Watch:         WatchConfig{Enabled: true, IncludeInitialState: false},
+		DiscoveryMode: DiscoveryModeAPIGroups,
+		APIGroupFilters: &APIGroupFilters{
+			Include: []string{"example.com"},
+			Exclude: []string{},
+		},
+	}
+	require.NoError(t, config.Validate())
+
+	sink := &consumertest.LogsSink{}
+	wm := newTestWatchMode(client, sink, config)
+	wm.ctx, wm.cancel = context.WithCancel(context.Background())
+	wm.stopCh = make(chan struct{})
+
+	// Start a CR watcher — this will use firstWatcher
+	err := wm.startCRWatcher(crGVR)
+	require.NoError(t, err)
+
+	// Close first watcher's channel to simulate API server disconnect
+	close(firstWatcher.ch)
+
+	// Wait for retry to kick in and the second watcher to be installed.
+	// The retry uses initialBackoff (1s), so we wait a bit longer.
+	assert.Eventually(t, func() bool {
+		wm.mu.Lock()
+		defer wm.mu.Unlock()
+		crw, exists := wm.crWatchers[formatGVRKey(crGVR)]
+		if !exists {
+			return false
+		}
+		// The watcher reference should be updated to secondWatcher
+		return crw.watcher == secondWatcher
+	}, 5*time.Second, 100*time.Millisecond, "CR watcher should be recreated after channel close")
+
+	// Send an event on the second watcher to verify it's actually processing
+	cr := makeTestCR("test-cr", "example.com", "TestResource", "v1")
+	secondWatcher.ch <- watch.Event{
+		Type:   watch.Added,
+		Object: cr,
+	}
+
+	assert.Eventually(t, func() bool {
+		return sink.LogRecordCount() > 0
+	}, 2*time.Second, 100*time.Millisecond, "should receive events on recreated watcher")
+
+	// Clean shutdown — stop the CR watcher via its stopCh, then cancel context
+	wm.mu.Lock()
+	if crw, exists := wm.crWatchers[formatGVRKey(crGVR)]; exists {
+		crw.Stop()
+	}
+	wm.mu.Unlock()
+	wm.cancel()
+	wm.wg.Wait()
+}
+
+func TestWatchMode_CRWatcherStopsDuringRetry(t *testing.T) {
+	crGVR := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "testresources"}
+
+	firstWatcher := newFakeWatcher()
+
+	client := newFakeClient().
+		withWatcher(crGVR, firstWatcher).
+		withList(crGVR, &unstructured.UnstructuredList{})
+
+	config := &Config{
+		Watch:         WatchConfig{Enabled: true, IncludeInitialState: false},
+		DiscoveryMode: DiscoveryModeAPIGroups,
+		APIGroupFilters: &APIGroupFilters{
+			Include: []string{"example.com"},
+			Exclude: []string{},
+		},
+	}
+	require.NoError(t, config.Validate())
+
+	sink := &consumertest.LogsSink{}
+	wm := newTestWatchMode(client, sink, config)
+	wm.ctx, wm.cancel = context.WithCancel(context.Background())
+	wm.stopCh = make(chan struct{})
+
+	err := wm.startCRWatcher(crGVR)
+	require.NoError(t, err)
+
+	// Close first watcher's channel to trigger retry
+	close(firstWatcher.ch)
+
+	// Simulate CRD deletion removing the entry during the backoff wait.
+	// Give the goroutine a moment to enter the retry backoff.
+	time.Sleep(100 * time.Millisecond)
+	wm.mu.Lock()
+	crw, exists := wm.crWatchers[formatGVRKey(crGVR)]
+	if exists {
+		crw.Stop()
+		delete(wm.crWatchers, formatGVRKey(crGVR))
+	}
+	wm.mu.Unlock()
+
+	// The retry goroutine should detect the removed entry and exit cleanly.
+	// Cancel context to unblock any remaining backoff wait.
+	wm.cancel()
+	close(wm.stopCh)
+
+	// wg.Wait should return promptly — the goroutine should not hang.
+	done := make(chan struct{})
+	go func() {
+		wm.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// OK
+	case <-time.After(5 * time.Second):
+		t.Fatal("goroutine did not exit after CRD deletion during retry")
+	}
 }
 
 func TestWatchMode_Shutdown(t *testing.T) {
