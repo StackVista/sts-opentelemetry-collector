@@ -76,6 +76,11 @@ func newWatchMode(
 func (m *watchMode) Start(ctx context.Context) error {
 	m.ctx, m.cancel = context.WithCancel(ctx)
 	m.stopCh = make(chan struct{})
+
+	if !m.config.Pull.Enabled {
+		m.settings.Logger.Warn("Watch mode without pull mode: resources that fail due to insufficient RBAC permissions will not be retried automatically. Enable pull mode for periodic retry of forbidden resources.")
+	}
+
 	return m.startCRDWatcher()
 }
 
@@ -184,6 +189,8 @@ func (m *watchMode) runCRDWatchLoop(crdGVR schema.GroupVersionResource) {
 			select {
 			case <-m.stopCh:
 				return
+			case <-m.ctx.Done():
+				return
 			case <-time.After(backoff):
 				backoff = min(backoff*2, maxBackoff)
 
@@ -221,6 +228,8 @@ func (m *watchMode) processCRDEvents() error {
 				continue
 			}
 
+			// shouldEmit and err are independent: a CRD can match filters (shouldEmit=true)
+			// even if a side effect like starting a CR watcher fails (err!=nil).
 			shouldEmit, err := m.handleCRDEvent(obj, event.Type)
 			if err != nil {
 				m.settings.Logger.Error("Failed to handle CRD event", zap.Error(err))
@@ -283,9 +292,9 @@ func (m *watchMode) handleCRDAdded(crdObj *unstructured.Unstructured) (bool, err
 	}
 
 	if shouldRetry, retryIn := m.forbiddenTracker.shouldRetry(gvr); !shouldRetry {
-		m.settings.Logger.Debug("Skipping forbidden resource (will retry later)",
+		m.settings.Logger.Debug("Skipping forbidden resource (requires pull mode or CRD change to retry)",
 			zap.String("gvr", formatGVRKey(gvr)),
-			zap.Duration("retry_in", retryIn),
+			zap.Duration("forbidden_ttl_remaining", retryIn),
 		)
 		return false, nil
 	}
@@ -370,25 +379,31 @@ func (m *watchMode) handleCRDModified(crdObj *unstructured.Unstructured) (bool, 
 	newKey := formatGVRKey(newGVR)
 
 	// Find existing watcher, stop it if version changed — single lock to avoid races.
-	m.mu.Lock()
 	var oldGVR schema.GroupVersionResource
-	var versionChanged bool
-	for key, crw := range m.crWatchers {
-		if crw.gvr.Group == crd.Spec.Group && crw.gvr.Resource == crd.Spec.Names.Plural {
-			if key == newKey {
-				// Version unchanged
-				m.mu.Unlock()
-				return true, nil
+	var versionChanged, versionUnchanged bool
+	func() {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		for key, crw := range m.crWatchers {
+			if crw.gvr.Group == crd.Spec.Group && crw.gvr.Resource == crd.Spec.Names.Plural {
+				if key == newKey {
+					// Version unchanged
+					versionUnchanged = true
+					return
+				}
+				// Version changed — stop old watcher while we hold the lock
+				oldGVR = crw.gvr
+				crw.Stop()
+				delete(m.crWatchers, key)
+				versionChanged = true
+				return
 			}
-			// Version changed — stop old watcher while we hold the lock
-			oldGVR = crw.gvr
-			crw.Stop()
-			delete(m.crWatchers, key)
-			versionChanged = true
-			break
 		}
+	}()
+
+	if versionUnchanged {
+		return true, nil
 	}
-	m.mu.Unlock()
 
 	if !versionChanged {
 		// No existing watcher for this CRD — nothing to restart
@@ -418,12 +433,12 @@ func (m *watchMode) startCRWatcher(gvr schema.GroupVersionResource) error {
 	key := formatGVRKey(gvr)
 
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	if _, exists := m.crWatchers[key]; exists {
+		m.mu.Unlock()
 		m.settings.Logger.Debug("Already watching CR", zap.String("gvr", key))
 		return nil
 	}
+	m.mu.Unlock()
 
 	watcher, err := m.client.Resource(gvr).Watch(m.ctx, metav1.ListOptions{})
 	if err != nil {
@@ -440,14 +455,23 @@ func (m *watchMode) startCRWatcher(gvr schema.GroupVersionResource) error {
 		return fmt.Errorf("failed to watch CR %s: %w", key, err)
 	}
 
-	stopCh := make(chan struct{})
+	// Check under lock before inserting
+	m.mu.Lock()
+	if _, exists := m.crWatchers[key]; exists {
+		m.mu.Unlock()
+		watcher.Stop()
+		m.settings.Logger.Debug("Already watching CR", zap.String("gvr", key))
+		return nil
+	}
 
+	stopCh := make(chan struct{})
 	crw := &crWatcher{
 		gvr:     gvr,
 		watcher: watcher,
 		stopCh:  stopCh,
 	}
 	m.crWatchers[key] = crw
+	m.mu.Unlock()
 
 	// List initial state if configured
 	if m.config.Watch.IncludeInitialState {
