@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/config/configretry"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
@@ -79,7 +80,7 @@ func (f *Factory) CreateLogsExporter(
 		exporterhelper.WithStart(exp.Start),
 		exporterhelper.WithShutdown(exp.Shutdown),
 		exporterhelper.WithTimeout(typedCfg.TimeoutSettings),
-		exporterhelper.WithQueue(typedCfg.QueueSettings),
+		exporterhelper.WithQueue(configoptional.Some(typedCfg.QueueSettings)),
 		exporterhelper.WithRetry(typedCfg.BackOffConfig),
 	)
 }
