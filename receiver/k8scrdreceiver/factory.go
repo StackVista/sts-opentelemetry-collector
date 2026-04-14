@@ -29,17 +29,11 @@ func createDefaultConfig() component.Config {
 		APIConfig: APIConfig{
 			AuthType: AuthTypeServiceAccount,
 		},
-		Pull: PullConfig{
-			Enabled:  true,
-			Interval: 1 * time.Hour,
-		},
-		Watch: WatchConfig{
-			Enabled:             true,
-			IncludeInitialState: true,
-		},
-		DiscoveryMode: DiscoveryModeAPIGroups,
+		Interval:            5 * time.Minute,
+		IncludeInitialState: true,
+		DiscoveryMode:       DiscoveryModeAPIGroups,
 		APIGroupFilters: &APIGroupFilters{
-			Include: []string{"*"}, // Watch all API groups by default
+			Include: []string{"*"},
 			Exclude: []string{},
 		},
 	}
