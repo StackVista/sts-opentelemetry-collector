@@ -259,9 +259,11 @@ func TestBuildCRLogRecord(t *testing.T) {
 			require.True(t, ok)
 			assert.Equal(t, eventDomainK8s, domain.Str())
 
-			name, ok := attrs.Get(attrEventName)
+			assert.Equal(t, eventNameCR, logRecord.EventName())
+
+			objectName, ok := attrs.Get(attrK8sObjectName)
 			require.True(t, ok)
-			assert.Equal(t, tt.cr.GetName(), name.Str())
+			assert.Equal(t, tt.cr.GetName(), objectName.Str())
 
 			// Verify namespace attribute in log record (also kept for backward compatibility)
 			if tt.cr.GetNamespace() != "" {
@@ -401,9 +403,11 @@ func TestBuildCRDLogRecord(t *testing.T) {
 			require.True(t, ok)
 			assert.Equal(t, eventDomainK8s, domain.Str())
 
-			name, ok := attrs.Get(attrEventName)
+			assert.Equal(t, eventNameCRD, logRecord.EventName())
+
+			objectName, ok := attrs.Get(attrK8sObjectName)
 			require.True(t, ok)
-			assert.Equal(t, tt.crd.GetName(), name.Str())
+			assert.Equal(t, tt.crd.GetName(), objectName.Str())
 
 			// Verify NO namespace attribute for cluster-scoped CRDs
 			_, ok = attrs.Get(attrK8sNamespaceName)

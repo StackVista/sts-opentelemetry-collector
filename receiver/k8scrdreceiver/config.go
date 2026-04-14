@@ -17,28 +17,33 @@ const (
 	DiscoveryModeAll       DiscoveryMode = "all"
 )
 
-// PullConfig configures pull mode for periodic CRD/CR collection
-type PullConfig struct {
-	// Enabled determines if pull mode is active
-	Enabled bool `mapstructure:"enabled"`
-	// Interval for pull mode - how often to list all CRDs/CRs (default: 1h, min: 1m)
-	Interval time.Duration `mapstructure:"interval"`
-}
+// Config defines configuration for the k8scrd receiver.
+// The receiver always watches CRDs/CRs via informers and periodically emits
+// snapshots from the local cache.
+type Config struct {
+	APIConfig APIConfig `mapstructure:",squash"`
 
-// WatchConfig configures watch mode for real-time CRD/CR updates
-type WatchConfig struct {
-	// Enabled determines if watch mode is active
-	Enabled bool `mapstructure:"enabled"`
-	// IncludeInitialState emits existing CRs on startup
+	// Interval controls how often a full snapshot is emitted from the informer cache.
+	// This also serves as the informer resync period. Default: 15m, min: 1m.
+	Interval time.Duration `mapstructure:"interval"`
+
+	// IncludeInitialState emits all existing CRDs/CRs on startup before the first interval tick.
 	IncludeInitialState bool `mapstructure:"include_initial_state"`
+
+	// DiscoveryMode controls how CRDs are discovered: "api_groups" (filtered) or "all".
+	DiscoveryMode DiscoveryMode `mapstructure:"discovery_mode"`
+
+	// APIGroupFilters defines inclusion/exclusion patterns for API groups.
+	// Only used when DiscoveryMode is "api_groups".
+	APIGroupFilters *APIGroupFilters `mapstructure:"api_group_filters"`
 }
 
 // APIGroupFilters defines inclusion and exclusion patterns for API groups
 type APIGroupFilters struct {
-	// Include defines patterns to include (regex). Default: ["*"] (all groups)
+	// Include defines patterns to include (glob). Default: ["*"] (all groups)
 	Include []string `mapstructure:"include"`
 
-	// Exclude defines patterns to exclude (regex). Applied after include.
+	// Exclude defines patterns to exclude (glob). Applied after include.
 	Exclude []string `mapstructure:"exclude"`
 
 	// Compiled regex caches (not exposed in config)
@@ -46,28 +51,12 @@ type APIGroupFilters struct {
 	excludeRegexes []*regexp.Regexp
 }
 
-// Config defines configuration for the k8scrd receiver
-type Config struct {
-	APIConfig       APIConfig        `mapstructure:",squash"`
-	Pull            PullConfig       `mapstructure:"pull"`
-	Watch           WatchConfig      `mapstructure:"watch"`
-	DiscoveryMode   DiscoveryMode    `mapstructure:"discovery_mode"`
-	APIGroupFilters *APIGroupFilters `mapstructure:"api_group_filters"`
-}
-
 func (c *Config) Validate() error {
-	if !c.Pull.Enabled && !c.Watch.Enabled {
-		return errors.New("at least one mode (pull or watch) must be enabled")
+	if c.Interval == 0 {
+		c.Interval = 5 * time.Minute
 	}
-
-	// Pull mode validations
-	if c.Pull.Enabled {
-		if c.Pull.Interval == 0 {
-			return errors.New("pull interval is required when pull mode is enabled")
-		}
-		if c.Pull.Interval < 1*time.Minute {
-			return errors.New("pull interval must be at least 1 minute")
-		}
+	if c.Interval < 1*time.Minute {
+		return errors.New("interval must be at least 1 minute")
 	}
 
 	if c.DiscoveryMode == "" {
@@ -121,7 +110,7 @@ func (c *Config) getDynamicClient() (dynamic.Interface, error) {
 	return MakeDynamicClient(c.APIConfig)
 }
 
-// shouldWatch determines if a CRD's API group should be watched based on filters
+// shouldWatchAPIGroup determines if a CRD's API group should be watched based on filters
 func (c *Config) shouldWatchAPIGroup(apiGroup string) bool {
 	if c.DiscoveryMode == DiscoveryModeAll {
 		return true
@@ -148,28 +137,6 @@ func (c *Config) shouldWatchAPIGroup(apiGroup string) bool {
 	}
 
 	return true
-}
-
-// matchesPattern checks if a string matches a glob-style pattern
-// Supports:
-//   - "*" matches anything
-//   - "*.example.com" matches "foo.example.com" but not "example.com"
-//   - Exact match: "policies.kubewarden.io"
-//
-// Note: This function compiles patterns on every call and is only used for testing.
-// Production code uses pre-compiled regexes cached in Config.APIGroupFilters.
-func matchesPattern(pattern, str string) bool {
-	// Simple glob support
-	if pattern == "*" {
-		return true
-	}
-
-	regex, err := compilePattern(pattern)
-	if err != nil {
-		return false
-	}
-
-	return regex.MatchString(str)
 }
 
 // compilePattern converts a glob-style pattern to a regex

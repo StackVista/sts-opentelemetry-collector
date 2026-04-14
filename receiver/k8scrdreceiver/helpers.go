@@ -74,11 +74,12 @@ func buildCRLogRecord(
 	bodyMap.PutStr("type", string(eventType))
 
 	// Add attributes for easier filtering
+	logRecord.SetEventName(eventNameCR)
 	logRecord.Attributes().PutStr(attrK8sResourceName, cr.GetKind())
 	logRecord.Attributes().PutStr(attrK8sResourceGroup, cr.GroupVersionKind().Group)
 	logRecord.Attributes().PutStr(attrK8sResourceVersion, cr.GroupVersionKind().Version)
 	logRecord.Attributes().PutStr(attrEventDomain, eventDomainK8s)
-	logRecord.Attributes().PutStr(attrEventName, cr.GetName())
+	logRecord.Attributes().PutStr(attrK8sObjectName, cr.GetName())
 	if cr.GetNamespace() != "" {
 		logRecord.Attributes().PutStr(attrK8sNamespaceName, cr.GetNamespace())
 	}
@@ -115,11 +116,12 @@ func buildCRDLogRecord(
 
 	// Add attributes for easier filtering
 	// CRDs are always kind "CustomResourceDefinition" in group "apiextensions.k8s.io"
+	logRecord.SetEventName(eventNameCRD)
 	logRecord.Attributes().PutStr(attrK8sResourceName, "CustomResourceDefinition")
 	logRecord.Attributes().PutStr(attrK8sResourceGroup, "apiextensions.k8s.io")
 	logRecord.Attributes().PutStr(attrK8sResourceVersion, "v1")
 	logRecord.Attributes().PutStr(attrEventDomain, eventDomainK8s)
-	logRecord.Attributes().PutStr(attrEventName, crd.GetName())
+	logRecord.Attributes().PutStr(attrK8sObjectName, crd.GetName())
 	// No namespace attribute for cluster-scoped CRDs
 
 	return logs, nil
