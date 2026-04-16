@@ -8,9 +8,10 @@ const (
 	attrK8sResourceName    = "k8s.resource.name"
 	attrK8sResourceGroup   = "k8s.resource.group"
 	attrK8sResourceVersion = "k8s.resource.version"
-	attrK8sObjectName    = "k8s.object.name"
-	attrEventDomain      = "event.domain"
-	attrK8sNamespaceName = "k8s.namespace.name"
+	attrK8sObjectName      = "k8s.object.name"
+	attrEventDomain        = "event.domain"
+	attrK8sNamespaceName   = "k8s.namespace.name"
+	attrK8sClusterName     = "k8s.cluster.name"
 
 	// eventDomainK8s is the value for the event.domain attribute
 	eventDomainK8s = "k8s"

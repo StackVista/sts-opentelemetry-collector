@@ -29,7 +29,8 @@ func createDefaultConfig() component.Config {
 		APIConfig: APIConfig{
 			AuthType: AuthTypeServiceAccount,
 		},
-		Interval:            5 * time.Minute,
+		IncrementInterval:  10 * time.Second,
+		SnapshotInterval:   5 * time.Minute,
 		IncludeInitialState: true,
 		DiscoveryMode:       DiscoveryModeAPIGroups,
 		APIGroupFilters: &APIGroupFilters{

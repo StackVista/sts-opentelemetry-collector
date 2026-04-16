@@ -138,6 +138,7 @@ func TestConvertUnstructuredToCRD(t *testing.T) {
 
 func TestBuildCRLogRecord(t *testing.T) {
 	timestamp := time.Date(2026, 4, 8, 12, 0, 0, 0, time.UTC)
+	clusterName := "test-cluster"
 
 	tests := []struct {
 		name      string
@@ -197,7 +198,7 @@ func TestBuildCRLogRecord(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			logs, err := buildCRLogRecord(tt.cr, tt.eventType, timestamp)
+			logs, err := buildCRLogRecord(tt.cr, tt.eventType, timestamp, clusterName)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -209,14 +210,16 @@ func TestBuildCRLogRecord(t *testing.T) {
 			assert.Equal(t, 1, logs.ResourceLogs().Len())
 			resourceLogs := logs.ResourceLogs().At(0)
 
-			// Verify resource attributes - namespace should be set at resource level
+			// Verify resource attributes
 			resourceAttrs := resourceLogs.Resource().Attributes()
+			cluster, ok := resourceAttrs.Get(attrK8sClusterName)
+			require.True(t, ok, "resource should have cluster name attribute")
+			assert.Equal(t, clusterName, cluster.Str())
+
 			if tt.cr.GetNamespace() != "" {
 				ns, ok := resourceAttrs.Get(attrK8sNamespaceName)
 				require.True(t, ok, "resource should have namespace attribute for namespaced resources")
 				assert.Equal(t, tt.cr.GetNamespace(), ns.Str())
-			} else {
-				assert.Equal(t, 0, resourceAttrs.Len(), "resource should have no attributes for cluster-scoped resources")
 			}
 
 			assert.Equal(t, 1, resourceLogs.ScopeLogs().Len())
@@ -280,6 +283,7 @@ func TestBuildCRLogRecord(t *testing.T) {
 
 func TestBuildCRDLogRecord(t *testing.T) {
 	timestamp := time.Date(2026, 4, 8, 12, 0, 0, 0, time.UTC)
+	clusterName := "test-cluster"
 
 	tests := []struct {
 		name      string
@@ -342,7 +346,7 @@ func TestBuildCRDLogRecord(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			logs, err := buildCRDLogRecord(tt.crd, tt.eventType, timestamp)
+			logs, err := buildCRDLogRecord(tt.crd, tt.eventType, timestamp, clusterName)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -354,9 +358,12 @@ func TestBuildCRDLogRecord(t *testing.T) {
 			assert.Equal(t, 1, logs.ResourceLogs().Len())
 			resourceLogs := logs.ResourceLogs().At(0)
 
-			// CRDs are cluster-scoped - no resource attributes
+			// CRDs are cluster-scoped — only cluster name in resource attributes
 			resourceAttrs := resourceLogs.Resource().Attributes()
-			assert.Equal(t, 0, resourceAttrs.Len(), "CRD should have no resource attributes (cluster-scoped)")
+			cluster, ok := resourceAttrs.Get(attrK8sClusterName)
+			require.True(t, ok, "CRD should have cluster name attribute")
+			assert.Equal(t, clusterName, cluster.Str())
+			assert.Equal(t, 1, resourceAttrs.Len(), "CRD should only have cluster name attribute (cluster-scoped)")
 
 			assert.Equal(t, 1, resourceLogs.ScopeLogs().Len())
 

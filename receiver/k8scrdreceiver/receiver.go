@@ -19,11 +19,11 @@ const (
 
 // k8scrdReceiver uses informers to watch CRDs and their custom resources.
 type k8scrdReceiver struct {
-	settings        receiver.Settings
-	config          *Config
-	consumer        consumer.Logs
-	dynamicClient   dynamic.Interface // injectable for testing
-	informerManager *informerManager
+	settings      receiver.Settings
+	config        *Config
+	consumer      consumer.Logs
+	dynamicClient dynamic.Interface // injectable for testing
+	collector     *crdCollector
 }
 
 func newReceiver(params receiver.Settings, config *Config, consumer consumer.Logs) (receiver.Logs, error) {
@@ -44,14 +44,16 @@ func (r *k8scrdReceiver) Start(ctx context.Context, _ component.Host) error {
 	}
 
 	ft := newForbiddenTracker(defaultForbiddenRetryInterval)
-	r.informerManager = newInformerManager(r.settings, r.config, r.consumer, r.dynamicClient, ft)
+	informerSet := newResourceInformers(r.settings, r.config, r.dynamicClient, ft)
+	r.collector = newCRDCollector(r.settings.Logger, r.config, r.consumer, informerSet)
 
-	if err := r.informerManager.Start(ctx); err != nil {
-		return fmt.Errorf("failed to start informer manager: %w", err)
+	if err := r.collector.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start CRD collector: %w", err)
 	}
 
 	r.settings.Logger.Info("K8s CRD Receiver started",
-		zap.Duration("interval", r.config.Interval),
+		zap.Duration("increment_interval", r.config.IncrementInterval),
+		zap.Duration("snapshot_interval", r.config.SnapshotInterval),
 		zap.Bool("include_initial_state", r.config.IncludeInitialState),
 		zap.String("discovery_mode", string(r.config.DiscoveryMode)),
 	)
@@ -62,8 +64,8 @@ func (r *k8scrdReceiver) Start(ctx context.Context, _ component.Host) error {
 func (r *k8scrdReceiver) Shutdown(ctx context.Context) error {
 	r.settings.Logger.Info("Shutting down K8s CRD Receiver")
 
-	if r.informerManager != nil {
-		return r.informerManager.Shutdown(ctx)
+	if r.collector != nil {
+		return r.collector.Shutdown(ctx)
 	}
 
 	return nil

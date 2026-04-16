@@ -46,12 +46,15 @@ func convertUnstructuredToCRD(u *unstructured.Unstructured, crd *apiextensionsv1
 // buildCRLogRecord creates an OTLP log record from a CR and event type.
 // This function contains the pure log-building logic and can be tested independently.
 func buildCRLogRecord(
-	cr *unstructured.Unstructured, eventType watch.EventType, timestamp time.Time,
+	cr *unstructured.Unstructured, eventType watch.EventType, timestamp time.Time, clusterName string,
 ) (plog.Logs, error) {
 	logs := plog.NewLogs()
 	resourceLogs := logs.ResourceLogs().AppendEmpty()
 
-	// Set resource attributes - namespace is a property of the resource itself
+	// Set resource attributes
+	if clusterName != "" {
+		resourceLogs.Resource().Attributes().PutStr(attrK8sClusterName, clusterName)
+	}
 	if cr.GetNamespace() != "" {
 		resourceLogs.Resource().Attributes().PutStr(attrK8sNamespaceName, cr.GetNamespace())
 	}
@@ -90,12 +93,15 @@ func buildCRLogRecord(
 // buildCRDLogRecord creates an OTLP log record from a CRD and event type.
 // CRDs are cluster-scoped resources that define custom resource types.
 func buildCRDLogRecord(
-	crd *unstructured.Unstructured, eventType watch.EventType, timestamp time.Time,
+	crd *unstructured.Unstructured, eventType watch.EventType, timestamp time.Time, clusterName string,
 ) (plog.Logs, error) {
 	logs := plog.NewLogs()
 	resourceLogs := logs.ResourceLogs().AppendEmpty()
 
-	// CRDs are cluster-scoped - no namespace in resource attributes
+	// CRDs are cluster-scoped — only cluster name in resource attributes
+	if clusterName != "" {
+		resourceLogs.Resource().Attributes().PutStr(attrK8sClusterName, clusterName)
+	}
 
 	scopeLogs := resourceLogs.ScopeLogs().AppendEmpty()
 	scopeLogs.Scope().SetName(scopeName)
@@ -122,7 +128,6 @@ func buildCRDLogRecord(
 	logRecord.Attributes().PutStr(attrK8sResourceVersion, "v1")
 	logRecord.Attributes().PutStr(attrEventDomain, eventDomainK8s)
 	logRecord.Attributes().PutStr(attrK8sObjectName, crd.GetName())
-	// No namespace attribute for cluster-scoped CRDs
 
 	return logs, nil
 }
@@ -138,15 +143,15 @@ func isPermissionDenied(err error) bool {
 }
 
 // emitLog builds and sends a log record to the consumer.
-// This is the unified emit helper used by both pull and watch modes.
 func emitLog(
 	ctx context.Context,
 	cons consumer.Logs,
 	obj *unstructured.Unstructured,
 	eventType watch.EventType,
-	buildLogFn func(*unstructured.Unstructured, watch.EventType, time.Time) (plog.Logs, error),
+	clusterName string,
+	buildLogFn func(*unstructured.Unstructured, watch.EventType, time.Time, string) (plog.Logs, error),
 ) error {
-	logs, err := buildLogFn(obj, eventType, time.Now())
+	logs, err := buildLogFn(obj, eventType, time.Now(), clusterName)
 	if err != nil {
 		return err
 	}

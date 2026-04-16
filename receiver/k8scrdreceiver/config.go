@@ -18,17 +18,28 @@ const (
 )
 
 // Config defines configuration for the k8scrd receiver.
-// The receiver always watches CRDs/CRs via informers and periodically emits
-// snapshots from the local cache.
+// The receiver watches CRDs/CRs via informers and uses a consolidated increment loop
+// to detect changes and emit snapshots.
 type Config struct {
 	APIConfig APIConfig `mapstructure:",squash"`
 
-	// Interval controls how often a full snapshot is emitted from the informer cache.
-	// This also serves as the informer resync period. Default: 15m, min: 1m.
-	Interval time.Duration `mapstructure:"interval"`
+	// IncrementInterval controls how often the process cache is compared against
+	// the informer cache to detect and emit changes. Default: 10s, min: 1s.
+	IncrementInterval time.Duration `mapstructure:"increment_interval"`
+
+	// SnapshotInterval controls how often a full snapshot is emitted from the informer cache.
+	// Snapshots emit all current resources as ADDED (for downstream TTL freshness) and
+	// emit DELETED for any resources that were previously cached but are no longer present.
+	// Default: 5m, min: 1m.
+	SnapshotInterval time.Duration `mapstructure:"snapshot_interval"`
 
 	// IncludeInitialState emits all existing CRDs/CRs on startup before the first interval tick.
+	// When false, the first increment populates the process cache without emitting.
 	IncludeInitialState bool `mapstructure:"include_initial_state"`
+
+	// ClusterName is added to resource attributes as k8s.cluster.name.
+	// Used for sub-stream identification and sharding in multi-cluster deployments.
+	ClusterName string `mapstructure:"cluster_name"`
 
 	// DiscoveryMode controls how CRDs are discovered: "api_groups" (filtered) or "all".
 	DiscoveryMode DiscoveryMode `mapstructure:"discovery_mode"`
@@ -52,11 +63,22 @@ type APIGroupFilters struct {
 }
 
 func (c *Config) Validate() error {
-	if c.Interval == 0 {
-		c.Interval = 5 * time.Minute
+	if c.IncrementInterval == 0 {
+		c.IncrementInterval = 10 * time.Second
 	}
-	if c.Interval < 1*time.Minute {
-		return errors.New("interval must be at least 1 minute")
+	if c.IncrementInterval < 1*time.Second {
+		return errors.New("increment_interval must be at least 1 second")
+	}
+
+	if c.SnapshotInterval == 0 {
+		c.SnapshotInterval = 5 * time.Minute
+	}
+	if c.SnapshotInterval < 1*time.Minute {
+		return errors.New("snapshot_interval must be at least 1 minute")
+	}
+
+	if c.SnapshotInterval < c.IncrementInterval {
+		return errors.New("snapshot_interval must be greater than or equal to increment_interval")
 	}
 
 	if c.DiscoveryMode == "" {
