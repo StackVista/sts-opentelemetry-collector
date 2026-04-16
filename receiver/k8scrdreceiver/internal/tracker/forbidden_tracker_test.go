@@ -1,10 +1,10 @@
-//nolint:testpackage // Tests require access to internal types
-package k8scrdreceiver
+package tracker_test
 
 import (
 	"testing"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/tracker"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -54,7 +54,7 @@ func TestForbiddenTracker_ShouldRetry(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tracker := newForbiddenTracker(tt.retryInterval)
+			ft := tracker.NewForbiddenTracker(tt.retryInterval)
 			gvr := schema.GroupVersionResource{
 				Group:    "policies.kubewarden.io",
 				Version:  "v1",
@@ -62,13 +62,13 @@ func TestForbiddenTracker_ShouldRetry(t *testing.T) {
 			}
 
 			if tt.markForbidden {
-				tracker.markForbidden(gvr)
+				ft.MarkForbidden(gvr)
 				if tt.waitDuration > 0 {
 					time.Sleep(tt.waitDuration)
 				}
 			}
 
-			shouldRetry, retryIn := tracker.shouldRetry(gvr)
+			shouldRetry, retryIn := ft.ShouldRetry(gvr)
 
 			assert.Equal(t, tt.wantShouldRetry, shouldRetry)
 			if !shouldRetry {
@@ -82,7 +82,7 @@ func TestForbiddenTracker_ShouldRetry(t *testing.T) {
 }
 
 func TestForbiddenTracker_MarkForbidden(t *testing.T) {
-	tracker := newForbiddenTracker(1 * time.Hour)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 	gvr := schema.GroupVersionResource{
 		Group:    "longhorn.io",
 		Version:  "v1beta1",
@@ -90,20 +90,20 @@ func TestForbiddenTracker_MarkForbidden(t *testing.T) {
 	}
 
 	// Initially not forbidden
-	shouldRetry, _ := tracker.shouldRetry(gvr)
+	shouldRetry, _ := ft.ShouldRetry(gvr)
 	assert.True(t, shouldRetry)
 
 	// Mark as forbidden
-	tracker.markForbidden(gvr)
+	ft.MarkForbidden(gvr)
 
 	// Now should not retry
-	shouldRetry, retryIn := tracker.shouldRetry(gvr)
+	shouldRetry, retryIn := ft.ShouldRetry(gvr)
 	assert.False(t, shouldRetry)
 	assert.Greater(t, retryIn, time.Duration(0))
 }
 
 func TestForbiddenTracker_Clear(t *testing.T) {
-	tracker := newForbiddenTracker(1 * time.Hour)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 	gvr := schema.GroupVersionResource{
 		Group:    "example.com",
 		Version:  "v1",
@@ -111,48 +111,48 @@ func TestForbiddenTracker_Clear(t *testing.T) {
 	}
 
 	// Mark as forbidden
-	tracker.markForbidden(gvr)
-	shouldRetry, _ := tracker.shouldRetry(gvr)
+	ft.MarkForbidden(gvr)
+	shouldRetry, _ := ft.ShouldRetry(gvr)
 	assert.False(t, shouldRetry, "should not retry when forbidden")
 
 	// Clear forbidden status
-	tracker.clear(gvr)
+	ft.Clear(gvr)
 
 	// Should retry after clear
-	shouldRetry, retryIn := tracker.shouldRetry(gvr)
+	shouldRetry, retryIn := ft.ShouldRetry(gvr)
 	assert.True(t, shouldRetry, "should retry after clear")
 	assert.Equal(t, time.Duration(0), retryIn)
 }
 
-func TestForbiddenTracker_MultiplResources(t *testing.T) {
-	tracker := newForbiddenTracker(1 * time.Hour)
+func TestForbiddenTracker_MultipleResources(t *testing.T) {
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 
 	gvr1 := schema.GroupVersionResource{Group: "group1.io", Version: "v1", Resource: "res1"}
 	gvr2 := schema.GroupVersionResource{Group: "group2.io", Version: "v1", Resource: "res2"}
 
 	// Mark only gvr1 as forbidden
-	tracker.markForbidden(gvr1)
+	ft.MarkForbidden(gvr1)
 
 	// gvr1 should not retry
-	shouldRetry1, _ := tracker.shouldRetry(gvr1)
+	shouldRetry1, _ := ft.ShouldRetry(gvr1)
 	assert.False(t, shouldRetry1)
 
 	// gvr2 should still retry
-	shouldRetry2, _ := tracker.shouldRetry(gvr2)
+	shouldRetry2, _ := ft.ShouldRetry(gvr2)
 	assert.True(t, shouldRetry2)
 
 	// Clear gvr1
-	tracker.clear(gvr1)
+	ft.Clear(gvr1)
 
 	// Both should retry now
-	shouldRetry1, _ = tracker.shouldRetry(gvr1)
-	shouldRetry2, _ = tracker.shouldRetry(gvr2)
+	shouldRetry1, _ = ft.ShouldRetry(gvr1)
+	shouldRetry2, _ = ft.ShouldRetry(gvr2)
 	assert.True(t, shouldRetry1)
 	assert.True(t, shouldRetry2)
 }
 
 func TestForbiddenTracker_Concurrency(_ *testing.T) {
-	tracker := newForbiddenTracker(1 * time.Millisecond)
+	ft := tracker.NewForbiddenTracker(1 * time.Millisecond)
 	gvr := schema.GroupVersionResource{Group: "test.io", Version: "v1", Resource: "test"}
 
 	// Run concurrent mark/check/clear operations
@@ -161,9 +161,9 @@ func TestForbiddenTracker_Concurrency(_ *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func() {
 			for j := 0; j < 100; j++ {
-				tracker.markForbidden(gvr)
-				tracker.shouldRetry(gvr)
-				tracker.clear(gvr)
+				ft.MarkForbidden(gvr)
+				ft.ShouldRetry(gvr)
+				ft.Clear(gvr)
 			}
 			done <- true
 		}()

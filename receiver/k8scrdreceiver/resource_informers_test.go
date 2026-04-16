@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/tracker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,7 +29,7 @@ func TestResourceInformers_ReadCRDs(t *testing.T) {
 	)
 
 	config := testConfig([]string{"example.com"}, nil)
-	ft := newForbiddenTracker(1 * time.Hour)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 	ri := newResourceInformers(testSettings(t), config, client, ft)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -59,7 +60,7 @@ func TestResourceInformers_ReadCRs(t *testing.T) {
 	)
 
 	config := testConfig([]string{"example.com"}, nil)
-	ft := newForbiddenTracker(1 * time.Hour)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 	ri := newResourceInformers(testSettings(t), config, client, ft)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -91,7 +92,7 @@ func TestResourceInformers_CRDAddStartsCRInformer(t *testing.T) {
 	)
 
 	config := testConfig([]string{"example.com"}, nil)
-	ft := newForbiddenTracker(1 * time.Hour)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 	ri := newResourceInformers(testSettings(t), config, client, ft)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -123,7 +124,7 @@ func TestResourceInformers_CRDDeleteStopsCRInformer(t *testing.T) {
 	)
 
 	config := testConfig([]string{"example.com"}, nil)
-	ft := newForbiddenTracker(1 * time.Hour)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 	ri := newResourceInformers(testSettings(t), config, client, ft)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -170,7 +171,7 @@ func TestResourceInformers_FiltersAPIGroups(t *testing.T) {
 	)
 
 	config := testConfig([]string{"allowed.com"}, nil)
-	ft := newForbiddenTracker(1 * time.Hour)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 	ri := newResourceInformers(testSettings(t), config, client, ft)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -212,7 +213,7 @@ func TestResourceInformers_ExcludeFilter(t *testing.T) {
 	)
 
 	config := testConfig([]string{"*"}, []string{"excluded.com"})
-	ft := newForbiddenTracker(1 * time.Hour)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 	ri := newResourceInformers(testSettings(t), config, client, ft)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -247,8 +248,8 @@ func TestResourceInformers_ForbiddenTrackerSkipsResource(t *testing.T) {
 	)
 
 	config := testConfig([]string{"example.com"}, nil)
-	ft := newForbiddenTracker(1 * time.Hour)
-	ft.markForbidden(crGVR)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
+	ft.MarkForbidden(crGVR)
 
 	ri := newResourceInformers(testSettings(t), config, client, ft)
 
@@ -281,7 +282,7 @@ func TestResourceInformers_Shutdown(t *testing.T) {
 	)
 
 	config := testConfig([]string{"example.com"}, nil)
-	ft := newForbiddenTracker(1 * time.Hour)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 	ri := newResourceInformers(testSettings(t), config, client, ft)
 
 	ctx, cancel := context.WithCancel(context.Background())

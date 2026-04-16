@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 )
 
+//nolint:unparam
 func makeCachedCRD(name, resourceVersion string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -27,6 +28,7 @@ func makeCachedCRD(name, resourceVersion string) *unstructured.Unstructured {
 	}
 }
 
+//nolint:unparam
 func makeCachedCR(name, namespace, group, version, kind, resourceVersion string) *unstructured.Unstructured {
 	obj := &unstructured.Unstructured{
 		Object: map[string]interface{}{

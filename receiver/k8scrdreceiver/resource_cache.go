@@ -3,6 +3,7 @@ package k8scrdreceiver
 import (
 	"fmt"
 
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/emit"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
@@ -146,5 +147,5 @@ func (rc *resourceCache) update(
 
 // crResourceKey returns a unique key for a CR within the resource cache.
 func crResourceKey(gvr schema.GroupVersionResource, namespace, name string) string {
-	return fmt.Sprintf("%s/%s/%s", formatGVRKey(gvr), namespace, name)
+	return fmt.Sprintf("%s/%s/%s", emit.FormatGVRKey(gvr), namespace, name)
 }

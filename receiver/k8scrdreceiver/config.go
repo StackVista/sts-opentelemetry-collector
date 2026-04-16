@@ -47,6 +47,11 @@ type Config struct {
 	// APIGroupFilters defines inclusion/exclusion patterns for API groups.
 	// Only used when DiscoveryMode is "api_groups".
 	APIGroupFilters *APIGroupFilters `mapstructure:"api_group_filters"`
+
+	// ValkeyEndpoint is the address of a Valkey instance for cache persistence.
+	// When set, the resource cache is persisted across restarts and leader failovers.
+	// Format: "host:port" (e.g. "valkey:6379"). When empty, no external cache is used.
+	ValkeyEndpoint string `mapstructure:"valkey_endpoint"`
 }
 
 // APIGroupFilters defines inclusion and exclusion patterns for API groups

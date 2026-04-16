@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/emit"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/tracker"
 	"go.opentelemetry.io/collector/receiver"
 	"go.uber.org/zap"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -60,7 +62,7 @@ type ResourceInformers struct {
 	settings         receiver.Settings
 	config           *Config
 	dynamicClient    dynamic.Interface
-	forbiddenTracker *forbiddenTracker
+	forbiddenTracker *tracker.ForbiddenTracker
 
 	// CRD informer
 	crdInformer     cache.SharedIndexInformer
@@ -68,7 +70,7 @@ type ResourceInformers struct {
 
 	// CR informers — one per matching CRD
 	mu          sync.RWMutex
-	crInformers map[string]*crInformerEntry // key: formatGVRKey(gvr)
+	crInformers map[string]*crInformerEntry // key: emit.FormatGVRKey(gvr)
 
 	// Lifecycle
 	wg     sync.WaitGroup
@@ -80,7 +82,7 @@ func newResourceInformers(
 	settings receiver.Settings,
 	config *Config,
 	dynamicClient dynamic.Interface,
-	ft *forbiddenTracker,
+	ft *tracker.ForbiddenTracker,
 ) *ResourceInformers {
 	return &ResourceInformers{
 		settings:         settings,
@@ -234,7 +236,7 @@ func (ri *ResourceInformers) onCRDAdd(obj interface{}) {
 
 	if err := ri.startCRInformer(gvr); err != nil {
 		ri.settings.Logger.Error("Failed to start CR informer",
-			zap.String("gvr", formatGVRKey(gvr)),
+			zap.String("gvr", emit.FormatGVRKey(gvr)),
 			zap.Error(err),
 		)
 	}
@@ -276,16 +278,16 @@ func (ri *ResourceInformers) onCRDUpdate(oldObj, newObj interface{}) {
 	// Version changed — restart CR informer
 	ri.settings.Logger.Info("CRD storage version changed, restarting CR informer",
 		zap.String("crd", newCRD.GetName()),
-		zap.String("old_gvr", formatGVRKey(oldGVR)),
-		zap.String("new_gvr", formatGVRKey(newGVR)),
+		zap.String("old_gvr", emit.FormatGVRKey(oldGVR)),
+		zap.String("new_gvr", emit.FormatGVRKey(newGVR)),
 	)
 
 	ri.stopCRInformer(oldGVR)
-	ri.forbiddenTracker.clear(oldGVR)
+	ri.forbiddenTracker.Clear(oldGVR)
 
 	if err := ri.startCRInformer(newGVR); err != nil {
 		ri.settings.Logger.Error("Failed to restart CR informer after version change",
-			zap.String("gvr", formatGVRKey(newGVR)),
+			zap.String("gvr", emit.FormatGVRKey(newGVR)),
 			zap.Error(err),
 		)
 	}
@@ -322,7 +324,7 @@ func (ri *ResourceInformers) onCRDDelete(obj interface{}) {
 	}
 
 	ri.stopCRInformer(gvr)
-	ri.forbiddenTracker.clear(gvr)
+	ri.forbiddenTracker.Clear(gvr)
 }
 
 // --- CR informer lifecycle ---
@@ -330,9 +332,9 @@ func (ri *ResourceInformers) onCRDDelete(obj interface{}) {
 // startCRInformer creates and starts an informer for the given GVR.
 // The informer has no event handlers — the collector reads its cache directly.
 func (ri *ResourceInformers) startCRInformer(gvr schema.GroupVersionResource) error {
-	key := formatGVRKey(gvr)
+	key := emit.FormatGVRKey(gvr)
 
-	if shouldRetry, retryIn := ri.forbiddenTracker.shouldRetry(gvr); !shouldRetry {
+	if shouldRetry, retryIn := ri.forbiddenTracker.ShouldRetry(gvr); !shouldRetry {
 		ri.settings.Logger.Debug("Skipping forbidden resource",
 			zap.String("gvr", key),
 			zap.Duration("retry_in", retryIn),
@@ -352,7 +354,7 @@ func (ri *ResourceInformers) startCRInformer(gvr schema.GroupVersionResource) er
 	_, err := ri.dynamicClient.Resource(gvr).List(ri.ctx, metav1.ListOptions{Limit: 1})
 	if err != nil {
 		if isPermissionDenied(err) {
-			ri.forbiddenTracker.markForbidden(gvr)
+			ri.forbiddenTracker.MarkForbidden(gvr)
 			ri.settings.Logger.Info("Skipping CR informer - insufficient RBAC permissions",
 				zap.String("gvr", key),
 			)
@@ -406,7 +408,7 @@ func (ri *ResourceInformers) startCRInformer(gvr schema.GroupVersionResource) er
 }
 
 func (ri *ResourceInformers) stopCRInformer(gvr schema.GroupVersionResource) {
-	key := formatGVRKey(gvr)
+	key := emit.FormatGVRKey(gvr)
 
 	ri.mu.Lock()
 	defer ri.mu.Unlock()
@@ -429,8 +431,9 @@ func (ri *ResourceInformers) ReadCRDs() []*unstructured.Unstructured {
 		return nil
 	}
 
-	var result []*unstructured.Unstructured
-	for _, obj := range ri.crdInformer.GetStore().List() {
+	items := ri.crdInformer.GetStore().List()
+	result := make([]*unstructured.Unstructured, 0, len(items))
+	for _, obj := range items {
 		crd, ok := toUnstructured(obj)
 		if !ok {
 			continue
@@ -465,7 +468,7 @@ func (ri *ResourceInformers) ReadCRs() map[schema.GroupVersionResource][]*unstru
 			continue
 		}
 
-		if shouldRetry, _ := ri.forbiddenTracker.shouldRetry(entry.gvr); !shouldRetry {
+		if shouldRetry, _ := ri.forbiddenTracker.ShouldRetry(entry.gvr); !shouldRetry {
 			continue
 		}
 

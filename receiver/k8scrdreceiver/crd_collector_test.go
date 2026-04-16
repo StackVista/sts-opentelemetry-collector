@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/tracker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
@@ -134,20 +135,17 @@ func waitForInitialEmissions(t *testing.T, sink *consumertest.LogsSink, minCount
 }
 
 // newTestCollector creates a crdCollector backed by a real ResourceInformers for integration tests.
-// Returns both the collector and the informer set so tests can inspect informer state.
 func newTestCollector(
 	t *testing.T,
 	config *Config,
 	sink *consumertest.LogsSink,
 	client *dynamicfake.FakeDynamicClient,
-	ft *forbiddenTracker,
-) (*crdCollector, *ResourceInformers) {
+	ft *tracker.ForbiddenTracker,
+) *crdCollector {
 	t.Helper()
 	settings := testSettings(t)
 	informerSet := newResourceInformers(settings, config, client, ft)
-	collector := newCRDCollector(settings.Logger, config, sink, informerSet)
-
-	return collector, informerSet
+	return newCRDCollector(settings.Logger, config, sink, informerSet, nil)
 }
 
 func TestCRDCollector_EmitsInitialCRDAndCR(t *testing.T) {
@@ -167,8 +165,8 @@ func TestCRDCollector_EmitsInitialCRDAndCR(t *testing.T) {
 
 	sink := &consumertest.LogsSink{}
 	config := testConfig([]string{"example.com"}, nil)
-	ft := newForbiddenTracker(1 * time.Hour)
-	collector, _ := newTestCollector(t, config, sink, client, ft)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
+	collector := newTestCollector(t, config, sink, client, ft)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -200,8 +198,8 @@ func TestCRDCollector_CRLifecycleEvents(t *testing.T) {
 
 	sink := &consumertest.LogsSink{}
 	config := testConfig([]string{"example.com"}, nil)
-	ft := newForbiddenTracker(1 * time.Hour)
-	collector, _ := newTestCollector(t, config, sink, client, ft)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
+	collector := newTestCollector(t, config, sink, client, ft)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -271,8 +269,8 @@ func TestCRDCollector_SnapshotEmitsAllResources(t *testing.T) {
 
 	sink := &consumertest.LogsSink{}
 	config := testConfig([]string{"example.com"}, nil)
-	ft := newForbiddenTracker(1 * time.Hour)
-	collector, _ := newTestCollector(t, config, sink, client, ft)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
+	collector := newTestCollector(t, config, sink, client, ft)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -306,8 +304,8 @@ func TestCRDCollector_IncludeInitialStateFalse(t *testing.T) {
 	sink := &consumertest.LogsSink{}
 	config := testConfig([]string{"example.com"}, nil)
 	config.IncludeInitialState = false
-	ft := newForbiddenTracker(1 * time.Hour)
-	collector, _ := newTestCollector(t, config, sink, client, ft)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
+	collector := newTestCollector(t, config, sink, client, ft)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
