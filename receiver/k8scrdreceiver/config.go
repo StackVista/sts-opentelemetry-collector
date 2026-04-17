@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/collector/component"
 	"k8s.io/client-go/dynamic"
 )
 
@@ -37,8 +38,8 @@ type Config struct {
 	// When false, the first increment populates the process cache without emitting.
 	IncludeInitialState bool `mapstructure:"include_initial_state"`
 
-	// ClusterName is added to resource attributes as k8s.cluster.name.
-	// Used for sub-stream identification and sharding in multi-cluster deployments.
+	// ClusterName identifies the observed cluster. Added to log records as k8s.cluster.name
+	// and used to namespace the Valkey cache key in multi-cluster deployments.
 	ClusterName string `mapstructure:"cluster_name"`
 
 	// DiscoveryMode controls how CRDs are discovered: "api_groups" (filtered) or "all".
@@ -52,6 +53,10 @@ type Config struct {
 	// When set, the resource cache is persisted across restarts and leader failovers.
 	// Format: "host:port" (e.g. "valkey:6379"). When empty, no external cache is used.
 	ValkeyEndpoint string `mapstructure:"valkey_endpoint"`
+
+	// K8sLeaderElector is the component ID of a k8sleaderelector extension.
+	// When set, only the leader replica actively watches CRDs/CRs.
+	K8sLeaderElector *component.ID `mapstructure:"k8s_leader_elector"`
 }
 
 // APIGroupFilters defines inclusion and exclusion patterns for API groups

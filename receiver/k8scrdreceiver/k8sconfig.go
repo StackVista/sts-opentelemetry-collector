@@ -29,38 +29,34 @@ type APIConfig struct {
 	AuthType AuthType `mapstructure:"auth_type"`
 }
 
-// MakeDynamicClient creates a Kubernetes dynamic client.
-//
-// A dynamic client is necessary for this receiver because we discover CRDs at runtime
-// and need to watch arbitrary custom resources without compile-time knowledge of their types.
-// Unlike typed clients (clientset.CoreV1().Pods(), etc.) which require Go structs,
-// the dynamic client works with any GroupVersionResource and returns unstructured data
-// (map[string]interface{}) that we can serialize and emit as OTLP logs.
-func MakeDynamicClient(apiConf APIConfig) (dynamic.Interface, error) {
+// makeRESTConfig creates a Kubernetes REST config based on the auth type.
+func makeRESTConfig(apiConf APIConfig) (*rest.Config, error) {
 	authType := apiConf.AuthType
 	if authType == "" {
 		authType = AuthTypeServiceAccount
 	}
-
-	var (
-		restConfig *rest.Config
-		err        error
-	)
 
 	switch authType {
 	case AuthTypeKubeConfig:
 		loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 		configOverrides := &clientcmd.ConfigOverrides{}
 		kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
-		restConfig, err = kubeConfig.ClientConfig()
+		return kubeConfig.ClientConfig()
 	case AuthTypeServiceAccount:
-		restConfig, err = rest.InClusterConfig()
+		return rest.InClusterConfig()
 	case AuthTypeNone:
-		restConfig = &rest.Config{}
+		return &rest.Config{}, nil
 	default:
 		return nil, fmt.Errorf("invalid authType for kubernetes: %s", authType)
 	}
+}
 
+// MakeDynamicClient creates a Kubernetes dynamic client.
+//
+// A dynamic client is necessary for this receiver because we discover CRDs at runtime
+// and need to watch arbitrary custom resources without compile-time knowledge of their types.
+func MakeDynamicClient(apiConf APIConfig) (dynamic.Interface, error) {
+	restConfig, err := makeRESTConfig(apiConf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Kubernetes rest config: %w", err)
 	}
