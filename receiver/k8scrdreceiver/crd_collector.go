@@ -25,8 +25,7 @@ type crdCollector struct {
 	cache            *resourceCache
 	lastSnapshotTime time.Time
 
-	// External cache persistence
-	cacheStore CacheStore
+	peerStore PeerStore
 
 	// Lifecycle
 	wg     sync.WaitGroup
@@ -39,33 +38,32 @@ func newCRDCollector(
 	config *Config,
 	cons consumer.Logs,
 	informer Informers,
-	cacheStore CacheStore,
+	peerStore PeerStore,
 ) *crdCollector {
-	if cacheStore == nil {
-		cacheStore = &noopCacheStore{}
+	if peerStore == nil {
+		peerStore = &noopPeerStore{}
 	}
 	return &crdCollector{
-		logger:     logger,
-		config:     config,
-		consumer:   cons,
-		informer:   informer,
-		cacheStore: cacheStore,
+		logger:    logger,
+		config:    config,
+		consumer:  cons,
+		informer:  informer,
+		peerStore: peerStore,
 	}
 }
 
 func (c *crdCollector) Start(ctx context.Context) error {
 	c.ctx, c.cancel = context.WithCancel(ctx)
 
-	// Load persisted cache from external store (if configured).
-	// On failure, start with an empty cache — the first increment will be a full snapshot.
-	loadedCache, err := c.cacheStore.Load(ctx)
+	// Load cache from peer sync. On failure, start fresh — the first increment will be a full snapshot.
+	loadedCache, err := c.peerStore.Load(ctx)
 	if err != nil {
-		c.logger.Debug("Failed to load cache from store, starting fresh", zap.Error(err))
+		c.logger.Debug("Failed to load resource cache from peers, starting fresh", zap.Error(err))
 		c.cache = newResourceCache()
 	} else {
 		c.cache = loadedCache
 		if !c.cache.isEmpty() {
-			c.logger.Info("Loaded resource cache from store",
+			c.logger.Info("Loaded resource cache from peers",
 				zap.Int("crds", len(c.cache.crds)),
 				zap.Int("crs", len(c.cache.crs)),
 			)
@@ -91,10 +89,10 @@ func (c *crdCollector) Shutdown(ctx context.Context) error {
 	// since the loop reads from informer caches.
 	c.wg.Wait()
 
-	// Persist cache to external store before stopping.
+	// Save cache before stopping so peers have the latest state.
 	if c.cache != nil {
-		if err := c.cacheStore.Save(ctx, c.cache); err != nil {
-			c.logger.Debug("Failed to save cache to store on shutdown", zap.Error(err))
+		if err := c.peerStore.Save(ctx, c.cache); err != nil {
+			c.logger.Debug("Failed to sync resource cache to peers on shutdown", zap.Error(err))
 		}
 	}
 
@@ -143,6 +141,10 @@ func (c *crdCollector) runIncrement() {
 			zap.Int("crds", len(currentCRDs)),
 			zap.Int("cr_types", len(currentCRs)),
 		)
+		// Persist so peers can sync the initial state
+		if err := c.peerStore.Save(c.ctx, c.cache); err != nil {
+			c.logger.Debug("Failed to save cache after initial population", zap.Error(err))
+		}
 		return
 	}
 
@@ -157,6 +159,11 @@ func (c *crdCollector) runIncrement() {
 	}
 
 	c.cache.update(currentCRDs, currentCRs)
+
+	// Persist cache so peers can sync the latest state
+	if err := c.peerStore.Save(c.ctx, c.cache); err != nil {
+		c.logger.Debug("Failed to save cache after increment", zap.Error(err))
+	}
 }
 
 // emitSnapshot emits all current resources as ADDED for downstream TTL freshness,

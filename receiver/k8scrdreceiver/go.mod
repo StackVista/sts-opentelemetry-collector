@@ -5,14 +5,11 @@ go 1.25.3
 require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector v0.138.0
 	github.com/stretchr/testify v1.11.1
-	github.com/valkey-io/valkey-go v1.0.74
-	github.com/valkey-io/valkey-go/mock v1.0.74
 	go.opentelemetry.io/collector/component v1.44.0
 	go.opentelemetry.io/collector/consumer v1.44.0
 	go.opentelemetry.io/collector/consumer/consumertest v0.138.0
 	go.opentelemetry.io/collector/pdata v1.44.0
 	go.opentelemetry.io/collector/receiver v1.44.0
-	go.uber.org/mock v0.6.0
 	go.uber.org/zap v1.27.0
 	k8s.io/apiextensions-apiserver v0.32.1
 	k8s.io/apimachinery v0.32.3
@@ -42,6 +39,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/onsi/ginkgo/v2 v2.25.3 // indirect
+	github.com/onsi/gomega v1.38.2 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sconfig v0.138.0 // indirect
 	github.com/openshift/api v3.9.0+incompatible // indirect
 	github.com/openshift/client-go v0.0.0-20241203091221-452dfb8fa071 // indirect

@@ -8,7 +8,6 @@ import (
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/tracker"
-	"github.com/valkey-io/valkey-go"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/receiver"
@@ -27,6 +26,9 @@ type k8scrdReceiver struct {
 	config        *Config
 	consumer      consumer.Logs
 	dynamicClient dynamic.Interface // injectable for testing
+
+	// Peer store — runs regardless of leadership for push/pull sync.
+	peerStore *peerSyncCacheStore
 
 	// Collector lifecycle — guarded by leader election when enabled.
 	mu        sync.Mutex
@@ -50,6 +52,17 @@ func (r *k8scrdReceiver) Start(ctx context.Context, host component.Host) error {
 		r.dynamicClient = client
 	}
 
+	// Start peer sync cache store — runs regardless of leadership so that
+	// the HTTP server can receive pushes from the leader and serve pull requests.
+	r.peerStore = newPeerSyncCacheStore(
+		r.settings.Logger,
+		r.config.PeerSyncPort,
+		r.config.PeerSyncDNS,
+	)
+	if err := r.peerStore.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start peer sync cache store: %w", err)
+	}
+
 	if r.config.K8sLeaderElector != nil {
 		return r.startWithLeaderElection(ctx, host)
 	}
@@ -59,14 +72,9 @@ func (r *k8scrdReceiver) Start(ctx context.Context, host component.Host) error {
 
 // startCollector creates and starts the collector (called directly or from leader election callback).
 func (r *k8scrdReceiver) startCollector(ctx context.Context) error {
-	cacheStore, err := r.createCacheStore()
-	if err != nil {
-		return fmt.Errorf("failed to create cache store: %w", err)
-	}
-
 	ft := tracker.NewForbiddenTracker(defaultForbiddenRetryInterval)
 	informerSet := newResourceInformers(r.settings, r.config, r.dynamicClient, ft)
-	collector := newCRDCollector(r.settings.Logger, r.config, r.consumer, informerSet, cacheStore)
+	collector := newCRDCollector(r.settings.Logger, r.config, r.consumer, informerSet, r.peerStore)
 
 	if err := collector.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start CRD collector: %w", err)
@@ -133,34 +141,13 @@ func (r *k8scrdReceiver) startWithLeaderElection(_ context.Context, host compone
 	return nil
 }
 
-// --- Cache store ---
-
-func (r *k8scrdReceiver) createCacheStore() (CacheStore, error) {
-	if r.config.ValkeyEndpoint == "" {
-		r.settings.Logger.Info("No Valkey endpoint configured, cache will not be persisted")
-		return &noopCacheStore{}, nil
-	}
-
-	client, err := valkey.NewClient(valkey.ClientOption{
-		InitAddress:       []string{r.config.ValkeyEndpoint},
-		ForceSingleClient: true,
-		DisableCache:      true,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Valkey client for %s: %w", r.config.ValkeyEndpoint, err)
-	}
-
-	r.settings.Logger.Info("Valkey cache store configured",
-		zap.String("endpoint", r.config.ValkeyEndpoint),
-	)
-
-	return newValkeyCacheStore(r.settings.Logger, client, r.config.ClusterName), nil
-}
-
 // --- Shutdown ---
 
 func (r *k8scrdReceiver) Shutdown(ctx context.Context) error {
 	r.settings.Logger.Info("Shutting down K8s CRD Receiver")
 	r.stopCollector(ctx)
+	if r.peerStore != nil {
+		r.peerStore.Stop()
+	}
 	return nil
 }

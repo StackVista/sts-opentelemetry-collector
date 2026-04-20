@@ -11,15 +11,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func TestNoopCacheStore_LoadReturnsEmptyCache(t *testing.T) {
-	store := &noopCacheStore{}
+func TestNoopPeerStore_LoadReturnsEmptyCache(t *testing.T) {
+	store := &noopPeerStore{}
 	cache, err := store.Load(context.Background())
 	require.NoError(t, err)
 	assert.True(t, cache.isEmpty())
 }
 
-func TestNoopCacheStore_SaveIsNoop(t *testing.T) {
-	store := &noopCacheStore{}
+func TestNoopPeerStore_SaveIsNoop(t *testing.T) {
+	store := &noopPeerStore{}
 	cache := newResourceCache()
 	cache.crds["test"] = &unstructured.Unstructured{}
 	err := store.Save(context.Background(), cache)

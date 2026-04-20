@@ -8,23 +8,22 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// CacheStore provides persistence for the resource cache across restarts and leader failovers.
-type CacheStore interface {
+// PeerStore provides resource cache sharing between replicas for fast leader failover.
+type PeerStore interface {
 	Load(ctx context.Context) (*resourceCache, error)
 	Save(ctx context.Context, cache *resourceCache) error
 }
 
-// noopCacheStore is a no-op implementation used when no external cache is configured.
-// Load returns an empty cache, Save is a no-op.
-type noopCacheStore struct{}
+// noopPeerStore is a no-op implementation. Load returns an empty cache, Save is a no-op.
+type noopPeerStore struct{}
 
-var _ CacheStore = (*noopCacheStore)(nil)
+var _ PeerStore = (*noopPeerStore)(nil)
 
-func (n *noopCacheStore) Load(_ context.Context) (*resourceCache, error) {
+func (n *noopPeerStore) Load(_ context.Context) (*resourceCache, error) {
 	return newResourceCache(), nil
 }
 
-func (n *noopCacheStore) Save(_ context.Context, _ *resourceCache) error {
+func (n *noopPeerStore) Save(_ context.Context, _ *resourceCache) error {
 	return nil
 }
 

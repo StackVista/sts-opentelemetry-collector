@@ -38,8 +38,7 @@ type Config struct {
 	// When false, the first increment populates the process cache without emitting.
 	IncludeInitialState bool `mapstructure:"include_initial_state"`
 
-	// ClusterName identifies the observed cluster. Added to log records as k8s.cluster.name
-	// and used to namespace the Valkey cache key in multi-cluster deployments.
+	// ClusterName identifies the observed cluster. Added to log records as k8s.cluster.name.
 	ClusterName string `mapstructure:"cluster_name"`
 
 	// DiscoveryMode controls how CRDs are discovered: "api_groups" (filtered) or "all".
@@ -49,10 +48,14 @@ type Config struct {
 	// Only used when DiscoveryMode is "api_groups".
 	APIGroupFilters *APIGroupFilters `mapstructure:"api_group_filters"`
 
-	// ValkeyEndpoint is the address of a Valkey instance for cache persistence.
-	// When set, the resource cache is persisted across restarts and leader failovers.
-	// Format: "host:port" (e.g. "valkey:6379"). When empty, no external cache is used.
-	ValkeyEndpoint string `mapstructure:"valkey_endpoint"`
+	// PeerSyncPort is the port on which the HTTP server listens for peer sync requests.
+	// Each replica serves its serialized cache on this port. Default: 4319.
+	PeerSyncPort int `mapstructure:"peer_sync_port"`
+
+	// PeerSyncDNS is the headless Service DNS name used to discover peer replicas.
+	// Resolved via net.LookupHost to get all pod IPs behind the headless Service.
+	// When empty, peer sync is disabled and the cache is not shared between replicas.
+	PeerSyncDNS string `mapstructure:"peer_sync_dns"`
 
 	// K8sLeaderElector is the component ID of a k8sleaderelector extension.
 	// When set, only the leader replica actively watches CRDs/CRs.

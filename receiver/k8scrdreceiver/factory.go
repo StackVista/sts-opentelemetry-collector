@@ -37,6 +37,7 @@ func createDefaultConfig() component.Config {
 			Include: []string{"*"},
 			Exclude: []string{},
 		},
+		PeerSyncPort: defaultPeerPort,
 	}
 }
 
