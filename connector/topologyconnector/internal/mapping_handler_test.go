@@ -13,15 +13,18 @@ import (
 )
 
 type mockEvaluator struct {
-	result bool
-	err    error
+	boolResult bool
+	boolErr    error
+	// stringResult is typed as Action for convenience in tests; converted to string at return site.
+	stringResult internal.Action
+	stringErr    error
 }
 
 func (m *mockEvaluator) EvalBooleanExpression(_ settingsproto.OtelBooleanExpression, _ *internal.ExpressionEvalContext) (bool, error) {
-	return m.result, m.err
+	return m.boolResult, m.boolErr
 }
 func (m *mockEvaluator) EvalStringExpression(_ settingsproto.OtelStringExpression, _ *internal.ExpressionEvalContext) (string, error) {
-	return "", nil
+	return string(m.stringResult), m.stringErr
 }
 func (m *mockEvaluator) EvalOptionalStringExpression(_ *settingsproto.OtelStringExpression, _ *internal.ExpressionEvalContext) (*string, error) {
 	//nolint:nilnil
@@ -56,13 +59,18 @@ func (m *mockEvaluator) GetAnyExpressionAST(_ settingsproto.OtelAnyExpression) (
 	return nil, nil
 }
 
-func makeHandler(t *testing.T, eval *mockEvaluator) (*internal.MappingHandler[settingsproto.OtelComponentMapping], *bool) {
+func makeHandler(t *testing.T, eval *mockEvaluator, signal ...settingsproto.OtelInputSignal) (*internal.MappingHandler[settingsproto.OtelComponentMapping], *internal.Action) {
 	t.Helper()
-	executed := false
+	var executedAction internal.Action
+
+	sig := settingsproto.TRACES
+	if len(signal) > 0 {
+		sig = signal[0]
+	}
 
 	mockBaseCtx := internal.BaseContext{
 		Logger:              zap.NewNop(),
-		Signal:              settingsproto.TRACES,
+		Signal:              sig,
 		Evaluator:           eval,
 		CollectionTimestamp: time.Now().UnixMilli(),
 		Results:             &[]internal.MessageWithKey{},
@@ -75,11 +83,15 @@ func makeHandler(t *testing.T, eval *mockEvaluator) (*internal.MappingHandler[se
 	}
 
 	handler := internal.NewMappingHandler(mockMappingCtx)
-	handler.ExecuteMappingFunc = func(_ context.Context, _ *internal.ExpressionEvalContext) {
-		executed = true
+	handler.ExecuteMappingFunc = func(_ context.Context, _ *internal.ExpressionEvalContext, action internal.Action) {
+		executedAction = action
 	}
 
-	return handler, &executed
+	return handler, &executedAction
+}
+
+func actionExpr(expr string) *settingsproto.OtelStringExpression {
+	return &settingsproto.OtelStringExpression{Expression: expr}
 }
 
 func TestHandleVisitLevel_Behavior(t *testing.T) {
@@ -88,62 +100,87 @@ func TestHandleVisitLevel_Behavior(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		evalResult     bool
-		evalErr        error
-		action         *settingsproto.OtelInputConditionAction
+		boolResult     bool
+		boolErr        error
+		stringResult   internal.Action
+		stringErr      error
+		action         *settingsproto.OtelStringExpression
 		condition      *settingsproto.OtelBooleanExpression
 		expectedResult internal.VisitResult
-		expectExecuted bool
+		expectedAction internal.Action
 	}{
 		{
 			name:           "nil condition + nil action => defaults to CONTINUE (VisitContinue), no execute",
+			stringResult:   internal.ActionContinue,
 			expectedResult: internal.VisitContinue,
 		},
 		{
 			name:           "true condition + CONTINUE => VisitContinue, no execute",
-			evalResult:     true,
-			action:         ptr(settingsproto.CONTINUE),
+			boolResult:     true,
+			stringResult:   internal.ActionContinue,
+			action:         actionExpr("'CONTINUE'"),
 			expectedResult: internal.VisitContinue,
 		},
 		{
-			name:           "true condition + CREATE => VisitSkip and execute",
-			evalResult:     true,
-			action:         ptr(settingsproto.CREATE),
+			name:           "true condition + CREATE => VisitSkip and execute CREATE",
+			boolResult:     true,
+			stringResult:   internal.ActionCreate,
+			action:         actionExpr("'CREATE'"),
 			condition:      ptr(settingsproto.OtelBooleanExpression{Expression: `true`}),
 			expectedResult: internal.VisitSkip,
-			expectExecuted: true,
+			expectedAction: internal.ActionCreate,
 		},
 		{
-			name:           "nil condition + CREATE => VisitSkip and execute",
-			action:         ptr(settingsproto.CREATE),
+			name:           "nil condition + CREATE => VisitSkip and execute CREATE",
+			stringResult:   internal.ActionCreate,
+			action:         actionExpr("'CREATE'"),
 			expectedResult: internal.VisitSkip,
-			expectExecuted: true,
+			expectedAction: internal.ActionCreate,
 		},
 		{
 			name:           "false condition + CREATE => VisitSkip, no execute",
-			evalResult:     false,
-			action:         ptr(settingsproto.CREATE),
+			boolResult:     false,
+			stringResult:   internal.ActionCreate,
+			action:         actionExpr("'CREATE'"),
 			condition:      ptr(settingsproto.OtelBooleanExpression{Expression: `false`}),
 			expectedResult: internal.VisitSkip,
 		},
 		{
 			name:           "error during condition => VisitSkip, no execute",
-			evalErr:        assert.AnError,
-			action:         ptr(settingsproto.CREATE),
+			boolErr:        assert.AnError,
+			stringResult:   internal.ActionCreate,
+			action:         actionExpr("'CREATE'"),
 			condition:      ptr(settingsproto.OtelBooleanExpression{}),
+			expectedResult: internal.VisitSkip,
+		},
+		{
+			name:           "DELETE at non-terminal level => VisitSkip and execute DELETE",
+			boolResult:     true,
+			stringResult:   internal.ActionDelete,
+			action:         actionExpr("'DELETE'"),
+			condition:      ptr(settingsproto.OtelBooleanExpression{Expression: `true`}),
+			expectedResult: internal.VisitSkip,
+			expectedAction: internal.ActionDelete,
+		},
+		{
+			name:           "action eval error => VisitSkip, no execute",
+			boolResult:     true,
+			stringErr:      assert.AnError,
+			action:         actionExpr("invalid"),
+			condition:      ptr(settingsproto.OtelBooleanExpression{Expression: `true`}),
 			expectedResult: internal.VisitSkip,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockEval := &mockEvaluator{result: tt.evalResult, err: tt.evalErr}
-			handler, executed := makeHandler(t, mockEval)
+			mockEval := &mockEvaluator{boolResult: tt.boolResult, boolErr: tt.boolErr, stringResult: tt.stringResult, stringErr: tt.stringErr}
+			handler, executedAction := makeHandler(t, mockEval)
 
 			res := handler.HandleVisitLevel(ctx, evalCtx, tt.action, tt.condition)
 
 			assert.Equal(t, tt.expectedResult, res)
-			assert.Equal(t, tt.expectExecuted, *executed)
+			assert.Equal(t, tt.expectedAction, *executedAction)
 		})
 	}
 }
@@ -154,52 +191,81 @@ func TestHandleTerminalVisit_Behavior(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		evalResult     bool
-		evalErr        error
-		action         *settingsproto.OtelInputConditionAction
+		boolResult     bool
+		boolErr        error
+		stringResult   internal.Action
+		stringErr      error
+		action         *settingsproto.OtelStringExpression
 		condition      *settingsproto.OtelBooleanExpression
-		expectExecuted bool
+		signal         settingsproto.OtelInputSignal
+		expectedAction internal.Action
 	}{
 		{
-			name:           "nil condition + nil action => no execute",
-			expectExecuted: false,
+			name:         "nil condition + nil action => no execute",
+			stringResult: internal.ActionContinue,
 		},
 		{
-			name:           "nil condition + CREATE => executes",
-			action:         ptr(settingsproto.CREATE),
-			expectExecuted: true,
+			name:           "nil condition + CREATE => executes CREATE",
+			stringResult:   internal.ActionCreate,
+			action:         actionExpr("'CREATE'"),
+			expectedAction: internal.ActionCreate,
 		},
 		{
-			name:           "true condition + CREATE => executes",
-			evalResult:     true,
-			action:         ptr(settingsproto.CREATE),
+			name:           "true condition + CREATE => executes CREATE",
+			boolResult:     true,
+			stringResult:   internal.ActionCreate,
+			action:         actionExpr("'CREATE'"),
 			condition:      ptr(settingsproto.OtelBooleanExpression{Expression: `true`}),
-			expectExecuted: true,
+			expectedAction: internal.ActionCreate,
 		},
 		{
-			name:           "false condition + CREATE => no execute",
-			evalResult:     false,
-			action:         ptr(settingsproto.CREATE),
-			condition:      ptr(settingsproto.OtelBooleanExpression{Expression: `false`}),
-			expectExecuted: false,
+			name:         "false condition + CREATE => no execute",
+			boolResult:   false,
+			stringResult: internal.ActionCreate,
+			action:       actionExpr("'CREATE'"),
+			condition:    ptr(settingsproto.OtelBooleanExpression{Expression: `false`}),
 		},
 		{
-			name:           "error evaluating => no execute",
-			evalErr:        assert.AnError,
-			action:         ptr(settingsproto.CREATE),
-			condition:      ptr(settingsproto.OtelBooleanExpression{}),
-			expectExecuted: false,
+			name:         "error evaluating condition => no execute",
+			boolErr:      assert.AnError,
+			stringResult: internal.ActionCreate,
+			action:       actionExpr("'CREATE'"),
+			condition:    ptr(settingsproto.OtelBooleanExpression{}),
+		},
+		{
+			name:           "DELETE + LOGS signal => executes DELETE",
+			boolResult:     true,
+			stringResult:   internal.ActionDelete,
+			action:         actionExpr("'DELETE'"),
+			condition:      ptr(settingsproto.OtelBooleanExpression{Expression: `true`}),
+			signal:         settingsproto.LOGS,
+			expectedAction: internal.ActionDelete,
+		},
+		{
+			name:         "DELETE + TRACES signal => no execute",
+			boolResult:   true,
+			stringResult: internal.ActionDelete,
+			action:       actionExpr("'DELETE'"),
+			condition:    ptr(settingsproto.OtelBooleanExpression{Expression: `true`}),
+			signal:       settingsproto.TRACES,
+		},
+		{
+			name:       "action eval error => no execute",
+			boolResult: true,
+			stringErr:  assert.AnError,
+			action:     actionExpr("invalid"),
+			condition:  ptr(settingsproto.OtelBooleanExpression{Expression: `true`}),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockEval := &mockEvaluator{result: tt.evalResult, err: tt.evalErr}
-			handler, executed := makeHandler(t, mockEval)
+			mockEval := &mockEvaluator{boolResult: tt.boolResult, boolErr: tt.boolErr, stringResult: tt.stringResult, stringErr: tt.stringErr}
+			handler, executedAction := makeHandler(t, mockEval, tt.signal)
 
 			handler.HandleTerminalVisit(ctx, evalCtx, tt.action, tt.condition)
 
-			assert.Equal(t, tt.expectExecuted, *executed)
+			assert.Equal(t, tt.expectedAction, *executedAction)
 		})
 	}
 }

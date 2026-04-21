@@ -275,7 +275,7 @@ func otelComponentMappingSpecForService() *harness.OtelComponentMappingSpec {
 				settingsproto.METRICS,
 			},
 			Resource: settingsproto.OtelInputResource{
-				Action:    harness.Ptr(settingsproto.CREATE),
+				Action:    harness.PtrStrExpr("'CREATE'"),
 				Condition: harness.PtrBoolExpr(`'service.name' in resource.attributes`),
 			},
 		},
@@ -303,7 +303,7 @@ func otelComponentMappingSpecForQueue() *harness.OtelComponentMappingSpec {
 				Scope: &settingsproto.OtelInputScope{
 					Metric: &settingsproto.OtelInputMetric{
 						Datapoint: &settingsproto.OtelInputDatapoint{
-							Action:    harness.Ptr(settingsproto.CREATE),
+							Action:    harness.PtrStrExpr("'CREATE'"),
 							Condition: harness.PtrBoolExpr(`"queue.name" in datapoint.attributes`),
 						},
 					},
@@ -333,7 +333,7 @@ func otelRelationMappingSpecForMetrics() *harness.OtelRelationMappingSpec {
 				Scope: &settingsproto.OtelInputScope{
 					Metric: &settingsproto.OtelInputMetric{
 						Datapoint: &settingsproto.OtelInputDatapoint{
-							Action:    harness.Ptr(settingsproto.CREATE),
+							Action:    harness.PtrStrExpr("'CREATE'"),
 							Condition: harness.PtrBoolExpr(`"client.service" in datapoint.attributes && "server.service" in datapoint.attributes`),
 						},
 					},

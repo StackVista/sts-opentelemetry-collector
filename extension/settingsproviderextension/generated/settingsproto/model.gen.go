@@ -230,12 +230,6 @@ const (
 	OtelComponentMappingTypeOtelComponentMapping OtelComponentMappingType = "OtelComponentMapping"
 )
 
-// Defines values for OtelInputConditionAction.
-const (
-	CONTINUE OtelInputConditionAction = "CONTINUE"
-	CREATE   OtelInputConditionAction = "CREATE"
-)
-
 // Defines values for OtelInputSignal.
 const (
 	LOGS    OtelInputSignal = "LOGS"
@@ -952,13 +946,13 @@ type OtelInput struct {
 	Signal   OtelInputSignalList `json:"signal"`
 }
 
-// OtelInputConditionAction defines model for OtelInputConditionAction.
-type OtelInputConditionAction string
-
 // OtelInputDatapoint Defines conditional mapping at the resource -> scope -> metric -> datapoint level.
 // If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
 type OtelInputDatapoint struct {
-	Action *OtelInputConditionAction `json:"action,omitempty"`
+	// Action An expression that must produce a string. It must be one of these formats:
+	//   - A plain string, for example `"this is a plain string"`
+	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
+	Action *OtelStringExpression `json:"action,omitempty"`
 
 	// Condition A Cel expression that must return a boolean
 	Condition *OtelBooleanExpression `json:"condition,omitempty"`
@@ -967,7 +961,10 @@ type OtelInputDatapoint struct {
 // OtelInputLog Defines conditional mapping at the resource -> scope -> log level.
 // If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
 type OtelInputLog struct {
-	Action *OtelInputConditionAction `json:"action,omitempty"`
+	// Action An expression that must produce a string. It must be one of these formats:
+	//   - A plain string, for example `"this is a plain string"`
+	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
+	Action *OtelStringExpression `json:"action,omitempty"`
 
 	// Condition A Cel expression that must return a boolean
 	Condition *OtelBooleanExpression `json:"condition,omitempty"`
@@ -976,7 +973,10 @@ type OtelInputLog struct {
 // OtelInputMetric Defines conditional mapping at the resource -> scope -> metric level.
 // If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
 type OtelInputMetric struct {
-	Action *OtelInputConditionAction `json:"action,omitempty"`
+	// Action An expression that must produce a string. It must be one of these formats:
+	//   - A plain string, for example `"this is a plain string"`
+	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
+	Action *OtelStringExpression `json:"action,omitempty"`
 
 	// Condition A Cel expression that must return a boolean
 	Condition *OtelBooleanExpression `json:"condition,omitempty"`
@@ -989,7 +989,10 @@ type OtelInputMetric struct {
 // OtelInputResource Defines the conditional mapping at the resource level.
 // If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
 type OtelInputResource struct {
-	Action *OtelInputConditionAction `json:"action,omitempty"`
+	// Action An expression that must produce a string. It must be one of these formats:
+	//   - A plain string, for example `"this is a plain string"`
+	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
+	Action *OtelStringExpression `json:"action,omitempty"`
 
 	// Condition A Cel expression that must return a boolean
 	Condition *OtelBooleanExpression `json:"condition,omitempty"`
@@ -1002,7 +1005,10 @@ type OtelInputResource struct {
 // OtelInputScope Defines conditional mapping at the resource -> scope level.
 // If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
 type OtelInputScope struct {
-	Action *OtelInputConditionAction `json:"action,omitempty"`
+	// Action An expression that must produce a string. It must be one of these formats:
+	//   - A plain string, for example `"this is a plain string"`
+	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
+	Action *OtelStringExpression `json:"action,omitempty"`
 
 	// Condition A Cel expression that must return a boolean
 	Condition *OtelBooleanExpression `json:"condition,omitempty"`
@@ -1069,7 +1075,10 @@ type OtelInputSignalList = []OtelInputSignal
 // OtelInputSpan Defines conditional mapping at the resource -> scope -> span level.
 // If omitted, `condition` defaults to `true` and `action` defaults to `CONTINUE`.
 type OtelInputSpan struct {
-	Action *OtelInputConditionAction `json:"action,omitempty"`
+	// Action An expression that must produce a string. It must be one of these formats:
+	//   - A plain string, for example `"this is a plain string"`
+	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
+	Action *OtelStringExpression `json:"action,omitempty"`
 
 	// Condition A Cel expression that must return a boolean
 	Condition *OtelBooleanExpression `json:"condition,omitempty"`

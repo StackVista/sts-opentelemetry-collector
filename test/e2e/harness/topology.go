@@ -160,4 +160,28 @@ func PtrBoolExpr(s string) *settingsproto.OtelBooleanExpression {
 	return Ptr(BoolExpr(s))
 }
 
+func PtrStrExpr(s string) *settingsproto.OtelStringExpression {
+	return Ptr(StrExpr(s))
+}
+
+// ExtractDeletes extracts delete external IDs from topology (Kafka) records.
+func ExtractDeletes(
+	t *testing.T,
+	recs []*kgo.Record,
+) (componentDeleteIds []string, relationDeleteIds []string) {
+	for _, rec := range recs {
+		var topoMsg topostreamv1.TopologyStreamMessage
+		require.NoError(t, proto.Unmarshal(rec.Value, &topoMsg))
+		require.NotNil(t, topoMsg.Payload)
+
+		data := topoMsg.GetTopologyStreamRepeatElementsData()
+		if data == nil {
+			continue
+		}
+		componentDeleteIds = append(componentDeleteIds, data.DeleteComponentExternalIds...)
+		relationDeleteIds = append(relationDeleteIds, data.DeleteRelationExternalIds...)
+	}
+	return componentDeleteIds, relationDeleteIds
+}
+
 func Ptr[T any](v T) *T { return &v }
