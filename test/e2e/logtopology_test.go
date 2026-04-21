@@ -203,11 +203,11 @@ func TestLogToOtelTopology_DeleteComponentMapping(t *testing.T) {
 	sendLogs(t, env)
 
 	recs := env.ConsumeTopologyRecords(t, 1)
-	componentDeleteIds, relationDeleteIds := harness.ExtractDeletes(t, recs)
+	componentDeleteIDs, relationDeleteIDs := harness.ExtractDeletes(t, recs)
 
-	require.Len(t, componentDeleteIds, 1)
-	require.Equal(t, "urn:kubewarden:cluster/production:policyserver/default", componentDeleteIds[0])
-	require.Len(t, relationDeleteIds, 0)
+	require.Len(t, componentDeleteIDs, 1)
+	require.Equal(t, "urn:kubewarden:cluster/production:policyserver/default", componentDeleteIDs[0])
+	require.Len(t, relationDeleteIDs, 0)
 }
 
 // sendLogs builds log data and calls harness.BuildAndSendLogs.
