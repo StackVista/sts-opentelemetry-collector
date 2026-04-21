@@ -152,7 +152,7 @@ func NewLog(
 
 	return &Log{
 		cachedMap: map[string]any{
-			"name":       name,
+			"eventName":  name,
 			"body":       processedBody,
 			"attributes": attrs,
 		},

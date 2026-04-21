@@ -137,7 +137,7 @@ func (h *MappingHandler[T]) evalCtxSummary(evalCtx *ExpressionEvalContext) zap.F
 	summary := make(map[string]any)
 	if evalCtx.Log != nil {
 		logMap := evalCtx.Log.ToMap()
-		summary["log.eventName"] = logMap["name"]
+		summary["log.eventName"] = logMap["eventName"]
 		summary["log.attributes"] = logMap["attributes"]
 	}
 	if evalCtx.Resource != nil {

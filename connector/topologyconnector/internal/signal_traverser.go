@@ -397,7 +397,7 @@ func (l *LogTraverser) Traverse(ctx context.Context, mappingVisitor MappingVisit
 				logMap := log.ToMap()
 				l.logger.Debug("Visiting log record",
 					zap.Int("logIdx", logIdx),
-					zap.Any("eventName", logMap["name"]),
+					zap.Any("eventName", logMap["eventName"]),
 					zap.Any("logAttributes", logMap["attributes"]),
 				)
 				logCtx := NewLogEvalContext(log, scope, resource)
