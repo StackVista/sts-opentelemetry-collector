@@ -330,7 +330,7 @@ func otelComponentMappingSnapshot(mappings ...*harness.OtelComponentMappingSpec)
 func otelComponentMappingSpecCheckoutService() *harness.OtelComponentMappingSpec {
 	return otelComponentMappingSpec(
 		settingsproto.OtelInputResource{
-			Action:    harness.Ptr(settingsproto.CREATE),
+			Action:    harness.PtrStrExpr("'CREATE'"),
 			Condition: harness.PtrBoolExpr(`resource.attributes["service.name"] == "checkout-service"`),
 		},
 		settingsproto.OtelVariableMapping{
@@ -347,7 +347,7 @@ func otelComponentMappingSpecPeerService(peerService string) *harness.OtelCompon
 		settingsproto.OtelInputResource{
 			Scope: &settingsproto.OtelInputScope{
 				Span: &settingsproto.OtelInputSpan{
-					Action:    harness.Ptr(settingsproto.CREATE),
+					Action:    harness.PtrStrExpr("'CREATE'"),
 					Condition: harness.PtrBoolExpr(fmt.Sprintf(`span.attributes["net.peer.name"] == "%s"`, peerService)),
 				},
 			},
@@ -414,7 +414,7 @@ func otelRelationMappingSpec() *harness.OtelRelationMappingSpec {
 			Resource: settingsproto.OtelInputResource{
 				Scope: &settingsproto.OtelInputScope{
 					Span: &settingsproto.OtelInputSpan{
-						Action:    harness.Ptr(settingsproto.CREATE),
+						Action:    harness.PtrStrExpr("'CREATE'"),
 						Condition: harness.PtrBoolExpr(`"client.address" in span.attributes && "server.address" in span.attributes`),
 					},
 				},

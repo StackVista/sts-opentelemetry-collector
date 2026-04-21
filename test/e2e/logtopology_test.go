@@ -192,6 +192,24 @@ func TestLogToOtelTopology_RemovesMappingsWhenOmittedFromNextSnapshot(t *testing
 	require.Len(t, relations, 0, "no new relations without the relation mapping")
 }
 
+func TestLogToOtelTopology_DeleteComponentMapping(t *testing.T) {
+	env := harness.SetupTopologyTest(t, 1, false)
+	defer env.Cleanup()
+
+	env.PublishSettingSnapshots(
+		t,
+		otelComponentMappingSnapshot(otelLogComponentMappingSpecPolicyServerDelete()),
+	)
+	sendLogs(t, env)
+
+	recs := env.ConsumeTopologyRecords(t, 1)
+	componentDeleteIds, relationDeleteIds := harness.ExtractDeletes(t, recs)
+
+	require.Len(t, componentDeleteIds, 1)
+	require.Equal(t, "urn:kubewarden:cluster/production:policyserver/default", componentDeleteIds[0])
+	require.Len(t, relationDeleteIds, 0)
+}
+
 // sendLogs builds log data and calls harness.BuildAndSendLogs.
 func sendLogs(t *testing.T, env *harness.TopologyTestEnv) {
 	endpoint := env.Collector.Instances[0].HostAddr
@@ -407,7 +425,7 @@ func otelLogComponentMappingSpecPolicyServer() *harness.OtelComponentMappingSpec
 			Resource: settingsproto.OtelInputResource{
 				Scope: &settingsproto.OtelInputScope{
 					Log: &settingsproto.OtelInputLog{
-						Action: harness.Ptr(settingsproto.CREATE),
+						Action: harness.PtrStrExpr("'CREATE'"),
 						Condition: harness.PtrBoolExpr(
 							`log.attributes["k8s.resource.kind"] == "PolicyServer" && log.attributes["k8s.resource.api_group"] == "policies.kubewarden.io"`,
 						),
@@ -439,6 +457,47 @@ func otelLogComponentMappingSpecPolicyServer() *harness.OtelComponentMappingSpec
 	}
 }
 
+func otelLogComponentMappingSpecPolicyServerDelete() *harness.OtelComponentMappingSpec {
+	return &harness.OtelComponentMappingSpec{
+		MappingID:         "log-comp-policy-server-delete",
+		MappingIdentifier: "urn:stackpack:kubewarden:otel-component-mapping:policy-server-delete",
+		Name:              "Kubewarden Policy Server Delete",
+		ExpireAfterMs:     900000,
+		Input: settingsproto.OtelInput{
+			Signal: settingsproto.OtelInputSignalList{
+				settingsproto.LOGS,
+			},
+			Resource: settingsproto.OtelInputResource{
+				Scope: &settingsproto.OtelInputScope{
+					Log: &settingsproto.OtelInputLog{
+						Action: harness.PtrStrExpr("'DELETE'"),
+						Condition: harness.PtrBoolExpr(
+							`log.attributes["k8s.resource.kind"] == "PolicyServer" && log.attributes["k8s.resource.api_group"] == "policies.kubewarden.io"`,
+						),
+					},
+				},
+			},
+		},
+		Vars: []settingsproto.OtelVariableMapping{
+			{
+				Name:  "serverName",
+				Value: harness.AnyExpr(`log.attributes["k8s.resource.name"]`),
+			},
+			{
+				Name:  "clusterName",
+				Value: harness.AnyExpr(`resource.attributes["k8s.cluster.name"]`),
+			},
+		},
+		Output: settingsproto.OtelComponentMappingOutput{
+			Identifier: harness.StrExpr(`"urn:kubewarden:cluster/" + vars.clusterName + ":policyserver/" + vars.serverName`),
+			Name:       harness.StrExpr(`vars.serverName`),
+			TypeName:   harness.StrExpr("'policy server'"),
+			LayerName:  harness.StrExpr("'Control Plane'"),
+			DomainName: harness.StrExpr("'Kubernetes'"),
+		},
+	}
+}
+
 func otelLogRelationMappingSpecPolicyEnforcedByServer() *harness.OtelRelationMappingSpec {
 	return &harness.OtelRelationMappingSpec{
 		MappingID:         "log-rel-policy-enforced-by-server",
@@ -451,7 +510,7 @@ func otelLogRelationMappingSpecPolicyEnforcedByServer() *harness.OtelRelationMap
 			Resource: settingsproto.OtelInputResource{
 				Scope: &settingsproto.OtelInputScope{
 					Log: &settingsproto.OtelInputLog{
-						Action: harness.Ptr(settingsproto.CREATE),
+						Action: harness.PtrStrExpr("'CREATE'"),
 						Condition: harness.PtrBoolExpr(
 							`log.attributes["k8s.resource.api_group"] == "policies.kubewarden.io" && ` +
 								`(log.attributes["k8s.resource.kind"] == "AdmissionPolicy" || ` +

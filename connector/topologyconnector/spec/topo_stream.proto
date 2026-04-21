@@ -77,10 +77,10 @@ message TopologyStreamRelation {
 
 
 /**
-Delete message for any datasource:shardId
+Delete message for an entire datasource:shardId.
+Removes all components and relations associated with this datasource:shardId.
 */
 message TopologyStreamRemove {
-  // Do we need to track the cause of removal? Is it always the OtelMapping settings being deleted?
   string removal_cause = 1;
 }
 
@@ -130,6 +130,11 @@ message TopologyStreamRepeatElementsData {
 
   // In case the Mapping fails and the Otel collector would like to push some messages that we can display when the user requests the TopologyStream status via the cli
   repeated TopoStreamError errors = 4;
+
+  // External IDs of components to delete for low-latency removal without waiting for expiry
+  repeated string delete_component_external_ids = 5;
+  // External IDs of relations to delete for low-latency removal without waiting for expiry
+  repeated string delete_relation_external_ids = 6;
 }
 
 
