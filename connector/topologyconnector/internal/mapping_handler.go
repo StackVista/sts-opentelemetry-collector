@@ -38,10 +38,6 @@ func (h *MappingHandler[T]) HandleVisitLevel(
 	ok := h.evaluateCondition(evalCtx, condition)
 
 	if !ok {
-		h.MappingCtx.BaseCtx.Logger.Debug("Visit level condition false, skipping subtree",
-			zap.String("mapping", h.MappingCtx.Mapping.GetIdentifier()),
-			h.conditionField(condition),
-		)
 		return VisitSkip
 	}
 
@@ -77,28 +73,9 @@ func (h *MappingHandler[T]) HandleTerminalVisit(
 		act = *action
 	}
 
-	logger := h.MappingCtx.BaseCtx.Logger
-	if !ok {
-		logger.Debug("Terminal visit condition false, not executing mapping",
-			zap.String("mapping", h.MappingCtx.Mapping.GetIdentifier()),
-			h.conditionField(condition),
-			h.evalCtxSummary(evalCtx),
-		)
-		return
+	if ok && act == settingsproto.CREATE {
+		h.ExecuteMappingFunc(ctx, evalCtx)
 	}
-
-	if act != settingsproto.CREATE {
-		logger.Debug("Terminal visit condition true but action is not CREATE",
-			zap.String("mapping", h.MappingCtx.Mapping.GetIdentifier()),
-			zap.String("action", string(act)),
-		)
-		return
-	}
-
-	logger.Debug("Terminal visit executing mapping",
-		zap.String("mapping", h.MappingCtx.Mapping.GetIdentifier()),
-	)
-	h.ExecuteMappingFunc(ctx, evalCtx)
 }
 
 // evaluateCondition checks a condition safely with defaults.
@@ -122,14 +99,6 @@ func (h *MappingHandler[T]) evaluateCondition(
 		return false
 	}
 	return ok
-}
-
-// conditionField returns a zap field for the condition expression, or a skip field if nil.
-func (h *MappingHandler[T]) conditionField(condition *settingsproto.OtelBooleanExpression) zap.Field {
-	if condition == nil {
-		return zap.Skip()
-	}
-	return zap.String("condition", condition.Expression)
 }
 
 // evalCtxSummary returns a zap field summarizing what data is available in the eval context.
@@ -176,9 +145,6 @@ func (v *MappingContext[T]) ExecuteMapping(
 		time.Duration(v.Mapping.GetExpireAfterMs())*time.Millisecond,
 	)
 	if !send {
-		v.BaseCtx.Logger.Debug("Mapping suppressed by deduplication",
-			zap.String("mapping", v.Mapping.GetIdentifier()),
-		)
 		return
 	}
 
@@ -198,14 +164,8 @@ func (v *MappingContext[T]) handleComponent(
 ) {
 	componentMappingStart := time.Now()
 
-	component, errs := convertToComponent(v.BaseCtx.Logger, v.BaseCtx.Evaluator, v.BaseCtx.Mapper, evalCtx, &mapping)
+	component, errs := convertToComponent(v.BaseCtx.Evaluator, v.BaseCtx.Mapper, evalCtx, &mapping)
 	if component != nil {
-		v.BaseCtx.Logger.Debug("Component produced",
-			zap.String("mapping", mapping.GetIdentifier()),
-			zap.String("identifier", component.ExternalId),
-			zap.String("name", component.Name),
-			zap.String("typeName", component.TypeName),
-		)
 		*v.BaseCtx.Results = append(
 			*v.BaseCtx.Results,
 			*OutputToMessageWithKey(
@@ -221,10 +181,6 @@ func (v *MappingContext[T]) handleComponent(
 		v.BaseCtx.MetricsRecorder.IncTopologyProduced(ctx, 1, settingsproto.SettingTypeOtelComponentMapping, v.BaseCtx.Signal)
 	}
 	if errs != nil {
-		v.BaseCtx.Logger.Debug("Component mapping failed",
-			zap.String("mapping", mapping.GetIdentifier()),
-			zap.Errors("errors", errs),
-		)
 		*v.BaseCtx.Results = append(
 			*v.BaseCtx.Results,
 			*ErrorsToMessageWithKey(&errs, mapping, v.BaseCtx.CollectionTimestamp),
@@ -247,14 +203,8 @@ func (v *MappingContext[T]) handleRelation(
 	evalCtx *ExpressionEvalContext,
 	mapping settingsproto.OtelRelationMapping,
 ) {
-	relation, errs := convertToRelation(v.BaseCtx.Logger, v.BaseCtx.Evaluator, v.BaseCtx.Mapper, evalCtx, &mapping)
+	relation, errs := convertToRelation(v.BaseCtx.Evaluator, v.BaseCtx.Mapper, evalCtx, &mapping)
 	if relation != nil {
-		v.BaseCtx.Logger.Debug("Relation produced",
-			zap.String("mapping", mapping.GetIdentifier()),
-			zap.String("sourceId", relation.SourceIdentifier),
-			zap.String("targetId", relation.TargetIdentifier),
-			zap.String("typeName", relation.TypeName),
-		)
 		*v.BaseCtx.Results = append(
 			*v.BaseCtx.Results,
 			*OutputToMessageWithKey(
@@ -266,10 +216,6 @@ func (v *MappingContext[T]) handleRelation(
 		v.BaseCtx.MetricsRecorder.IncTopologyProduced(ctx, 1, settingsproto.SettingTypeOtelRelationMapping, v.BaseCtx.Signal)
 	}
 	if errs != nil {
-		v.BaseCtx.Logger.Debug("Relation mapping failed",
-			zap.String("mapping", mapping.GetIdentifier()),
-			zap.Errors("errors", errs),
-		)
 		*v.BaseCtx.Results = append(
 			*v.BaseCtx.Results,
 			*ErrorsToMessageWithKey(&errs, mapping, v.BaseCtx.CollectionTimestamp),
@@ -279,25 +225,16 @@ func (v *MappingContext[T]) handleRelation(
 }
 
 func convertToComponent(
-	logger *zap.Logger,
 	expressionEvaluator ExpressionEvaluator,
 	mapper *Mapper,
 	evalContext *ExpressionEvalContext,
 	mapping *settingsproto.OtelComponentMapping,
 ) (*topostreamv1.TopologyStreamComponent, []error) {
 	// at this point, we've done the condition filtering and can proceed to evaluate variables
-	evaluatedVars, errs := EvalVariables(logger, expressionEvaluator, evalContext, mapping.Vars)
+	evaluatedVars, errs := EvalVariables(expressionEvaluator, evalContext, mapping.Vars)
 	if errs != nil {
-		logger.Debug("Component variable evaluation failed, skipping mapping",
-			zap.String("mapping", mapping.GetIdentifier()),
-			zap.Errors("errors", errs),
-		)
 		return nil, errs
 	}
-	logger.Debug("Component variables evaluated",
-		zap.String("mapping", mapping.GetIdentifier()),
-		zap.Any("vars", evaluatedVars),
-	)
 	evalContextWithVars := evalContext.CloneWithVariables(evaluatedVars)
 
 	component, err := mapper.MapComponent(mapping, expressionEvaluator, evalContextWithVars)
@@ -308,25 +245,16 @@ func convertToComponent(
 }
 
 func convertToRelation(
-	logger *zap.Logger,
 	expressionEvaluator ExpressionEvaluator,
 	mapper *Mapper,
 	evalContext *ExpressionEvalContext,
 	mapping *settingsproto.OtelRelationMapping,
 ) (*topostreamv1.TopologyStreamRelation, []error) {
 	// at this point, we've done the condition filtering and can proceed to evaluate variables
-	evaluatedVars, errs := EvalVariables(logger, expressionEvaluator, evalContext, mapping.Vars)
+	evaluatedVars, errs := EvalVariables(expressionEvaluator, evalContext, mapping.Vars)
 	if errs != nil {
-		logger.Debug("Relation variable evaluation failed, skipping mapping",
-			zap.String("mapping", mapping.GetIdentifier()),
-			zap.Errors("errors", errs),
-		)
 		return nil, errs
 	}
-	logger.Debug("Relation variables evaluated",
-		zap.String("mapping", mapping.GetIdentifier()),
-		zap.Any("vars", evaluatedVars),
-	)
 	evalContextWithVars := evalContext.CloneWithVariables(evaluatedVars)
 
 	relation, err := mapper.MapRelation(mapping, expressionEvaluator, evalContextWithVars)

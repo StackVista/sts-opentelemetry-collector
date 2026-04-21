@@ -82,13 +82,7 @@ func ConvertLogToTopologyStreamMessage(
 	collectionTimestampMs int64,
 	metricsRecorder metrics.ConnectorMetricsRecorder,
 ) []MessageWithKey {
-	logsTraverser := NewLogTraverser(logData, logger)
-
-	logger.Debug("Processing logs for topology mapping",
-		zap.Int("componentMappings", len(componentMappings)),
-		zap.Int("relationMappings", len(relationMappings)),
-		zap.Int("logRecordCount", logData.LogRecordCount()),
-	)
+	logsTraverser := NewLogTraverser(logData)
 
 	return convertSignalDataToTopologyStreamMessage(
 		ctx,
