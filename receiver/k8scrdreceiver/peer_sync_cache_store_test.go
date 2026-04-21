@@ -1,4 +1,4 @@
-//nolint:testpackage // Tests require access to internal types
+//nolint:testpackage
 package k8scrdreceiver
 
 import (
@@ -50,7 +50,7 @@ func peerPort(t *testing.T, addr string) (string, int) {
 func TestPeerSyncCacheStore_SaveLoadRoundtrip(t *testing.T) {
 	t.Parallel()
 	logger := zaptest.NewLogger(t)
-	store := newPeerSyncCacheStore(logger, 0, "")
+	store := newPeerSyncCacheStore(logger, 0, "", nil)
 
 	original := testCacheWithData(t)
 
@@ -74,7 +74,7 @@ func TestPeerSyncCacheStore_SaveLoadRoundtrip(t *testing.T) {
 func TestPeerSyncCacheStore_LoadReturnsEmptyWhenNoData(t *testing.T) {
 	t.Parallel()
 	logger := zaptest.NewLogger(t)
-	store := newPeerSyncCacheStore(logger, 0, "")
+	store := newPeerSyncCacheStore(logger, 0, "", nil)
 
 	cache, err := store.Load(context.Background())
 	require.NoError(t, err)
@@ -86,7 +86,7 @@ func TestPeerSyncCacheStore_LoadReturnsEmptyWhenNoData(t *testing.T) {
 func TestPeerSyncCacheStore_HandleGet_Returns204WhenEmpty(t *testing.T) {
 	t.Parallel()
 	logger := zaptest.NewLogger(t)
-	store := newPeerSyncCacheStore(logger, 0, "")
+	store := newPeerSyncCacheStore(logger, 0, "", nil)
 
 	req := httptest.NewRequest(http.MethodGet, syncCachePath, nil)
 	w := httptest.NewRecorder()
@@ -98,7 +98,7 @@ func TestPeerSyncCacheStore_HandleGet_Returns204WhenEmpty(t *testing.T) {
 func TestPeerSyncCacheStore_HandlePost_StoresReceivedData(t *testing.T) {
 	t.Parallel()
 	logger := zaptest.NewLogger(t)
-	store := newPeerSyncCacheStore(logger, 0, "")
+	store := newPeerSyncCacheStore(logger, 0, "", nil)
 
 	cache := testCacheWithData(t)
 	data, err := marshalResourceCache(cache)
@@ -120,7 +120,7 @@ func TestPeerSyncCacheStore_HandlePost_StoresReceivedData(t *testing.T) {
 func TestPeerSyncCacheStore_HandlePost_GzipCompressed(t *testing.T) {
 	t.Parallel()
 	logger := zaptest.NewLogger(t)
-	store := newPeerSyncCacheStore(logger, 0, "")
+	store := newPeerSyncCacheStore(logger, 0, "", nil)
 
 	data, err := marshalResourceCache(testCacheWithData(t))
 	require.NoError(t, err)
@@ -147,7 +147,7 @@ func TestPeerSyncCacheStore_StartStop(t *testing.T) {
 	t.Parallel()
 	logger := zaptest.NewLogger(t)
 
-	store := newPeerSyncCacheStore(logger, 0, "")
+	store := newPeerSyncCacheStore(logger, 0, "", nil)
 	err := store.Start(context.Background())
 	require.NoError(t, err)
 
@@ -161,7 +161,7 @@ func TestPeerSyncCacheStore_Load_PullsFromPeerWhenLocalEmpty(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
 	// Set up a peer that has cached data (simulates previous leader).
-	peer := newPeerSyncCacheStore(logger, 0, "")
+	peer := newPeerSyncCacheStore(logger, 0, "", nil)
 	err := peer.Save(context.Background(), testCacheWithData(t))
 	require.NoError(t, err)
 
@@ -171,7 +171,7 @@ func TestPeerSyncCacheStore_Load_PullsFromPeerWhenLocalEmpty(t *testing.T) {
 	_, peerPortInt := peerPort(t, peerServer.Listener.Addr().String())
 
 	// New store with no local data — Load should pull from the peer.
-	store := newPeerSyncCacheStore(logger, peerPortInt, "localhost")
+	store := newPeerSyncCacheStore(logger, peerPortInt, "localhost", nil)
 
 	loaded, err := store.Load(context.Background())
 	require.NoError(t, err)
@@ -184,13 +184,13 @@ func TestPeerSyncCacheStore_Load_ReturnsEmptyWhenAllPeersEmpty(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
 	// Peer has no data — returns 204.
-	peer := newPeerSyncCacheStore(logger, 0, "")
+	peer := newPeerSyncCacheStore(logger, 0, "", nil)
 	peerServer := httptest.NewServer(http.HandlerFunc(peer.handleSyncCache))
 	defer peerServer.Close()
 
 	_, peerPortInt := peerPort(t, peerServer.Listener.Addr().String())
 
-	store := newPeerSyncCacheStore(logger, peerPortInt, "localhost")
+	store := newPeerSyncCacheStore(logger, peerPortInt, "localhost", nil)
 
 	loaded, err := store.Load(context.Background())
 	require.NoError(t, err)
@@ -206,7 +206,7 @@ func TestPeerSyncCacheStore_Load_PrefersLocalOverPull(t *testing.T) {
 	peerCRD := makeTestCRDUnstructured("gadgets.example.com", "example.com", "Gadget", "gadgets")
 	peerCache.crds["gadgets.example.com"] = peerCRD
 
-	peer := newPeerSyncCacheStore(logger, 0, "")
+	peer := newPeerSyncCacheStore(logger, 0, "", nil)
 	err := peer.Save(context.Background(), peerCache)
 	require.NoError(t, err)
 
@@ -216,7 +216,7 @@ func TestPeerSyncCacheStore_Load_PrefersLocalOverPull(t *testing.T) {
 	_, peerPortInt := peerPort(t, peerServer.Listener.Addr().String())
 
 	// Store has local data — should use it, not pull from peer.
-	store := newPeerSyncCacheStore(logger, peerPortInt, "localhost")
+	store := newPeerSyncCacheStore(logger, peerPortInt, "localhost", nil)
 	err = store.Save(context.Background(), testCacheWithData(t))
 	require.NoError(t, err)
 
@@ -233,7 +233,7 @@ func TestPeerSyncCacheStore_Load_PrefersLocalOverPull(t *testing.T) {
 func TestPeerSyncCacheStore_Load_RecoverFromCorruptData(t *testing.T) {
 	t.Parallel()
 	logger := zaptest.NewLogger(t)
-	store := newPeerSyncCacheStore(logger, 0, "")
+	store := newPeerSyncCacheStore(logger, 0, "", nil)
 
 	// Store corrupt data directly.
 	store.mu.Lock()
@@ -249,7 +249,7 @@ func TestPeerSyncCacheStore_Load_RecoverFromCorruptData(t *testing.T) {
 // --- Broadcast behavior ---
 
 func TestPeerSyncCacheStore_BroadcastSkipsSelf(t *testing.T) {
-	t.Parallel()
+	// Cannot use t.Parallel() because t.Setenv is used below.
 	logger := zaptest.NewLogger(t)
 
 	var receivedPush bool
@@ -264,7 +264,7 @@ func TestPeerSyncCacheStore_BroadcastSkipsSelf(t *testing.T) {
 	// Set POD_IP to the peer's address so broadcastToPeers skips it.
 	t.Setenv("POD_IP", peerHost)
 
-	store := newPeerSyncCacheStore(logger, peerPortInt, "localhost")
+	store := newPeerSyncCacheStore(logger, peerPortInt, "localhost", nil)
 
 	data, err := marshalResourceCache(testCacheWithData(t))
 	require.NoError(t, err)
@@ -278,7 +278,7 @@ func TestPeerSyncCacheStore_BroadcastNoOpWithoutDNS(t *testing.T) {
 	t.Parallel()
 	logger := zaptest.NewLogger(t)
 
-	store := newPeerSyncCacheStore(logger, defaultPeerPort, "")
+	store := newPeerSyncCacheStore(logger, defaultPeerPort, "", nil)
 
 	data, err := marshalResourceCache(testCacheWithData(t))
 	require.NoError(t, err)
@@ -291,7 +291,7 @@ func TestPeerSyncCacheStore_BroadcastHandlesDNSFailure(t *testing.T) {
 	t.Parallel()
 	logger := zaptest.NewLogger(t)
 
-	store := newPeerSyncCacheStore(logger, defaultPeerPort, "this-dns-does-not-exist.invalid")
+	store := newPeerSyncCacheStore(logger, defaultPeerPort, "this-dns-does-not-exist.invalid", nil)
 
 	data, err := marshalResourceCache(testCacheWithData(t))
 	require.NoError(t, err)
@@ -307,12 +307,12 @@ func TestPeerSyncCacheStore_PushToPeer_DataIntegrity(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
 	// Use a real peer store as the receiver to verify end-to-end data flow.
-	receiver := newPeerSyncCacheStore(logger, 0, "")
+	receiver := newPeerSyncCacheStore(logger, 0, "", nil)
 	peerServer := httptest.NewServer(http.HandlerFunc(receiver.handleSyncCache))
 	defer peerServer.Close()
 
 	peerHost, peerPortInt := peerPort(t, peerServer.Listener.Addr().String())
-	sender := newPeerSyncCacheStore(logger, peerPortInt, "")
+	sender := newPeerSyncCacheStore(logger, peerPortInt, "", nil)
 
 	data, err := marshalResourceCache(testCacheWithData(t))
 	require.NoError(t, err)
@@ -354,7 +354,7 @@ func TestPeerSyncCacheStore_PushRespectsContextCancellation(t *testing.T) {
 	defer peerServer.Close()
 
 	peerHost, peerPortInt := peerPort(t, peerServer.Listener.Addr().String())
-	store := newPeerSyncCacheStore(logger, peerPortInt, "")
+	store := newPeerSyncCacheStore(logger, peerPortInt, "", nil)
 
 	data := []byte(`{"crds":{},"crs":{}}`)
 	compressed, err := gzipCompress(data)
@@ -376,7 +376,7 @@ func TestPeerSyncCacheStore_PullHandlesDNSFailure(t *testing.T) {
 	t.Parallel()
 	logger := zaptest.NewLogger(t)
 
-	store := newPeerSyncCacheStore(logger, defaultPeerPort, "this-dns-does-not-exist.invalid")
+	store := newPeerSyncCacheStore(logger, defaultPeerPort, "this-dns-does-not-exist.invalid", nil)
 
 	data := store.pullFromPeers(context.Background(), 1*time.Second)
 	assert.Nil(t, data)
@@ -387,7 +387,7 @@ func TestPeerSyncCacheStore_PullHandlesDNSFailure(t *testing.T) {
 func TestPeerSyncCacheStore_HandleGet_ServesGzippedData(t *testing.T) {
 	t.Parallel()
 	logger := zaptest.NewLogger(t)
-	store := newPeerSyncCacheStore(logger, 0, "")
+	store := newPeerSyncCacheStore(logger, 0, "", nil)
 
 	err := store.Save(context.Background(), testCacheWithData(t))
 	require.NoError(t, err)

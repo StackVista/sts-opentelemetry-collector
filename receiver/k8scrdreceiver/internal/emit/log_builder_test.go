@@ -262,13 +262,17 @@ func TestBuildCRDLogRecord(t *testing.T) {
 
 			attrs := logRecord.Attributes()
 
+			// CRD attributes should reflect the defined CR type, not the CRD API type itself.
+			crdKind, _, _ := unstructured.NestedString(tt.crd.Object, "spec", "names", "kind")
+			crdGroup, _, _ := unstructured.NestedString(tt.crd.Object, "spec", "group")
+
 			kind, ok := attrs.Get(emit.AttrK8sResourceName)
 			require.True(t, ok)
-			assert.Equal(t, "CustomResourceDefinition", kind.Str())
+			assert.Equal(t, crdKind, kind.Str())
 
 			group, ok := attrs.Get(emit.AttrK8sResourceGroup)
 			require.True(t, ok)
-			assert.Equal(t, "apiextensions.k8s.io", group.Str())
+			assert.Equal(t, crdGroup, group.Str())
 
 			version, ok := attrs.Get(emit.AttrK8sResourceVersion)
 			require.True(t, ok)

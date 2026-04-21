@@ -15,8 +15,10 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/metrics"
 	"go.uber.org/zap"
 )
 
@@ -27,6 +29,10 @@ const (
 	pushMaxRetries    = 3
 	pushRetryBaseWait = 100 * time.Millisecond
 	pushPeerTimeout   = 2 * time.Second
+
+	// broadcastFailureWarnThreshold is the number of consecutive failed broadcasts
+	// before escalating the log level to Warn so operators notice peer sync is broken.
+	broadcastFailureWarnThreshold = 5
 )
 
 // peerSyncCacheStore implements PeerStore with push-primary, pull-failsafe peer sync.
@@ -38,9 +44,14 @@ type peerSyncCacheStore struct {
 	logger   *zap.Logger
 	syncPort int
 	peerDNS  string
+	metrics  metrics.Recorder
 
 	mu              sync.RWMutex
 	syncedCacheData []byte
+
+	// consecutiveBroadcastFailures tracks how many broadcasts in a row failed to reach any peer.
+	// Reset to zero on the first successful broadcast.
+	consecutiveBroadcastFailures atomic.Int32
 
 	server *http.Server
 	wg     sync.WaitGroup
@@ -48,11 +59,15 @@ type peerSyncCacheStore struct {
 
 var _ PeerStore = (*peerSyncCacheStore)(nil)
 
-func newPeerSyncCacheStore(logger *zap.Logger, syncPort int, peerDNS string) *peerSyncCacheStore {
+func newPeerSyncCacheStore(logger *zap.Logger, syncPort int, peerDNS string, rec metrics.Recorder) *peerSyncCacheStore {
+	if rec == nil {
+		rec = metrics.NoopRecorder{}
+	}
 	return &peerSyncCacheStore{
 		logger:   logger,
 		syncPort: syncPort,
 		peerDNS:  peerDNS,
+		metrics:  rec,
 	}
 }
 
@@ -240,29 +255,78 @@ func (p *peerSyncCacheStore) broadcastToPeers(ctx context.Context, data []byte) 
 			zap.String("dns", p.peerDNS),
 			zap.Error(err),
 		)
+		p.recordBroadcastFailure("dns lookup failed")
 		return
 	}
 
 	podIP := os.Getenv("POD_IP")
+	peers := make([]string, 0, len(ips))
+	for _, ip := range ips {
+		if ip == podIP {
+			continue
+		}
+		peers = append(peers, ip)
+	}
+
+	// No peers to push to (single replica or only self resolved). Not a failure.
+	if len(peers) == 0 {
+		return
+	}
 
 	compressed, err := gzipCompress(data)
 	if err != nil {
 		p.logger.Warn("Failed to gzip cache data for broadcast", zap.Error(err))
+		p.recordBroadcastFailure("gzip failed")
 		return
 	}
 
 	client := &http.Client{Timeout: pushPeerTimeout}
 
-	for _, ip := range ips {
-		if ip == podIP {
-			continue
+	var succeeded int
+	for _, ip := range peers {
+		if p.pushToPeer(ctx, client, ip, compressed) {
+			succeeded++
 		}
-		p.pushToPeer(ctx, client, ip, compressed)
+	}
+
+	if succeeded > 0 {
+		p.recordBroadcastSuccess()
+	} else {
+		p.recordBroadcastFailure("all peers unreachable")
+	}
+}
+
+// recordBroadcastSuccess resets the consecutive failure counter and emits a success metric.
+// Logs an Info recovery message if the previous run had crossed the failure threshold.
+func (p *peerSyncCacheStore) recordBroadcastSuccess() {
+	prev := p.consecutiveBroadcastFailures.Swap(0)
+	p.metrics.RecordPeerBroadcast(context.Background(), metrics.BroadcastSuccess)
+	if prev >= broadcastFailureWarnThreshold {
+		p.logger.Info("Peer broadcast recovered after consecutive failures",
+			zap.Int32("previous_failures", prev),
+		)
+	}
+}
+
+// recordBroadcastFailure increments the consecutive failure counter and emits a failure metric.
+// Logs once at Error level when the threshold is first crossed; further occurrences are
+// surfaced via the peer_broadcasts_total metric to avoid log spam from a chronically
+// misconfigured peer DNS.
+func (p *peerSyncCacheStore) recordBroadcastFailure(reason string) {
+	n := p.consecutiveBroadcastFailures.Add(1)
+	p.metrics.RecordPeerBroadcast(context.Background(), metrics.BroadcastFailed)
+	if n == broadcastFailureWarnThreshold {
+		p.logger.Error("Peer broadcast failing repeatedly — check peer DNS and network reachability",
+			zap.String("reason", reason),
+			zap.String("peer_dns", p.peerDNS),
+			zap.Int32("consecutive_failures", n),
+		)
 	}
 }
 
 // pushToPeer sends compressed cache data to a single peer with retries.
-func (p *peerSyncCacheStore) pushToPeer(ctx context.Context, client *http.Client, ip string, compressed []byte) {
+// Returns true if any attempt received a 200 OK.
+func (p *peerSyncCacheStore) pushToPeer(ctx context.Context, client *http.Client, ip string, compressed []byte) bool {
 	url := fmt.Sprintf("http://%s:%d%s", ip, p.syncPort, syncCachePath)
 
 	backoff := pushRetryBaseWait
@@ -275,7 +339,7 @@ func (p *peerSyncCacheStore) pushToPeer(ctx context.Context, client *http.Client
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(compressed))
 		if err != nil {
 			p.logger.Debug("Failed to create push request", zap.String("peer", ip), zap.Error(err))
-			return
+			return false
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Content-Encoding", "gzip")
@@ -299,7 +363,7 @@ func (p *peerSyncCacheStore) pushToPeer(ctx context.Context, client *http.Client
 				zap.String("peer", ip),
 				zap.Int("bytes", len(compressed)),
 			)
-			return
+			return true
 		}
 
 		p.logger.Debug("Peer rejected cache push",
@@ -309,10 +373,11 @@ func (p *peerSyncCacheStore) pushToPeer(ctx context.Context, client *http.Client
 		)
 	}
 
-	p.logger.Warn("Failed to push cache to peer after retries",
+	p.logger.Debug("Failed to push cache to peer after retries",
 		zap.String("peer", ip),
 		zap.Int("max_retries", pushMaxRetries),
 	)
+	return false
 }
 
 // --- Pull failsafe ---

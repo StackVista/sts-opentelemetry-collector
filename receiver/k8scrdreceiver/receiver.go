@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/tracker"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
@@ -25,6 +26,7 @@ type k8scrdReceiver struct {
 	settings      receiver.Settings
 	config        *Config
 	consumer      consumer.Logs
+	metrics       metrics.Recorder
 	dynamicClient dynamic.Interface // injectable for testing
 
 	// Peer store — runs regardless of leadership for push/pull sync.
@@ -35,11 +37,20 @@ type k8scrdReceiver struct {
 	collector *crdCollector
 }
 
-func newReceiver(params receiver.Settings, config *Config, consumer consumer.Logs) (receiver.Logs, error) {
+func newReceiver(
+	params receiver.Settings,
+	config *Config,
+	consumer consumer.Logs,
+	rec metrics.Recorder,
+) (receiver.Logs, error) {
+	if rec == nil {
+		rec = metrics.NoopRecorder{}
+	}
 	return &k8scrdReceiver{
 		settings: params,
 		config:   config,
 		consumer: consumer,
+		metrics:  rec,
 	}, nil
 }
 
@@ -58,6 +69,7 @@ func (r *k8scrdReceiver) Start(ctx context.Context, host component.Host) error {
 		r.settings.Logger,
 		r.config.PeerSyncPort,
 		r.config.PeerSyncDNS,
+		r.metrics,
 	)
 	if err := r.peerStore.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start peer sync cache store: %w", err)
@@ -74,7 +86,7 @@ func (r *k8scrdReceiver) Start(ctx context.Context, host component.Host) error {
 func (r *k8scrdReceiver) startCollector(ctx context.Context) error {
 	ft := tracker.NewForbiddenTracker(defaultForbiddenRetryInterval)
 	informerSet := newResourceInformers(r.settings, r.config, r.dynamicClient, ft)
-	collector := newCRDCollector(r.settings.Logger, r.config, r.consumer, informerSet, r.peerStore)
+	collector := newCRDCollector(r.settings.Logger, r.config, r.consumer, informerSet, r.peerStore, r.metrics)
 
 	if err := collector.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start CRD collector: %w", err)

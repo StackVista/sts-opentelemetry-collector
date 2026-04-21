@@ -1,4 +1,4 @@
-//nolint:testpackage // Tests require access to internal types
+//nolint:testpackage
 package k8scrdreceiver
 
 import (

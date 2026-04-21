@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/collector/receiver"
 
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/metadata"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/metrics"
 )
 
 // NewFactory creates a factory for k8scrd receiver.
@@ -52,5 +53,6 @@ func createLogsReceiver(
 		return nil, fmt.Errorf("invalid config type: %T", cfg)
 	}
 
-	return newReceiver(params, rcfg, consumer)
+	m := metrics.NewMetrics(metadata.Type.String(), rcfg.ClusterName, params.TelemetrySettings)
+	return newReceiver(params, rcfg, consumer, m)
 }

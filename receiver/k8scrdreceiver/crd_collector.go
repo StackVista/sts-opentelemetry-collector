@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/emit"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/metrics"
 	"go.opentelemetry.io/collector/consumer"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -20,6 +21,7 @@ type crdCollector struct {
 	config   *Config
 	consumer consumer.Logs
 	informer Informers
+	metrics  metrics.Recorder
 
 	// Resource cache for delta computation
 	cache            *resourceCache
@@ -39,9 +41,13 @@ func newCRDCollector(
 	cons consumer.Logs,
 	informer Informers,
 	peerStore PeerStore,
+	rec metrics.Recorder,
 ) *crdCollector {
 	if peerStore == nil {
 		peerStore = &noopPeerStore{}
+	}
+	if rec == nil {
+		rec = metrics.NoopRecorder{}
 	}
 	return &crdCollector{
 		logger:    logger,
@@ -49,6 +55,7 @@ func newCRDCollector(
 		consumer:  cons,
 		informer:  informer,
 		peerStore: peerStore,
+		metrics:   rec,
 	}
 }
 
@@ -129,11 +136,10 @@ func (c *crdCollector) runIncrementLoop() {
 // runIncrement reads the current state from informer caches, compares against the
 // resource cache, and emits changes. Periodically emits full snapshots for TTL freshness.
 func (c *crdCollector) runIncrement() {
+	start := time.Now()
 	currentCRDs := c.informer.ReadCRDs()
 	currentCRs := c.informer.ReadCRs()
 
-	// If IncludeInitialState is false and cache is empty, populate without emitting.
-	// Set lastSnapshotTime so the next increment doesn't trigger a snapshot.
 	if !c.config.IncludeInitialState && c.cache.isEmpty() {
 		c.cache.update(currentCRDs, currentCRs)
 		c.lastSnapshotTime = time.Now()
@@ -141,29 +147,35 @@ func (c *crdCollector) runIncrement() {
 			zap.Int("crds", len(currentCRDs)),
 			zap.Int("cr_types", len(currentCRs)),
 		)
-		// Persist so peers can sync the initial state
 		if err := c.peerStore.Save(c.ctx, c.cache); err != nil {
 			c.logger.Debug("Failed to save cache after initial population", zap.Error(err))
 		}
+		c.recordCacheSize()
 		return
 	}
 
-	// Determine if this is a snapshot or increment
 	isSnapshot := c.cache.isEmpty() || time.Since(c.lastSnapshotTime) >= c.config.SnapshotInterval
 
+	mode := metrics.ModeIncrement
+	hasChanges := true
 	if isSnapshot {
+		mode = metrics.ModeSnapshot
 		c.emitSnapshot(currentCRDs, currentCRs)
 		c.lastSnapshotTime = time.Now()
 	} else {
-		c.emitIncrement(currentCRDs, currentCRs)
+		hasChanges = c.emitIncrement(currentCRDs, currentCRs)
 	}
 
 	c.cache.update(currentCRDs, currentCRs)
 
-	// Persist cache so peers can sync the latest state
-	if err := c.peerStore.Save(c.ctx, c.cache); err != nil {
-		c.logger.Debug("Failed to save cache after increment", zap.Error(err))
+	if hasChanges {
+		if err := c.peerStore.Save(c.ctx, c.cache); err != nil {
+			c.logger.Debug("Failed to save cache after increment", zap.Error(err))
+		}
 	}
+
+	c.recordCacheSize()
+	c.metrics.RecordCycle(c.ctx, mode, time.Since(start))
 }
 
 // emitSnapshot emits all current resources as ADDED for downstream TTL freshness,
@@ -172,9 +184,8 @@ func (c *crdCollector) emitSnapshot(
 	currentCRDs []*unstructured.Unstructured,
 	currentCRs map[schema.GroupVersionResource][]*unstructured.Unstructured,
 ) {
-	var crdCount, crCount, deletedCount int
+	var crdAdded, crAdded, crdDeleted, crDeleted int64
 
-	// Emit ADDED for all current CRDs
 	currentCRDNames := make(map[string]struct{}, len(currentCRDs))
 	for _, crd := range currentCRDs {
 		currentCRDNames[crd.GetName()] = struct{}{}
@@ -187,10 +198,9 @@ func (c *crdCollector) emitSnapshot(
 			)
 			continue
 		}
-		crdCount++
+		crdAdded++
 	}
 
-	// Emit ADDED for all current CRs
 	currentCRKeys := make(map[string]struct{})
 	for gvr, crs := range currentCRs {
 		for _, cr := range crs {
@@ -205,11 +215,10 @@ func (c *crdCollector) emitSnapshot(
 				)
 				continue
 			}
-			crCount++
+			crAdded++
 		}
 	}
 
-	// Emit DELETED for CRDs in the resource cache that are no longer present
 	for name, cachedCRD := range c.cache.crds {
 		if _, exists := currentCRDNames[name]; !exists {
 			if err := emit.Log(
@@ -221,11 +230,10 @@ func (c *crdCollector) emitSnapshot(
 				)
 				continue
 			}
-			deletedCount++
+			crdDeleted++
 		}
 	}
 
-	// Emit DELETED for CRs in the resource cache that are no longer present
 	for key, cached := range c.cache.crs {
 		if _, exists := currentCRKeys[key]; !exists {
 			if err := emit.Log(
@@ -237,28 +245,33 @@ func (c *crdCollector) emitSnapshot(
 				)
 				continue
 			}
-			deletedCount++
+			crDeleted++
 		}
 	}
 
+	c.metrics.RecordEmitted(c.ctx, metrics.ChangeAdded, crdAdded+crAdded)
+	c.metrics.RecordEmitted(c.ctx, metrics.ChangeDeleted, crdDeleted+crDeleted)
+
 	c.logger.Debug("Snapshot complete",
-		zap.Int("crds", crdCount),
-		zap.Int("crs", crCount),
-		zap.Int("deleted", deletedCount),
+		zap.Int64("crds", crdAdded),
+		zap.Int64("crs", crAdded),
+		zap.Int64("deleted", crdDeleted+crDeleted),
 	)
 }
 
 // emitIncrement computes the delta between resource cache and current state, and emits changes.
+// Returns true if any changes were detected.
 func (c *crdCollector) emitIncrement(
 	currentCRDs []*unstructured.Unstructured,
 	currentCRs map[schema.GroupVersionResource][]*unstructured.Unstructured,
-) {
+) bool {
 	changes := c.cache.computeChanges(currentCRDs, currentCRs)
 
 	if len(changes) == 0 {
-		return
+		return false
 	}
 
+	counts := map[metrics.ChangeType]int64{}
 	for _, change := range changes {
 		var err error
 		if change.isCRD {
@@ -272,10 +285,37 @@ func (c *crdCollector) emitIncrement(
 				zap.String("name", change.obj.GetName()),
 				zap.Error(err),
 			)
+			continue
 		}
+		counts[c.watchEventToChangeType(change.eventType)]++
+	}
+
+	for changeType, count := range counts {
+		c.metrics.RecordEmitted(c.ctx, changeType, count)
 	}
 
 	c.logger.Debug("Increment complete",
 		zap.Int("changes", len(changes)),
 	)
+
+	return true
+}
+
+func (c *crdCollector) recordCacheSize() {
+	c.metrics.RecordCacheSize(c.ctx, metrics.KindCRD, int64(len(c.cache.crds)))
+	c.metrics.RecordCacheSize(c.ctx, metrics.KindCR, int64(len(c.cache.crs)))
+}
+
+func (c *crdCollector) watchEventToChangeType(e watch.EventType) metrics.ChangeType {
+	switch e {
+	case watch.Added:
+		return metrics.ChangeAdded
+	case watch.Modified:
+		return metrics.ChangeModified
+	case watch.Deleted:
+		return metrics.ChangeDeleted
+	default:
+		c.logger.Warn("Unexpected watch event type", zap.String("event", string(e)))
+		return metrics.ChangeUnknown
+	}
 }

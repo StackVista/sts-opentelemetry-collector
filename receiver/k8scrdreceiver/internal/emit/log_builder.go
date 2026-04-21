@@ -89,11 +89,14 @@ func BuildCRDLogRecord(
 	// Add event type
 	bodyMap.PutStr("type", string(eventType))
 
-	// Add attributes for easier filtering
-	// CRDs are always kind "CustomResourceDefinition" in group "apiextensions.k8s.io"
+	// Extract the CRD's defined group and kind from spec — these identify what
+	// custom resource type this CRD defines, not the CRD API type itself.
+	crdGroup, _, _ := unstructured.NestedString(crd.Object, "spec", "group")
+	crdKind, _, _ := unstructured.NestedString(crd.Object, "spec", "names", "kind")
+
 	logRecord.SetEventName(EventNameCRD)
-	logRecord.Attributes().PutStr(AttrK8sResourceName, "CustomResourceDefinition")
-	logRecord.Attributes().PutStr(AttrK8sResourceGroup, "apiextensions.k8s.io")
+	logRecord.Attributes().PutStr(AttrK8sResourceName, crdKind)
+	logRecord.Attributes().PutStr(AttrK8sResourceGroup, crdGroup)
 	logRecord.Attributes().PutStr(AttrK8sResourceVersion, "v1")
 	logRecord.Attributes().PutStr(AttrEventDomain, EventDomainK8s)
 	logRecord.Attributes().PutStr(AttrK8sObjectName, crd.GetName())

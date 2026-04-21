@@ -1,4 +1,4 @@
-//nolint:testpackage // Tests require access to internal types
+//nolint:testpackage
 package k8scrdreceiver
 
 import (
@@ -145,7 +145,7 @@ func newTestCollector(
 	t.Helper()
 	settings := testSettings(t)
 	informerSet := newResourceInformers(settings, config, client, ft)
-	return newCRDCollector(settings.Logger, config, sink, informerSet, nil)
+	return newCRDCollector(settings.Logger, config, sink, informerSet, nil, nil)
 }
 
 func TestCRDCollector_EmitsInitialCRDAndCR(t *testing.T) {
