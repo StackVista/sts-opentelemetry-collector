@@ -9,6 +9,7 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 )
 
 type mockEvaluator struct {
@@ -60,6 +61,7 @@ func makeHandler(t *testing.T, eval *mockEvaluator) (*internal.MappingHandler[se
 	executed := false
 
 	mockBaseCtx := internal.BaseContext{
+		Logger:              zap.NewNop(),
 		Signal:              settingsproto.TRACES,
 		Evaluator:           eval,
 		CollectionTimestamp: time.Now().UnixMilli(),

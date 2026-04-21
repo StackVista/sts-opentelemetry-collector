@@ -201,6 +201,12 @@ func (d *TopologyDeduplicator) ShouldSend(
 	}
 
 	// Skip sending - content unchanged and not time to refresh
+	d.logger.Debug("Deduplication suppressed send",
+		zap.String("mappingIdentifier", mappingIdentifier),
+		zap.String("key", key),
+		zap.Duration("sinceLastSent", now.Sub(e.lastSent)),
+		zap.Duration("refreshInterval", refreshInterval),
+	)
 	return false
 }
 

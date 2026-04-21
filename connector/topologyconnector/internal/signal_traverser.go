@@ -8,6 +8,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	"go.uber.org/zap"
 )
 
 // ------------------------------------------------
@@ -311,6 +312,7 @@ func (t *TracesTraverser) Traverse(ctx context.Context, mappingVisitor MappingVi
 //	scopes     - caches scopes by [resourceIndex, scopeIndex]
 //	logs       - caches logs by [resourceIndex, scopeIndex, logIndex]
 type LogTraverser struct {
+	logger  *zap.Logger
 	logData plog.Logs
 
 	resources objectCache[int, *Resource] // map[int]Resource
@@ -318,8 +320,9 @@ type LogTraverser struct {
 	logs      objectCache[[3]int, *Log]   // map[[3]int]Log
 }
 
-func NewLogTraverser(logData plog.Logs) *LogTraverser {
+func NewLogTraverser(logData plog.Logs, logger *zap.Logger) *LogTraverser {
 	return &LogTraverser{
+		logger:  logger,
 		logData: logData,
 	}
 }
@@ -363,12 +366,19 @@ func (l *LogTraverser) log(resourceIdx, scopeIdx, logIdx int, logs plog.LogRecor
 //nolint:dupl
 func (l *LogTraverser) Traverse(ctx context.Context, mappingVisitor MappingVisitor) {
 	resourceLogs := l.logData.ResourceLogs()
+	l.logger.Debug("Traversing log records",
+		zap.Int("resourceLogs", resourceLogs.Len()),
+	)
 	for resourceIdx := 0; resourceIdx < resourceLogs.Len(); resourceIdx++ {
 		rl := resourceLogs.At(resourceIdx)
 		resource := l.resource(resourceIdx, resourceLogs)
 		resourceCtx := NewLogEvalContext(nil, nil, resource)
 
 		if mappingVisitor.VisitResource(ctx, resourceCtx) == VisitSkip {
+			l.logger.Debug("Resource skipped by visitor",
+				zap.Int("resourceIdx", resourceIdx),
+				zap.Any("resourceAttrs", resource.ToMap()["attributes"]),
+			)
 			continue
 		}
 
@@ -384,6 +394,12 @@ func (l *LogTraverser) Traverse(ctx context.Context, mappingVisitor MappingVisit
 			logRecords := sl.LogRecords()
 			for logIdx := 0; logIdx < logRecords.Len(); logIdx++ {
 				log := l.log(resourceIdx, scopeIdx, logIdx, logRecords)
+				logMap := log.ToMap()
+				l.logger.Debug("Visiting log record",
+					zap.Int("logIdx", logIdx),
+					zap.Any("eventName", logMap["name"]),
+					zap.Any("logAttributes", logMap["attributes"]),
+				)
 				logCtx := NewLogEvalContext(log, scope, resource)
 				mappingVisitor.VisitLog(ctx, logCtx)
 			}

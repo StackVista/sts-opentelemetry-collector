@@ -9,6 +9,7 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	"go.uber.org/zap"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -178,6 +179,7 @@ func TestEvalVariables(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			vars := tt.vars
 			got, errs := EvalVariables(
+				zap.NewNop(),
 				&mockEvalExpressionEvaluator{
 					varExpressionLookup: tt.varExpressionLookup,
 					varErrsLookup:       tt.varErrsLookup,
@@ -225,6 +227,7 @@ func TestEvalVariables_withRealContext(t *testing.T) {
 
 	// Pass along constructed span, scope and resource to validate plumbing works as expected
 	got, errs := EvalVariables(
+		zap.NewNop(),
 		fakeEval,
 		NewSpanEvalContext(
 			NewSpan("name", "client", "ok", "", span.Attributes().AsRaw()),

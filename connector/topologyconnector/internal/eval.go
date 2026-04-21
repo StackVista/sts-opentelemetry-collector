@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
+	"go.uber.org/zap"
 )
 
 // EvalVariables evaluates a list of OtelVariableMapping objects and resolves variable values
@@ -11,6 +12,7 @@ import (
 // It returns a map of variable names and their resolved values and a map of variable names and
 // any encountered errors.
 func EvalVariables(
+	logger *zap.Logger,
 	expressionEvaluator ExpressionEvaluator,
 	evalContext *ExpressionEvalContext,
 	vars *[]settingsproto.OtelVariableMapping,
@@ -23,8 +25,18 @@ func EvalVariables(
 
 	for _, variable := range *vars {
 		if value, err := expressionEvaluator.EvalAnyExpression(variable.Value, evalContext); err == nil {
+			logger.Debug("Variable evaluated",
+				zap.String("name", variable.Name),
+				zap.String("expression", variable.Value.Expression),
+				zap.Any("value", value),
+			)
 			result[variable.Name] = value
 		} else {
+			logger.Debug("Variable evaluation failed",
+				zap.String("name", variable.Name),
+				zap.String("expression", variable.Value.Expression),
+				zap.Error(err),
+			)
 			errs[variable.Name] = err
 		}
 	}
