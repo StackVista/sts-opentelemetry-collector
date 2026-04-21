@@ -117,7 +117,7 @@ func ExtractComponentsAndRelations(
 ) {
 	components := make(map[string]*topostreamv1.TopologyStreamComponent)
 	relations := make(map[string]*topostreamv1.TopologyStreamRelation)
-	errs := make([]*topostreamv1.TopoStreamError, 0)
+	errs := make([]*topostreamv1.TopoStreamError, 0, len(recs))
 
 	for _, rec := range recs {
 		var topoMsg topostreamv1.TopologyStreamMessage
@@ -168,7 +168,9 @@ func PtrStrExpr(s string) *settingsproto.OtelStringExpression {
 func ExtractDeletes(
 	t *testing.T,
 	recs []*kgo.Record,
-) (componentDeleteIds []string, relationDeleteIds []string) {
+) ([]string, []string) {
+	var componentDeleteIDs, relationDeleteIDs []string
+
 	for _, rec := range recs {
 		var topoMsg topostreamv1.TopologyStreamMessage
 		require.NoError(t, proto.Unmarshal(rec.Value, &topoMsg))
@@ -178,10 +180,10 @@ func ExtractDeletes(
 		if data == nil {
 			continue
 		}
-		componentDeleteIds = append(componentDeleteIds, data.DeleteComponentExternalIds...)
-		relationDeleteIds = append(relationDeleteIds, data.DeleteRelationExternalIds...)
+		componentDeleteIDs = append(componentDeleteIDs, data.DeleteComponentExternalIds...)
+		relationDeleteIDs = append(relationDeleteIDs, data.DeleteRelationExternalIds...)
 	}
-	return componentDeleteIds, relationDeleteIds
+	return componentDeleteIDs, relationDeleteIDs
 }
 
 func Ptr[T any](v T) *T { return &v }
