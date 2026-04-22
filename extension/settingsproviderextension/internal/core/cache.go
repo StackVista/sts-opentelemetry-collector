@@ -67,6 +67,7 @@ type DefaultSettingsCache struct {
 
 func NewDefaultSettingsCache(logger *zap.Logger) *DefaultSettingsCache {
 	return &DefaultSettingsCache{
+		logger:              logger,
 		subscriptionService: NewSubscriberHub(logger),
 		settingsByType:      make(SettingsByType),
 	}
