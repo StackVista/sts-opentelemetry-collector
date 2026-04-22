@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"sync"
+	"time"
+
 	stsSettingsConfig "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/config"
 	stsSettingsEvents "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/events"
 	stsSettingsCore "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/internal/core"
 	"go.yaml.in/yaml/v3"
-	"os"
-	"sync"
-	"time"
 
 	"go.opentelemetry.io/collector/component"
 	"go.uber.org/zap"
@@ -60,6 +61,7 @@ func NewFileSettingsProvider(
 func (f *SettingsProvider) Start(ctx context.Context, _ component.Host) error {
 	f.logger.Info("Starting file-based settings provider.", zap.String("path", f.cfg.Path))
 
+	//nolint:gosec // cancel func stored in struct field, called in Shutdown
 	ctx, f.providerCancelFunc = context.WithCancel(ctx)
 
 	f.providerCancelWg.Add(1)

@@ -209,6 +209,8 @@ func (v *MappingContext[T]) ExecuteMapping(
 			v.handleRelationDelete(ctx, evalCtx, mapping)
 		default:
 		}
+	case ActionContinue:
+		// CONTINUE at execution level: nothing to do
 	}
 }
 
@@ -228,7 +230,7 @@ func (v *MappingContext[T]) handleComponentDelete(
 	}
 	evalCtxWithVars := evalCtx.CloneWithVariables(evaluatedVars)
 
-	externalId, err := v.BaseCtx.Evaluator.EvalStringExpression(mapping.Output.Identifier, evalCtxWithVars)
+	externalID, err := v.BaseCtx.Evaluator.EvalStringExpression(mapping.Output.Identifier, evalCtxWithVars)
 	if err != nil {
 		errs := []error{err}
 		*v.BaseCtx.Results = append(
@@ -241,7 +243,7 @@ func (v *MappingContext[T]) handleComponentDelete(
 
 	*v.BaseCtx.Results = append(
 		*v.BaseCtx.Results,
-		*ComponentDeleteToMessageWithKey(externalId, mapping, v.BaseCtx.CollectionTimestamp),
+		*ComponentDeleteToMessageWithKey(externalID, mapping, v.BaseCtx.CollectionTimestamp),
 	)
 	v.BaseCtx.MetricsRecorder.IncTopologyProduced(ctx, 1, settingsproto.SettingTypeOtelComponentMapping, v.BaseCtx.Signal)
 }
@@ -262,8 +264,8 @@ func (v *MappingContext[T]) handleRelationDelete(
 	}
 	evalCtxWithVars := evalCtx.CloneWithVariables(evaluatedVars)
 
-	sourceId, sourceErr := v.BaseCtx.Evaluator.EvalStringExpression(mapping.Output.SourceId, evalCtxWithVars)
-	targetId, targetErr := v.BaseCtx.Evaluator.EvalStringExpression(mapping.Output.TargetId, evalCtxWithVars)
+	sourceID, sourceErr := v.BaseCtx.Evaluator.EvalStringExpression(mapping.Output.SourceId, evalCtxWithVars)
+	targetID, targetErr := v.BaseCtx.Evaluator.EvalStringExpression(mapping.Output.TargetId, evalCtxWithVars)
 	if sourceErr != nil || targetErr != nil {
 		evalErrs := make([]error, 0, 2)
 		if sourceErr != nil {
@@ -280,10 +282,10 @@ func (v *MappingContext[T]) handleRelationDelete(
 		return
 	}
 
-	externalId := sourceId + "-" + targetId
+	externalID := sourceID + "-" + targetID
 	*v.BaseCtx.Results = append(
 		*v.BaseCtx.Results,
-		*RelationDeleteToMessageWithKey(externalId, mapping, v.BaseCtx.CollectionTimestamp),
+		*RelationDeleteToMessageWithKey(externalID, mapping, v.BaseCtx.CollectionTimestamp),
 	)
 	v.BaseCtx.MetricsRecorder.IncTopologyProduced(ctx, 1, settingsproto.SettingTypeOtelRelationMapping, v.BaseCtx.Signal)
 }

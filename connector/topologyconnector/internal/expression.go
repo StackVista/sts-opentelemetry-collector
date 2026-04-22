@@ -151,7 +151,9 @@ func (ec *ExpressionEvalContext) CloneWithVariables(vars map[string]any) *Expres
 }
 
 func NewCELEvaluator(ctx context.Context, cacheSettings metrics.MeteredCacheSettings) (*CelEvaluator, error) {
-	envOpts := []cel.EnvOption{
+	customFuncs := celCustomFunctions()
+	envOpts := make([]cel.EnvOption, 0, 10+len(customFuncs))
+	envOpts = append(envOpts,
 		cel.Variable("span", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("log", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("datapoint", cel.MapType(cel.StringType, cel.DynType)),
@@ -168,8 +170,8 @@ func NewCELEvaluator(ctx context.Context, cacheSettings metrics.MeteredCacheSett
 		// Note: Dot notation (span.attributes.key) works without OptionalTypes, but bracket notation requires it.
 		cel.OptionalTypes(),
 		ext.Strings(), // enables string manipulation functions (matches, startsWith, endsWith, etc.)
-	}
-	envOpts = append(envOpts, celCustomFunctions()...)
+	)
+	envOpts = append(envOpts, customFuncs...)
 	env, err := cel.NewEnv(envOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CEL environment: %w", err)

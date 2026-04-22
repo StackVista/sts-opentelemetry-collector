@@ -611,7 +611,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			collectionTimestampMs,
 			metrics,
 		)
-		actualKeys := make([]topostreamv1.TopologyStreamMessageKey, 0)
+		actualKeys := make([]topostreamv1.TopologyStreamMessageKey, 0, len(result))
 		for _, message := range result {
 			//nolint:govet
 			actualKeys = append(actualKeys, *message.Key)
@@ -693,7 +693,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			collectionTimestampMs,
 			metrics,
 		)
-		actualKeys := make([]topostreamv1.TopologyStreamMessageKey, 0)
+		actualKeys := make([]topostreamv1.TopologyStreamMessageKey, 0, len(result))
 		for _, message := range result {
 			//nolint:govet
 			actualKeys = append(actualKeys, *message.Key)
@@ -855,7 +855,7 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage_MultipleComponents(t *te
 			Key: &topostreamv1.TopologyStreamMessageKey{
 				Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 				DataSource: "urn:otel-component-mapping:api-route",
-				ShardId:    stableShardID("api-gateway-/products", ShardCount),
+				ShardId:    stableShardID("api-gateway-/products"),
 			},
 			Message: &topostreamv1.TopologyStreamMessage{
 				CollectionTimestamp: collectionTimestampMs,
@@ -882,7 +882,7 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage_MultipleComponents(t *te
 			Key: &topostreamv1.TopologyStreamMessageKey{
 				Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 				DataSource: "urn:otel-component-mapping:api-route",
-				ShardId:    stableShardID("api-gateway-/users", ShardCount),
+				ShardId:    stableShardID("api-gateway-/users"),
 			},
 			Message: &topostreamv1.TopologyStreamMessage{
 				CollectionTimestamp: collectionTimestampMs,

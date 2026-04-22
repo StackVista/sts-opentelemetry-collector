@@ -28,7 +28,7 @@ func OutputToMessageWithKey(
 		Key: &topostreamv1.TopologyStreamMessageKey{
 			Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 			DataSource: mapping.GetIdentifier(),
-			ShardId:    stableShardID(output.GetExternalId(), ShardCount),
+			ShardId:    stableShardID(output.GetExternalId()),
 		},
 		Message: &topostreamv1.TopologyStreamMessage{
 			CollectionTimestamp: collectionTimestampMs,
@@ -102,7 +102,7 @@ func RemovalToMessageWithKey(
 }
 
 func ComponentDeleteToMessageWithKey(
-	externalId string,
+	externalID string,
 	mapping settingsproto.SettingExtension,
 	collectionTimestampMs int64,
 ) *MessageWithKey {
@@ -110,7 +110,7 @@ func ComponentDeleteToMessageWithKey(
 		Key: &topostreamv1.TopologyStreamMessageKey{
 			Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 			DataSource: mapping.GetIdentifier(),
-			ShardId:    stableShardID(externalId, ShardCount),
+			ShardId:    stableShardID(externalID),
 		},
 		Message: &topostreamv1.TopologyStreamMessage{
 			CollectionTimestamp: collectionTimestampMs,
@@ -118,7 +118,7 @@ func ComponentDeleteToMessageWithKey(
 			Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 				TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
 					ExpiryIntervalMs:           mapping.GetExpireAfterMs(),
-					DeleteComponentExternalIds: []string{externalId},
+					DeleteComponentExternalIds: []string{externalID},
 				},
 			},
 		},
@@ -126,7 +126,7 @@ func ComponentDeleteToMessageWithKey(
 }
 
 func RelationDeleteToMessageWithKey(
-	externalId string,
+	externalID string,
 	mapping settingsproto.SettingExtension,
 	collectionTimestampMs int64,
 ) *MessageWithKey {
@@ -134,7 +134,7 @@ func RelationDeleteToMessageWithKey(
 		Key: &topostreamv1.TopologyStreamMessageKey{
 			Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 			DataSource: mapping.GetIdentifier(),
-			ShardId:    stableShardID(externalId, ShardCount),
+			ShardId:    stableShardID(externalID),
 		},
 		Message: &topostreamv1.TopologyStreamMessage{
 			CollectionTimestamp: collectionTimestampMs,
@@ -142,15 +142,15 @@ func RelationDeleteToMessageWithKey(
 			Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 				TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
 					ExpiryIntervalMs:          mapping.GetExpireAfterMs(),
-					DeleteRelationExternalIds: []string{externalId},
+					DeleteRelationExternalIds: []string{externalID},
 				},
 			},
 		},
 	}
 }
 
-func stableShardID(shardKey string, shardCount uint32) string {
+func stableShardID(shardKey string) string {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(shardKey))
-	return fmt.Sprintf("%d", h.Sum32()%shardCount)
+	return fmt.Sprintf("%d", h.Sum32()%ShardCount)
 }
