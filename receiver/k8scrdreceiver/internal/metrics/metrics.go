@@ -43,12 +43,34 @@ const (
 	BroadcastFailed  BroadcastOutcome = "failed"
 )
 
+// PushOutcome is the result of a single push attempt to a peer.
+type PushOutcome string
+
+const (
+	PushSuccess PushOutcome = "success"
+	PushFailed  PushOutcome = "failed"
+)
+
+// PushFailureReason categorizes why a push attempt failed. Empty string for success.
+type PushFailureReason string
+
+const (
+	PushFailureNone          PushFailureReason = ""
+	PushFailureTimeout       PushFailureReason = "timeout"
+	PushFailureConnection    PushFailureReason = "connection_error"
+	PushFailureHTTPStatus    PushFailureReason = "http_error"
+	PushFailureRequestFailed PushFailureReason = "request_failed"
+)
+
 // Recorder is the interface used by the receiver to record metrics.
 type Recorder interface {
 	RecordEmitted(ctx context.Context, change ChangeType, n int64)
 	RecordCycle(ctx context.Context, mode CycleMode, d time.Duration)
 	RecordCacheSize(ctx context.Context, kind ResourceKind, n int64)
 	RecordPeerBroadcast(ctx context.Context, outcome BroadcastOutcome)
+	RecordPeerPushAttempt(ctx context.Context, outcome PushOutcome, reason PushFailureReason)
+	RecordPeerPushBytes(ctx context.Context, n int64)
+	RecordPeerPushDuration(ctx context.Context, d time.Duration)
 }
 
 // NoopRecorder is a Recorder that drops every measurement. Useful in tests.
@@ -58,15 +80,22 @@ func (NoopRecorder) RecordEmitted(_ context.Context, _ ChangeType, _ int64)     
 func (NoopRecorder) RecordCycle(_ context.Context, _ CycleMode, _ time.Duration) {}
 func (NoopRecorder) RecordCacheSize(_ context.Context, _ ResourceKind, _ int64)  {}
 func (NoopRecorder) RecordPeerBroadcast(_ context.Context, _ BroadcastOutcome)   {}
+func (NoopRecorder) RecordPeerPushAttempt(_ context.Context, _ PushOutcome, _ PushFailureReason) {
+}
+func (NoopRecorder) RecordPeerPushBytes(_ context.Context, _ int64)           {}
+func (NoopRecorder) RecordPeerPushDuration(_ context.Context, _ time.Duration) {}
 
 // Metrics is the live Recorder backed by a real Meter.
 type Metrics struct {
 	common []attribute.KeyValue
 
-	recordsEmitted  metric.Int64Counter
-	cycleDuration   metric.Float64Histogram
-	cachedResources metric.Int64Gauge
-	peerBroadcasts  metric.Int64Counter
+	recordsEmitted    metric.Int64Counter
+	cycleDuration     metric.Float64Histogram
+	cachedResources   metric.Int64Gauge
+	peerBroadcasts    metric.Int64Counter
+	peerPushAttempts  metric.Int64Counter
+	peerPushBytes     metric.Int64Histogram
+	peerPushDuration  metric.Float64Histogram
 }
 
 // NewMetrics registers all instruments. Errors from the meter are dropped to match the
@@ -90,15 +119,32 @@ func NewMetrics(typeName, clusterName string, settings component.TelemetrySettin
 	)
 	peerBroadcasts, _ := meter.Int64Counter(
 		name("peer_broadcasts_total"),
-		metric.WithDescription("Peer cache broadcast attempts, labelled by outcome."),
+		metric.WithDescription("Peer cache broadcast outcomes per Save() call, labelled by outcome."),
+	)
+	peerPushAttempts, _ := meter.Int64Counter(
+		name("peer_push_attempts_total"),
+		metric.WithDescription("Per-peer per-attempt push outcomes, labelled by outcome and (on failure) reason."),
+	)
+	peerPushBytes, _ := meter.Int64Histogram(
+		name("peer_push_bytes"),
+		metric.WithDescription("Compressed payload size pushed to a single peer, in bytes."),
+		metric.WithUnit("By"),
+	)
+	peerPushDuration, _ := meter.Float64Histogram(
+		name("peer_push_duration_seconds"),
+		metric.WithDescription("Wall-clock duration of a single peer push, including all retries."),
+		metric.WithUnit("s"),
 	)
 
 	return &Metrics{
-		common:          []attribute.KeyValue{attribute.String("k8s.cluster.name", clusterName)},
-		recordsEmitted:  recordsEmitted,
-		cycleDuration:   cycleDuration,
-		cachedResources: cachedResources,
-		peerBroadcasts:  peerBroadcasts,
+		common:           []attribute.KeyValue{attribute.String("k8s.cluster.name", clusterName)},
+		recordsEmitted:   recordsEmitted,
+		cycleDuration:    cycleDuration,
+		cachedResources:  cachedResources,
+		peerBroadcasts:   peerBroadcasts,
+		peerPushAttempts: peerPushAttempts,
+		peerPushBytes:    peerPushBytes,
+		peerPushDuration: peerPushDuration,
 	}
 }
 
@@ -133,6 +179,22 @@ func (m *Metrics) RecordPeerBroadcast(ctx context.Context, outcome BroadcastOutc
 	m.peerBroadcasts.Add(ctx, 1, metric.WithAttributeSet(
 		m.attrs(attribute.String("outcome", string(outcome))),
 	))
+}
+
+func (m *Metrics) RecordPeerPushAttempt(ctx context.Context, outcome PushOutcome, reason PushFailureReason) {
+	attrs := []attribute.KeyValue{attribute.String("outcome", string(outcome))}
+	if reason != PushFailureNone {
+		attrs = append(attrs, attribute.String("reason", string(reason)))
+	}
+	m.peerPushAttempts.Add(ctx, 1, metric.WithAttributeSet(m.attrs(attrs...)))
+}
+
+func (m *Metrics) RecordPeerPushBytes(ctx context.Context, n int64) {
+	m.peerPushBytes.Record(ctx, n, metric.WithAttributeSet(m.attrs()))
+}
+
+func (m *Metrics) RecordPeerPushDuration(ctx context.Context, d time.Duration) {
+	m.peerPushDuration.Record(ctx, d.Seconds(), metric.WithAttributeSet(m.attrs()))
 }
 
 func (m *Metrics) attrs(extras ...attribute.KeyValue) attribute.Set {

@@ -30,9 +30,9 @@ const (
 	pushRetryBaseWait = 100 * time.Millisecond
 	pushPeerTimeout   = 2 * time.Second
 
-	// broadcastFailureWarnThreshold is the number of consecutive failed broadcasts
+	// broadcastFailureErrorThreshold is the number of consecutive failed broadcasts
 	// before escalating the log level to Warn so operators notice peer sync is broken.
-	broadcastFailureWarnThreshold = 5
+	broadcastFailureErrorThreshold = 5
 )
 
 // peerSyncCacheStore implements PeerStore with push-primary, pull-failsafe peer sync.
@@ -302,7 +302,7 @@ func (p *peerSyncCacheStore) broadcastToPeers(ctx context.Context, data []byte) 
 func (p *peerSyncCacheStore) recordBroadcastSuccess() {
 	prev := p.consecutiveBroadcastFailures.Swap(0)
 	p.metrics.RecordPeerBroadcast(context.Background(), metrics.BroadcastSuccess)
-	if prev >= broadcastFailureWarnThreshold {
+	if prev >= broadcastFailureErrorThreshold {
 		p.logger.Info("Peer broadcast recovered after consecutive failures",
 			zap.Int32("previous_failures", prev),
 		)
@@ -316,7 +316,7 @@ func (p *peerSyncCacheStore) recordBroadcastSuccess() {
 func (p *peerSyncCacheStore) recordBroadcastFailure(reason string) {
 	n := p.consecutiveBroadcastFailures.Add(1)
 	p.metrics.RecordPeerBroadcast(context.Background(), metrics.BroadcastFailed)
-	if n == broadcastFailureWarnThreshold {
+	if n == broadcastFailureErrorThreshold {
 		p.logger.Error("Peer broadcast failing repeatedly — check peer DNS and network reachability",
 			zap.String("reason", reason),
 			zap.String("peer_dns", p.peerDNS),
@@ -326,9 +326,16 @@ func (p *peerSyncCacheStore) recordBroadcastFailure(reason string) {
 }
 
 // pushToPeer sends compressed cache data to a single peer with retries.
-// Returns true if any attempt received a 200 OK.
+// Returns true if any attempt received a 200 OK. Records per-attempt outcomes,
+// total push duration, and payload size as metrics for ops visibility.
 func (p *peerSyncCacheStore) pushToPeer(ctx context.Context, client *http.Client, ip string, compressed []byte) bool {
 	url := fmt.Sprintf("http://%s:%d%s", ip, p.syncPort, syncCachePath)
+
+	start := time.Now()
+	defer func() {
+		p.metrics.RecordPeerPushDuration(context.Background(), time.Since(start))
+		p.metrics.RecordPeerPushBytes(context.Background(), int64(len(compressed)))
+	}()
 
 	backoff := pushRetryBaseWait
 	for attempt := range pushMaxRetries {
@@ -340,6 +347,7 @@ func (p *peerSyncCacheStore) pushToPeer(ctx context.Context, client *http.Client
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(compressed))
 		if err != nil {
 			p.logger.Debug("Failed to create push request", zap.String("peer", ip), zap.Error(err))
+			p.metrics.RecordPeerPushAttempt(context.Background(), metrics.PushFailed, metrics.PushFailureRequestFailed)
 			return false
 		}
 		req.Header.Set("Content-Type", "application/json")
@@ -347,11 +355,14 @@ func (p *peerSyncCacheStore) pushToPeer(ctx context.Context, client *http.Client
 
 		resp, err := client.Do(req)
 		if err != nil {
+			reason := classifyPushError(err)
 			p.logger.Debug("Failed to push cache to peer",
 				zap.String("peer", ip),
 				zap.Int("attempt", attempt+1),
+				zap.String("reason", string(reason)),
 				zap.Error(err),
 			)
+			p.metrics.RecordPeerPushAttempt(context.Background(), metrics.PushFailed, reason)
 			continue
 		}
 
@@ -364,6 +375,7 @@ func (p *peerSyncCacheStore) pushToPeer(ctx context.Context, client *http.Client
 				zap.String("peer", ip),
 				zap.Int("bytes", len(compressed)),
 			)
+			p.metrics.RecordPeerPushAttempt(context.Background(), metrics.PushSuccess, metrics.PushFailureNone)
 			return true
 		}
 
@@ -372,6 +384,7 @@ func (p *peerSyncCacheStore) pushToPeer(ctx context.Context, client *http.Client
 			zap.Int("status", resp.StatusCode),
 			zap.Int("attempt", attempt+1),
 		)
+		p.metrics.RecordPeerPushAttempt(context.Background(), metrics.PushFailed, metrics.PushFailureHTTPStatus)
 	}
 
 	p.logger.Debug("Failed to push cache to peer after retries",
@@ -379,6 +392,20 @@ func (p *peerSyncCacheStore) pushToPeer(ctx context.Context, client *http.Client
 		zap.Int("max_retries", pushMaxRetries),
 	)
 	return false
+}
+
+// classifyPushError maps a transport-layer error from client.Do into a metric reason.
+// Timeouts (including context deadline) are distinguished from other transport errors so
+// operators can tell whether the peer was slow vs. unreachable.
+func classifyPushError(err error) metrics.PushFailureReason {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return metrics.PushFailureTimeout
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return metrics.PushFailureTimeout
+	}
+	return metrics.PushFailureConnection
 }
 
 // --- Pull failsafe ---
