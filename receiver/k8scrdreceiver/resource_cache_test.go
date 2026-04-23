@@ -51,7 +51,7 @@ func TestResourceCache_IsEmpty(t *testing.T) {
 	rc := newResourceCache()
 	assert.True(t, rc.isEmpty())
 
-	rc.crds["test"] = &unstructured.Unstructured{}
+	rc.CRDs["test"] = &unstructured.Unstructured{}
 	assert.False(t, rc.isEmpty())
 }
 
@@ -72,7 +72,7 @@ func TestResourceCache_ComputeChanges_CRDAdded(t *testing.T) {
 
 func TestResourceCache_ComputeChanges_CRDModified(t *testing.T) {
 	rc := newResourceCache()
-	rc.crds["foos.example.com"] = makeCachedCRD("foos.example.com", "1")
+	rc.CRDs["foos.example.com"] = makeCachedCRD("foos.example.com", "1")
 
 	currentCRDs := []*unstructured.Unstructured{
 		makeCachedCRD("foos.example.com", "2"), // different resourceVersion
@@ -87,7 +87,7 @@ func TestResourceCache_ComputeChanges_CRDModified(t *testing.T) {
 
 func TestResourceCache_ComputeChanges_CRDDeleted(t *testing.T) {
 	rc := newResourceCache()
-	rc.crds["foos.example.com"] = makeCachedCRD("foos.example.com", "1")
+	rc.CRDs["foos.example.com"] = makeCachedCRD("foos.example.com", "1")
 
 	// Current state: no CRDs
 	changes := rc.computeChanges(nil, nil)
@@ -100,7 +100,7 @@ func TestResourceCache_ComputeChanges_CRDDeleted(t *testing.T) {
 
 func TestResourceCache_ComputeChanges_CRDUnchanged(t *testing.T) {
 	rc := newResourceCache()
-	rc.crds["foos.example.com"] = makeCachedCRD("foos.example.com", "1")
+	rc.CRDs["foos.example.com"] = makeCachedCRD("foos.example.com", "1")
 
 	currentCRDs := []*unstructured.Unstructured{
 		makeCachedCRD("foos.example.com", "1"), // same resourceVersion
@@ -134,9 +134,9 @@ func TestResourceCache_ComputeChanges_CRModified(t *testing.T) {
 	key := crResourceKey(gvr, "default", "my-foo")
 
 	rc := newResourceCache()
-	rc.crs[key] = &cachedCR{
-		obj: makeCachedCR("my-foo", "default", "example.com", "v1", "Foo", "1"),
-		gvr: gvr,
+	rc.CRs[key] = &cachedCR{
+		Obj: makeCachedCR("my-foo", "default", "example.com", "v1", "Foo", "1"),
+		GVR: gvr,
 	}
 
 	currentCRs := map[schema.GroupVersionResource][]*unstructured.Unstructured{
@@ -157,9 +157,9 @@ func TestResourceCache_ComputeChanges_CRDeleted(t *testing.T) {
 	key := crResourceKey(gvr, "default", "my-foo")
 
 	rc := newResourceCache()
-	rc.crs[key] = &cachedCR{
-		obj: makeCachedCR("my-foo", "default", "example.com", "v1", "Foo", "1"),
-		gvr: gvr,
+	rc.CRs[key] = &cachedCR{
+		Obj: makeCachedCR("my-foo", "default", "example.com", "v1", "Foo", "1"),
+		GVR: gvr,
 	}
 
 	// Current state: no CRs
@@ -175,14 +175,14 @@ func TestResourceCache_ComputeChanges_MixedChanges(t *testing.T) {
 	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "foos"}
 
 	rc := newResourceCache()
-	rc.crds["foos.example.com"] = makeCachedCRD("foos.example.com", "1")
-	rc.crs[crResourceKey(gvr, "default", "existing-foo")] = &cachedCR{
-		obj: makeCachedCR("existing-foo", "default", "example.com", "v1", "Foo", "1"),
-		gvr: gvr,
+	rc.CRDs["foos.example.com"] = makeCachedCRD("foos.example.com", "1")
+	rc.CRs[crResourceKey(gvr, "default", "existing-foo")] = &cachedCR{
+		Obj: makeCachedCR("existing-foo", "default", "example.com", "v1", "Foo", "1"),
+		GVR: gvr,
 	}
-	rc.crs[crResourceKey(gvr, "default", "deleted-foo")] = &cachedCR{
-		obj: makeCachedCR("deleted-foo", "default", "example.com", "v1", "Foo", "1"),
-		gvr: gvr,
+	rc.CRs[crResourceKey(gvr, "default", "deleted-foo")] = &cachedCR{
+		Obj: makeCachedCR("deleted-foo", "default", "example.com", "v1", "Foo", "1"),
+		GVR: gvr,
 	}
 
 	currentCRDs := []*unstructured.Unstructured{
@@ -227,9 +227,9 @@ func TestResourceCache_Update_DeepCopies(t *testing.T) {
 	cr.SetResourceVersion("999")
 
 	// Cached copies should be unaffected
-	assert.Equal(t, "1", rc.crds["foos.example.com"].GetResourceVersion())
+	assert.Equal(t, "1", rc.CRDs["foos.example.com"].GetResourceVersion())
 	key := crResourceKey(gvr, "default", "my-foo")
-	assert.Equal(t, "1", rc.crs[key].obj.GetResourceVersion())
+	assert.Equal(t, "1", rc.CRs[key].Obj.GetResourceVersion())
 }
 
 func TestResourceCache_ApplyAdditions(t *testing.T) {
@@ -238,8 +238,8 @@ func TestResourceCache_ApplyAdditions(t *testing.T) {
 
 	rc := newResourceCache()
 	// Pre-existing entries that ApplyAdditions should update or leave alone.
-	rc.crds["foos.example.com"] = makeCachedCRD("foos.example.com", "1")
-	rc.crs[key] = &cachedCR{obj: makeCachedCR("my-foo", "default", "example.com", "v1", "Foo", "1"), gvr: gvr}
+	rc.CRDs["foos.example.com"] = makeCachedCRD("foos.example.com", "1")
+	rc.CRs[key] = &cachedCR{Obj: makeCachedCR("my-foo", "default", "example.com", "v1", "Foo", "1"), GVR: gvr}
 
 	newCRD := makeCachedCRD("foos.example.com", "2") // modify
 	newCR := makeCachedCR("my-foo", "default", "example.com", "v1", "Foo", "2")
@@ -253,14 +253,14 @@ func TestResourceCache_ApplyAdditions(t *testing.T) {
 		{obj: deletedCRD, eventType: watch.Deleted, isCRD: true},
 	})
 
-	assert.Equal(t, "2", rc.crds["foos.example.com"].GetResourceVersion(), "CRD should be modified")
-	assert.NotContains(t, rc.crds, "ignored.example.com", "deleted change must not be applied")
-	assert.Equal(t, "2", rc.crs[key].obj.GetResourceVersion(), "CR should be modified")
-	assert.Contains(t, rc.crs, crResourceKey(gvr, "default", "other-foo"), "added CR should be present")
+	assert.Equal(t, "2", rc.CRDs["foos.example.com"].GetResourceVersion(), "CRD should be modified")
+	assert.NotContains(t, rc.CRDs, "ignored.example.com", "deleted change must not be applied")
+	assert.Equal(t, "2", rc.CRs[key].Obj.GetResourceVersion(), "CR should be modified")
+	assert.Contains(t, rc.CRs, crResourceKey(gvr, "default", "other-foo"), "added CR should be present")
 
 	// Mutating the source object must not bleed into the cache (deep copy).
 	newCRD.SetResourceVersion("999")
-	assert.Equal(t, "2", rc.crds["foos.example.com"].GetResourceVersion())
+	assert.Equal(t, "2", rc.CRDs["foos.example.com"].GetResourceVersion())
 }
 
 func TestResourceCache_ApplyDeletions(t *testing.T) {
@@ -269,10 +269,10 @@ func TestResourceCache_ApplyDeletions(t *testing.T) {
 	dropKey := crResourceKey(gvr, "default", "drop-foo")
 
 	rc := newResourceCache()
-	rc.crds["keep.example.com"] = makeCachedCRD("keep.example.com", "1")
-	rc.crds["drop.example.com"] = makeCachedCRD("drop.example.com", "1")
-	rc.crs[keepKey] = &cachedCR{obj: makeCachedCR("keep-foo", "default", "example.com", "v1", "Foo", "1"), gvr: gvr}
-	rc.crs[dropKey] = &cachedCR{obj: makeCachedCR("drop-foo", "default", "example.com", "v1", "Foo", "1"), gvr: gvr}
+	rc.CRDs["keep.example.com"] = makeCachedCRD("keep.example.com", "1")
+	rc.CRDs["drop.example.com"] = makeCachedCRD("drop.example.com", "1")
+	rc.CRs[keepKey] = &cachedCR{Obj: makeCachedCR("keep-foo", "default", "example.com", "v1", "Foo", "1"), GVR: gvr}
+	rc.CRs[dropKey] = &cachedCR{Obj: makeCachedCR("drop-foo", "default", "example.com", "v1", "Foo", "1"), GVR: gvr}
 
 	rc.applyDeletions([]resourceChange{
 		{obj: makeCachedCRD("drop.example.com", "1"), eventType: watch.Deleted, isCRD: true},
@@ -281,11 +281,11 @@ func TestResourceCache_ApplyDeletions(t *testing.T) {
 		{obj: makeCachedCRD("keep.example.com", "2"), eventType: watch.Modified, isCRD: true},
 	})
 
-	assert.NotContains(t, rc.crds, "drop.example.com", "deleted CRD should be removed")
-	assert.NotContains(t, rc.crs, dropKey, "deleted CR should be removed")
-	assert.Contains(t, rc.crds, "keep.example.com", "non-delete change must not affect cache")
-	assert.Equal(t, "1", rc.crds["keep.example.com"].GetResourceVersion(), "modify ignored, original retained")
-	assert.Contains(t, rc.crs, keepKey)
+	assert.NotContains(t, rc.CRDs, "drop.example.com", "deleted CRD should be removed")
+	assert.NotContains(t, rc.CRs, dropKey, "deleted CR should be removed")
+	assert.Contains(t, rc.CRDs, "keep.example.com", "non-delete change must not affect cache")
+	assert.Equal(t, "1", rc.CRDs["keep.example.com"].GetResourceVersion(), "modify ignored, original retained")
+	assert.Contains(t, rc.CRs, keepKey)
 }
 
 func TestCRResourceKey(t *testing.T) {

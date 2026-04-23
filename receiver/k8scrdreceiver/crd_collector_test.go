@@ -164,31 +164,41 @@ func newTestCollectorWithPeerStore(
 }
 
 // recordingPeerStore captures each Save() invocation as a snapshot of the cache contents
-// (resource names + versions). Used to assert two-phase save ordering during increments.
+// (resource names + versions) plus the LastSnapshotTime carried in the envelope.
+// Used to assert two-phase save ordering and snapshot-timestamp continuity.
 type recordingPeerStore struct {
 	mu    sync.Mutex
 	saves []recordedSave
+	// loadState is returned from Load(). When nil, an empty PeerSyncMessage is returned.
+	loadState *PeerSyncMessage
 }
 
 type recordedSave struct {
-	crds map[string]string // CRD name -> resourceVersion
-	crs  map[string]string // CR key  -> resourceVersion
+	crds             map[string]string // CRD name -> resourceVersion
+	crs              map[string]string // CR key  -> resourceVersion
+	lastSnapshotTime time.Time
 }
 
-func (r *recordingPeerStore) Load(_ context.Context) (*resourceCache, error) {
-	return newResourceCache(), nil
-}
-
-func (r *recordingPeerStore) Save(_ context.Context, c *resourceCache) error {
-	snap := recordedSave{
-		crds: make(map[string]string, len(c.crds)),
-		crs:  make(map[string]string, len(c.crs)),
+func (r *recordingPeerStore) Load(_ context.Context) (*PeerSyncMessage, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.loadState != nil {
+		return r.loadState, nil
 	}
-	for name, crd := range c.crds {
+	return &PeerSyncMessage{Cache: newResourceCache()}, nil
+}
+
+func (r *recordingPeerStore) Save(_ context.Context, state *PeerSyncMessage) error {
+	snap := recordedSave{
+		crds:             make(map[string]string, len(state.Cache.CRDs)),
+		crs:              make(map[string]string, len(state.Cache.CRs)),
+		lastSnapshotTime: state.LastSnapshotTime,
+	}
+	for name, crd := range state.Cache.CRDs {
 		snap.crds[name] = crd.GetResourceVersion()
 	}
-	for k, cr := range c.crs {
-		snap.crs[k] = cr.obj.GetResourceVersion()
+	for k, cr := range state.Cache.CRs {
+		snap.crs[k] = cr.Obj.GetResourceVersion()
 	}
 	r.mu.Lock()
 	r.saves = append(r.saves, snap)

@@ -94,7 +94,7 @@ func newResourceInformers(
 }
 
 func (ri *ResourceInformers) Start(ctx context.Context) error {
-	ri.ctx, ri.cancel = context.WithCancel(ctx)
+	ri.ctx, ri.cancel = context.WithCancel(ctx) //nolint:gosec // cancel is called in Shutdown
 
 	if err := ri.startCRDInformer(); err != nil {
 		return fmt.Errorf("failed to start CRD informer: %w", err)

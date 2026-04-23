@@ -62,17 +62,23 @@ func newCRDCollector(
 func (c *crdCollector) Start(ctx context.Context) error {
 	c.ctx, c.cancel = context.WithCancel(ctx)
 
-	// Load cache from peer sync. On failure, start fresh — the first increment will be a full snapshot.
-	loadedCache, err := c.peerStore.Load(ctx)
-	if err != nil {
-		c.logger.Debug("Failed to load resource cache from peers, starting fresh", zap.Error(err))
+	// Load state from peer sync. On failure, start fresh — the first increment will be a full snapshot.
+	state, err := c.peerStore.Load(ctx)
+	if err != nil || state == nil {
+		c.logger.Debug("Failed to load peer sync state, starting fresh", zap.Error(err))
 		c.resourceCache = newResourceCache()
 	} else {
-		c.resourceCache = loadedCache
+		c.resourceCache = state.Cache
+		// Inherit the previous leader's snapshot timestamp so the next snapshot is
+		// scheduled relative to cluster history rather than this leader's startup
+		// time. This bounds the worst-case snapshot gap to one configured interval
+		// even across failovers.
+		c.lastSnapshotTime = state.LastSnapshotTime
 		if !c.resourceCache.isEmpty() {
-			c.logger.Info("Loaded resource cache from peers",
-				zap.Int("crds", len(c.resourceCache.crds)),
-				zap.Int("crs", len(c.resourceCache.crs)),
+			c.logger.Info("Loaded peer sync state",
+				zap.Int("crds", len(c.resourceCache.CRDs)),
+				zap.Int("crs", len(c.resourceCache.CRs)),
+				zap.Time("last_snapshot_time", c.lastSnapshotTime),
 			)
 		}
 	}
@@ -96,10 +102,10 @@ func (c *crdCollector) Shutdown(ctx context.Context) error {
 	// since the loop reads from informer caches.
 	c.wg.Wait()
 
-	// Save cache before stopping so peers have the latest state.
+	// Save state before stopping so peers have the latest cache and snapshot timestamp.
 	if c.resourceCache != nil {
-		if err := c.peerStore.Save(ctx, c.resourceCache); err != nil {
-			c.logger.Debug("Failed to sync resource cache to peers on shutdown", zap.Error(err))
+		if err := c.peerStore.Save(ctx, c.currentState()); err != nil {
+			c.logger.Debug("Failed to sync peer state on shutdown", zap.Error(err))
 		}
 	}
 
@@ -108,6 +114,16 @@ func (c *crdCollector) Shutdown(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// currentState wraps the live cache and snapshot timestamp into a PeerSyncMessage for
+// transmission to peers. Used at every Save() site to keep the protocol contract in
+// one place.
+func (c *crdCollector) currentState() *PeerSyncMessage {
+	return &PeerSyncMessage{
+		Cache:            c.resourceCache,
+		LastSnapshotTime: c.lastSnapshotTime,
+	}
 }
 
 // --- Consolidated increment loop ---
@@ -147,8 +163,8 @@ func (c *crdCollector) runIncrement() {
 			zap.Int("crds", len(currentCRDs)),
 			zap.Int("cr_types", len(currentCRs)),
 		)
-		if err := c.peerStore.Save(c.ctx, c.resourceCache); err != nil {
-			c.logger.Debug("Failed to save cache after initial population", zap.Error(err))
+		if err := c.peerStore.Save(c.ctx, c.currentState()); err != nil {
+			c.logger.Debug("Failed to save state after initial population", zap.Error(err))
 		}
 		c.recordCacheSize()
 		return
@@ -162,8 +178,8 @@ func (c *crdCollector) runIncrement() {
 		c.emitSnapshot(currentCRDs, currentCRs)
 		c.lastSnapshotTime = time.Now()
 		c.resourceCache.update(currentCRDs, currentCRs)
-		if err := c.peerStore.Save(c.ctx, c.resourceCache); err != nil {
-			c.logger.Debug("Failed to save cache after snapshot", zap.Error(err))
+		if err := c.peerStore.Save(c.ctx, c.currentState()); err != nil {
+			c.logger.Debug("Failed to save state after snapshot", zap.Error(err))
 		}
 	} else {
 		c.emitIncrement(currentCRDs, currentCRs)
@@ -214,7 +230,7 @@ func (c *crdCollector) emitSnapshot(
 		}
 	}
 
-	for name, cachedCRD := range c.resourceCache.crds {
+	for name, cachedCRD := range c.resourceCache.CRDs {
 		if _, exists := currentCRDNames[name]; !exists {
 			if err := emit.Log(
 				c.ctx, c.consumer, cachedCRD, watch.Deleted, c.config.ClusterName, emit.BuildCRDLogRecord,
@@ -229,13 +245,13 @@ func (c *crdCollector) emitSnapshot(
 		}
 	}
 
-	for key, cached := range c.resourceCache.crs {
+	for key, cached := range c.resourceCache.CRs {
 		if _, exists := currentCRKeys[key]; !exists {
 			if err := emit.Log(
-				c.ctx, c.consumer, cached.obj, watch.Deleted, c.config.ClusterName, emit.BuildCRLogRecord,
+				c.ctx, c.consumer, cached.Obj, watch.Deleted, c.config.ClusterName, emit.BuildCRLogRecord,
 			); err != nil {
 				c.logger.Debug("Failed to emit CR deletion in snapshot",
-					zap.String("name", cached.obj.GetName()),
+					zap.String("name", cached.Obj.GetName()),
 					zap.Error(err),
 				)
 				continue
@@ -285,8 +301,8 @@ func (c *crdCollector) emitIncrement(
 	// Phase 1 — adds/mods: save first, then emit.
 	if len(adds) > 0 {
 		c.resourceCache.applyAdditions(adds)
-		if err := c.peerStore.Save(c.ctx, c.resourceCache); err != nil {
-			c.logger.Debug("Failed to save cache before emitting adds/mods", zap.Error(err))
+		if err := c.peerStore.Save(c.ctx, c.currentState()); err != nil {
+			c.logger.Debug("Failed to save state before emitting adds/mods", zap.Error(err))
 		}
 		c.emitChanges(adds)
 	}
@@ -295,8 +311,8 @@ func (c *crdCollector) emitIncrement(
 	if len(deletes) > 0 {
 		c.emitChanges(deletes)
 		c.resourceCache.applyDeletions(deletes)
-		if err := c.peerStore.Save(c.ctx, c.resourceCache); err != nil {
-			c.logger.Debug("Failed to save cache after emitting deletes", zap.Error(err))
+		if err := c.peerStore.Save(c.ctx, c.currentState()); err != nil {
+			c.logger.Debug("Failed to save state after emitting deletes", zap.Error(err))
 		}
 	}
 
@@ -329,8 +345,8 @@ func (c *crdCollector) emitChanges(changes []resourceChange) {
 }
 
 func (c *crdCollector) recordCacheSize() {
-	c.metrics.RecordCacheSize(c.ctx, metrics.KindCRD, int64(len(c.resourceCache.crds)))
-	c.metrics.RecordCacheSize(c.ctx, metrics.KindCR, int64(len(c.resourceCache.crs)))
+	c.metrics.RecordCacheSize(c.ctx, metrics.KindCRD, int64(len(c.resourceCache.CRDs)))
+	c.metrics.RecordCacheSize(c.ctx, metrics.KindCR, int64(len(c.resourceCache.CRs)))
 }
 
 func (c *crdCollector) watchEventToChangeType(e watch.EventType) metrics.ChangeType {

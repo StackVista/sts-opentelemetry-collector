@@ -25,15 +25,28 @@ func testCacheWithData(t *testing.T) *resourceCache {
 
 	crd := makeTestCRDUnstructured("widgets.example.com", "example.com", "Widget", "widgets")
 	crd.SetResourceVersion("42")
-	cache.crds["widgets.example.com"] = crd
+	cache.CRDs["widgets.example.com"] = crd
 
 	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"}
 	cr := makeTestCR("my-widget", "default", "example.com", "v1", "Widget")
 	cr.SetResourceVersion("7")
 	key := crResourceKey(gvr, "default", "my-widget")
-	cache.crs[key] = &cachedCR{obj: cr, gvr: gvr}
+	cache.CRs[key] = &cachedCR{Obj: cr, GVR: gvr}
 
 	return cache
+}
+
+// msg wraps a cache in a PeerSyncMessage. Test convenience.
+func msg(c *resourceCache) *PeerSyncMessage {
+	return &PeerSyncMessage{Cache: c}
+}
+
+// cacheBytes marshals a cache through the peer sync envelope.
+func cacheBytes(t *testing.T, c *resourceCache) []byte {
+	t.Helper()
+	data, err := marshalPeerSyncMessage(msg(c))
+	require.NoError(t, err)
+	return data
 }
 
 func peerPort(t *testing.T, addr string) (string, int) {
@@ -54,21 +67,21 @@ func TestPeerSyncCacheStore_SaveLoadRoundtrip(t *testing.T) {
 
 	original := testCacheWithData(t)
 
-	err := store.Save(context.Background(), original)
+	err := store.Save(context.Background(), msg(original))
 	require.NoError(t, err)
 
 	loaded, err := store.Load(context.Background())
 	require.NoError(t, err)
 
-	require.Len(t, loaded.crds, 1)
-	assert.Equal(t, "widgets.example.com", loaded.crds["widgets.example.com"].GetName())
-	assert.Equal(t, "42", loaded.crds["widgets.example.com"].GetResourceVersion())
+	require.Len(t, loaded.Cache.CRDs, 1)
+	assert.Equal(t, "widgets.example.com", loaded.Cache.CRDs["widgets.example.com"].GetName())
+	assert.Equal(t, "42", loaded.Cache.CRDs["widgets.example.com"].GetResourceVersion())
 
-	require.Len(t, loaded.crs, 1)
+	require.Len(t, loaded.Cache.CRs, 1)
 	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"}
 	key := crResourceKey(gvr, "default", "my-widget")
-	assert.Equal(t, "my-widget", loaded.crs[key].obj.GetName())
-	assert.Equal(t, "7", loaded.crs[key].obj.GetResourceVersion())
+	assert.Equal(t, "my-widget", loaded.Cache.CRs[key].Obj.GetName())
+	assert.Equal(t, "7", loaded.Cache.CRs[key].Obj.GetResourceVersion())
 }
 
 func TestPeerSyncCacheStore_LoadReturnsEmptyWhenNoData(t *testing.T) {
@@ -76,9 +89,9 @@ func TestPeerSyncCacheStore_LoadReturnsEmptyWhenNoData(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	store := newPeerSyncCacheStore(logger, 0, "", nil)
 
-	cache, err := store.Load(context.Background())
+	loaded, err := store.Load(context.Background())
 	require.NoError(t, err)
-	assert.True(t, cache.isEmpty())
+	assert.True(t, loaded.Cache.isEmpty())
 }
 
 // --- HTTP handler ---
@@ -100,9 +113,7 @@ func TestPeerSyncCacheStore_HandlePost_StoresReceivedData(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	store := newPeerSyncCacheStore(logger, 0, "", nil)
 
-	cache := testCacheWithData(t)
-	data, err := marshalResourceCache(cache)
-	require.NoError(t, err)
+	data := cacheBytes(t, testCacheWithData(t))
 
 	req := httptest.NewRequest(http.MethodPost, syncCachePath, strings.NewReader(string(data)))
 	req.Header.Set("Content-Type", "application/json")
@@ -113,8 +124,8 @@ func TestPeerSyncCacheStore_HandlePost_StoresReceivedData(t *testing.T) {
 
 	loaded, err := store.Load(context.Background())
 	require.NoError(t, err)
-	assert.Len(t, loaded.crds, 1)
-	assert.Len(t, loaded.crs, 1)
+	assert.Len(t, loaded.Cache.CRDs, 1)
+	assert.Len(t, loaded.Cache.CRs, 1)
 }
 
 func TestPeerSyncCacheStore_HandlePost_GzipCompressed(t *testing.T) {
@@ -122,8 +133,7 @@ func TestPeerSyncCacheStore_HandlePost_GzipCompressed(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	store := newPeerSyncCacheStore(logger, 0, "", nil)
 
-	data, err := marshalResourceCache(testCacheWithData(t))
-	require.NoError(t, err)
+	data := cacheBytes(t, testCacheWithData(t))
 
 	compressed, err := gzipCompress(data)
 	require.NoError(t, err)
@@ -138,7 +148,7 @@ func TestPeerSyncCacheStore_HandlePost_GzipCompressed(t *testing.T) {
 
 	loaded, err := store.Load(context.Background())
 	require.NoError(t, err)
-	assert.Len(t, loaded.crds, 1)
+	assert.Len(t, loaded.Cache.CRDs, 1)
 }
 
 // --- Lifecycle ---
@@ -162,7 +172,7 @@ func TestPeerSyncCacheStore_Load_PullsFromPeerWhenLocalEmpty(t *testing.T) {
 
 	// Set up a peer that has cached data (simulates previous leader).
 	peer := newPeerSyncCacheStore(logger, 0, "", nil)
-	err := peer.Save(context.Background(), testCacheWithData(t))
+	err := peer.Save(context.Background(), msg(testCacheWithData(t)))
 	require.NoError(t, err)
 
 	peerServer := httptest.NewServer(http.HandlerFunc(peer.handleSyncCache))
@@ -175,8 +185,8 @@ func TestPeerSyncCacheStore_Load_PullsFromPeerWhenLocalEmpty(t *testing.T) {
 
 	loaded, err := store.Load(context.Background())
 	require.NoError(t, err)
-	assert.Len(t, loaded.crds, 1)
-	assert.Len(t, loaded.crs, 1)
+	assert.Len(t, loaded.Cache.CRDs, 1)
+	assert.Len(t, loaded.Cache.CRs, 1)
 }
 
 func TestPeerSyncCacheStore_Load_ReturnsEmptyWhenAllPeersEmpty(t *testing.T) {
@@ -194,7 +204,7 @@ func TestPeerSyncCacheStore_Load_ReturnsEmptyWhenAllPeersEmpty(t *testing.T) {
 
 	loaded, err := store.Load(context.Background())
 	require.NoError(t, err)
-	assert.True(t, loaded.isEmpty())
+	assert.True(t, loaded.Cache.isEmpty())
 }
 
 func TestPeerSyncCacheStore_Load_PrefersLocalOverPull(t *testing.T) {
@@ -204,10 +214,10 @@ func TestPeerSyncCacheStore_Load_PrefersLocalOverPull(t *testing.T) {
 	// Peer has different data than local.
 	peerCache := newResourceCache()
 	peerCRD := makeTestCRDUnstructured("gadgets.example.com", "example.com", "Gadget", "gadgets")
-	peerCache.crds["gadgets.example.com"] = peerCRD
+	peerCache.CRDs["gadgets.example.com"] = peerCRD
 
 	peer := newPeerSyncCacheStore(logger, 0, "", nil)
-	err := peer.Save(context.Background(), peerCache)
+	err := peer.Save(context.Background(), msg(peerCache))
 	require.NoError(t, err)
 
 	peerServer := httptest.NewServer(http.HandlerFunc(peer.handleSyncCache))
@@ -217,14 +227,14 @@ func TestPeerSyncCacheStore_Load_PrefersLocalOverPull(t *testing.T) {
 
 	// Store has local data — should use it, not pull from peer.
 	store := newPeerSyncCacheStore(logger, peerPortInt, "localhost", nil)
-	err = store.Save(context.Background(), testCacheWithData(t))
+	err = store.Save(context.Background(), msg(testCacheWithData(t)))
 	require.NoError(t, err)
 
 	loaded, err := store.Load(context.Background())
 	require.NoError(t, err)
 
-	assert.Contains(t, loaded.crds, "widgets.example.com")
-	_, hasGadgets := loaded.crds["gadgets.example.com"]
+	assert.Contains(t, loaded.Cache.CRDs, "widgets.example.com")
+	_, hasGadgets := loaded.Cache.CRDs["gadgets.example.com"]
 	assert.False(t, hasGadgets, "should prefer local data over peer pull")
 }
 
@@ -243,7 +253,7 @@ func TestPeerSyncCacheStore_Load_RecoverFromCorruptData(t *testing.T) {
 	// Load should recover gracefully — return empty cache, no error.
 	loaded, err := store.Load(context.Background())
 	require.NoError(t, err)
-	assert.True(t, loaded.isEmpty())
+	assert.True(t, loaded.Cache.isEmpty())
 }
 
 // --- Broadcast behavior ---
@@ -266,8 +276,7 @@ func TestPeerSyncCacheStore_BroadcastSkipsSelf(t *testing.T) {
 
 	store := newPeerSyncCacheStore(logger, peerPortInt, "localhost", nil)
 
-	data, err := marshalResourceCache(testCacheWithData(t))
-	require.NoError(t, err)
+	data := cacheBytes(t, testCacheWithData(t))
 
 	store.broadcastToPeers(context.Background(), data)
 
@@ -280,8 +289,7 @@ func TestPeerSyncCacheStore_BroadcastNoOpWithoutDNS(t *testing.T) {
 
 	store := newPeerSyncCacheStore(logger, defaultPeerPort, "", nil)
 
-	data, err := marshalResourceCache(testCacheWithData(t))
-	require.NoError(t, err)
+	data := cacheBytes(t, testCacheWithData(t))
 
 	// Should return immediately without panic when peerDNS is empty.
 	store.broadcastToPeers(context.Background(), data)
@@ -293,8 +301,7 @@ func TestPeerSyncCacheStore_BroadcastHandlesDNSFailure(t *testing.T) {
 
 	store := newPeerSyncCacheStore(logger, defaultPeerPort, "this-dns-does-not-exist.invalid", nil)
 
-	data, err := marshalResourceCache(testCacheWithData(t))
-	require.NoError(t, err)
+	data := cacheBytes(t, testCacheWithData(t))
 
 	// Should not panic — logs and returns.
 	store.broadcastToPeers(context.Background(), data)
@@ -314,8 +321,7 @@ func TestPeerSyncCacheStore_PushToPeer_DataIntegrity(t *testing.T) {
 	peerHost, peerPortInt := peerPort(t, peerServer.Listener.Addr().String())
 	sender := newPeerSyncCacheStore(logger, peerPortInt, "", nil)
 
-	data, err := marshalResourceCache(testCacheWithData(t))
-	require.NoError(t, err)
+	data := cacheBytes(t, testCacheWithData(t))
 
 	compressed, err := gzipCompress(data)
 	require.NoError(t, err)
@@ -327,13 +333,13 @@ func TestPeerSyncCacheStore_PushToPeer_DataIntegrity(t *testing.T) {
 	loaded, err := receiver.Load(context.Background())
 	require.NoError(t, err)
 
-	require.Len(t, loaded.crds, 1)
-	assert.Equal(t, "widgets.example.com", loaded.crds["widgets.example.com"].GetName())
-	require.Len(t, loaded.crs, 1)
+	require.Len(t, loaded.Cache.CRDs, 1)
+	assert.Equal(t, "widgets.example.com", loaded.Cache.CRDs["widgets.example.com"].GetName())
+	require.Len(t, loaded.Cache.CRs, 1)
 
 	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"}
 	key := crResourceKey(gvr, "default", "my-widget")
-	assert.Equal(t, "my-widget", loaded.crs[key].obj.GetName())
+	assert.Equal(t, "my-widget", loaded.Cache.CRs[key].Obj.GetName())
 }
 
 // --- Context cancellation ---
@@ -389,7 +395,7 @@ func TestPeerSyncCacheStore_HandleGet_ServesGzippedData(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	store := newPeerSyncCacheStore(logger, 0, "", nil)
 
-	err := store.Save(context.Background(), testCacheWithData(t))
+	err := store.Save(context.Background(), msg(testCacheWithData(t)))
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, syncCachePath, nil)
@@ -409,8 +415,8 @@ func TestPeerSyncCacheStore_HandleGet_ServesGzippedData(t *testing.T) {
 	data, err := io.ReadAll(gr)
 	require.NoError(t, err)
 
-	restored, err := unmarshalResourceCache(data)
+	restored, err := unmarshalPeerSyncMessage(data)
 	require.NoError(t, err)
-	assert.Len(t, restored.crds, 1)
-	assert.Len(t, restored.crs, 1)
+	assert.Len(t, restored.Cache.CRDs, 1)
+	assert.Len(t, restored.Cache.CRs, 1)
 }

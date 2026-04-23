@@ -118,8 +118,8 @@ func (p *peerSyncCacheStore) Stop() {
 
 // --- PeerStore interface ---
 
-// Load returns the locally synced cache. If empty, attempts a one-shot pull from peers.
-func (p *peerSyncCacheStore) Load(ctx context.Context) (*resourceCache, error) {
+// Load returns the locally synced state. If empty, attempts a one-shot pull from peers.
+func (p *peerSyncCacheStore) Load(ctx context.Context) (*PeerSyncMessage, error) {
 	p.mu.RLock()
 	data := p.syncedCacheData
 	p.mu.RUnlock()
@@ -137,14 +137,14 @@ func (p *peerSyncCacheStore) Load(ctx context.Context) (*resourceCache, error) {
 	}
 
 	p.logger.Info("No peers with cache data available, starting fresh")
-	return newResourceCache(), nil
+	return &PeerSyncMessage{Cache: newResourceCache()}, nil
 }
 
-// Save marshals the cache, stores it locally, and broadcasts to all peers via POST.
-func (p *peerSyncCacheStore) Save(ctx context.Context, cache *resourceCache) error {
-	data, err := marshalResourceCache(cache)
+// Save marshals the state, stores it locally, and broadcasts to all peers via POST.
+func (p *peerSyncCacheStore) Save(ctx context.Context, state *PeerSyncMessage) error {
+	data, err := marshalPeerSyncMessage(state)
 	if err != nil {
-		return fmt.Errorf("marshal cache for peer sync: %w", err)
+		return fmt.Errorf("marshal peer sync state: %w", err)
 	}
 
 	p.mu.Lock()
@@ -153,8 +153,9 @@ func (p *peerSyncCacheStore) Save(ctx context.Context, cache *resourceCache) err
 
 	p.logger.Debug("Cache saved locally",
 		zap.Int("bytes", len(data)),
-		zap.Int("crds", len(cache.crds)),
-		zap.Int("crs", len(cache.crs)),
+		zap.Int("crds", len(state.Cache.CRDs)),
+		zap.Int("crs", len(state.Cache.CRs)),
+		zap.Time("last_snapshot_time", state.LastSnapshotTime),
 	)
 
 	p.broadcastToPeers(ctx, data)
@@ -228,8 +229,8 @@ func (p *peerSyncCacheStore) handlePost(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if _, err := unmarshalResourceCache(data); err != nil {
-		http.Error(w, "invalid cache data", http.StatusBadRequest)
+	if _, err := unmarshalPeerSyncMessage(data); err != nil {
+		http.Error(w, "invalid peer sync envelope", http.StatusBadRequest)
 		return
 	}
 
@@ -477,20 +478,21 @@ func (p *peerSyncCacheStore) fetchPeerCache(ctx context.Context, client *http.Cl
 
 // --- Helpers ---
 
-func (p *peerSyncCacheStore) unmarshalAndLog(data []byte, source string) (*resourceCache, error) {
-	cache, err := unmarshalResourceCache(data)
+func (p *peerSyncCacheStore) unmarshalAndLog(data []byte, source string) (*PeerSyncMessage, error) {
+	state, err := unmarshalPeerSyncMessage(data)
 	if err != nil {
-		p.logger.Warn("Failed to unmarshal cache data, starting fresh",
+		p.logger.Warn("Failed to unmarshal peer sync envelope, starting fresh",
 			zap.String("source", source),
 			zap.Error(err),
 		)
-		return newResourceCache(), nil
+		return &PeerSyncMessage{Cache: newResourceCache()}, nil
 	}
 	p.logger.Info("Loaded cache from "+source,
-		zap.Int("crds", len(cache.crds)),
-		zap.Int("crs", len(cache.crs)),
+		zap.Int("crds", len(state.Cache.CRDs)),
+		zap.Int("crs", len(state.Cache.CRs)),
+		zap.Time("last_snapshot_time", state.LastSnapshotTime),
 	)
-	return cache, nil
+	return state, nil
 }
 
 func gzipCompress(data []byte) ([]byte, error) {

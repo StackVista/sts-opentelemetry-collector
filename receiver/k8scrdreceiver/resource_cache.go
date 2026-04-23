@@ -17,29 +17,31 @@ type resourceChange struct {
 	gvr       schema.GroupVersionResource // set for CR changes
 }
 
-// cachedCR stores a CR alongside its GVR for delta computation.
+// cachedCR stores a CR alongside its GVR for delta computation. Fields are exported
+// because the cache is shipped over the peer sync protocol via encoding/json.
 type cachedCR struct {
-	obj *unstructured.Unstructured
-	gvr schema.GroupVersionResource
+	Obj *unstructured.Unstructured  `json:"object"`
+	GVR schema.GroupVersionResource `json:"gvr"`
 }
 
 // resourceCache tracks the last state emitted downstream.
 // It is used to compute deltas between successive increment loop iterations.
 // The cache is not thread-safe — it is only accessed from the increment loop goroutine.
+// Fields are exported so the cache can be JSON-marshaled directly for peer sync.
 type resourceCache struct {
-	crds map[string]*unstructured.Unstructured // key: CRD name
-	crs  map[string]*cachedCR                  // key: crResourceKey(gvr, namespace, name)
+	CRDs map[string]*unstructured.Unstructured `json:"crds"` // key: CRD name
+	CRs  map[string]*cachedCR                  `json:"crs"`  // key: crResourceKey(gvr, namespace, name)
 }
 
 func newResourceCache() *resourceCache {
 	return &resourceCache{
-		crds: make(map[string]*unstructured.Unstructured),
-		crs:  make(map[string]*cachedCR),
+		CRDs: make(map[string]*unstructured.Unstructured),
+		CRs:  make(map[string]*cachedCR),
 	}
 }
 
 func (rc *resourceCache) isEmpty() bool {
-	return len(rc.crds) == 0 && len(rc.crs) == 0
+	return len(rc.CRDs) == 0 && len(rc.CRs) == 0
 }
 
 // computeChanges compares the current informer state against the resource cache and returns the delta.
@@ -55,7 +57,7 @@ func (rc *resourceCache) computeChanges(
 		name := crd.GetName()
 		currentCRDMap[name] = crd
 
-		prev, exists := rc.crds[name]
+		prev, exists := rc.CRDs[name]
 		if !exists {
 			changes = append(changes, resourceChange{
 				obj:       crd,
@@ -72,7 +74,7 @@ func (rc *resourceCache) computeChanges(
 	}
 
 	// Detect deleted CRDs
-	for name, prev := range rc.crds {
+	for name, prev := range rc.CRDs {
 		if _, exists := currentCRDMap[name]; !exists {
 			changes = append(changes, resourceChange{
 				obj:       prev,
@@ -89,14 +91,14 @@ func (rc *resourceCache) computeChanges(
 			key := crResourceKey(gvr, cr.GetNamespace(), cr.GetName())
 			currentCRMap[key] = cr
 
-			prev, exists := rc.crs[key]
+			prev, exists := rc.CRs[key]
 			if !exists {
 				changes = append(changes, resourceChange{
 					obj:       cr,
 					eventType: watch.Added,
 					gvr:       gvr,
 				})
-			} else if prev.obj.GetResourceVersion() != cr.GetResourceVersion() {
+			} else if prev.Obj.GetResourceVersion() != cr.GetResourceVersion() {
 				changes = append(changes, resourceChange{
 					obj:       cr,
 					eventType: watch.Modified,
@@ -107,12 +109,12 @@ func (rc *resourceCache) computeChanges(
 	}
 
 	// Detect deleted CRs
-	for key, prev := range rc.crs {
+	for key, prev := range rc.CRs {
 		if _, exists := currentCRMap[key]; !exists {
 			changes = append(changes, resourceChange{
-				obj:       prev.obj,
+				obj:       prev.Obj,
 				eventType: watch.Deleted,
-				gvr:       prev.gvr,
+				gvr:       prev.GVR,
 			})
 		}
 	}
@@ -128,10 +130,10 @@ func (rc *resourceCache) applyAdditions(changes []resourceChange) {
 			continue
 		}
 		if ch.isCRD {
-			rc.crds[ch.obj.GetName()] = ch.obj.DeepCopy()
+			rc.CRDs[ch.obj.GetName()] = ch.obj.DeepCopy()
 		} else {
 			key := crResourceKey(ch.gvr, ch.obj.GetNamespace(), ch.obj.GetName())
-			rc.crs[key] = &cachedCR{obj: ch.obj.DeepCopy(), gvr: ch.gvr}
+			rc.CRs[key] = &cachedCR{Obj: ch.obj.DeepCopy(), GVR: ch.gvr}
 		}
 	}
 }
@@ -145,10 +147,10 @@ func (rc *resourceCache) applyDeletions(changes []resourceChange) {
 			continue
 		}
 		if ch.isCRD {
-			delete(rc.crds, ch.obj.GetName())
+			delete(rc.CRDs, ch.obj.GetName())
 		} else {
 			key := crResourceKey(ch.gvr, ch.obj.GetNamespace(), ch.obj.GetName())
-			delete(rc.crs, key)
+			delete(rc.CRs, key)
 		}
 	}
 }
@@ -163,19 +165,19 @@ func (rc *resourceCache) update(
 	for _, crd := range currentCRDs {
 		newCRDs[crd.GetName()] = crd.DeepCopy()
 	}
-	rc.crds = newCRDs
+	rc.CRDs = newCRDs
 
 	newCRs := make(map[string]*cachedCR)
 	for gvr, crs := range currentCRs {
 		for _, cr := range crs {
 			key := crResourceKey(gvr, cr.GetNamespace(), cr.GetName())
 			newCRs[key] = &cachedCR{
-				obj: cr.DeepCopy(),
-				gvr: gvr,
+				Obj: cr.DeepCopy(),
+				GVR: gvr,
 			}
 		}
 	}
-	rc.crs = newCRs
+	rc.CRs = newCRs
 }
 
 // crResourceKey returns a unique key for a CR within the resource cache.
