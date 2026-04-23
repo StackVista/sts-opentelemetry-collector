@@ -232,6 +232,62 @@ func TestResourceCache_Update_DeepCopies(t *testing.T) {
 	assert.Equal(t, "1", rc.crs[key].obj.GetResourceVersion())
 }
 
+func TestResourceCache_ApplyAdditions(t *testing.T) {
+	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "foos"}
+	key := crResourceKey(gvr, "default", "my-foo")
+
+	rc := newResourceCache()
+	// Pre-existing entries that ApplyAdditions should update or leave alone.
+	rc.crds["foos.example.com"] = makeCachedCRD("foos.example.com", "1")
+	rc.crs[key] = &cachedCR{obj: makeCachedCR("my-foo", "default", "example.com", "v1", "Foo", "1"), gvr: gvr}
+
+	newCRD := makeCachedCRD("foos.example.com", "2") // modify
+	newCR := makeCachedCR("my-foo", "default", "example.com", "v1", "Foo", "2")
+	addedCR := makeCachedCR("other-foo", "default", "example.com", "v1", "Foo", "1") // add
+	deletedCRD := makeCachedCRD("ignored.example.com", "1")                          // should be skipped
+
+	rc.applyAdditions([]resourceChange{
+		{obj: newCRD, eventType: watch.Modified, isCRD: true},
+		{obj: newCR, eventType: watch.Modified, gvr: gvr},
+		{obj: addedCR, eventType: watch.Added, gvr: gvr},
+		{obj: deletedCRD, eventType: watch.Deleted, isCRD: true},
+	})
+
+	assert.Equal(t, "2", rc.crds["foos.example.com"].GetResourceVersion(), "CRD should be modified")
+	assert.NotContains(t, rc.crds, "ignored.example.com", "deleted change must not be applied")
+	assert.Equal(t, "2", rc.crs[key].obj.GetResourceVersion(), "CR should be modified")
+	assert.Contains(t, rc.crs, crResourceKey(gvr, "default", "other-foo"), "added CR should be present")
+
+	// Mutating the source object must not bleed into the cache (deep copy).
+	newCRD.SetResourceVersion("999")
+	assert.Equal(t, "2", rc.crds["foos.example.com"].GetResourceVersion())
+}
+
+func TestResourceCache_ApplyDeletions(t *testing.T) {
+	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "foos"}
+	keepKey := crResourceKey(gvr, "default", "keep-foo")
+	dropKey := crResourceKey(gvr, "default", "drop-foo")
+
+	rc := newResourceCache()
+	rc.crds["keep.example.com"] = makeCachedCRD("keep.example.com", "1")
+	rc.crds["drop.example.com"] = makeCachedCRD("drop.example.com", "1")
+	rc.crs[keepKey] = &cachedCR{obj: makeCachedCR("keep-foo", "default", "example.com", "v1", "Foo", "1"), gvr: gvr}
+	rc.crs[dropKey] = &cachedCR{obj: makeCachedCR("drop-foo", "default", "example.com", "v1", "Foo", "1"), gvr: gvr}
+
+	rc.applyDeletions([]resourceChange{
+		{obj: makeCachedCRD("drop.example.com", "1"), eventType: watch.Deleted, isCRD: true},
+		{obj: makeCachedCR("drop-foo", "default", "example.com", "v1", "Foo", "1"), eventType: watch.Deleted, gvr: gvr},
+		// Non-delete changes must be ignored — they don't affect the cache here.
+		{obj: makeCachedCRD("keep.example.com", "2"), eventType: watch.Modified, isCRD: true},
+	})
+
+	assert.NotContains(t, rc.crds, "drop.example.com", "deleted CRD should be removed")
+	assert.NotContains(t, rc.crs, dropKey, "deleted CR should be removed")
+	assert.Contains(t, rc.crds, "keep.example.com", "non-delete change must not affect cache")
+	assert.Equal(t, "1", rc.crds["keep.example.com"].GetResourceVersion(), "modify ignored, original retained")
+	assert.Contains(t, rc.crs, keepKey)
+}
+
 func TestCRResourceKey(t *testing.T) {
 	gvr := schema.GroupVersionResource{
 		Group:    "policies.kubewarden.io",

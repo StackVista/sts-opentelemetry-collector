@@ -3,6 +3,7 @@ package k8scrdreceiver
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -143,9 +144,64 @@ func newTestCollector(
 	ft *tracker.ForbiddenTracker,
 ) *crdCollector {
 	t.Helper()
+	return newTestCollectorWithPeerStore(t, config, sink, client, ft, nil)
+}
+
+// newTestCollectorWithPeerStore is like newTestCollector but lets the caller inject a
+// custom PeerStore implementation, e.g. to record Save() invocations.
+func newTestCollectorWithPeerStore(
+	t *testing.T,
+	config *Config,
+	sink *consumertest.LogsSink,
+	client *dynamicfake.FakeDynamicClient,
+	ft *tracker.ForbiddenTracker,
+	peerStore PeerStore,
+) *crdCollector {
+	t.Helper()
 	settings := testSettings(t)
 	informerSet := newResourceInformers(settings, config, client, ft)
-	return newCRDCollector(settings.Logger, config, sink, informerSet, nil, nil)
+	return newCRDCollector(settings.Logger, config, sink, informerSet, peerStore, nil)
+}
+
+// recordingPeerStore captures each Save() invocation as a snapshot of the cache contents
+// (resource names + versions). Used to assert two-phase save ordering during increments.
+type recordingPeerStore struct {
+	mu    sync.Mutex
+	saves []recordedSave
+}
+
+type recordedSave struct {
+	crds map[string]string // CRD name -> resourceVersion
+	crs  map[string]string // CR key  -> resourceVersion
+}
+
+func (r *recordingPeerStore) Load(_ context.Context) (*resourceCache, error) {
+	return newResourceCache(), nil
+}
+
+func (r *recordingPeerStore) Save(_ context.Context, c *resourceCache) error {
+	snap := recordedSave{
+		crds: make(map[string]string, len(c.crds)),
+		crs:  make(map[string]string, len(c.crs)),
+	}
+	for name, crd := range c.crds {
+		snap.crds[name] = crd.GetResourceVersion()
+	}
+	for k, cr := range c.crs {
+		snap.crs[k] = cr.obj.GetResourceVersion()
+	}
+	r.mu.Lock()
+	r.saves = append(r.saves, snap)
+	r.mu.Unlock()
+	return nil
+}
+
+func (r *recordingPeerStore) snapshot() []recordedSave {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]recordedSave, len(r.saves))
+	copy(out, r.saves)
+	return out
 }
 
 func TestCRDCollector_EmitsInitialCRDAndCR(t *testing.T) {
@@ -330,6 +386,150 @@ func TestCRDCollector_IncludeInitialStateFalse(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		return sink.LogRecordCount() > 0
 	}, 10*time.Second, 100*time.Millisecond, "new CR should be detected as ADDED after initial cache load")
+}
+
+// TestCRDCollector_TwoPhaseSaveOrdering verifies the asymmetric save/emit ordering in
+// the increment loop:
+//   - adds/mods: Save() runs BEFORE emit, so peers see the new state first
+//   - deletes:   Save() runs AFTER emit, so peers retain the resource until the platform
+//     has been notified
+//
+// We assert this by recording each Save() invocation along with the cache contents at
+// that moment, then checking the number of saves and what each save contained per cycle.
+func TestCRDCollector_TwoPhaseSaveOrdering(t *testing.T) {
+	scheme := testScheme()
+	registerCRGVR(scheme, "example.com", "v1", "TestResource")
+
+	crd := makeTestCRDUnstructured("testresources.example.com", "example.com", "TestResource", "testresources")
+	crGVR := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "testresources"}
+
+	keepCR := makeTestCR("keep", "default", "example.com", "v1", "TestResource")
+	keepCR.SetResourceVersion("1")
+	dropCR := makeTestCR("drop", "default", "example.com", "v1", "TestResource")
+	dropCR.SetResourceVersion("1")
+
+	tests := []struct {
+		name string
+		// mutate is invoked after the initial snapshot save has been recorded.
+		mutate func(t *testing.T, ctx context.Context, client *dynamicfake.FakeDynamicClient)
+		// expectedSavesAfterMutation is the number of Save() calls expected in addition
+		// to the one that happens after the initial snapshot.
+		expectedSavesAfterMutation int
+		// assertSaves runs against the recorded saves *after* the initial snapshot save.
+		// Empty for the no-changes case.
+		assertSaves func(t *testing.T, saves []recordedSave)
+	}{
+		{
+			name:                       "no changes: increment cycle does not save",
+			mutate:                     func(*testing.T, context.Context, *dynamicfake.FakeDynamicClient) {},
+			expectedSavesAfterMutation: 0,
+			assertSaves:                func(*testing.T, []recordedSave) {},
+		},
+		{
+			name: "only adds: single save with the added CR present",
+			mutate: func(t *testing.T, ctx context.Context, client *dynamicfake.FakeDynamicClient) {
+				newCR := makeTestCR("new", "default", "example.com", "v1", "TestResource")
+				newCR.SetResourceVersion("1")
+				_, err := client.Resource(crGVR).Namespace("default").Create(ctx, newCR, metav1.CreateOptions{})
+				require.NoError(t, err)
+			},
+			expectedSavesAfterMutation: 1,
+			assertSaves: func(t *testing.T, saves []recordedSave) {
+				require.Len(t, saves, 1, "phase-1 should produce exactly one save")
+				assert.Contains(t, saves[0].crs, crResourceKey(crGVR, "default", "new"), "added CR should appear in save")
+			},
+		},
+		{
+			name: "only deletes: single save with the deleted CR removed",
+			mutate: func(t *testing.T, ctx context.Context, client *dynamicfake.FakeDynamicClient) {
+				err := client.Resource(crGVR).Namespace("default").Delete(ctx, "drop", metav1.DeleteOptions{})
+				require.NoError(t, err)
+			},
+			expectedSavesAfterMutation: 1,
+			assertSaves: func(t *testing.T, saves []recordedSave) {
+				require.Len(t, saves, 1, "phase-2 should produce exactly one save")
+				assert.NotContains(t, saves[0].crs, crResourceKey(crGVR, "default", "drop"), "deleted CR must be absent in save")
+				assert.Contains(t, saves[0].crs, crResourceKey(crGVR, "default", "keep"), "kept CR should still be present")
+			},
+		},
+		{
+			name: "mixed: phase-1 save retains to-be-deleted CR; phase-2 save removes it",
+			mutate: func(t *testing.T, ctx context.Context, client *dynamicfake.FakeDynamicClient) {
+				newCR := makeTestCR("new", "default", "example.com", "v1", "TestResource")
+				newCR.SetResourceVersion("1")
+				_, err := client.Resource(crGVR).Namespace("default").Create(ctx, newCR, metav1.CreateOptions{})
+				require.NoError(t, err)
+				require.NoError(t, client.Resource(crGVR).Namespace("default").Delete(ctx, "drop", metav1.DeleteOptions{}))
+			},
+			expectedSavesAfterMutation: 2,
+			assertSaves: func(t *testing.T, saves []recordedSave) {
+				require.Len(t, saves, 2, "mixed cycle should produce exactly two saves")
+				dropKey := crResourceKey(crGVR, "default", "drop")
+				newKey := crResourceKey(crGVR, "default", "new")
+
+				// Phase 1 (adds first): added CR present; soon-to-be-deleted CR still present.
+				assert.Contains(t, saves[0].crs, newKey, "phase-1 save should contain the added CR")
+				assert.Contains(t, saves[0].crs, dropKey, "phase-1 save should still contain the to-be-deleted CR")
+
+				// Phase 2 (deletes after): added CR still present; deleted CR removed.
+				assert.Contains(t, saves[1].crs, newKey, "phase-2 save should still contain the added CR")
+				assert.NotContains(t, saves[1].crs, dropKey, "phase-2 save must not contain the deleted CR")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme,
+				map[schema.GroupVersionResource]string{
+					crdGVR: "CustomResourceDefinitionList",
+					crGVR:  "TestResourceList",
+				},
+				crd, keepCR.DeepCopy(), dropCR.DeepCopy(),
+			)
+
+			sink := &consumertest.LogsSink{}
+			config := testConfig([]string{"example.com"}, nil)
+			ft := tracker.NewForbiddenTracker(1 * time.Hour)
+			peerStore := &recordingPeerStore{}
+			collector := newTestCollectorWithPeerStore(t, config, sink, client, ft, peerStore)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			require.NoError(t, collector.Start(ctx))
+			defer func() { require.NoError(t, collector.Shutdown(ctx)) }()
+
+			// Wait for the initial snapshot save.
+			assert.Eventually(t, func() bool {
+				return len(peerStore.snapshot()) >= 1
+			}, 10*time.Second, 50*time.Millisecond, "expected initial snapshot save")
+			savesBeforeMutation := len(peerStore.snapshot())
+
+			tt.mutate(t, ctx, client)
+
+			if tt.expectedSavesAfterMutation == 0 {
+				// Wait long enough for at least one increment cycle to complete and assert nothing saved.
+				time.Sleep(2 * config.IncrementInterval)
+				assert.Equal(t, savesBeforeMutation, len(peerStore.snapshot()),
+					"increment cycle with no changes must not call Save()")
+				return
+			}
+
+			expectedTotal := savesBeforeMutation + tt.expectedSavesAfterMutation
+			assert.Eventually(t, func() bool {
+				return len(peerStore.snapshot()) >= expectedTotal
+			}, 10*time.Second, 50*time.Millisecond, "expected %d saves after mutation, got %d",
+				tt.expectedSavesAfterMutation, len(peerStore.snapshot())-savesBeforeMutation)
+
+			// Give one extra tick to confirm we don't get extra unexpected saves.
+			time.Sleep(config.IncrementInterval + 200*time.Millisecond)
+			all := peerStore.snapshot()
+			assert.Equal(t, expectedTotal, len(all), "unexpected number of saves")
+
+			tt.assertSaves(t, all[savesBeforeMutation:])
+		})
+	}
 }
 
 func TestConfig_Simplified(t *testing.T) {

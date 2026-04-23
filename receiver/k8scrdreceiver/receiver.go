@@ -85,8 +85,8 @@ func (r *k8scrdReceiver) Start(ctx context.Context, host component.Host) error {
 // startCollector creates and starts the collector (called directly or from leader election callback).
 func (r *k8scrdReceiver) startCollector(ctx context.Context) error {
 	ft := tracker.NewForbiddenTracker(defaultForbiddenRetryInterval)
-	informerSet := newResourceInformers(r.settings, r.config, r.dynamicClient, ft)
-	collector := newCRDCollector(r.settings.Logger, r.config, r.consumer, informerSet, r.peerStore, r.metrics)
+	informers := newResourceInformers(r.settings, r.config, r.dynamicClient, ft)
+	collector := newCRDCollector(r.settings.Logger, r.config, r.consumer, informers, r.peerStore, r.metrics)
 
 	if err := collector.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start CRD collector: %w", err)

@@ -120,6 +120,39 @@ func (rc *resourceCache) computeChanges(
 	return changes
 }
 
+// applyAdditions applies ADDED and MODIFIED changes to the cache. Used in the first
+// phase of a two-phase increment so peers can be updated before the platform is notified.
+func (rc *resourceCache) applyAdditions(changes []resourceChange) {
+	for _, ch := range changes {
+		if ch.eventType == watch.Deleted {
+			continue
+		}
+		if ch.isCRD {
+			rc.crds[ch.obj.GetName()] = ch.obj.DeepCopy()
+		} else {
+			key := crResourceKey(ch.gvr, ch.obj.GetNamespace(), ch.obj.GetName())
+			rc.crs[key] = &cachedCR{obj: ch.obj.DeepCopy(), gvr: ch.gvr}
+		}
+	}
+}
+
+// applyDeletions removes DELETED entries from the cache. Used in the second phase of a
+// two-phase increment so the cache retains the soon-to-be-deleted resources until after
+// the platform has been notified.
+func (rc *resourceCache) applyDeletions(changes []resourceChange) {
+	for _, ch := range changes {
+		if ch.eventType != watch.Deleted {
+			continue
+		}
+		if ch.isCRD {
+			delete(rc.crds, ch.obj.GetName())
+		} else {
+			key := crResourceKey(ch.gvr, ch.obj.GetNamespace(), ch.obj.GetName())
+			delete(rc.crs, key)
+		}
+	}
+}
+
 // update replaces the resource cache with the current state.
 // Objects are deep-copied to prevent the cache from being mutated by informer updates.
 func (rc *resourceCache) update(

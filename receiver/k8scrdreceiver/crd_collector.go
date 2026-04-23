@@ -14,17 +14,17 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 )
 
-// crdCollector reads from Informers, compares against a resource cache,
+// crdCollector reads from Informers, compares against a resource resourceCache,
 // and emits deltas (ADDED/MODIFIED/DELETED) or periodic full snapshots as log records.
 type crdCollector struct {
-	logger   *zap.Logger
-	config   *Config
-	consumer consumer.Logs
-	informer Informers
-	metrics  metrics.Recorder
+	logger    *zap.Logger
+	config    *Config
+	consumer  consumer.Logs
+	informers Informers
+	metrics   metrics.Recorder
 
-	// Resource cache for delta computation
-	cache            *resourceCache
+	// Resource resourceCache for delta computation
+	resourceCache    *resourceCache
 	lastSnapshotTime time.Time
 
 	peerStore PeerStore
@@ -39,7 +39,7 @@ func newCRDCollector(
 	logger *zap.Logger,
 	config *Config,
 	cons consumer.Logs,
-	informer Informers,
+	informers Informers,
 	peerStore PeerStore,
 	rec metrics.Recorder,
 ) *crdCollector {
@@ -53,7 +53,7 @@ func newCRDCollector(
 		logger:    logger,
 		config:    config,
 		consumer:  cons,
-		informer:  informer,
+		informers: informers,
 		peerStore: peerStore,
 		metrics:   rec,
 	}
@@ -66,18 +66,18 @@ func (c *crdCollector) Start(ctx context.Context) error {
 	loadedCache, err := c.peerStore.Load(ctx)
 	if err != nil {
 		c.logger.Debug("Failed to load resource cache from peers, starting fresh", zap.Error(err))
-		c.cache = newResourceCache()
+		c.resourceCache = newResourceCache()
 	} else {
-		c.cache = loadedCache
-		if !c.cache.isEmpty() {
+		c.resourceCache = loadedCache
+		if !c.resourceCache.isEmpty() {
 			c.logger.Info("Loaded resource cache from peers",
-				zap.Int("crds", len(c.cache.crds)),
-				zap.Int("crs", len(c.cache.crs)),
+				zap.Int("crds", len(c.resourceCache.crds)),
+				zap.Int("crs", len(c.resourceCache.crs)),
 			)
 		}
 	}
 
-	if err := c.informer.Start(ctx); err != nil {
+	if err := c.informers.Start(ctx); err != nil {
 		return err
 	}
 
@@ -97,14 +97,14 @@ func (c *crdCollector) Shutdown(ctx context.Context) error {
 	c.wg.Wait()
 
 	// Save cache before stopping so peers have the latest state.
-	if c.cache != nil {
-		if err := c.peerStore.Save(ctx, c.cache); err != nil {
+	if c.resourceCache != nil {
+		if err := c.peerStore.Save(ctx, c.resourceCache); err != nil {
 			c.logger.Debug("Failed to sync resource cache to peers on shutdown", zap.Error(err))
 		}
 	}
 
-	if c.informer != nil {
-		return c.informer.Shutdown(ctx)
+	if c.informers != nil {
+		return c.informers.Shutdown(ctx)
 	}
 
 	return nil
@@ -112,8 +112,8 @@ func (c *crdCollector) Shutdown(ctx context.Context) error {
 
 // --- Consolidated increment loop ---
 
-// runIncrementLoop is the single polling loop that reads informer caches, compares
-// against the resource cache, and emits deltas or periodic snapshots.
+// runIncrementLoop is the single polling loop that reads informers caches, compares
+// against the resource resourceCache, and emits deltas or periodic snapshots.
 func (c *crdCollector) runIncrementLoop() {
 	defer c.wg.Done()
 
@@ -133,45 +133,40 @@ func (c *crdCollector) runIncrementLoop() {
 	}
 }
 
-// runIncrement reads the current state from informer caches, compares against the
-// resource cache, and emits changes. Periodically emits full snapshots for TTL freshness.
+// runIncrement reads the current state from informers caches, compares against the
+// resource resourceCache, and emits changes. Periodically emits full snapshots for TTL freshness.
 func (c *crdCollector) runIncrement() {
 	start := time.Now()
-	currentCRDs := c.informer.ReadCRDs()
-	currentCRs := c.informer.ReadCRs()
+	currentCRDs := c.informers.ReadCRDs()
+	currentCRs := c.informers.ReadCRs()
 
-	if !c.config.IncludeInitialState && c.cache.isEmpty() {
-		c.cache.update(currentCRDs, currentCRs)
+	if !c.config.IncludeInitialState && c.resourceCache.isEmpty() {
+		c.resourceCache.update(currentCRDs, currentCRs)
 		c.lastSnapshotTime = time.Now()
 		c.logger.Info("Initial state loaded into resource cache (not emitting)",
 			zap.Int("crds", len(currentCRDs)),
 			zap.Int("cr_types", len(currentCRs)),
 		)
-		if err := c.peerStore.Save(c.ctx, c.cache); err != nil {
+		if err := c.peerStore.Save(c.ctx, c.resourceCache); err != nil {
 			c.logger.Debug("Failed to save cache after initial population", zap.Error(err))
 		}
 		c.recordCacheSize()
 		return
 	}
 
-	isSnapshot := c.cache.isEmpty() || time.Since(c.lastSnapshotTime) >= c.config.SnapshotInterval
+	isSnapshot := c.resourceCache.isEmpty() || time.Since(c.lastSnapshotTime) >= c.config.SnapshotInterval
 
 	mode := metrics.ModeIncrement
-	hasChanges := true
 	if isSnapshot {
 		mode = metrics.ModeSnapshot
 		c.emitSnapshot(currentCRDs, currentCRs)
 		c.lastSnapshotTime = time.Now()
-	} else {
-		hasChanges = c.emitIncrement(currentCRDs, currentCRs)
-	}
-
-	c.cache.update(currentCRDs, currentCRs)
-
-	if hasChanges {
-		if err := c.peerStore.Save(c.ctx, c.cache); err != nil {
-			c.logger.Debug("Failed to save cache after increment", zap.Error(err))
+		c.resourceCache.update(currentCRDs, currentCRs)
+		if err := c.peerStore.Save(c.ctx, c.resourceCache); err != nil {
+			c.logger.Debug("Failed to save cache after snapshot", zap.Error(err))
 		}
+	} else {
+		c.emitIncrement(currentCRDs, currentCRs)
 	}
 
 	c.recordCacheSize()
@@ -179,7 +174,7 @@ func (c *crdCollector) runIncrement() {
 }
 
 // emitSnapshot emits all current resources as ADDED for downstream TTL freshness,
-// and emits DELETED for resources that were in the resource cache but are no longer present.
+// and emits DELETED for resources that were in the resource resourceCache but are no longer present.
 func (c *crdCollector) emitSnapshot(
 	currentCRDs []*unstructured.Unstructured,
 	currentCRs map[schema.GroupVersionResource][]*unstructured.Unstructured,
@@ -219,7 +214,7 @@ func (c *crdCollector) emitSnapshot(
 		}
 	}
 
-	for name, cachedCRD := range c.cache.crds {
+	for name, cachedCRD := range c.resourceCache.crds {
 		if _, exists := currentCRDNames[name]; !exists {
 			if err := emit.Log(
 				c.ctx, c.consumer, cachedCRD, watch.Deleted, c.config.ClusterName, emit.BuildCRDLogRecord,
@@ -234,7 +229,7 @@ func (c *crdCollector) emitSnapshot(
 		}
 	}
 
-	for key, cached := range c.cache.crs {
+	for key, cached := range c.resourceCache.crs {
 		if _, exists := currentCRKeys[key]; !exists {
 			if err := emit.Log(
 				c.ctx, c.consumer, cached.obj, watch.Deleted, c.config.ClusterName, emit.BuildCRLogRecord,
@@ -259,18 +254,57 @@ func (c *crdCollector) emitSnapshot(
 	)
 }
 
-// emitIncrement computes the delta between resource cache and current state, and emits changes.
-// Returns true if any changes were detected.
+// emitIncrement computes the delta between the resourceCache and current state (from the informers) and emits
+// changes using a two-phase ordering chosen to minimise the impact of a leader crash:
+//
+//   - Adds/Mods: save peers BEFORE emitting. If we crash between save and emit, the new
+//     leader's peerCache matches its informers state and emits nothing — the platform briefly
+//     misses the change but is reconciled by the next snapshot (worst case: snapshot interval).
+//   - Deletes: emit BEFORE saving peers. If we crash between emit and save, the new
+//     leader's peerCache still contains the deleted resource while its informers does not, so it
+//     re-emits the DELETE (idempotent duplicate). This avoids a missed DELETE that would
+//     otherwise linger on the platform until TTL expiry.
 func (c *crdCollector) emitIncrement(
 	currentCRDs []*unstructured.Unstructured,
 	currentCRs map[schema.GroupVersionResource][]*unstructured.Unstructured,
-) bool {
-	changes := c.cache.computeChanges(currentCRDs, currentCRs)
-
+) {
+	changes := c.resourceCache.computeChanges(currentCRDs, currentCRs)
 	if len(changes) == 0 {
-		return false
+		return
 	}
 
+	var adds, deletes []resourceChange
+	for _, ch := range changes {
+		if ch.eventType == watch.Deleted {
+			deletes = append(deletes, ch)
+		} else {
+			adds = append(adds, ch)
+		}
+	}
+
+	// Phase 1 — adds/mods: save first, then emit.
+	if len(adds) > 0 {
+		c.resourceCache.applyAdditions(adds)
+		if err := c.peerStore.Save(c.ctx, c.resourceCache); err != nil {
+			c.logger.Debug("Failed to save cache before emitting adds/mods", zap.Error(err))
+		}
+		c.emitChanges(adds)
+	}
+
+	// Phase 2 — deletes: emit first, then save.
+	if len(deletes) > 0 {
+		c.emitChanges(deletes)
+		c.resourceCache.applyDeletions(deletes)
+		if err := c.peerStore.Save(c.ctx, c.resourceCache); err != nil {
+			c.logger.Debug("Failed to save cache after emitting deletes", zap.Error(err))
+		}
+	}
+
+	c.logger.Debug("Increment complete", zap.Int("changes", len(changes)))
+}
+
+// emitChanges sends a list of changes to the consumer and records per-type counters.
+func (c *crdCollector) emitChanges(changes []resourceChange) {
 	counts := map[metrics.ChangeType]int64{}
 	for _, change := range changes {
 		var err error
@@ -289,21 +323,14 @@ func (c *crdCollector) emitIncrement(
 		}
 		counts[c.watchEventToChangeType(change.eventType)]++
 	}
-
 	for changeType, count := range counts {
 		c.metrics.RecordEmitted(c.ctx, changeType, count)
 	}
-
-	c.logger.Debug("Increment complete",
-		zap.Int("changes", len(changes)),
-	)
-
-	return true
 }
 
 func (c *crdCollector) recordCacheSize() {
-	c.metrics.RecordCacheSize(c.ctx, metrics.KindCRD, int64(len(c.cache.crds)))
-	c.metrics.RecordCacheSize(c.ctx, metrics.KindCR, int64(len(c.cache.crs)))
+	c.metrics.RecordCacheSize(c.ctx, metrics.KindCRD, int64(len(c.resourceCache.crds)))
+	c.metrics.RecordCacheSize(c.ctx, metrics.KindCR, int64(len(c.resourceCache.crs)))
 }
 
 func (c *crdCollector) watchEventToChangeType(e watch.EventType) metrics.ChangeType {
