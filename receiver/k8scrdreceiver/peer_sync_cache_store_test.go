@@ -94,31 +94,45 @@ func TestPeerSyncCacheStore_LoadReturnsEmptyWhenNoData(t *testing.T) {
 	assert.True(t, loaded.Cache.isEmpty())
 }
 
-// --- HTTP handler ---
+// --- HTTP handlers ---
 
-func TestPeerSyncCacheStore_HandleGet_Returns204WhenEmpty(t *testing.T) {
+func TestPeerSyncCacheStore_HandleSnapshot_Returns503WhenNotLeader(t *testing.T) {
 	t.Parallel()
 	logger := zaptest.NewLogger(t)
 	store := newPeerSyncCacheStore(logger, 0, "", nil)
+	require.NoError(t, store.Save(context.Background(), msg(testCacheWithData(t))))
 
-	req := httptest.NewRequest(http.MethodGet, syncCachePath, nil)
+	req := httptest.NewRequest(http.MethodGet, syncSnapshotPath, nil)
 	w := httptest.NewRecorder()
-	store.handleSyncCache(w, req)
+	store.handleSnapshot(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+func TestPeerSyncCacheStore_HandleSnapshot_Returns204WhenLeaderHasNoData(t *testing.T) {
+	t.Parallel()
+	logger := zaptest.NewLogger(t)
+	store := newPeerSyncCacheStore(logger, 0, "", nil)
+	store.SetLeader(true)
+
+	req := httptest.NewRequest(http.MethodGet, syncSnapshotPath, nil)
+	w := httptest.NewRecorder()
+	store.handleSnapshot(w, req)
 
 	assert.Equal(t, http.StatusNoContent, w.Code)
 }
 
-func TestPeerSyncCacheStore_HandlePost_StoresReceivedData(t *testing.T) {
+func TestPeerSyncCacheStore_HandleIncrement_StoresReceivedData(t *testing.T) {
 	t.Parallel()
 	logger := zaptest.NewLogger(t)
 	store := newPeerSyncCacheStore(logger, 0, "", nil)
 
 	data := cacheBytes(t, testCacheWithData(t))
 
-	req := httptest.NewRequest(http.MethodPost, syncCachePath, strings.NewReader(string(data)))
+	req := httptest.NewRequest(http.MethodPost, syncIncrementsPath, strings.NewReader(string(data)))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	store.handleSyncCache(w, req)
+	store.handleIncrement(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -128,7 +142,7 @@ func TestPeerSyncCacheStore_HandlePost_StoresReceivedData(t *testing.T) {
 	assert.Len(t, loaded.Cache.CRs, 1)
 }
 
-func TestPeerSyncCacheStore_HandlePost_GzipCompressed(t *testing.T) {
+func TestPeerSyncCacheStore_HandleIncrement_GzipCompressed(t *testing.T) {
 	t.Parallel()
 	logger := zaptest.NewLogger(t)
 	store := newPeerSyncCacheStore(logger, 0, "", nil)
@@ -138,11 +152,11 @@ func TestPeerSyncCacheStore_HandlePost_GzipCompressed(t *testing.T) {
 	compressed, err := gzipCompress(data)
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPost, syncCachePath, strings.NewReader(string(compressed)))
+	req := httptest.NewRequest(http.MethodPost, syncIncrementsPath, strings.NewReader(string(compressed)))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Content-Encoding", "gzip")
 	w := httptest.NewRecorder()
-	store.handleSyncCache(w, req)
+	store.handleIncrement(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -172,10 +186,11 @@ func TestPeerSyncCacheStore_Load_PullsFromPeerWhenLocalEmpty(t *testing.T) {
 
 	// Set up a peer that has cached data (simulates previous leader).
 	peer := newPeerSyncCacheStore(logger, 0, "", nil)
+	peer.SetLeader(true)
 	err := peer.Save(context.Background(), msg(testCacheWithData(t)))
 	require.NoError(t, err)
 
-	peerServer := httptest.NewServer(http.HandlerFunc(peer.handleSyncCache))
+	peerServer := httptest.NewServer(http.HandlerFunc(peer.handleSnapshot))
 	defer peerServer.Close()
 
 	_, peerPortInt := peerPort(t, peerServer.Listener.Addr().String())
@@ -195,7 +210,8 @@ func TestPeerSyncCacheStore_Load_ReturnsEmptyWhenAllPeersEmpty(t *testing.T) {
 
 	// Peer has no data — returns 204.
 	peer := newPeerSyncCacheStore(logger, 0, "", nil)
-	peerServer := httptest.NewServer(http.HandlerFunc(peer.handleSyncCache))
+	peer.SetLeader(true)
+	peerServer := httptest.NewServer(http.HandlerFunc(peer.handleSnapshot))
 	defer peerServer.Close()
 
 	_, peerPortInt := peerPort(t, peerServer.Listener.Addr().String())
@@ -217,10 +233,11 @@ func TestPeerSyncCacheStore_Load_PrefersLocalOverPull(t *testing.T) {
 	peerCache.CRDs["gadgets.example.com"] = peerCRD
 
 	peer := newPeerSyncCacheStore(logger, 0, "", nil)
+	peer.SetLeader(true)
 	err := peer.Save(context.Background(), msg(peerCache))
 	require.NoError(t, err)
 
-	peerServer := httptest.NewServer(http.HandlerFunc(peer.handleSyncCache))
+	peerServer := httptest.NewServer(http.HandlerFunc(peer.handleSnapshot))
 	defer peerServer.Close()
 
 	_, peerPortInt := peerPort(t, peerServer.Listener.Addr().String())
@@ -433,7 +450,7 @@ func TestPeerSyncCacheStore_PushToPeer_DataIntegrity(t *testing.T) {
 
 	// Use a real peer store as the receiver to verify end-to-end data flow.
 	receiver := newPeerSyncCacheStore(logger, 0, "", nil)
-	peerServer := httptest.NewServer(http.HandlerFunc(receiver.handleSyncCache))
+	peerServer := httptest.NewServer(http.HandlerFunc(receiver.handleIncrement))
 	defer peerServer.Close()
 
 	peerHost, peerPortInt := peerPort(t, peerServer.Listener.Addr().String())
@@ -506,25 +523,33 @@ func TestPeerSyncCacheStore_PullHandlesDNSFailure(t *testing.T) {
 	assert.Nil(t, data)
 }
 
-// --- GET handler serves data correctly ---
+// --- Snapshot endpoint serves data correctly ---
 
-func TestPeerSyncCacheStore_HandleGet_ServesGzippedData(t *testing.T) {
+func TestPeerSyncCacheStore_HandleSnapshot_ServesGzippedDataWithAppliedAtHeader(t *testing.T) {
 	t.Parallel()
 	logger := zaptest.NewLogger(t)
 	store := newPeerSyncCacheStore(logger, 0, "", nil)
+	store.SetLeader(true)
 
+	before := time.Now()
 	err := store.Save(context.Background(), msg(testCacheWithData(t)))
 	require.NoError(t, err)
+	after := time.Now()
 
-	req := httptest.NewRequest(http.MethodGet, syncCachePath, nil)
+	req := httptest.NewRequest(http.MethodGet, syncSnapshotPath, nil)
 	w := httptest.NewRecorder()
-	store.handleSyncCache(w, req)
+	store.handleSnapshot(w, req)
 
 	resp := w.Result()
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
+
+	appliedAt, err := time.Parse(time.RFC3339Nano, resp.Header.Get(snapshotAppliedAtHeader))
+	require.NoError(t, err, "X-Snapshot-AppliedAt header should be parseable")
+	assert.True(t, !appliedAt.Before(before) && !appliedAt.After(after),
+		"appliedAt %v should fall between save bounds %v–%v", appliedAt, before, after)
 
 	gr, err := gzip.NewReader(resp.Body)
 	require.NoError(t, err)

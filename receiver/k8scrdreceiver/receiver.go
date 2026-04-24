@@ -79,6 +79,9 @@ func (r *k8scrdReceiver) Start(ctx context.Context, host component.Host) error {
 		return r.startWithLeaderElection(ctx, host)
 	}
 
+	// Single-replica deploy: this instance is effectively always the leader, so it
+	// must serve snapshots to anyone who asks.
+	r.peerStore.SetLeader(true)
 	return r.startCollector(ctx)
 }
 
@@ -140,12 +143,14 @@ func (r *k8scrdReceiver) startWithLeaderElection(_ context.Context, host compone
 	elector.SetCallBackFuncs(
 		func(ctx context.Context) {
 			r.settings.Logger.Info("Became leader, starting CRD collection")
+			r.peerStore.SetLeader(true)
 			if err := r.startCollector(ctx); err != nil {
 				r.settings.Logger.Error("Failed to start collector after acquiring leadership", zap.Error(err))
 			}
 		},
 		func() {
 			r.settings.Logger.Info("Lost leadership, stopping CRD collection")
+			r.peerStore.SetLeader(false)
 			r.stopCollector(context.Background())
 		},
 	)

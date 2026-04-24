@@ -23,8 +23,20 @@ import (
 )
 
 const (
-	syncCachePath   = "/sync/cache"
+	// syncIncrementsPath is the leader→peer push endpoint. POST only. Carries the
+	// most recent cache update (today: full cache; Phase 4: per-cycle delta).
+	syncIncrementsPath = "/sync/increments"
+
+	// syncSnapshotPath is the bootstrap pull endpoint. GET only, served only by the
+	// current leader (peer caches can be stale).
+	syncSnapshotPath = "/sync/snapshot"
+
 	defaultPeerPort = 4319
+
+	// snapshotAppliedAtHeader carries the leader's wall-clock time at the moment the
+	// snapshot was taken. Secondaries use this to discard buffered deltas with a
+	// timestamp older than the snapshot.
+	snapshotAppliedAtHeader = "X-Snapshot-AppliedAt"
 
 	pushMaxRetries    = 3
 	pushRetryBaseWait = 100 * time.Millisecond
@@ -53,6 +65,11 @@ type peerSyncCacheStore struct {
 
 	mu              sync.RWMutex
 	syncedCacheData []byte
+	lastSavedAt     time.Time
+
+	// isLeader gates the snapshot endpoint: only the current leader serves snapshots
+	// (peer caches can be stale). Set via SetLeader from the leader-election callbacks.
+	isLeader atomic.Bool
 
 	// consecutiveBroadcastFailures tracks how many broadcasts in a row failed to reach any peer.
 	// Reset to zero on the first successful broadcast.
@@ -60,6 +77,13 @@ type peerSyncCacheStore struct {
 
 	server *http.Server
 	wg     sync.WaitGroup
+}
+
+// SetLeader records whether this replica is the current leader. The snapshot endpoint
+// only serves data when this is true; non-leaders return 503 to redirect callers
+// to whichever peer holds the lease.
+func (p *peerSyncCacheStore) SetLeader(leader bool) {
+	p.isLeader.Store(leader)
 }
 
 var _ PeerStore = (*peerSyncCacheStore)(nil)
@@ -79,7 +103,8 @@ func newPeerSyncCacheStore(logger *zap.Logger, syncPort int, peerDNS string, rec
 // Start launches the HTTP server. Must be called before Load/Save and regardless of leadership.
 func (p *peerSyncCacheStore) Start(_ context.Context) error {
 	mux := http.NewServeMux()
-	mux.HandleFunc(syncCachePath, p.handleSyncCache)
+	mux.HandleFunc(syncIncrementsPath, p.handleIncrement)
+	mux.HandleFunc(syncSnapshotPath, p.handleSnapshot)
 
 	p.server = &http.Server{
 		Addr:              fmt.Sprintf("0.0.0.0:%d", p.syncPort),
@@ -154,6 +179,7 @@ func (p *peerSyncCacheStore) Save(ctx context.Context, state *PeerSyncMessage) e
 
 	p.mu.Lock()
 	p.syncedCacheData = data
+	p.lastSavedAt = time.Now()
 	p.mu.Unlock()
 
 	p.logger.Debug("Cache saved locally",
@@ -170,21 +196,33 @@ func (p *peerSyncCacheStore) Save(ctx context.Context, state *PeerSyncMessage) e
 
 // --- HTTP handler ---
 
-// handleSyncCache routes GET (pull) and POST (push) requests.
-func (p *peerSyncCacheStore) handleSyncCache(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		p.handleGet(w)
-	case http.MethodPost:
-		p.handlePost(w, r)
-	default:
+// handleIncrement accepts a leader push of cache updates. POST only.
+func (p *peerSyncCacheStore) handleIncrement(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
 	}
+	p.handlePost(w, r)
 }
 
-func (p *peerSyncCacheStore) handleGet(w http.ResponseWriter) {
+// handleSnapshot serves the leader's cache to a peer that's bootstrapping. Non-leader
+// replicas return 503 — peer caches can be stale (their last delta may have been missed)
+// so only the lease-holder is authoritative.
+func (p *peerSyncCacheStore) handleSnapshot(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !p.isLeader.Load() {
+		w.Header().Set("Retry-After", "1")
+		http.Error(w, "not leader", http.StatusServiceUnavailable)
+		return
+	}
+
 	p.mu.RLock()
 	data := p.syncedCacheData
+	appliedAt := p.lastSavedAt
 	p.mu.RUnlock()
 
 	if len(data) == 0 {
@@ -194,6 +232,7 @@ func (p *peerSyncCacheStore) handleGet(w http.ResponseWriter) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Encoding", "gzip")
+	w.Header().Set(snapshotAppliedAtHeader, appliedAt.UTC().Format(time.RFC3339Nano))
 
 	gz := gzip.NewWriter(w)
 	defer func() {
@@ -203,7 +242,7 @@ func (p *peerSyncCacheStore) handleGet(w http.ResponseWriter) {
 	}()
 
 	if _, err := gz.Write(data); err != nil {
-		p.logger.Debug("Failed to write gzip response", zap.Error(err))
+		p.logger.Debug("Failed to write snapshot response", zap.Error(err))
 	}
 }
 
@@ -371,7 +410,7 @@ func (p *peerSyncCacheStore) recordBroadcastFailure(reason metrics.BroadcastFail
 // Returns true if any attempt received a 200 OK. Records per-attempt outcomes,
 // total push duration, and payload size as metrics for ops visibility.
 func (p *peerSyncCacheStore) pushToPeer(ctx context.Context, client *http.Client, ip string, compressed []byte) bool {
-	url := fmt.Sprintf("http://%s:%d%s", ip, p.syncPort, syncCachePath)
+	url := fmt.Sprintf("http://%s:%d%s", ip, p.syncPort, syncIncrementsPath)
 
 	start := time.Now()
 	defer func() {
@@ -496,9 +535,10 @@ func (p *peerSyncCacheStore) pullFromPeers(ctx context.Context, timeout time.Dur
 	return nil
 }
 
-// fetchPeerCache fetches the cache from a single peer via GET. Returns nil for 204.
+// fetchPeerCache pulls the snapshot from a single peer. Returns nil for 204 (peer
+// has no data) or 503 (peer is not the leader and won't serve a snapshot).
 func (p *peerSyncCacheStore) fetchPeerCache(ctx context.Context, client *http.Client, ip string) ([]byte, error) {
-	url := fmt.Sprintf("http://%s:%d%s", ip, p.syncPort, syncCachePath)
+	url := fmt.Sprintf("http://%s:%d%s", ip, p.syncPort, syncSnapshotPath)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -515,11 +555,12 @@ func (p *peerSyncCacheStore) fetchPeerCache(ctx context.Context, client *http.Cl
 		}
 	}()
 
-	if resp.StatusCode == http.StatusNoContent {
+	switch resp.StatusCode {
+	case http.StatusNoContent, http.StatusServiceUnavailable:
 		return nil, nil
-	}
-
-	if resp.StatusCode != http.StatusOK {
+	case http.StatusOK:
+		// fall through
+	default:
 		return nil, fmt.Errorf("GET %s: status %d", url, resp.StatusCode)
 	}
 
