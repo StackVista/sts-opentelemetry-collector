@@ -337,13 +337,92 @@ func TestPeerSyncCacheStore_PushConcurrently_Parallel(t *testing.T) {
 	client := &http.Client{Timeout: pushPeerTimeout}
 
 	start := time.Now()
-	succeeded := store.pushConcurrently(context.Background(), client, peers, compressed)
+	// ackThreshold=0 → wait for all; ackWaitTimeout=0 → no timeout.
+	acked, timedOut := store.pushConcurrently(context.Background(), client, peers, compressed, 0, 0)
 	elapsed := time.Since(start)
 
-	assert.Equal(t, numPeers, succeeded, "all peers should succeed")
+	assert.Equal(t, numPeers, acked, "all peers should succeed")
+	assert.False(t, timedOut)
 	// Sequential would take ≥ numPeers*perPeerDelay; allow 2× perPeerDelay for scheduler jitter.
 	assert.Less(t, elapsed, 2*perPeerDelay,
 		"pushes should run concurrently; sequential would take ≥%v, got %v", numPeers*perPeerDelay, elapsed)
+}
+
+func TestPeerSyncCacheStore_PushConcurrently_EarlyReturnOnAckThreshold(t *testing.T) {
+	t.Parallel()
+	logger := zaptest.NewLogger(t)
+
+	const (
+		numPeers     = 4
+		perPeerDelay = 1 * time.Second
+		ackThreshold = 1
+	)
+
+	peerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(perPeerDelay)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer peerServer.Close()
+
+	peerHost, peerPortInt := peerPort(t, peerServer.Listener.Addr().String())
+	store := newPeerSyncCacheStore(logger, peerPortInt, "", nil)
+
+	peers := make([]string, numPeers)
+	for i := range peers {
+		peers[i] = peerHost
+	}
+
+	compressed, err := gzipCompress(cacheBytes(t, testCacheWithData(t)))
+	require.NoError(t, err)
+	client := &http.Client{Timeout: pushPeerTimeout}
+
+	start := time.Now()
+	acked, timedOut := store.pushConcurrently(context.Background(), client, peers, compressed, ackThreshold, 0)
+	elapsed := time.Since(start)
+
+	assert.GreaterOrEqual(t, acked, ackThreshold, "should return as soon as threshold is met")
+	assert.False(t, timedOut)
+	// First peer responds at ~perPeerDelay; we shouldn't wait for the rest (would be ~4×).
+	assert.Less(t, elapsed, perPeerDelay+500*time.Millisecond,
+		"should return shortly after first ACK, got %v", elapsed)
+}
+
+func TestPeerSyncCacheStore_PushConcurrently_TimeoutWhenNoAck(t *testing.T) {
+	t.Parallel()
+	logger := zaptest.NewLogger(t)
+
+	const (
+		numPeers       = 2
+		perPeerDelay   = 5 * time.Second
+		ackWaitTimeout = 100 * time.Millisecond
+	)
+
+	peerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(perPeerDelay)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer peerServer.Close()
+
+	peerHost, peerPortInt := peerPort(t, peerServer.Listener.Addr().String())
+	store := newPeerSyncCacheStore(logger, peerPortInt, "", nil)
+
+	peers := make([]string, numPeers)
+	for i := range peers {
+		peers[i] = peerHost
+	}
+
+	compressed, err := gzipCompress(cacheBytes(t, testCacheWithData(t)))
+	require.NoError(t, err)
+	client := &http.Client{Timeout: pushPeerTimeout}
+
+	start := time.Now()
+	acked, timedOut := store.pushConcurrently(context.Background(), client, peers, compressed, 1, ackWaitTimeout)
+	elapsed := time.Since(start)
+
+	assert.Equal(t, 0, acked, "no peer should ACK within the wait timeout")
+	assert.True(t, timedOut)
+	assert.Less(t, elapsed, ackWaitTimeout+200*time.Millisecond,
+		"should return shortly after wait timeout, got %v", elapsed)
 }
 
 // --- Push data integrity ---

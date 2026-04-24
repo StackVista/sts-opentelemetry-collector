@@ -43,6 +43,17 @@ const (
 	BroadcastFailed  BroadcastOutcome = "failed"
 )
 
+// BroadcastFailureReason categorizes why a broadcast did not satisfy its ACK threshold.
+type BroadcastFailureReason string
+
+const (
+	BroadcastFailureNone        BroadcastFailureReason = ""
+	BroadcastFailureDNSLookup   BroadcastFailureReason = "dns_lookup"
+	BroadcastFailureGzip        BroadcastFailureReason = "gzip"
+	BroadcastFailureAckTimeout  BroadcastFailureReason = "ack_timeout"
+	BroadcastFailureNoAcks      BroadcastFailureReason = "no_acks"
+)
+
 // PushOutcome is the result of a single push attempt to a peer.
 type PushOutcome string
 
@@ -67,7 +78,7 @@ type Recorder interface {
 	RecordEmitted(ctx context.Context, change ChangeType, n int64)
 	RecordCycle(ctx context.Context, mode CycleMode, d time.Duration)
 	RecordCacheSize(ctx context.Context, kind ResourceKind, n int64)
-	RecordPeerBroadcast(ctx context.Context, outcome BroadcastOutcome)
+	RecordPeerBroadcast(ctx context.Context, outcome BroadcastOutcome, reason BroadcastFailureReason)
 	RecordPeerPushAttempt(ctx context.Context, outcome PushOutcome, reason PushFailureReason)
 	RecordPeerPushBytes(ctx context.Context, n int64)
 	RecordPeerPushDuration(ctx context.Context, d time.Duration)
@@ -79,7 +90,8 @@ type NoopRecorder struct{}
 func (NoopRecorder) RecordEmitted(_ context.Context, _ ChangeType, _ int64)      {}
 func (NoopRecorder) RecordCycle(_ context.Context, _ CycleMode, _ time.Duration) {}
 func (NoopRecorder) RecordCacheSize(_ context.Context, _ ResourceKind, _ int64)  {}
-func (NoopRecorder) RecordPeerBroadcast(_ context.Context, _ BroadcastOutcome)   {}
+func (NoopRecorder) RecordPeerBroadcast(_ context.Context, _ BroadcastOutcome, _ BroadcastFailureReason) {
+}
 func (NoopRecorder) RecordPeerPushAttempt(_ context.Context, _ PushOutcome, _ PushFailureReason) {
 }
 func (NoopRecorder) RecordPeerPushBytes(_ context.Context, _ int64)           {}
@@ -175,10 +187,12 @@ func (m *Metrics) RecordCacheSize(ctx context.Context, kind ResourceKind, n int6
 	))
 }
 
-func (m *Metrics) RecordPeerBroadcast(ctx context.Context, outcome BroadcastOutcome) {
-	m.peerBroadcasts.Add(ctx, 1, metric.WithAttributeSet(
-		m.attrs(attribute.String("outcome", string(outcome))),
-	))
+func (m *Metrics) RecordPeerBroadcast(ctx context.Context, outcome BroadcastOutcome, reason BroadcastFailureReason) {
+	attrs := []attribute.KeyValue{attribute.String("outcome", string(outcome))}
+	if reason != BroadcastFailureNone {
+		attrs = append(attrs, attribute.String("reason", string(reason)))
+	}
+	m.peerBroadcasts.Add(ctx, 1, metric.WithAttributeSet(m.attrs(attrs...)))
 }
 
 func (m *Metrics) RecordPeerPushAttempt(ctx context.Context, outcome PushOutcome, reason PushFailureReason) {

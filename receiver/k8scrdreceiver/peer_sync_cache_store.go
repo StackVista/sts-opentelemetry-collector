@@ -30,6 +30,11 @@ const (
 	pushRetryBaseWait = 100 * time.Millisecond
 	pushPeerTimeout   = 2 * time.Second
 
+	// broadcastAckTimeout caps how long Save() blocks waiting for ACKs from all peers.
+	// On timeout the broadcast is recorded as failed but Save still returns
+	// (best-effort emission so the platform keeps receiving updates).
+	broadcastAckTimeout = 500 * time.Millisecond
+
 	// broadcastFailureErrorThreshold is the number of consecutive failed broadcasts
 	// before escalating the log level to Warn so operators notice peer sync is broken.
 	broadcastFailureErrorThreshold = 5
@@ -256,7 +261,7 @@ func (p *peerSyncCacheStore) broadcastToPeers(ctx context.Context, data []byte) 
 			zap.String("dns", p.peerDNS),
 			zap.Error(err),
 		)
-		p.recordBroadcastFailure("dns lookup failed")
+		p.recordBroadcastFailure(metrics.BroadcastFailureDNSLookup)
 		return
 	}
 
@@ -277,49 +282,68 @@ func (p *peerSyncCacheStore) broadcastToPeers(ctx context.Context, data []byte) 
 	compressed, err := gzipCompress(data)
 	if err != nil {
 		p.logger.Warn("Failed to gzip cache data for broadcast", zap.Error(err))
-		p.recordBroadcastFailure("gzip failed")
+		p.recordBroadcastFailure(metrics.BroadcastFailureGzip)
 		return
 	}
 
 	client := &http.Client{Timeout: pushPeerTimeout}
-	succeeded := p.pushConcurrently(ctx, client, peers, compressed)
+	acked, timedOut := p.pushConcurrently(ctx, client, peers, compressed, len(peers), broadcastAckTimeout)
 
-	if succeeded > 0 {
+	switch {
+	case acked == len(peers):
 		p.recordBroadcastSuccess()
-	} else {
-		p.recordBroadcastFailure("all peers unreachable")
+	case timedOut:
+		p.recordBroadcastFailure(metrics.BroadcastFailureAckTimeout)
+	default:
+		p.recordBroadcastFailure(metrics.BroadcastFailureNoAcks)
 	}
 }
 
-// pushConcurrently pushes to all peers in parallel; total wall-clock is max(per-peer)
-// Returns the number of peers that ACKed.
-func (p *peerSyncCacheStore) pushConcurrently(ctx context.Context, client *http.Client, peers []string, compressed []byte) int {
+// pushConcurrently pushes to all peers in concurrently and returns once `ackThreshold` peers
+// have ACKed or `ackWaitTimeout` elapses, whichever comes first. In-flight pushes to the
+// remaining peers continue running in the background; their results but per-attempt metrics are still recorded
+// inside pushToPeer.
+//
+// `ackThreshold <= 0` waits for all peers. `ackWaitTimeout <= 0` waits without timeout.
+func (p *peerSyncCacheStore) pushConcurrently(
+	ctx context.Context,
+	client *http.Client,
+	peers []string,
+	compressed []byte,
+	ackThreshold int,
+	ackWaitTimeout time.Duration,
+) (acked int, timedOut bool) {
 	results := make(chan bool, len(peers))
-	var wg sync.WaitGroup
 	for _, ip := range peers {
-		wg.Add(1)
 		go func(peerIP string) {
-			defer wg.Done()
 			results <- p.pushToPeer(ctx, client, peerIP, compressed)
 		}(ip)
 	}
-	wg.Wait()
-	close(results)
 
-	var succeeded int
-	for ok := range results {
-		if ok {
-			succeeded++
+	var deadline <-chan time.Time
+	if ackWaitTimeout > 0 {
+		deadline = time.After(ackWaitTimeout)
+	}
+
+	for range len(peers) {
+		select {
+		case ok := <-results:
+			if ok {
+				acked++
+				if ackThreshold > 0 && acked == ackThreshold {
+					return acked, false
+				}
+			}
+		case <-deadline:
+			return acked, true
 		}
 	}
-	return succeeded
+	return acked, false
 }
 
-// recordBroadcastSuccess resets the consecutive failure counter and emits a success metric.
-// Logs an Info recovery message if the previous run had crossed the failure threshold.
 func (p *peerSyncCacheStore) recordBroadcastSuccess() {
 	prev := p.consecutiveBroadcastFailures.Swap(0)
-	p.metrics.RecordPeerBroadcast(context.Background(), metrics.BroadcastSuccess)
+	p.metrics.RecordPeerBroadcast(context.Background(), metrics.BroadcastSuccess, metrics.BroadcastFailureNone)
 	if prev >= broadcastFailureErrorThreshold {
 		p.logger.Info("Peer broadcast recovered after consecutive failures",
 			zap.Int32("previous_failures", prev),
@@ -327,16 +351,16 @@ func (p *peerSyncCacheStore) recordBroadcastSuccess() {
 	}
 }
 
-// recordBroadcastFailure increments the consecutive failure counter and emits a failure metric.
-// Logs once at Error level when the threshold is first crossed; further occurrences are
+// recordBroadcastFailure increments the consecutive failure counter and emits a failure
+// metric. Logs once at Error when the threshold is crossed; further occurrences are
 // surfaced via the peer_broadcasts_total metric to avoid log spam from a chronically
 // misconfigured peer DNS.
-func (p *peerSyncCacheStore) recordBroadcastFailure(reason string) {
+func (p *peerSyncCacheStore) recordBroadcastFailure(reason metrics.BroadcastFailureReason) {
 	n := p.consecutiveBroadcastFailures.Add(1)
-	p.metrics.RecordPeerBroadcast(context.Background(), metrics.BroadcastFailed)
+	p.metrics.RecordPeerBroadcast(context.Background(), metrics.BroadcastFailed, reason)
 	if n == broadcastFailureErrorThreshold {
 		p.logger.Error("Peer broadcast failing repeatedly — check peer DNS and network reachability",
-			zap.String("reason", reason),
+			zap.String("reason", string(reason)),
 			zap.String("peer_dns", p.peerDNS),
 			zap.Int32("consecutive_failures", n),
 		)
