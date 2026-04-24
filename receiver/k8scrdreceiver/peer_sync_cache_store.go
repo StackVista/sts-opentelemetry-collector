@@ -282,19 +282,37 @@ func (p *peerSyncCacheStore) broadcastToPeers(ctx context.Context, data []byte) 
 	}
 
 	client := &http.Client{Timeout: pushPeerTimeout}
-
-	var succeeded int
-	for _, ip := range peers {
-		if p.pushToPeer(ctx, client, ip, compressed) {
-			succeeded++
-		}
-	}
+	succeeded := p.pushConcurrently(ctx, client, peers, compressed)
 
 	if succeeded > 0 {
 		p.recordBroadcastSuccess()
 	} else {
 		p.recordBroadcastFailure("all peers unreachable")
 	}
+}
+
+// pushConcurrently pushes to all peers in parallel; total wall-clock is max(per-peer)
+// Returns the number of peers that ACKed.
+func (p *peerSyncCacheStore) pushConcurrently(ctx context.Context, client *http.Client, peers []string, compressed []byte) int {
+	results := make(chan bool, len(peers))
+	var wg sync.WaitGroup
+	for _, ip := range peers {
+		wg.Add(1)
+		go func(peerIP string) {
+			defer wg.Done()
+			results <- p.pushToPeer(ctx, client, peerIP, compressed)
+		}(ip)
+	}
+	wg.Wait()
+	close(results)
+
+	var succeeded int
+	for ok := range results {
+		if ok {
+			succeeded++
+		}
+	}
+	return succeeded
 }
 
 // recordBroadcastSuccess resets the consecutive failure counter and emits a success metric.

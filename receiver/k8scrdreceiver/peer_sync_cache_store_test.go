@@ -307,6 +307,45 @@ func TestPeerSyncCacheStore_BroadcastHandlesDNSFailure(t *testing.T) {
 	store.broadcastToPeers(context.Background(), data)
 }
 
+// --- Concurrent push ---
+
+func TestPeerSyncCacheStore_PushConcurrently_Parallel(t *testing.T) {
+	t.Parallel()
+	logger := zaptest.NewLogger(t)
+
+	const (
+		numPeers     = 4
+		perPeerDelay = 200 * time.Millisecond
+	)
+
+	peerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(perPeerDelay)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer peerServer.Close()
+
+	peerHost, peerPortInt := peerPort(t, peerServer.Listener.Addr().String())
+	store := newPeerSyncCacheStore(logger, peerPortInt, "", nil)
+
+	peers := make([]string, numPeers)
+	for i := range peers {
+		peers[i] = peerHost
+	}
+
+	compressed, err := gzipCompress(cacheBytes(t, testCacheWithData(t)))
+	require.NoError(t, err)
+	client := &http.Client{Timeout: pushPeerTimeout}
+
+	start := time.Now()
+	succeeded := store.pushConcurrently(context.Background(), client, peers, compressed)
+	elapsed := time.Since(start)
+
+	assert.Equal(t, numPeers, succeeded, "all peers should succeed")
+	// Sequential would take ≥ numPeers*perPeerDelay; allow 2× perPeerDelay for scheduler jitter.
+	assert.Less(t, elapsed, 2*perPeerDelay,
+		"pushes should run concurrently; sequential would take ≥%v, got %v", numPeers*perPeerDelay, elapsed)
+}
+
 // --- Push data integrity ---
 
 func TestPeerSyncCacheStore_PushToPeer_DataIntegrity(t *testing.T) {
