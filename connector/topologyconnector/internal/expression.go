@@ -151,9 +151,7 @@ func (ec *ExpressionEvalContext) CloneWithVariables(vars map[string]any) *Expres
 }
 
 func NewCELEvaluator(ctx context.Context, cacheSettings metrics.MeteredCacheSettings) (*CelEvaluator, error) {
-	customFuncs := celCustomFunctions()
-	envOpts := make([]cel.EnvOption, 0, 10+len(customFuncs))
-	envOpts = append(envOpts,
+	envOpts := append([]cel.EnvOption{
 		cel.Variable("span", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("log", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("datapoint", cel.MapType(cel.StringType, cel.DynType)),
@@ -161,7 +159,6 @@ func NewCELEvaluator(ctx context.Context, cacheSettings metrics.MeteredCacheSett
 		cel.Variable("scope", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("resource", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("vars", cel.MapType(cel.StringType, cel.DynType)),
-		cel.Variable("test_int", cel.IntType),
 		// NOTE: The OptionalTypes library enables type conversion of values accessed via bracket notation map indexing.
 		// When accessing map values with brackets (e.g., span.attributes["key"]), the returned value has type 'dyn'.
 		// Without OptionalTypes, string() conversion fails:
@@ -170,8 +167,7 @@ func NewCELEvaluator(ctx context.Context, cacheSettings metrics.MeteredCacheSett
 		// Note: Dot notation (span.attributes.key) works without OptionalTypes, but bracket notation requires it.
 		cel.OptionalTypes(),
 		ext.Strings(), // enables string manipulation functions (matches, startsWith, endsWith, etc.)
-	)
-	envOpts = append(envOpts, customFuncs...)
+	}, celCustomFunctions()...)
 	env, err := cel.NewEnv(envOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CEL environment: %w", err)
