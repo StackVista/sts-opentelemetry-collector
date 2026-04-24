@@ -1,13 +1,16 @@
 package k8scrdreceiver
 
-// Consistency model: eventually consistent. The leader pushes cache updates to all
-// replicas with retries but does not block on ACKs. Replicas that miss pushes (e.g.,
-// due to restarts) pull the latest cache from peers on leadership acquisition.
+// Consistency model: the leader broadcasts per-cycle deltas to all replicas
+// concurrently and waits up to broadcastAckTimeout for every peer to ACK before
+// proceeding (best-effort fallback on timeout). Newly started replicas Bootstrap
+// from the current leader to obtain a baseline cache; deltas that arrive during
+// Bootstrap are buffered and drained on completion.
 
 import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -19,16 +22,19 @@ import (
 	"time"
 
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/metrics"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/types"
 	"go.uber.org/zap"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 const (
-	// syncIncrementsPath is the leader→peer push endpoint. POST only. Carries the
-	// most recent cache update (today: full cache; Phase 4: per-cycle delta).
+	// syncIncrementsPath is the leader -> peer push endpoint. POST only. Carries a
+	// PeerSyncDelta with the per-cycle changes.
 	syncIncrementsPath = "/sync/increments"
 
 	// syncSnapshotPath is the bootstrap pull endpoint. GET only, served only by the
-	// current leader (peer caches can be stale).
+	// current leader.
 	syncSnapshotPath = "/sync/snapshot"
 
 	defaultPeerPort = 4319
@@ -42,34 +48,56 @@ const (
 	pushRetryBaseWait = 100 * time.Millisecond
 	pushPeerTimeout   = 2 * time.Second
 
-	// broadcastAckTimeout caps how long Save() blocks waiting for ACKs from all peers.
-	// On timeout the broadcast is recorded as failed but Save still returns
+	// broadcastAckTimeout caps how long ApplyDelta blocks waiting for every peer to
+	// ACK. On timeout the broadcast is recorded as failed but ApplyDelta still returns
 	// (best-effort emission so the platform keeps receiving updates).
 	broadcastAckTimeout = 500 * time.Millisecond
 
 	// broadcastFailureErrorThreshold is the number of consecutive failed broadcasts
 	// before escalating the log level to Warn so operators notice peer sync is broken.
 	broadcastFailureErrorThreshold = 5
+
+	// Bootstrap pull retry parameters. The pull is retried with exponential backoff
+	// until the leader becomes reachable or the overall deadline passes. On timeout
+	// we fall back to cold-start behaviour (empty cache + drain whatever buffered).
+	bootstrapPullTimeout = 3 * time.Second
+	bootstrapBaseBackoff = 200 * time.Millisecond
+	bootstrapMaxBackoff  = 5 * time.Second
+	bootstrapMaxDuration = 30 * time.Second
+
+	// deltaBufferMaxSize caps how many incoming deltas are queued while Bootstrap
+	// is in progress. With a 10s increment interval and at most 2 deltas per cycle
+	// (the two-phase split), a 30s bootstrap window only produces ~6 deltas; 50
+	// leaves generous headroom for split-brain leader writes during failover.
+	deltaBufferMaxSize = 50
 )
 
-// peerSyncCacheStore implements PeerStore with push-primary, pull-failsafe peer sync.
-//
-// Save() marshals the cache, stores it locally, and broadcasts to all peer replicas
-// via POST. Load() returns the locally stored cache, falling back to a one-shot GET
-// pull from peers if no data has been received yet.
+// peerSyncCacheStore is the live owner of the synchronised resource cache plus the
+// HTTP transport for peer sync. The leader applies changes locally and broadcasts a
+// PeerSyncDelta to peers; secondaries apply received deltas to their copy.
 type peerSyncCacheStore struct {
 	logger   *zap.Logger
 	syncPort int
 	peerDNS  string
 	metrics  metrics.Recorder
 
-	mu              sync.RWMutex
-	syncedCacheData []byte
-	lastSavedAt     time.Time
+	// cacheMu guards cache and lastSnapshotTime.
+	cacheMu          sync.RWMutex
+	cache            *resourceCache
+	lastSnapshotTime time.Time
 
 	// isLeader gates the snapshot endpoint: only the current leader serves snapshots
 	// (peer caches can be stale). Set via SetLeader from the leader-election callbacks.
 	isLeader atomic.Bool
+
+	// bufferMu serialises access to ready and deltaBuffer. Held by handleIncrement
+	// across "check ready + apply OR buffer" and by Bootstrap when flipping ready,
+	// so the transition can't race with an in-flight delta application. Initial
+	// value of ready is true: until Bootstrap explicitly enters its window, deltas
+	// apply directly.
+	bufferMu    sync.Mutex
+	ready       bool
+	deltaBuffer []*PeerSyncDelta
 
 	// consecutiveBroadcastFailures tracks how many broadcasts in a row failed to reach any peer.
 	// Reset to zero on the first successful broadcast.
@@ -79,9 +107,7 @@ type peerSyncCacheStore struct {
 	wg     sync.WaitGroup
 }
 
-// SetLeader records whether this replica is the current leader. The snapshot endpoint
-// only serves data when this is true; non-leaders return 503 to redirect callers
-// to whichever peer holds the lease.
+// SetLeader records whether this replica is the current leader.
 func (p *peerSyncCacheStore) SetLeader(leader bool) {
 	p.isLeader.Store(leader)
 }
@@ -97,10 +123,14 @@ func newPeerSyncCacheStore(logger *zap.Logger, syncPort int, peerDNS string, rec
 		syncPort: syncPort,
 		peerDNS:  peerDNS,
 		metrics:  rec,
+		cache:    newResourceCache(),
+		ready:    true,
 	}
 }
 
-// Start launches the HTTP server. Must be called before Load/Save and regardless of leadership.
+// Start launches the HTTP server. Must be called before any other method and
+// regardless of leadership — secondaries also need the listener up so the leader
+// can push deltas to them.
 func (p *peerSyncCacheStore) Start(_ context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc(syncIncrementsPath, p.handleIncrement)
@@ -148,50 +178,193 @@ func (p *peerSyncCacheStore) Stop() {
 
 // --- PeerStore interface ---
 
-// Load returns the locally synced state. If empty, attempts a one-shot pull from peers.
-func (p *peerSyncCacheStore) Load(ctx context.Context) (*PeerSyncMessage, error) {
-	p.mu.RLock()
-	data := p.syncedCacheData
-	p.mu.RUnlock()
-
-	if len(data) > 0 {
-		return p.unmarshalAndLog(data, "peer sync")
+// Bootstrap pulls a snapshot from the leader and applies it to the local cache.
+// Retries with exponential backoff until either a snapshot is obtained or the
+// overall deadline (bootstrapMaxDuration) passes — in which case we fall back
+// to cold start with whatever was buffered.
+//
+// While Bootstrap runs, ready is false: incoming deltas (via handleIncrement) go
+// into deltaBuffer. On exit, the buffer is drained — applying only deltas with
+// AppliedAt at or after the snapshot's reference time — and ready flips back to
+// true. Subsequent deltas apply directly.
+func (p *peerSyncCacheStore) Bootstrap(ctx context.Context) error {
+	if !p.cache.isEmpty() {
+		// Already populated (e.g., a previous Bootstrap or local leader writes).
+		return nil
 	}
 
-	p.logger.Info("No synced cache data, attempting pull from peers")
-	if data := p.pullFromPeers(ctx, 3*time.Second); len(data) > 0 {
-		p.mu.Lock()
-		p.syncedCacheData = data
-		p.mu.Unlock()
-		return p.unmarshalAndLog(data, "peer pull")
-	}
+	// Mark not-ready so concurrent handleIncrement calls buffer.
+	p.bufferMu.Lock()
+	p.ready = false
+	p.bufferMu.Unlock()
 
-	p.logger.Info("No peers with cache data available, starting fresh")
-	return &PeerSyncMessage{Cache: newResourceCache()}, nil
+	p.logger.Info("Bootstrapping peer cache from leader")
+	snap, outcome := p.pullSnapshotWithRetry(ctx)
+	p.metrics.RecordBootstrap(ctx, outcome)
+	switch outcome {
+	case types.BootstrapApplied:
+		// Successful pull; snap is non-nil and will populate the cache below.
+	case types.BootstrapLeaderEmpty:
+		p.logger.Info("Leader has no data, starting fresh")
+	case types.BootstrapTimedOut:
+		// Cache stays empty; resources existing before this replica started won't
+		// appear on the platform until the next snapshot cycle.
+		p.logger.Warn("Bootstrap timed out, secondary cache may be incomplete until next snapshot",
+			zap.Duration("max_duration", bootstrapMaxDuration),
+		)
+	}
+	p.completeBootstrap(snap)
+	return nil
 }
 
-// Save marshals the state, stores it locally, and broadcasts to all peers via POST.
-func (p *peerSyncCacheStore) Save(ctx context.Context, state *PeerSyncMessage) error {
-	data, err := marshalPeerSyncMessage(state)
-	if err != nil {
-		return fmt.Errorf("marshal peer sync state: %w", err)
+// pullSnapshotWithRetry attempts to fetch a snapshot until success, the deadline
+// passes, or a peer authoritatively says it has no data. Returns (snapshot, outcome):
+// the outcome distinguishes "leader had data" from "leader empty" from "timed out"
+// so the caller can pick the right log level and metric.
+func (p *peerSyncCacheStore) pullSnapshotWithRetry(ctx context.Context) (*PeerSyncSnapshot, types.BootstrapOutcome) {
+	deadline := time.Now().Add(bootstrapMaxDuration)
+	backoff := bootstrapBaseBackoff
+
+	for {
+		snap, leaderEmpty := p.pullSnapshotFromPeers(ctx, bootstrapPullTimeout)
+		if snap != nil {
+			return snap, types.BootstrapApplied
+		}
+		if leaderEmpty {
+			return nil, types.BootstrapLeaderEmpty
+		}
+
+		if time.Now().After(deadline) {
+			return nil, types.BootstrapTimedOut
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, types.BootstrapTimedOut
+		case <-time.After(backoff):
+		}
+		backoff = min(backoff*2, bootstrapMaxBackoff)
+	}
+}
+
+// completeBootstrap applies the (optional) snapshot, drains the buffered deltas
+// (filtering out any that predate the snapshot), and flips ready=true. Holds both
+// locks for the duration so the transition is atomic w.r.t. handleIncrement.
+func (p *peerSyncCacheStore) completeBootstrap(snapshot *PeerSyncSnapshot) {
+	p.bufferMu.Lock()
+	defer p.bufferMu.Unlock()
+
+	p.cacheMu.Lock()
+	if snapshot != nil {
+		p.cache = snapshot.Cache
+		p.lastSnapshotTime = snapshot.LastSnapshotTime
+		p.logger.Info("Applied bootstrap snapshot",
+			zap.Int("crds", len(snapshot.Cache.CRDs)),
+			zap.Int("crs", len(snapshot.Cache.CRs)),
+			zap.Time("last_snapshot_time", snapshot.LastSnapshotTime),
+		)
 	}
 
-	p.mu.Lock()
-	p.syncedCacheData = data
-	p.lastSavedAt = time.Now()
-	p.mu.Unlock()
+	snapshotTime := p.lastSnapshotTime
+	var applied, skipped int
+	for _, delta := range p.deltaBuffer {
+		if delta.AppliedAt.Before(snapshotTime) {
+			skipped++
+			continue
+		}
+		p.cache.applyDelta(delta.Changes)
+		if !delta.LastSnapshotTime.IsZero() {
+			p.lastSnapshotTime = delta.LastSnapshotTime
+		}
+		applied++
+	}
+	bufferedCount := len(p.deltaBuffer)
+	p.deltaBuffer = nil
+	p.cacheMu.Unlock()
 
-	p.logger.Debug("Cache saved locally",
-		zap.Int("bytes", len(data)),
-		zap.Int("crds", len(state.Cache.CRDs)),
-		zap.Int("crs", len(state.Cache.CRs)),
-		zap.Time("last_snapshot_time", state.LastSnapshotTime),
+	p.ready = true
+
+	if bufferedCount > 0 {
+		p.logger.Info("Drained delta buffer after Bootstrap",
+			zap.Int("buffered", bufferedCount),
+			zap.Int("applied", applied),
+			zap.Int("skipped_predates_snapshot", skipped),
+		)
+	}
+}
+
+// ComputeChanges returns the delta between the cache and current informer state.
+func (p *peerSyncCacheStore) ComputeChanges(
+	currentCRDs []*unstructured.Unstructured,
+	currentCRs map[schema.GroupVersionResource][]*unstructured.Unstructured,
+) []ResourceChange {
+	p.cacheMu.RLock()
+	defer p.cacheMu.RUnlock()
+	return p.cache.computeChanges(currentCRDs, currentCRs)
+}
+
+// ApplyDelta applies the delta to the cache and broadcasts to peers.
+//
+// LastSnapshotTime semantics: only updated when the caller passes a non-zero value
+// (snapshot cycles set it; increment cycles leave it zero). Either way, the broadcast
+// payload is filled with the store's current value so peers always receive a coherent
+// snapshot timestamp.
+func (p *peerSyncCacheStore) ApplyDelta(ctx context.Context, delta *PeerSyncDelta) error {
+	if delta == nil {
+		return nil
+	}
+
+	p.cacheMu.Lock()
+	p.cache.applyDelta(delta.Changes)
+	if !delta.LastSnapshotTime.IsZero() {
+		p.lastSnapshotTime = delta.LastSnapshotTime
+	}
+	delta.LastSnapshotTime = p.lastSnapshotTime
+	crds, crs := len(p.cache.CRDs), len(p.cache.CRs)
+	p.cacheMu.Unlock()
+
+	p.metrics.RecordCacheSize(ctx, types.KindCRD, int64(crds))
+	p.metrics.RecordCacheSize(ctx, types.KindCR, int64(crs))
+
+	p.logger.Debug("Applied delta",
+		zap.Int("changes", len(delta.Changes)),
+		zap.Int("crds", crds),
+		zap.Int("crs", crs),
 	)
 
-	p.broadcastToPeers(ctx, data)
+	if len(delta.Changes) == 0 {
+		// Nothing to broadcast; skip the network round-trip.
+		return nil
+	}
 
+	data, err := marshalPeerSyncDelta(delta)
+	if err != nil {
+		return fmt.Errorf("marshal delta: %w", err)
+	}
+	p.broadcastToPeers(ctx, data)
 	return nil
+}
+
+// IsEmpty returns true when the cache contains no CRDs or CRs.
+func (p *peerSyncCacheStore) IsEmpty() bool {
+	p.cacheMu.RLock()
+	defer p.cacheMu.RUnlock()
+	return p.cache.isEmpty()
+}
+
+// cacheSize returns the count of CRDs and CRs currently cached. Internal helper —
+// callers go through ApplyDelta which records the size as a side effect.
+func (p *peerSyncCacheStore) cacheSize() (int, int) {
+	p.cacheMu.RLock()
+	defer p.cacheMu.RUnlock()
+	return len(p.cache.CRDs), len(p.cache.CRs)
+}
+
+// LastSnapshotTime returns the leader's clock at the most recently applied snapshot.
+func (p *peerSyncCacheStore) LastSnapshotTime() time.Time {
+	p.cacheMu.RLock()
+	defer p.cacheMu.RUnlock()
+	return p.lastSnapshotTime
 }
 
 // --- HTTP handler ---
@@ -208,6 +381,11 @@ func (p *peerSyncCacheStore) handleIncrement(w http.ResponseWriter, r *http.Requ
 // handleSnapshot serves the leader's cache to a peer that's bootstrapping. Non-leader
 // replicas return 503 — peer caches can be stale (their last delta may have been missed)
 // so only the lease-holder is authoritative.
+//
+// The body is newline-delimited JSON: one meta frame followed by one frame per CRD
+// and CR entry. Each frame is encoded and written through gzip immediately; nothing
+// buffers the full marshaled snapshot. To keep cacheMu hold short, the cache maps
+// are shallow-copied first, then encoded lock-free.
 func (p *peerSyncCacheStore) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -220,19 +398,16 @@ func (p *peerSyncCacheStore) handleSnapshot(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	p.mu.RLock()
-	data := p.syncedCacheData
-	appliedAt := p.lastSavedAt
-	p.mu.RUnlock()
-
-	if len(data) == 0 {
+	crdsCopy, crsCopy, lastSnapshotTime, isEmpty := p.snapshotCopyForServe()
+	if isEmpty {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/x-ndjson")
 	w.Header().Set("Content-Encoding", "gzip")
-	w.Header().Set(snapshotAppliedAtHeader, appliedAt.UTC().Format(time.RFC3339Nano))
+	// Used by secondaries to filter buffered deltas that predate the snapshot.
+	w.Header().Set(snapshotAppliedAtHeader, lastSnapshotTime.UTC().Format(time.RFC3339Nano))
 
 	gz := gzip.NewWriter(w)
 	defer func() {
@@ -240,10 +415,68 @@ func (p *peerSyncCacheStore) handleSnapshot(w http.ResponseWriter, r *http.Reque
 			p.logger.Debug("Failed to close gzip writer", zap.Error(err))
 		}
 	}()
+	enc := json.NewEncoder(gz)
 
-	if _, err := gz.Write(data); err != nil {
-		p.logger.Debug("Failed to write snapshot response", zap.Error(err))
+	if err := enc.Encode(peerSyncStreamFrame{
+		Type:             streamFrameMeta,
+		LastSnapshotTime: lastSnapshotTime,
+	}); err != nil {
+		// Body has started; client will see a truncated stream.
+		p.metrics.RecordSnapshotStreamFailure(r.Context())
+		p.logger.Error("Failed to encode snapshot meta frame; partial stream", zap.Error(err))
+		return
 	}
+	for name, crd := range crdsCopy {
+		if err := enc.Encode(peerSyncStreamFrame{
+			Type: streamFrameCRD,
+			Key:  name,
+			Obj:  crd,
+		}); err != nil {
+			p.metrics.RecordSnapshotStreamFailure(r.Context())
+			p.logger.Error("Failed to encode snapshot CRD frame; partial stream",
+				zap.String("name", name), zap.Error(err))
+			return
+		}
+	}
+	for key, cr := range crsCopy {
+		gvr := cr.GVR
+		if err := enc.Encode(peerSyncStreamFrame{
+			Type: streamFrameCR,
+			Key:  key,
+			Obj:  cr.Obj,
+			GVR:  &gvr,
+		}); err != nil {
+			p.metrics.RecordSnapshotStreamFailure(r.Context())
+			p.logger.Error("Failed to encode snapshot CR frame; partial stream",
+				zap.String("key", key), zap.Error(err))
+			return
+		}
+	}
+}
+
+// snapshotCopyForServe takes a shallow copy of the cache maps under read lock so
+// the caller can iterate them lock-free. Resource values are shared (immutable
+// post-insertion) — only the map structure is duplicated.
+func (p *peerSyncCacheStore) snapshotCopyForServe() (
+	map[string]*unstructured.Unstructured,
+	map[string]*cachedCR,
+	time.Time,
+	bool,
+) {
+	p.cacheMu.RLock()
+	defer p.cacheMu.RUnlock()
+	if p.cache.isEmpty() {
+		return nil, nil, time.Time{}, true
+	}
+	crds := make(map[string]*unstructured.Unstructured, len(p.cache.CRDs))
+	for k, v := range p.cache.CRDs {
+		crds[k] = v
+	}
+	crs := make(map[string]*cachedCR, len(p.cache.CRs))
+	for k, v := range p.cache.CRs {
+		crs[k] = v
+	}
+	return crds, crs, p.lastSnapshotTime, false
 }
 
 func (p *peerSyncCacheStore) handlePost(w http.ResponseWriter, r *http.Request) {
@@ -273,16 +506,45 @@ func (p *peerSyncCacheStore) handlePost(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if _, err := unmarshalPeerSyncMessage(data); err != nil {
-		http.Error(w, "invalid peer sync envelope", http.StatusBadRequest)
+	delta, err := unmarshalPeerSyncDelta(data)
+	if err != nil {
+		http.Error(w, "invalid peer sync delta", http.StatusBadRequest)
 		return
 	}
 
-	p.mu.Lock()
-	p.syncedCacheData = data
-	p.mu.Unlock()
+	// Hold bufferMu across the ready check + apply so a concurrent Bootstrap
+	// can't flip ready and overwrite the cache between them.
+	p.bufferMu.Lock()
+	if !p.ready {
+		if len(p.deltaBuffer) >= deltaBufferMaxSize {
+			p.deltaBuffer = p.deltaBuffer[1:]
+			p.logger.Warn("Delta buffer full during bootstrap, dropped oldest",
+				zap.Int("max_size", deltaBufferMaxSize),
+			)
+		}
+		p.deltaBuffer = append(p.deltaBuffer, delta)
+		p.bufferMu.Unlock()
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 
-	p.logger.Debug("Received cache push from leader", zap.Int("bytes", len(data)))
+	p.cacheMu.Lock()
+	p.cache.applyDelta(delta.Changes)
+	if !delta.LastSnapshotTime.IsZero() {
+		p.lastSnapshotTime = delta.LastSnapshotTime
+	}
+	crds, crs := len(p.cache.CRDs), len(p.cache.CRs)
+	p.cacheMu.Unlock()
+	p.bufferMu.Unlock()
+
+	p.metrics.RecordCacheSize(r.Context(), types.KindCRD, int64(crds))
+	p.metrics.RecordCacheSize(r.Context(), types.KindCR, int64(crs))
+
+	p.logger.Debug("Applied delta from leader",
+		zap.Int("changes", len(delta.Changes)),
+		zap.Int("crds", crds),
+		zap.Int("crs", crs),
+	)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -300,7 +562,7 @@ func (p *peerSyncCacheStore) broadcastToPeers(ctx context.Context, data []byte) 
 			zap.String("dns", p.peerDNS),
 			zap.Error(err),
 		)
-		p.recordBroadcastFailure(metrics.BroadcastFailureDNSLookup)
+		p.recordBroadcastFailure(types.BroadcastFailureDNSLookup)
 		return
 	}
 
@@ -321,7 +583,7 @@ func (p *peerSyncCacheStore) broadcastToPeers(ctx context.Context, data []byte) 
 	compressed, err := gzipCompress(data)
 	if err != nil {
 		p.logger.Warn("Failed to gzip cache data for broadcast", zap.Error(err))
-		p.recordBroadcastFailure(metrics.BroadcastFailureGzip)
+		p.recordBroadcastFailure(types.BroadcastFailureGzip)
 		return
 	}
 
@@ -332,16 +594,16 @@ func (p *peerSyncCacheStore) broadcastToPeers(ctx context.Context, data []byte) 
 	case acked == len(peers):
 		p.recordBroadcastSuccess()
 	case timedOut:
-		p.recordBroadcastFailure(metrics.BroadcastFailureAckTimeout)
+		p.recordBroadcastFailure(types.BroadcastFailureAckTimeout)
 	default:
-		p.recordBroadcastFailure(metrics.BroadcastFailureNoAcks)
+		p.recordBroadcastFailure(types.BroadcastFailureNoAcks)
 	}
 }
 
-// pushConcurrently pushes to all peers in concurrently and returns once `ackThreshold` peers
-// have ACKed or `ackWaitTimeout` elapses, whichever comes first. In-flight pushes to the
-// remaining peers continue running in the background; their results but per-attempt metrics are still recorded
-// inside pushToPeer.
+// pushConcurrently pushes to all peers in parallel and returns once `ackThreshold`
+// peers have ACKed or `ackWaitTimeout` elapses. Push goroutines are tracked in the
+// store's lifecycle WaitGroup so Stop() waits for them; the results channel is
+// buffered to len(peers) so they never block on send after an early return.
 //
 // `ackThreshold <= 0` waits for all peers. `ackWaitTimeout <= 0` waits without timeout.
 func (p *peerSyncCacheStore) pushConcurrently(
@@ -351,10 +613,12 @@ func (p *peerSyncCacheStore) pushConcurrently(
 	compressed []byte,
 	ackThreshold int,
 	ackWaitTimeout time.Duration,
-) (acked int, timedOut bool) {
+) (int, bool) {
 	results := make(chan bool, len(peers))
 	for _, ip := range peers {
+		p.wg.Add(1)
 		go func(peerIP string) {
+			defer p.wg.Done()
 			results <- p.pushToPeer(ctx, client, peerIP, compressed)
 		}(ip)
 	}
@@ -364,6 +628,7 @@ func (p *peerSyncCacheStore) pushConcurrently(
 		deadline = time.After(ackWaitTimeout)
 	}
 
+	var acked int
 	for range len(peers) {
 		select {
 		case ok := <-results:
@@ -382,7 +647,7 @@ func (p *peerSyncCacheStore) pushConcurrently(
 
 func (p *peerSyncCacheStore) recordBroadcastSuccess() {
 	prev := p.consecutiveBroadcastFailures.Swap(0)
-	p.metrics.RecordPeerBroadcast(context.Background(), metrics.BroadcastSuccess, metrics.BroadcastFailureNone)
+	p.metrics.RecordPeerBroadcast(context.Background(), types.BroadcastSuccess, types.BroadcastFailureNone)
 	if prev >= broadcastFailureErrorThreshold {
 		p.logger.Info("Peer broadcast recovered after consecutive failures",
 			zap.Int32("previous_failures", prev),
@@ -394,9 +659,9 @@ func (p *peerSyncCacheStore) recordBroadcastSuccess() {
 // metric. Logs once at Error when the threshold is crossed; further occurrences are
 // surfaced via the peer_broadcasts_total metric to avoid log spam from a chronically
 // misconfigured peer DNS.
-func (p *peerSyncCacheStore) recordBroadcastFailure(reason metrics.BroadcastFailureReason) {
+func (p *peerSyncCacheStore) recordBroadcastFailure(reason types.BroadcastFailureReason) {
 	n := p.consecutiveBroadcastFailures.Add(1)
-	p.metrics.RecordPeerBroadcast(context.Background(), metrics.BroadcastFailed, reason)
+	p.metrics.RecordPeerBroadcast(context.Background(), types.BroadcastFailed, reason)
 	if n == broadcastFailureErrorThreshold {
 		p.logger.Error("Peer broadcast failing repeatedly — check peer DNS and network reachability",
 			zap.String("reason", string(reason)),
@@ -425,47 +690,60 @@ func (p *peerSyncCacheStore) pushToPeer(ctx context.Context, client *http.Client
 			backoff *= 2
 		}
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(compressed))
-		if err != nil {
-			p.logger.Debug("Failed to create push request", zap.String("peer", ip), zap.Error(err))
-			p.metrics.RecordPeerPushAttempt(context.Background(), metrics.PushFailed, metrics.PushFailureRequestFailed)
-			return false
-		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Content-Encoding", "gzip")
+		// Inner function so defer runs at the end of each iteration, closing the
+		// response body before the next attempt.
+		success, shouldRetry := func() (bool, bool) {
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(compressed))
+			if err != nil {
+				p.logger.Debug("Failed to create push request", zap.String("peer", ip), zap.Error(err))
+				p.metrics.RecordPeerPushAttempt(context.Background(), types.PushFailed, types.PushFailureRequestFailed)
+				return false, false
+			}
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Content-Encoding", "gzip")
 
-		resp, err := client.Do(req)
-		if err != nil {
-			reason := classifyPushError(err)
-			p.logger.Debug("Failed to push cache to peer",
+			resp, err := client.Do(req)
+			if err != nil {
+				reason := classifyPushError(err)
+				p.logger.Debug("Failed to push cache to peer",
+					zap.String("peer", ip),
+					zap.Int("attempt", attempt+1),
+					zap.String("reason", string(reason)),
+					zap.Error(err),
+				)
+				p.metrics.RecordPeerPushAttempt(context.Background(), types.PushFailed, reason)
+				return false, true
+			}
+			defer func() {
+				if err := resp.Body.Close(); err != nil {
+					p.logger.Debug("Failed to close response body", zap.String("peer", ip), zap.Error(err))
+				}
+			}()
+
+			if resp.StatusCode == http.StatusOK {
+				p.logger.Debug("Pushed cache to peer",
+					zap.String("peer", ip),
+					zap.Int("bytes", len(compressed)),
+				)
+				p.metrics.RecordPeerPushAttempt(context.Background(), types.PushSuccess, types.PushFailureNone)
+				return true, false
+			}
+
+			p.logger.Debug("Peer rejected cache push",
 				zap.String("peer", ip),
+				zap.Int("status", resp.StatusCode),
 				zap.Int("attempt", attempt+1),
-				zap.String("reason", string(reason)),
-				zap.Error(err),
 			)
-			p.metrics.RecordPeerPushAttempt(context.Background(), metrics.PushFailed, reason)
-			continue
-		}
+			p.metrics.RecordPeerPushAttempt(context.Background(), types.PushFailed, types.PushFailureHTTPStatus)
+			return false, true
+		}()
 
-		if err := resp.Body.Close(); err != nil {
-			p.logger.Debug("Failed to close response body", zap.String("peer", ip), zap.Error(err))
-		}
-
-		if resp.StatusCode == http.StatusOK {
-			p.logger.Debug("Pushed cache to peer",
-				zap.String("peer", ip),
-				zap.Int("bytes", len(compressed)),
-			)
-			p.metrics.RecordPeerPushAttempt(context.Background(), metrics.PushSuccess, metrics.PushFailureNone)
+		if success {
 			return true
 		}
-
-		p.logger.Debug("Peer rejected cache push",
-			zap.String("peer", ip),
-			zap.Int("status", resp.StatusCode),
-			zap.Int("attempt", attempt+1),
-		)
-		p.metrics.RecordPeerPushAttempt(context.Background(), metrics.PushFailed, metrics.PushFailureHTTPStatus)
+		if !shouldRetry {
+			return false
+		}
 	}
 
 	p.logger.Debug("Failed to push cache to peer after retries",
@@ -478,23 +756,33 @@ func (p *peerSyncCacheStore) pushToPeer(ctx context.Context, client *http.Client
 // classifyPushError maps a transport-layer error from client.Do into a metric reason.
 // Timeouts (including context deadline) are distinguished from other transport errors so
 // operators can tell whether the peer was slow vs. unreachable.
-func classifyPushError(err error) metrics.PushFailureReason {
+func classifyPushError(err error) types.PushFailureReason {
 	if errors.Is(err, context.DeadlineExceeded) {
-		return metrics.PushFailureTimeout
+		return types.PushFailureTimeout
 	}
 	var netErr net.Error
 	if errors.As(err, &netErr) && netErr.Timeout() {
-		return metrics.PushFailureTimeout
+		return types.PushFailureTimeout
 	}
-	return metrics.PushFailureConnection
+	return types.PushFailureConnection
 }
 
-// --- Pull failsafe ---
+// --- Bootstrap pull ---
 
-// pullFromPeers resolves peer IPs via DNS and pulls cache from the first peer that has it.
-func (p *peerSyncCacheStore) pullFromPeers(ctx context.Context, timeout time.Duration) []byte {
+// pullSnapshotFromPeers walks the peers from DNS and asks each for a snapshot.
+// Returns the first successful response. The two return values let the caller
+// (Bootstrap) decide whether retrying is worthwhile:
+//
+//   - (snap, _)    — got a snapshot, use it.
+//   - (nil, true)  — at least one peer said "I have no data" (HTTP 204): the leader
+//     exists but is empty (cold cluster). No point retrying.
+//   - (nil, false) — no peer was reachable, or all reachable peers replied "I'm not
+//     leader" (HTTP 503): retry, since a leader may emerge.
+func (p *peerSyncCacheStore) pullSnapshotFromPeers(
+	ctx context.Context, timeout time.Duration,
+) (*PeerSyncSnapshot, bool) {
 	if p.peerDNS == "" {
-		return nil
+		return nil, false
 	}
 
 	ips, err := net.LookupHost(p.peerDNS)
@@ -503,51 +791,69 @@ func (p *peerSyncCacheStore) pullFromPeers(ctx context.Context, timeout time.Dur
 			zap.String("dns", p.peerDNS),
 			zap.Error(err),
 		)
-		return nil
+		return nil, false
 	}
 
 	podIP := os.Getenv("POD_IP")
 	client := &http.Client{Timeout: timeout}
+	leaderRespondedEmpty := false
 
 	for _, ip := range ips {
 		if ip == podIP {
 			continue
 		}
 
-		data, err := p.fetchPeerCache(ctx, client, ip)
+		fetched, status, err := p.fetchPeerSnapshot(ctx, client, ip)
 		if err != nil {
-			p.logger.Debug("Failed to pull cache from peer",
+			p.logger.Debug("Failed to pull snapshot from peer",
 				zap.String("peer", ip),
 				zap.Error(err),
 			)
 			continue
 		}
 
-		if len(data) > 0 {
-			p.logger.Debug("Pulled cache from peer",
+		switch status {
+		case http.StatusOK:
+			crds, crs := 0, 0
+			if fetched != nil && fetched.Cache != nil {
+				crds, crs = len(fetched.Cache.CRDs), len(fetched.Cache.CRs)
+			}
+			p.logger.Debug("Pulled snapshot from peer",
 				zap.String("peer", ip),
-				zap.Int("bytes", len(data)),
+				zap.Int("crds", crds),
+				zap.Int("crs", crs),
 			)
-			return data
+			return fetched, false
+		case http.StatusNoContent:
+			leaderRespondedEmpty = true
 		}
+		// 503 / other: try next peer.
 	}
 
-	return nil
+	return nil, leaderRespondedEmpty
 }
 
-// fetchPeerCache pulls the snapshot from a single peer. Returns nil for 204 (peer
-// has no data) or 503 (peer is not the leader and won't serve a snapshot).
-func (p *peerSyncCacheStore) fetchPeerCache(ctx context.Context, client *http.Client, ip string) ([]byte, error) {
+// fetchPeerSnapshot pulls a snapshot from a single peer and assembles it from a
+// stream of NDJSON frames. Returns the assembled snapshot (only for 200), the
+// HTTP status code, and any transport/decode error.
+//
+// Each frame is decoded one at a time and applied to a fresh cache directly —
+// no intermediate buffer holds the full snapshot. Memory peak ≈ the assembled
+// cache size (which becomes our cache state anyway), plus one frame's worth of
+// transient decode buffer.
+func (p *peerSyncCacheStore) fetchPeerSnapshot(
+	ctx context.Context, client *http.Client, ip string,
+) (*PeerSyncSnapshot, int, error) {
 	url := fmt.Sprintf("http://%s:%d%s", ip, p.syncPort, syncSnapshotPath)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("create GET request for %s: %w", url, err)
+		return nil, 0, fmt.Errorf("create GET request for %s: %w", url, err)
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("GET %s: %w", url, err)
+		return nil, 0, fmt.Errorf("GET %s: %w", url, err)
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
@@ -555,20 +861,15 @@ func (p *peerSyncCacheStore) fetchPeerCache(ctx context.Context, client *http.Cl
 		}
 	}()
 
-	switch resp.StatusCode {
-	case http.StatusNoContent, http.StatusServiceUnavailable:
-		return nil, nil
-	case http.StatusOK:
-		// fall through
-	default:
-		return nil, fmt.Errorf("GET %s: status %d", url, resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		return nil, resp.StatusCode, nil
 	}
 
 	var reader io.Reader = resp.Body
 	if resp.Header.Get("Content-Encoding") == "gzip" {
 		gr, err := gzip.NewReader(resp.Body)
 		if err != nil {
-			return nil, fmt.Errorf("gzip reader for %s: %w", url, err)
+			return nil, resp.StatusCode, fmt.Errorf("gzip reader for %s: %w", url, err)
 		}
 		defer func() {
 			if err := gr.Close(); err != nil {
@@ -578,32 +879,37 @@ func (p *peerSyncCacheStore) fetchPeerCache(ctx context.Context, client *http.Cl
 		reader = gr
 	}
 
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, fmt.Errorf("read body from %s: %w", url, err)
+	snap := &PeerSyncSnapshot{Cache: newResourceCache()}
+	dec := json.NewDecoder(reader)
+	for {
+		var frame peerSyncStreamFrame
+		if err := dec.Decode(&frame); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, resp.StatusCode, fmt.Errorf("decode frame from %s: %w", url, err)
+		}
+		switch frame.Type {
+		case streamFrameMeta:
+			snap.LastSnapshotTime = frame.LastSnapshotTime
+		case streamFrameCRD:
+			snap.Cache.CRDs[frame.Key] = frame.Obj
+		case streamFrameCR:
+			if frame.GVR == nil {
+				return nil, resp.StatusCode, fmt.Errorf("CR frame for %q missing gvr", frame.Key)
+			}
+			snap.Cache.CRs[frame.Key] = &cachedCR{Obj: frame.Obj, GVR: *frame.GVR}
+		default:
+			p.logger.Debug("Unknown snapshot frame type, skipping",
+				zap.String("type", string(frame.Type)),
+				zap.String("peer", ip),
+			)
+		}
 	}
-
-	return data, nil
+	return snap, resp.StatusCode, nil
 }
 
 // --- Helpers ---
-
-func (p *peerSyncCacheStore) unmarshalAndLog(data []byte, source string) (*PeerSyncMessage, error) {
-	state, err := unmarshalPeerSyncMessage(data)
-	if err != nil {
-		p.logger.Warn("Failed to unmarshal peer sync envelope, starting fresh",
-			zap.String("source", source),
-			zap.Error(err),
-		)
-		return &PeerSyncMessage{Cache: newResourceCache()}, nil
-	}
-	p.logger.Info("Loaded cache from "+source,
-		zap.Int("crds", len(state.Cache.CRDs)),
-		zap.Int("crs", len(state.Cache.CRs)),
-		zap.Time("last_snapshot_time", state.LastSnapshotTime),
-	)
-	return state, nil
-}
 
 func gzipCompress(data []byte) ([]byte, error) {
 	var buf bytes.Buffer

@@ -148,7 +148,7 @@ func newTestCollector(
 }
 
 // newTestCollectorWithPeerStore is like newTestCollector but lets the caller inject a
-// custom PeerStore implementation, e.g. to record Save() invocations.
+// custom PeerStore implementation, e.g. to record ApplyDelta invocations.
 func newTestCollectorWithPeerStore(
 	t *testing.T,
 	config *Config,
@@ -163,14 +163,14 @@ func newTestCollectorWithPeerStore(
 	return newCRDCollector(settings.Logger, config, sink, informerSet, peerStore, nil)
 }
 
-// recordingPeerStore captures each Save() invocation as a snapshot of the cache contents
-// (resource names + versions) plus the LastSnapshotTime carried in the envelope.
-// Used to assert two-phase save ordering and snapshot-timestamp continuity.
+// recordingPeerStore captures each ApplyDelta invocation as a snapshot of the cache
+// contents (resource names + versions) plus LastSnapshotTime. Used to assert two-phase
+// save ordering and snapshot-timestamp continuity.
 type recordingPeerStore struct {
-	mu    sync.Mutex
-	saves []recordedSave
-	// loadState is returned from Load(). When nil, an empty PeerSyncMessage is returned.
-	loadState *PeerSyncMessage
+	mu               sync.Mutex
+	cache            *resourceCache
+	lastSnapshotTime time.Time
+	saves            []recordedSave
 }
 
 type recordedSave struct {
@@ -179,31 +179,57 @@ type recordedSave struct {
 	lastSnapshotTime time.Time
 }
 
-func (r *recordingPeerStore) Load(_ context.Context) (*PeerSyncMessage, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.loadState != nil {
-		return r.loadState, nil
-	}
-	return &PeerSyncMessage{Cache: newResourceCache()}, nil
+func newRecordingPeerStore() *recordingPeerStore {
+	return &recordingPeerStore{cache: newResourceCache()}
 }
 
-func (r *recordingPeerStore) Save(_ context.Context, state *PeerSyncMessage) error {
-	snap := recordedSave{
-		crds:             make(map[string]string, len(state.Cache.CRDs)),
-		crs:              make(map[string]string, len(state.Cache.CRs)),
-		lastSnapshotTime: state.LastSnapshotTime,
+func (r *recordingPeerStore) Start(_ context.Context) error     { return nil }
+func (r *recordingPeerStore) Stop()                             {}
+func (r *recordingPeerStore) Bootstrap(_ context.Context) error { return nil }
+func (r *recordingPeerStore) SetLeader(_ bool)                  {}
+
+func (r *recordingPeerStore) ComputeChanges(
+	currentCRDs []*unstructured.Unstructured,
+	currentCRs map[schema.GroupVersionResource][]*unstructured.Unstructured,
+) []ResourceChange {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cache.computeChanges(currentCRDs, currentCRs)
+}
+
+func (r *recordingPeerStore) ApplyDelta(_ context.Context, delta *PeerSyncDelta) error {
+	r.mu.Lock()
+	r.cache.applyDelta(delta.Changes)
+	if !delta.LastSnapshotTime.IsZero() {
+		r.lastSnapshotTime = delta.LastSnapshotTime
 	}
-	for name, crd := range state.Cache.CRDs {
+
+	snap := recordedSave{
+		crds:             make(map[string]string, len(r.cache.CRDs)),
+		crs:              make(map[string]string, len(r.cache.CRs)),
+		lastSnapshotTime: r.lastSnapshotTime,
+	}
+	for name, crd := range r.cache.CRDs {
 		snap.crds[name] = crd.GetResourceVersion()
 	}
-	for k, cr := range state.Cache.CRs {
+	for k, cr := range r.cache.CRs {
 		snap.crs[k] = cr.Obj.GetResourceVersion()
 	}
-	r.mu.Lock()
 	r.saves = append(r.saves, snap)
 	r.mu.Unlock()
 	return nil
+}
+
+func (r *recordingPeerStore) IsEmpty() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cache.isEmpty()
+}
+
+func (r *recordingPeerStore) LastSnapshotTime() time.Time {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.lastSnapshotTime
 }
 
 func (r *recordingPeerStore) snapshot() []recordedSave {
@@ -398,14 +424,14 @@ func TestCRDCollector_IncludeInitialStateFalse(t *testing.T) {
 	}, 10*time.Second, 100*time.Millisecond, "new CR should be detected as ADDED after initial cache load")
 }
 
-// TestCRDCollector_TwoPhaseSaveOrdering verifies the asymmetric save/emit ordering in
+// TestCRDCollector_TwoPhaseSaveOrdering verifies the asymmetric apply/emit ordering in
 // the increment loop:
-//   - adds/mods: Save() runs BEFORE emit, so peers see the new state first
-//   - deletes:   Save() runs AFTER emit, so peers retain the resource until the platform
+//   - adds/mods: ApplyDelta runs BEFORE emit, so peers see the new state first
+//   - deletes:   ApplyDelta runs AFTER emit, so peers retain the resource until the platform
 //     has been notified
 //
-// We assert this by recording each Save() invocation along with the cache contents at
-// that moment, then checking the number of saves and what each save contained per cycle.
+// We assert this by recording each ApplyDelta invocation along with the cache contents at
+// that moment, then checking the number of applies and what each apply contained per cycle.
 func TestCRDCollector_TwoPhaseSaveOrdering(t *testing.T) {
 	scheme := testScheme()
 	registerCRGVR(scheme, "example.com", "v1", "TestResource")
@@ -422,7 +448,7 @@ func TestCRDCollector_TwoPhaseSaveOrdering(t *testing.T) {
 		name string
 		// mutate is invoked after the initial snapshot save has been recorded.
 		mutate func(t *testing.T, ctx context.Context, client *dynamicfake.FakeDynamicClient)
-		// expectedSavesAfterMutation is the number of Save() calls expected in addition
+		// expectedSavesAfterMutation is the number of ApplyDelta calls expected in addition
 		// to the one that happens after the initial snapshot.
 		expectedSavesAfterMutation int
 		// assertSaves runs against the recorded saves *after* the initial snapshot save.
@@ -501,7 +527,7 @@ func TestCRDCollector_TwoPhaseSaveOrdering(t *testing.T) {
 			sink := &consumertest.LogsSink{}
 			config := testConfig([]string{"example.com"}, nil)
 			ft := tracker.NewForbiddenTracker(1 * time.Hour)
-			peerStore := &recordingPeerStore{}
+			peerStore := newRecordingPeerStore()
 			collector := newTestCollectorWithPeerStore(t, config, sink, client, ft, peerStore)
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -522,7 +548,7 @@ func TestCRDCollector_TwoPhaseSaveOrdering(t *testing.T) {
 				// Wait long enough for at least one increment cycle to complete and assert nothing saved.
 				time.Sleep(2 * config.IncrementInterval)
 				assert.Equal(t, savesBeforeMutation, len(peerStore.snapshot()),
-					"increment cycle with no changes must not call Save()")
+					"increment cycle with no changes must not call ApplyDelta")
 				return
 			}
 

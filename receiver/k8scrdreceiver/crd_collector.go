@@ -7,6 +7,7 @@ import (
 
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/emit"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/metrics"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/types"
 	"go.opentelemetry.io/collector/consumer"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -14,8 +15,9 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 )
 
-// crdCollector reads from Informers, compares against a resource resourceCache,
-// and emits deltas (ADDED/MODIFIED/DELETED) or periodic full snapshots as log records.
+// crdCollector reads from Informers, compares against the peerStore's cache, and
+// emits deltas (ADDED/MODIFIED/DELETED) or periodic full snapshots as log records.
+// Cache state lives in peerStore - the collector is a stateless worker.
 type crdCollector struct {
 	logger    *zap.Logger
 	config    *Config
@@ -23,15 +25,10 @@ type crdCollector struct {
 	informers Informers
 	metrics   metrics.Recorder
 
-	// Resource resourceCache for delta computation
-	resourceCache    *resourceCache
-	lastSnapshotTime time.Time
-
 	peerStore PeerStore
 
 	// Lifecycle
 	wg     sync.WaitGroup
-	ctx    context.Context //nolint:containedctx
 	cancel context.CancelFunc
 }
 
@@ -41,13 +38,13 @@ func newCRDCollector(
 	cons consumer.Logs,
 	informers Informers,
 	peerStore PeerStore,
-	rec metrics.Recorder,
+	metricsRecorder metrics.Recorder,
 ) *crdCollector {
 	if peerStore == nil {
 		peerStore = &noopPeerStore{}
 	}
-	if rec == nil {
-		rec = metrics.NoopRecorder{}
+	if metricsRecorder == nil {
+		metricsRecorder = metrics.NoopRecorder{}
 	}
 	return &crdCollector{
 		logger:    logger,
@@ -55,40 +52,29 @@ func newCRDCollector(
 		consumer:  cons,
 		informers: informers,
 		peerStore: peerStore,
-		metrics:   rec,
+		metrics:   metricsRecorder,
 	}
 }
 
 func (c *crdCollector) Start(ctx context.Context) error {
-	c.ctx, c.cancel = context.WithCancel(ctx)
+	loopCtx, cancel := context.WithCancel(ctx)
+	c.cancel = cancel
 
-	// Load state from peer sync. On failure, start fresh — the first increment will be a full snapshot.
-	state, err := c.peerStore.Load(ctx)
-	if err != nil || state == nil {
-		c.logger.Debug("Failed to load peer sync state, starting fresh", zap.Error(err))
-		c.resourceCache = newResourceCache()
-	} else {
-		c.resourceCache = state.Cache
-		// Inherit the previous leader's snapshot timestamp so the next snapshot is
-		// scheduled relative to cluster history rather than this leader's startup
-		// time. This bounds the worst-case snapshot gap to one configured interval
-		// even across failovers.
-		c.lastSnapshotTime = state.LastSnapshotTime
-		if !c.resourceCache.isEmpty() {
-			c.logger.Info("Loaded peer sync state",
-				zap.Int("crds", len(c.resourceCache.CRDs)),
-				zap.Int("crs", len(c.resourceCache.CRs)),
-				zap.Time("last_snapshot_time", c.lastSnapshotTime),
-			)
-		}
+	// Bootstrap the peer cache from the leader (if any). Idempotent — if the cache
+	// is already populated (e.g., this node was a secondary receiving deltas), it's
+	// a no-op. If no peer can serve a snapshot, the cache stays empty and the first
+	// increment becomes a full snapshot from informer state.
+	if err := c.peerStore.Bootstrap(ctx); err != nil {
+		c.logger.Debug("Bootstrap failed, starting fresh", zap.Error(err))
 	}
 
 	if err := c.informers.Start(ctx); err != nil {
+		cancel()
 		return err
 	}
 
 	c.wg.Add(1)
-	go c.runIncrementLoop()
+	go c.runIncrementLoop(loopCtx)
 
 	return nil
 }
@@ -102,13 +88,6 @@ func (c *crdCollector) Shutdown(ctx context.Context) error {
 	// since the loop reads from informer caches.
 	c.wg.Wait()
 
-	// Save state before stopping so peers have the latest cache and snapshot timestamp.
-	if c.resourceCache != nil {
-		if err := c.peerStore.Save(ctx, c.currentState()); err != nil {
-			c.logger.Debug("Failed to sync peer state on shutdown", zap.Error(err))
-		}
-	}
-
 	if c.informers != nil {
 		return c.informers.Shutdown(ctx)
 	}
@@ -116,92 +95,92 @@ func (c *crdCollector) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// currentState wraps the live cache and snapshot timestamp into a PeerSyncMessage for
-// transmission to peers. Used at every Save() site to keep the protocol contract in
-// one place.
-func (c *crdCollector) currentState() *PeerSyncMessage {
-	return &PeerSyncMessage{
-		Cache:            c.resourceCache,
-		LastSnapshotTime: c.lastSnapshotTime,
-	}
-}
-
 // --- Consolidated increment loop ---
 
 // runIncrementLoop is the single polling loop that reads informers caches, compares
 // against the resource resourceCache, and emits deltas or periodic snapshots.
-func (c *crdCollector) runIncrementLoop() {
+func (c *crdCollector) runIncrementLoop(ctx context.Context) {
 	defer c.wg.Done()
 
 	ticker := time.NewTicker(c.config.IncrementInterval)
 	defer ticker.Stop()
 
 	// Run first increment immediately
-	c.runIncrement()
+	c.runIncrement(ctx)
 
 	for {
 		select {
-		case <-c.ctx.Done():
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			c.runIncrement()
+			c.runIncrement(ctx)
 		}
 	}
 }
 
-// runIncrement reads the current state from informers caches, compares against the
-// resource resourceCache, and emits changes. Periodically emits full snapshots for TTL freshness.
-func (c *crdCollector) runIncrement() {
+// runIncrement reads the current informer state, compares it against the peerStore
+// cache, and emits changes. Periodically emits full snapshots for TTL freshness.
+func (c *crdCollector) runIncrement(ctx context.Context) {
 	start := time.Now()
 	currentCRDs := c.informers.ReadCRDs()
 	currentCRs := c.informers.ReadCRs()
 
-	if !c.config.IncludeInitialState && c.resourceCache.isEmpty() {
-		c.resourceCache.update(currentCRDs, currentCRs)
-		c.lastSnapshotTime = time.Now()
-		c.logger.Info("Initial state loaded into resource cache (not emitting)",
+	if !c.config.IncludeInitialState && c.peerStore.IsEmpty() {
+		now := time.Now()
+		changes := c.peerStore.ComputeChanges(currentCRDs, currentCRs)
+		c.logger.Info("Initial state loaded into peer cache (not emitting)",
 			zap.Int("crds", len(currentCRDs)),
 			zap.Int("cr_types", len(currentCRs)),
 		)
-		if err := c.peerStore.Save(c.ctx, c.currentState()); err != nil {
-			c.logger.Debug("Failed to save state after initial population", zap.Error(err))
+		// Mark this initial population as the first snapshot so the next snapshot
+		// is scheduled relative to it.
+		if err := c.peerStore.ApplyDelta(ctx, &PeerSyncDelta{
+			AppliedAt:        now,
+			LastSnapshotTime: now,
+			Changes:          changes,
+		}); err != nil {
+			c.logger.Debug("Failed to apply delta after initial population", zap.Error(err))
 		}
-		c.recordCacheSize()
 		return
 	}
 
-	isSnapshot := c.resourceCache.isEmpty() || time.Since(c.lastSnapshotTime) >= c.config.SnapshotInterval
+	isSnapshot := c.peerStore.IsEmpty() || time.Since(c.peerStore.LastSnapshotTime()) >= c.config.SnapshotInterval
 
-	mode := metrics.ModeIncrement
+	mode := types.ModeIncrement
 	if isSnapshot {
-		mode = metrics.ModeSnapshot
-		c.emitSnapshot(currentCRDs, currentCRs)
-		c.lastSnapshotTime = time.Now()
-		c.resourceCache.update(currentCRDs, currentCRs)
-		if err := c.peerStore.Save(c.ctx, c.currentState()); err != nil {
-			c.logger.Debug("Failed to save state after snapshot", zap.Error(err))
+		mode = types.ModeSnapshot
+		c.emitSnapshot(ctx, currentCRDs, currentCRs)
+		// Reset the snapshot timer: AppliedAt and LastSnapshotTime both reflect this
+		// moment because the delta IS the snapshot's broadcast. Increment cycles below
+		// only set AppliedAt — that's how secondaries distinguish snapshot ticks.
+		now := time.Now()
+		changes := c.peerStore.ComputeChanges(currentCRDs, currentCRs)
+		if err := c.peerStore.ApplyDelta(ctx, &PeerSyncDelta{
+			AppliedAt:        now,
+			LastSnapshotTime: now,
+			Changes:          changes,
+		}); err != nil {
+			c.logger.Debug("Failed to apply delta after snapshot", zap.Error(err))
 		}
 	} else {
-		c.emitIncrement(currentCRDs, currentCRs)
+		c.emitIncrement(ctx, currentCRDs, currentCRs)
 	}
 
-	c.recordCacheSize()
-	c.metrics.RecordCycle(c.ctx, mode, time.Since(start))
+	c.metrics.RecordCycle(ctx, mode, time.Since(start))
 }
 
 // emitSnapshot emits all current resources as ADDED for downstream TTL freshness,
-// and emits DELETED for resources that were in the resource resourceCache but are no longer present.
+// and emits DELETED for resources that were in the cache but are no longer present.
 func (c *crdCollector) emitSnapshot(
+	ctx context.Context,
 	currentCRDs []*unstructured.Unstructured,
 	currentCRs map[schema.GroupVersionResource][]*unstructured.Unstructured,
 ) {
 	var crdAdded, crAdded, crdDeleted, crDeleted int64
 
-	currentCRDNames := make(map[string]struct{}, len(currentCRDs))
 	for _, crd := range currentCRDs {
-		currentCRDNames[crd.GetName()] = struct{}{}
 		if err := emit.Log(
-			c.ctx, c.consumer, crd, watch.Added, c.config.ClusterName, emit.BuildCRDLogRecord,
+			ctx, c.consumer, crd, watch.Added, c.config.ClusterName, emit.BuildCRDLogRecord,
 		); err != nil {
 			c.logger.Debug("Failed to emit CRD snapshot log",
 				zap.String("name", crd.GetName()),
@@ -212,12 +191,10 @@ func (c *crdCollector) emitSnapshot(
 		crdAdded++
 	}
 
-	currentCRKeys := make(map[string]struct{})
 	for gvr, crs := range currentCRs {
 		for _, cr := range crs {
-			currentCRKeys[crResourceKey(gvr, cr.GetNamespace(), cr.GetName())] = struct{}{}
 			if err := emit.Log(
-				c.ctx, c.consumer, cr, watch.Added, c.config.ClusterName, emit.BuildCRLogRecord,
+				ctx, c.consumer, cr, watch.Added, c.config.ClusterName, emit.BuildCRLogRecord,
 			); err != nil {
 				c.logger.Debug("Failed to emit CR snapshot log",
 					zap.String("gvr", emit.FormatGVRKey(gvr)),
@@ -230,38 +207,34 @@ func (c *crdCollector) emitSnapshot(
 		}
 	}
 
-	for name, cachedCRD := range c.resourceCache.CRDs {
-		if _, exists := currentCRDNames[name]; !exists {
-			if err := emit.Log(
-				c.ctx, c.consumer, cachedCRD, watch.Deleted, c.config.ClusterName, emit.BuildCRDLogRecord,
-			); err != nil {
-				c.logger.Debug("Failed to emit CRD deletion in snapshot",
-					zap.String("name", cachedCRD.GetName()),
-					zap.Error(err),
-				)
-				continue
-			}
-			crdDeleted++
+	// Cache entries absent from current informer state get DELETED. We use
+	// ComputeChanges since it already produces cache-vs-current diffs.
+	for _, ch := range c.peerStore.ComputeChanges(currentCRDs, currentCRs) {
+		if ch.EventType != watch.Deleted {
+			continue
 		}
-	}
-
-	for key, cached := range c.resourceCache.CRs {
-		if _, exists := currentCRKeys[key]; !exists {
-			if err := emit.Log(
-				c.ctx, c.consumer, cached.Obj, watch.Deleted, c.config.ClusterName, emit.BuildCRLogRecord,
-			); err != nil {
-				c.logger.Debug("Failed to emit CR deletion in snapshot",
-					zap.String("name", cached.Obj.GetName()),
-					zap.Error(err),
-				)
-				continue
-			}
+		var err error
+		if ch.IsCRD {
+			err = emit.Log(ctx, c.consumer, ch.Obj, watch.Deleted, c.config.ClusterName, emit.BuildCRDLogRecord)
+		} else {
+			err = emit.Log(ctx, c.consumer, ch.Obj, watch.Deleted, c.config.ClusterName, emit.BuildCRLogRecord)
+		}
+		if err != nil {
+			c.logger.Debug("Failed to emit deletion in snapshot",
+				zap.String("name", ch.Obj.GetName()),
+				zap.Error(err),
+			)
+			continue
+		}
+		if ch.IsCRD {
+			crdDeleted++
+		} else {
 			crDeleted++
 		}
 	}
 
-	c.metrics.RecordEmitted(c.ctx, metrics.ChangeAdded, crdAdded+crAdded)
-	c.metrics.RecordEmitted(c.ctx, metrics.ChangeDeleted, crdDeleted+crDeleted)
+	c.metrics.RecordEmitted(ctx, types.ChangeAdded, crdAdded+crAdded)
+	c.metrics.RecordEmitted(ctx, types.ChangeDeleted, crdDeleted+crDeleted)
 
 	c.logger.Debug("Snapshot complete",
 		zap.Int64("crds", crdAdded),
@@ -270,49 +243,54 @@ func (c *crdCollector) emitSnapshot(
 	)
 }
 
-// emitIncrement computes the delta between the resourceCache and current state (from the informers) and emits
+// emitIncrement computes the delta between cache and informer state and emits
 // changes using a two-phase ordering chosen to minimise the impact of a leader crash:
 //
-//   - Adds/Mods: save peers BEFORE emitting. If we crash between save and emit, the new
-//     leader's peerCache matches its informers state and emits nothing — the platform briefly
-//     misses the change but is reconciled by the next snapshot (worst case: snapshot interval).
-//   - Deletes: emit BEFORE saving peers. If we crash between emit and save, the new
-//     leader's peerCache still contains the deleted resource while its informers does not, so it
-//     re-emits the DELETE (idempotent duplicate). This avoids a missed DELETE that would
-//     otherwise linger on the platform until TTL expiry.
+//   - Adds/Mods: apply+broadcast BEFORE emitting. If we crash between apply and emit,
+//     the new leader's cache matches informer state and emits nothing — the platform
+//     briefly misses the change but is reconciled by the next snapshot.
+//   - Deletes: emit BEFORE apply+broadcast. If we crash between emit and apply, the
+//     new leader's cache still contains the deleted resource while informer does not,
+//     so it re-emits the DELETE (idempotent duplicate). This avoids a missed DELETE
+//     lingering on the platform until TTL expiry.
 func (c *crdCollector) emitIncrement(
+	ctx context.Context,
 	currentCRDs []*unstructured.Unstructured,
 	currentCRs map[schema.GroupVersionResource][]*unstructured.Unstructured,
 ) {
-	changes := c.resourceCache.computeChanges(currentCRDs, currentCRs)
+	changes := c.peerStore.ComputeChanges(currentCRDs, currentCRs)
 	if len(changes) == 0 {
 		return
 	}
 
-	var adds, deletes []resourceChange
+	var adds, deletes []ResourceChange
 	for _, ch := range changes {
-		if ch.eventType == watch.Deleted {
+		if ch.EventType == watch.Deleted {
 			deletes = append(deletes, ch)
 		} else {
 			adds = append(adds, ch)
 		}
 	}
 
-	// Phase 1 — adds/mods: save first, then emit.
+	// Phase 1 — adds/mods: apply+broadcast first, then emit.
 	if len(adds) > 0 {
-		c.resourceCache.applyAdditions(adds)
-		if err := c.peerStore.Save(c.ctx, c.currentState()); err != nil {
-			c.logger.Debug("Failed to save state before emitting adds/mods", zap.Error(err))
+		if err := c.peerStore.ApplyDelta(ctx, &PeerSyncDelta{
+			AppliedAt: time.Now(),
+			Changes:   adds,
+		}); err != nil {
+			c.logger.Debug("Failed to apply delta before emitting adds/mods", zap.Error(err))
 		}
-		c.emitChanges(adds)
+		c.emitChanges(ctx, adds)
 	}
 
-	// Phase 2 — deletes: emit first, then save.
+	// Phase 2 — deletes: emit first, then apply+broadcast.
 	if len(deletes) > 0 {
-		c.emitChanges(deletes)
-		c.resourceCache.applyDeletions(deletes)
-		if err := c.peerStore.Save(c.ctx, c.currentState()); err != nil {
-			c.logger.Debug("Failed to save state after emitting deletes", zap.Error(err))
+		c.emitChanges(ctx, deletes)
+		if err := c.peerStore.ApplyDelta(ctx, &PeerSyncDelta{
+			AppliedAt: time.Now(),
+			Changes:   deletes,
+		}); err != nil {
+			c.logger.Debug("Failed to apply delta after emitting deletes", zap.Error(err))
 		}
 	}
 
@@ -320,45 +298,40 @@ func (c *crdCollector) emitIncrement(
 }
 
 // emitChanges sends a list of changes to the consumer and records per-type counters.
-func (c *crdCollector) emitChanges(changes []resourceChange) {
-	counts := map[metrics.ChangeType]int64{}
+func (c *crdCollector) emitChanges(ctx context.Context, changes []ResourceChange) {
+	counts := map[types.ChangeType]int64{}
 	for _, change := range changes {
 		var err error
-		if change.isCRD {
-			err = emit.Log(c.ctx, c.consumer, change.obj, change.eventType, c.config.ClusterName, emit.BuildCRDLogRecord)
+		if change.IsCRD {
+			err = emit.Log(ctx, c.consumer, change.Obj, change.EventType, c.config.ClusterName, emit.BuildCRDLogRecord)
 		} else {
-			err = emit.Log(c.ctx, c.consumer, change.obj, change.eventType, c.config.ClusterName, emit.BuildCRLogRecord)
+			err = emit.Log(ctx, c.consumer, change.Obj, change.EventType, c.config.ClusterName, emit.BuildCRLogRecord)
 		}
 		if err != nil {
 			c.logger.Debug("Failed to emit change log",
-				zap.String("event", string(change.eventType)),
-				zap.String("name", change.obj.GetName()),
+				zap.String("event", string(change.EventType)),
+				zap.String("name", change.Obj.GetName()),
 				zap.Error(err),
 			)
 			continue
 		}
-		counts[c.watchEventToChangeType(change.eventType)]++
+		counts[c.watchEventToChangeType(change.EventType)]++
 	}
 	for changeType, count := range counts {
-		c.metrics.RecordEmitted(c.ctx, changeType, count)
+		c.metrics.RecordEmitted(ctx, changeType, count)
 	}
 }
 
-func (c *crdCollector) recordCacheSize() {
-	c.metrics.RecordCacheSize(c.ctx, metrics.KindCRD, int64(len(c.resourceCache.CRDs)))
-	c.metrics.RecordCacheSize(c.ctx, metrics.KindCR, int64(len(c.resourceCache.CRs)))
-}
-
-func (c *crdCollector) watchEventToChangeType(e watch.EventType) metrics.ChangeType {
+func (c *crdCollector) watchEventToChangeType(e watch.EventType) types.ChangeType {
 	switch e {
 	case watch.Added:
-		return metrics.ChangeAdded
+		return types.ChangeAdded
 	case watch.Modified:
-		return metrics.ChangeModified
+		return types.ChangeModified
 	case watch.Deleted:
-		return metrics.ChangeDeleted
+		return types.ChangeDeleted
 	default:
 		c.logger.Warn("Unexpected watch event type", zap.String("event", string(e)))
-		return metrics.ChangeUnknown
+		return types.ChangeUnknown
 	}
 }

@@ -65,9 +65,9 @@ func TestResourceCache_ComputeChanges_CRDAdded(t *testing.T) {
 	changes := rc.computeChanges(currentCRDs, nil)
 
 	require.Len(t, changes, 1)
-	assert.Equal(t, watch.Added, changes[0].eventType)
-	assert.True(t, changes[0].isCRD)
-	assert.Equal(t, "foos.example.com", changes[0].obj.GetName())
+	assert.Equal(t, watch.Added, changes[0].EventType)
+	assert.True(t, changes[0].IsCRD)
+	assert.Equal(t, "foos.example.com", changes[0].Obj.GetName())
 }
 
 func TestResourceCache_ComputeChanges_CRDModified(t *testing.T) {
@@ -81,8 +81,8 @@ func TestResourceCache_ComputeChanges_CRDModified(t *testing.T) {
 	changes := rc.computeChanges(currentCRDs, nil)
 
 	require.Len(t, changes, 1)
-	assert.Equal(t, watch.Modified, changes[0].eventType)
-	assert.True(t, changes[0].isCRD)
+	assert.Equal(t, watch.Modified, changes[0].EventType)
+	assert.True(t, changes[0].IsCRD)
 }
 
 func TestResourceCache_ComputeChanges_CRDDeleted(t *testing.T) {
@@ -93,9 +93,9 @@ func TestResourceCache_ComputeChanges_CRDDeleted(t *testing.T) {
 	changes := rc.computeChanges(nil, nil)
 
 	require.Len(t, changes, 1)
-	assert.Equal(t, watch.Deleted, changes[0].eventType)
-	assert.True(t, changes[0].isCRD)
-	assert.Equal(t, "foos.example.com", changes[0].obj.GetName())
+	assert.Equal(t, watch.Deleted, changes[0].EventType)
+	assert.True(t, changes[0].IsCRD)
+	assert.Equal(t, "foos.example.com", changes[0].Obj.GetName())
 }
 
 func TestResourceCache_ComputeChanges_CRDUnchanged(t *testing.T) {
@@ -123,10 +123,10 @@ func TestResourceCache_ComputeChanges_CRAdded(t *testing.T) {
 	changes := rc.computeChanges(nil, currentCRs)
 
 	require.Len(t, changes, 1)
-	assert.Equal(t, watch.Added, changes[0].eventType)
-	assert.False(t, changes[0].isCRD)
-	assert.Equal(t, gvr, changes[0].gvr)
-	assert.Equal(t, "my-foo", changes[0].obj.GetName())
+	assert.Equal(t, watch.Added, changes[0].EventType)
+	assert.False(t, changes[0].IsCRD)
+	assert.Equal(t, gvr, changes[0].GVR)
+	assert.Equal(t, "my-foo", changes[0].Obj.GetName())
 }
 
 func TestResourceCache_ComputeChanges_CRModified(t *testing.T) {
@@ -148,8 +148,8 @@ func TestResourceCache_ComputeChanges_CRModified(t *testing.T) {
 	changes := rc.computeChanges(nil, currentCRs)
 
 	require.Len(t, changes, 1)
-	assert.Equal(t, watch.Modified, changes[0].eventType)
-	assert.Equal(t, gvr, changes[0].gvr)
+	assert.Equal(t, watch.Modified, changes[0].EventType)
+	assert.Equal(t, gvr, changes[0].GVR)
 }
 
 func TestResourceCache_ComputeChanges_CRDeleted(t *testing.T) {
@@ -166,9 +166,9 @@ func TestResourceCache_ComputeChanges_CRDeleted(t *testing.T) {
 	changes := rc.computeChanges(nil, nil)
 
 	require.Len(t, changes, 1)
-	assert.Equal(t, watch.Deleted, changes[0].eventType)
-	assert.Equal(t, gvr, changes[0].gvr)
-	assert.Equal(t, "my-foo", changes[0].obj.GetName())
+	assert.Equal(t, watch.Deleted, changes[0].EventType)
+	assert.Equal(t, gvr, changes[0].GVR)
+	assert.Equal(t, "my-foo", changes[0].Obj.GetName())
 }
 
 func TestResourceCache_ComputeChanges_MixedChanges(t *testing.T) {
@@ -203,14 +203,17 @@ func TestResourceCache_ComputeChanges_MixedChanges(t *testing.T) {
 
 	changesByType := make(map[watch.EventType]int)
 	for _, c := range changes {
-		changesByType[c.eventType]++
+		changesByType[c.EventType]++
 	}
 	assert.Equal(t, 1, changesByType[watch.Modified])
 	assert.Equal(t, 1, changesByType[watch.Added])
 	assert.Equal(t, 1, changesByType[watch.Deleted])
 }
 
-func TestResourceCache_Update_DeepCopies(t *testing.T) {
+// TestResourceCache_Update_SharesPointers documents that the cache stores object
+// pointers directly (no deep copy). Callers must not mutate cached objects after
+// inserting them — see applyAdditions for the rationale.
+func TestResourceCache_Update_SharesPointers(t *testing.T) {
 	rc := newResourceCache()
 
 	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "foos"}
@@ -222,14 +225,9 @@ func TestResourceCache_Update_DeepCopies(t *testing.T) {
 		map[schema.GroupVersionResource][]*unstructured.Unstructured{gvr: {cr}},
 	)
 
-	// Mutate the original objects
-	crd.SetResourceVersion("999")
-	cr.SetResourceVersion("999")
-
-	// Cached copies should be unaffected
-	assert.Equal(t, "1", rc.CRDs["foos.example.com"].GetResourceVersion())
+	assert.Same(t, crd, rc.CRDs["foos.example.com"])
 	key := crResourceKey(gvr, "default", "my-foo")
-	assert.Equal(t, "1", rc.CRs[key].Obj.GetResourceVersion())
+	assert.Same(t, cr, rc.CRs[key].Obj)
 }
 
 func TestResourceCache_ApplyAdditions(t *testing.T) {
@@ -246,11 +244,11 @@ func TestResourceCache_ApplyAdditions(t *testing.T) {
 	addedCR := makeCachedCR("other-foo", "default", "example.com", "v1", "Foo", "1") // add
 	deletedCRD := makeCachedCRD("ignored.example.com", "1")                          // should be skipped
 
-	rc.applyAdditions([]resourceChange{
-		{obj: newCRD, eventType: watch.Modified, isCRD: true},
-		{obj: newCR, eventType: watch.Modified, gvr: gvr},
-		{obj: addedCR, eventType: watch.Added, gvr: gvr},
-		{obj: deletedCRD, eventType: watch.Deleted, isCRD: true},
+	rc.applyAdditions([]ResourceChange{
+		{Obj: newCRD, EventType: watch.Modified, IsCRD: true},
+		{Obj: newCR, EventType: watch.Modified, GVR: gvr},
+		{Obj: addedCR, EventType: watch.Added, GVR: gvr},
+		{Obj: deletedCRD, EventType: watch.Deleted, IsCRD: true},
 	})
 
 	assert.Equal(t, "2", rc.CRDs["foos.example.com"].GetResourceVersion(), "CRD should be modified")
@@ -258,9 +256,6 @@ func TestResourceCache_ApplyAdditions(t *testing.T) {
 	assert.Equal(t, "2", rc.CRs[key].Obj.GetResourceVersion(), "CR should be modified")
 	assert.Contains(t, rc.CRs, crResourceKey(gvr, "default", "other-foo"), "added CR should be present")
 
-	// Mutating the source object must not bleed into the cache (deep copy).
-	newCRD.SetResourceVersion("999")
-	assert.Equal(t, "2", rc.CRDs["foos.example.com"].GetResourceVersion())
 }
 
 func TestResourceCache_ApplyDeletions(t *testing.T) {
@@ -274,11 +269,11 @@ func TestResourceCache_ApplyDeletions(t *testing.T) {
 	rc.CRs[keepKey] = &cachedCR{Obj: makeCachedCR("keep-foo", "default", "example.com", "v1", "Foo", "1"), GVR: gvr}
 	rc.CRs[dropKey] = &cachedCR{Obj: makeCachedCR("drop-foo", "default", "example.com", "v1", "Foo", "1"), GVR: gvr}
 
-	rc.applyDeletions([]resourceChange{
-		{obj: makeCachedCRD("drop.example.com", "1"), eventType: watch.Deleted, isCRD: true},
-		{obj: makeCachedCR("drop-foo", "default", "example.com", "v1", "Foo", "1"), eventType: watch.Deleted, gvr: gvr},
+	rc.applyDeletions([]ResourceChange{
+		{Obj: makeCachedCRD("drop.example.com", "1"), EventType: watch.Deleted, IsCRD: true},
+		{Obj: makeCachedCR("drop-foo", "default", "example.com", "v1", "Foo", "1"), EventType: watch.Deleted, GVR: gvr},
 		// Non-delete changes must be ignored — they don't affect the cache here.
-		{obj: makeCachedCRD("keep.example.com", "2"), eventType: watch.Modified, isCRD: true},
+		{Obj: makeCachedCRD("keep.example.com", "2"), EventType: watch.Modified, IsCRD: true},
 	})
 
 	assert.NotContains(t, rc.CRDs, "drop.example.com", "deleted CRD should be removed")

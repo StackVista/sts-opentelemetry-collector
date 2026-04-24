@@ -4,6 +4,9 @@ package k8scrdreceiver
 import (
 	"compress/gzip"
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -17,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/watch"
 )
 
 func testCacheWithData(t *testing.T) *resourceCache {
@@ -36,17 +40,28 @@ func testCacheWithData(t *testing.T) *resourceCache {
 	return cache
 }
 
-// msg wraps a cache in a PeerSyncMessage. Test convenience.
-func msg(c *resourceCache) *PeerSyncMessage {
-	return &PeerSyncMessage{Cache: c}
-}
-
-// cacheBytes marshals a cache through the peer sync envelope.
-func cacheBytes(t *testing.T, c *resourceCache) []byte {
+// deltaBytes marshals a cache as a delta payload containing all entries as ADDED.
+// Used to feed handleIncrement / pushToPeer in tests.
+func deltaBytes(t *testing.T, c *resourceCache) []byte {
 	t.Helper()
-	data, err := marshalPeerSyncMessage(msg(c))
+	delta := &PeerSyncDelta{AppliedAt: time.Now()}
+	for _, crd := range c.CRDs {
+		delta.Changes = append(delta.Changes, ResourceChange{Obj: crd, EventType: watch.Added, IsCRD: true})
+	}
+	for _, cr := range c.CRs {
+		delta.Changes = append(delta.Changes, ResourceChange{Obj: cr.Obj, EventType: watch.Added, GVR: cr.GVR})
+	}
+	data, err := marshalPeerSyncDelta(delta)
 	require.NoError(t, err)
 	return data
+}
+
+// seedCache directly installs c into store's cache, bypassing ApplyDelta.
+// Used for setup in tests that want a pre-populated store.
+func seedCache(store *peerSyncCacheStore, c *resourceCache) {
+	store.cacheMu.Lock()
+	store.cache = c
+	store.cacheMu.Unlock()
 }
 
 func peerPort(t *testing.T, addr string) (string, int) {
@@ -58,49 +73,40 @@ func peerPort(t *testing.T, addr string) (string, int) {
 	return host, port
 }
 
-// --- Core Save/Load ---
+// --- Core ApplyDelta / cache state ---
 
-func TestPeerSyncCacheStore_SaveLoadRoundtrip(t *testing.T) {
+func TestPeerSyncCacheStore_ApplyDelta_PopulatesCache(t *testing.T) {
 	t.Parallel()
-	logger := zaptest.NewLogger(t)
-	store := newPeerSyncCacheStore(logger, 0, "", nil)
+	store := newPeerSyncCacheStore(zaptest.NewLogger(t), 0, "", nil)
 
-	original := testCacheWithData(t)
+	delta := &PeerSyncDelta{AppliedAt: time.Now()}
+	for _, crd := range testCacheWithData(t).CRDs {
+		delta.Changes = append(delta.Changes, ResourceChange{Obj: crd, EventType: watch.Added, IsCRD: true})
+	}
+	for _, cr := range testCacheWithData(t).CRs {
+		delta.Changes = append(delta.Changes, ResourceChange{Obj: cr.Obj, EventType: watch.Added, GVR: cr.GVR})
+	}
 
-	err := store.Save(context.Background(), msg(original))
-	require.NoError(t, err)
+	require.NoError(t, store.ApplyDelta(context.Background(), delta))
 
-	loaded, err := store.Load(context.Background())
-	require.NoError(t, err)
-
-	require.Len(t, loaded.Cache.CRDs, 1)
-	assert.Equal(t, "widgets.example.com", loaded.Cache.CRDs["widgets.example.com"].GetName())
-	assert.Equal(t, "42", loaded.Cache.CRDs["widgets.example.com"].GetResourceVersion())
-
-	require.Len(t, loaded.Cache.CRs, 1)
-	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"}
-	key := crResourceKey(gvr, "default", "my-widget")
-	assert.Equal(t, "my-widget", loaded.Cache.CRs[key].Obj.GetName())
-	assert.Equal(t, "7", loaded.Cache.CRs[key].Obj.GetResourceVersion())
+	crds, crs := store.cacheSize()
+	assert.Equal(t, 1, crds)
+	assert.Equal(t, 1, crs)
+	assert.False(t, store.IsEmpty())
 }
 
-func TestPeerSyncCacheStore_LoadReturnsEmptyWhenNoData(t *testing.T) {
+func TestPeerSyncCacheStore_IsEmpty_TrueByDefault(t *testing.T) {
 	t.Parallel()
-	logger := zaptest.NewLogger(t)
-	store := newPeerSyncCacheStore(logger, 0, "", nil)
-
-	loaded, err := store.Load(context.Background())
-	require.NoError(t, err)
-	assert.True(t, loaded.Cache.isEmpty())
+	store := newPeerSyncCacheStore(zaptest.NewLogger(t), 0, "", nil)
+	assert.True(t, store.IsEmpty())
 }
 
 // --- HTTP handlers ---
 
 func TestPeerSyncCacheStore_HandleSnapshot_Returns503WhenNotLeader(t *testing.T) {
 	t.Parallel()
-	logger := zaptest.NewLogger(t)
-	store := newPeerSyncCacheStore(logger, 0, "", nil)
-	require.NoError(t, store.Save(context.Background(), msg(testCacheWithData(t))))
+	store := newPeerSyncCacheStore(zaptest.NewLogger(t), 0, "", nil)
+	seedCache(store, testCacheWithData(t))
 
 	req := httptest.NewRequest(http.MethodGet, syncSnapshotPath, nil)
 	w := httptest.NewRecorder()
@@ -111,8 +117,7 @@ func TestPeerSyncCacheStore_HandleSnapshot_Returns503WhenNotLeader(t *testing.T)
 
 func TestPeerSyncCacheStore_HandleSnapshot_Returns204WhenLeaderHasNoData(t *testing.T) {
 	t.Parallel()
-	logger := zaptest.NewLogger(t)
-	store := newPeerSyncCacheStore(logger, 0, "", nil)
+	store := newPeerSyncCacheStore(zaptest.NewLogger(t), 0, "", nil)
 	store.SetLeader(true)
 
 	req := httptest.NewRequest(http.MethodGet, syncSnapshotPath, nil)
@@ -122,34 +127,27 @@ func TestPeerSyncCacheStore_HandleSnapshot_Returns204WhenLeaderHasNoData(t *test
 	assert.Equal(t, http.StatusNoContent, w.Code)
 }
 
-func TestPeerSyncCacheStore_HandleIncrement_StoresReceivedData(t *testing.T) {
+func TestPeerSyncCacheStore_HandleIncrement_AppliesReceivedDelta(t *testing.T) {
 	t.Parallel()
-	logger := zaptest.NewLogger(t)
-	store := newPeerSyncCacheStore(logger, 0, "", nil)
+	store := newPeerSyncCacheStore(zaptest.NewLogger(t), 0, "", nil)
 
-	data := cacheBytes(t, testCacheWithData(t))
-
+	data := deltaBytes(t, testCacheWithData(t))
 	req := httptest.NewRequest(http.MethodPost, syncIncrementsPath, strings.NewReader(string(data)))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	store.handleIncrement(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-
-	loaded, err := store.Load(context.Background())
-	require.NoError(t, err)
-	assert.Len(t, loaded.Cache.CRDs, 1)
-	assert.Len(t, loaded.Cache.CRs, 1)
+	crds, crs := store.cacheSize()
+	assert.Equal(t, 1, crds)
+	assert.Equal(t, 1, crs)
 }
 
 func TestPeerSyncCacheStore_HandleIncrement_GzipCompressed(t *testing.T) {
 	t.Parallel()
-	logger := zaptest.NewLogger(t)
-	store := newPeerSyncCacheStore(logger, 0, "", nil)
+	store := newPeerSyncCacheStore(zaptest.NewLogger(t), 0, "", nil)
 
-	data := cacheBytes(t, testCacheWithData(t))
-
-	compressed, err := gzipCompress(data)
+	compressed, err := gzipCompress(deltaBytes(t, testCacheWithData(t)))
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodPost, syncIncrementsPath, strings.NewReader(string(compressed)))
@@ -159,56 +157,48 @@ func TestPeerSyncCacheStore_HandleIncrement_GzipCompressed(t *testing.T) {
 	store.handleIncrement(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-
-	loaded, err := store.Load(context.Background())
-	require.NoError(t, err)
-	assert.Len(t, loaded.Cache.CRDs, 1)
+	crds, _ := store.cacheSize()
+	assert.Equal(t, 1, crds)
 }
 
 // --- Lifecycle ---
 
 func TestPeerSyncCacheStore_StartStop(t *testing.T) {
 	t.Parallel()
-	logger := zaptest.NewLogger(t)
-
-	store := newPeerSyncCacheStore(logger, 0, "", nil)
-	err := store.Start(context.Background())
-	require.NoError(t, err)
-
+	store := newPeerSyncCacheStore(zaptest.NewLogger(t), 0, "", nil)
+	require.NoError(t, store.Start(context.Background()))
 	store.Stop()
 }
 
-// --- Load failover: pull from peers ---
+// --- Bootstrap: pull from peers ---
 
-func TestPeerSyncCacheStore_Load_PullsFromPeerWhenLocalEmpty(t *testing.T) {
+func TestPeerSyncCacheStore_Bootstrap_PullsFromLeaderPeer(t *testing.T) {
 	t.Parallel()
 	logger := zaptest.NewLogger(t)
 
-	// Set up a peer that has cached data (simulates previous leader).
+	// Set up a peer that holds the leader role and has cached data.
 	peer := newPeerSyncCacheStore(logger, 0, "", nil)
 	peer.SetLeader(true)
-	err := peer.Save(context.Background(), msg(testCacheWithData(t)))
-	require.NoError(t, err)
+	seedCache(peer, testCacheWithData(t))
 
 	peerServer := httptest.NewServer(http.HandlerFunc(peer.handleSnapshot))
 	defer peerServer.Close()
 
 	_, peerPortInt := peerPort(t, peerServer.Listener.Addr().String())
 
-	// New store with no local data — Load should pull from the peer.
+	// New store, empty cache — Bootstrap should pull from the peer.
 	store := newPeerSyncCacheStore(logger, peerPortInt, "localhost", nil)
+	require.NoError(t, store.Bootstrap(context.Background()))
 
-	loaded, err := store.Load(context.Background())
-	require.NoError(t, err)
-	assert.Len(t, loaded.Cache.CRDs, 1)
-	assert.Len(t, loaded.Cache.CRs, 1)
+	crds, crs := store.cacheSize()
+	assert.Equal(t, 1, crds)
+	assert.Equal(t, 1, crs)
 }
 
-func TestPeerSyncCacheStore_Load_ReturnsEmptyWhenAllPeersEmpty(t *testing.T) {
+func TestPeerSyncCacheStore_Bootstrap_StaysEmptyWhenAllPeersEmpty(t *testing.T) {
 	t.Parallel()
 	logger := zaptest.NewLogger(t)
 
-	// Peer has no data — returns 204.
 	peer := newPeerSyncCacheStore(logger, 0, "", nil)
 	peer.SetLeader(true)
 	peerServer := httptest.NewServer(http.HandlerFunc(peer.handleSnapshot))
@@ -217,60 +207,126 @@ func TestPeerSyncCacheStore_Load_ReturnsEmptyWhenAllPeersEmpty(t *testing.T) {
 	_, peerPortInt := peerPort(t, peerServer.Listener.Addr().String())
 
 	store := newPeerSyncCacheStore(logger, peerPortInt, "localhost", nil)
-
-	loaded, err := store.Load(context.Background())
-	require.NoError(t, err)
-	assert.True(t, loaded.Cache.isEmpty())
+	require.NoError(t, store.Bootstrap(context.Background()))
+	assert.True(t, store.IsEmpty())
 }
 
-func TestPeerSyncCacheStore_Load_PrefersLocalOverPull(t *testing.T) {
+func TestPeerSyncCacheStore_Bootstrap_NoOpWhenAlreadyPopulated(t *testing.T) {
 	t.Parallel()
 	logger := zaptest.NewLogger(t)
 
-	// Peer has different data than local.
+	// Peer has different data than what's already in the store.
 	peerCache := newResourceCache()
 	peerCRD := makeTestCRDUnstructured("gadgets.example.com", "example.com", "Gadget", "gadgets")
 	peerCache.CRDs["gadgets.example.com"] = peerCRD
 
 	peer := newPeerSyncCacheStore(logger, 0, "", nil)
 	peer.SetLeader(true)
-	err := peer.Save(context.Background(), msg(peerCache))
-	require.NoError(t, err)
+	seedCache(peer, peerCache)
 
 	peerServer := httptest.NewServer(http.HandlerFunc(peer.handleSnapshot))
 	defer peerServer.Close()
 
 	_, peerPortInt := peerPort(t, peerServer.Listener.Addr().String())
 
-	// Store has local data — should use it, not pull from peer.
+	// Pre-populate store; Bootstrap should be a no-op.
 	store := newPeerSyncCacheStore(logger, peerPortInt, "localhost", nil)
-	err = store.Save(context.Background(), msg(testCacheWithData(t)))
-	require.NoError(t, err)
+	seedCache(store, testCacheWithData(t))
 
-	loaded, err := store.Load(context.Background())
-	require.NoError(t, err)
-
-	assert.Contains(t, loaded.Cache.CRDs, "widgets.example.com")
-	_, hasGadgets := loaded.Cache.CRDs["gadgets.example.com"]
-	assert.False(t, hasGadgets, "should prefer local data over peer pull")
+	require.NoError(t, store.Bootstrap(context.Background()))
+	store.cacheMu.RLock()
+	assert.Contains(t, store.cache.CRDs, "widgets.example.com")
+	assert.NotContains(t, store.cache.CRDs, "gadgets.example.com",
+		"populated store should not be overwritten by bootstrap")
+	store.cacheMu.RUnlock()
 }
 
-// --- Unmarshal recovery ---
+// --- Buffer + ready gating during Bootstrap ---
 
-func TestPeerSyncCacheStore_Load_RecoverFromCorruptData(t *testing.T) {
+// TestPeerSyncCacheStore_BuffersDeltasDuringBootstrap puts the store into the
+// "bootstrapping" state, sends two deltas (one before and one after the snapshot's
+// AppliedAt), then completes bootstrap. The pre-snapshot delta is discarded; the
+// post-snapshot delta is applied.
+func TestPeerSyncCacheStore_BuffersDeltasDuringBootstrap(t *testing.T) {
 	t.Parallel()
-	logger := zaptest.NewLogger(t)
-	store := newPeerSyncCacheStore(logger, 0, "", nil)
+	store := newPeerSyncCacheStore(zaptest.NewLogger(t), 0, "", nil)
 
-	// Store corrupt data directly.
-	store.mu.Lock()
-	store.syncedCacheData = []byte("not valid json")
-	store.mu.Unlock()
+	// Put the store in the bootstrapping state directly.
+	store.bufferMu.Lock()
+	store.ready = false
+	store.bufferMu.Unlock()
 
-	// Load should recover gracefully — return empty cache, no error.
-	loaded, err := store.Load(context.Background())
+	// Send a delta that PREDATES the snapshot's reference time.
+	oldDelta := makeAddDelta(t, "old.example.com", time.Now().Add(-1*time.Hour))
+	postDeltaToStore(t, store, oldDelta)
+
+	// Send a delta that POSTDATES the snapshot.
+	newDelta := makeAddDelta(t, "new.example.com", time.Now().Add(1*time.Hour))
+	postDeltaToStore(t, store, newDelta)
+
+	// Both should be buffered, not applied.
+	assert.True(t, store.IsEmpty())
+	assert.Equal(t, 2, len(store.deltaBuffer))
+
+	// Complete bootstrap with a snapshot whose reference time falls between the deltas.
+	snap := &PeerSyncSnapshot{
+		Cache:            newResourceCache(),
+		LastSnapshotTime: time.Now(),
+	}
+	store.completeBootstrap(snap)
+
+	// Only the post-snapshot delta should have been applied.
+	store.cacheMu.RLock()
+	defer store.cacheMu.RUnlock()
+	assert.Contains(t, store.cache.CRDs, "new.example.com")
+	assert.NotContains(t, store.cache.CRDs, "old.example.com",
+		"delta predating the snapshot should be discarded on drain")
+}
+
+// TestPeerSyncCacheStore_Buffer_DropsOldestWhenFull verifies the bounded buffer
+// behaviour: when the cap is reached, the oldest entry is dropped.
+func TestPeerSyncCacheStore_Buffer_DropsOldestWhenFull(t *testing.T) {
+	t.Parallel()
+	store := newPeerSyncCacheStore(zaptest.NewLogger(t), 0, "", nil)
+	store.bufferMu.Lock()
+	store.ready = false
+	store.bufferMu.Unlock()
+
+	for i := 0; i <= deltaBufferMaxSize; i++ {
+		postDeltaToStore(t, store, makeAddDelta(t, fmt.Sprintf("crd-%d.example.com", i), time.Now()))
+	}
+
+	store.bufferMu.Lock()
+	assert.Equal(t, deltaBufferMaxSize, len(store.deltaBuffer))
+	// The very first entry (crd-0) should have been dropped.
+	for _, d := range store.deltaBuffer {
+		require.Len(t, d.Changes, 1)
+		assert.NotEqual(t, "crd-0.example.com", d.Changes[0].Obj.GetName())
+	}
+	store.bufferMu.Unlock()
+}
+
+// makeAddDelta builds a single-CRD ADDED delta with the given AppliedAt timestamp.
+func makeAddDelta(t *testing.T, crdName string, appliedAt time.Time) *PeerSyncDelta {
+	t.Helper()
+	crd := makeTestCRDUnstructured(crdName, "example.com", "Foo", "foos")
+	crd.SetResourceVersion("1")
+	return &PeerSyncDelta{
+		AppliedAt: appliedAt,
+		Changes:   []ResourceChange{{Obj: crd, EventType: watch.Added, IsCRD: true}},
+	}
+}
+
+// postDeltaToStore POSTs a delta to the store's increment endpoint.
+func postDeltaToStore(t *testing.T, store *peerSyncCacheStore, delta *PeerSyncDelta) {
+	t.Helper()
+	body, err := marshalPeerSyncDelta(delta)
 	require.NoError(t, err)
-	assert.True(t, loaded.Cache.isEmpty())
+	req := httptest.NewRequest(http.MethodPost, syncIncrementsPath, strings.NewReader(string(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	store.handleIncrement(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
 }
 
 // --- Broadcast behavior ---
@@ -293,7 +349,7 @@ func TestPeerSyncCacheStore_BroadcastSkipsSelf(t *testing.T) {
 
 	store := newPeerSyncCacheStore(logger, peerPortInt, "localhost", nil)
 
-	data := cacheBytes(t, testCacheWithData(t))
+	data := deltaBytes(t, testCacheWithData(t))
 
 	store.broadcastToPeers(context.Background(), data)
 
@@ -306,7 +362,7 @@ func TestPeerSyncCacheStore_BroadcastNoOpWithoutDNS(t *testing.T) {
 
 	store := newPeerSyncCacheStore(logger, defaultPeerPort, "", nil)
 
-	data := cacheBytes(t, testCacheWithData(t))
+	data := deltaBytes(t, testCacheWithData(t))
 
 	// Should return immediately without panic when peerDNS is empty.
 	store.broadcastToPeers(context.Background(), data)
@@ -318,7 +374,7 @@ func TestPeerSyncCacheStore_BroadcastHandlesDNSFailure(t *testing.T) {
 
 	store := newPeerSyncCacheStore(logger, defaultPeerPort, "this-dns-does-not-exist.invalid", nil)
 
-	data := cacheBytes(t, testCacheWithData(t))
+	data := deltaBytes(t, testCacheWithData(t))
 
 	// Should not panic — logs and returns.
 	store.broadcastToPeers(context.Background(), data)
@@ -349,7 +405,7 @@ func TestPeerSyncCacheStore_PushConcurrently_Parallel(t *testing.T) {
 		peers[i] = peerHost
 	}
 
-	compressed, err := gzipCompress(cacheBytes(t, testCacheWithData(t)))
+	compressed, err := gzipCompress(deltaBytes(t, testCacheWithData(t)))
 	require.NoError(t, err)
 	client := &http.Client{Timeout: pushPeerTimeout}
 
@@ -389,7 +445,7 @@ func TestPeerSyncCacheStore_PushConcurrently_EarlyReturnOnAckThreshold(t *testin
 		peers[i] = peerHost
 	}
 
-	compressed, err := gzipCompress(cacheBytes(t, testCacheWithData(t)))
+	compressed, err := gzipCompress(deltaBytes(t, testCacheWithData(t)))
 	require.NoError(t, err)
 	client := &http.Client{Timeout: pushPeerTimeout}
 
@@ -428,7 +484,7 @@ func TestPeerSyncCacheStore_PushConcurrently_TimeoutWhenNoAck(t *testing.T) {
 		peers[i] = peerHost
 	}
 
-	compressed, err := gzipCompress(cacheBytes(t, testCacheWithData(t)))
+	compressed, err := gzipCompress(deltaBytes(t, testCacheWithData(t)))
 	require.NoError(t, err)
 	client := &http.Client{Timeout: pushPeerTimeout}
 
@@ -456,7 +512,7 @@ func TestPeerSyncCacheStore_PushToPeer_DataIntegrity(t *testing.T) {
 	peerHost, peerPortInt := peerPort(t, peerServer.Listener.Addr().String())
 	sender := newPeerSyncCacheStore(logger, peerPortInt, "", nil)
 
-	data := cacheBytes(t, testCacheWithData(t))
+	data := deltaBytes(t, testCacheWithData(t))
 
 	compressed, err := gzipCompress(data)
 	require.NoError(t, err)
@@ -464,17 +520,16 @@ func TestPeerSyncCacheStore_PushToPeer_DataIntegrity(t *testing.T) {
 	client := &http.Client{Timeout: pushPeerTimeout}
 	sender.pushToPeer(context.Background(), client, peerHost, compressed)
 
-	// Receiver should now be able to Load the pushed data.
-	loaded, err := receiver.Load(context.Background())
-	require.NoError(t, err)
-
-	require.Len(t, loaded.Cache.CRDs, 1)
-	assert.Equal(t, "widgets.example.com", loaded.Cache.CRDs["widgets.example.com"].GetName())
-	require.Len(t, loaded.Cache.CRs, 1)
+	// Receiver should have applied the delta to its cache.
+	receiver.cacheMu.RLock()
+	defer receiver.cacheMu.RUnlock()
+	require.Len(t, receiver.cache.CRDs, 1)
+	assert.Equal(t, "widgets.example.com", receiver.cache.CRDs["widgets.example.com"].GetName())
+	require.Len(t, receiver.cache.CRs, 1)
 
 	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"}
 	key := crResourceKey(gvr, "default", "my-widget")
-	assert.Equal(t, "my-widget", loaded.Cache.CRs[key].Obj.GetName())
+	assert.Equal(t, "my-widget", receiver.cache.CRs[key].Obj.GetName())
 }
 
 // --- Context cancellation ---
@@ -519,22 +574,24 @@ func TestPeerSyncCacheStore_PullHandlesDNSFailure(t *testing.T) {
 
 	store := newPeerSyncCacheStore(logger, defaultPeerPort, "this-dns-does-not-exist.invalid", nil)
 
-	data := store.pullFromPeers(context.Background(), 1*time.Second)
-	assert.Nil(t, data)
+	snap, leaderEmpty := store.pullSnapshotFromPeers(context.Background(), 1*time.Second)
+	assert.Nil(t, snap)
+	assert.False(t, leaderEmpty)
 }
 
 // --- Snapshot endpoint serves data correctly ---
 
-func TestPeerSyncCacheStore_HandleSnapshot_ServesGzippedDataWithAppliedAtHeader(t *testing.T) {
+func TestPeerSyncCacheStore_HandleSnapshot_ServesNDJSONWithAppliedAtHeader(t *testing.T) {
 	t.Parallel()
-	logger := zaptest.NewLogger(t)
-	store := newPeerSyncCacheStore(logger, 0, "", nil)
+	store := newPeerSyncCacheStore(zaptest.NewLogger(t), 0, "", nil)
 	store.SetLeader(true)
+	seedCache(store, testCacheWithData(t))
 
-	before := time.Now()
-	err := store.Save(context.Background(), msg(testCacheWithData(t)))
-	require.NoError(t, err)
-	after := time.Now()
+	wantAppliedAt := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
+	require.NoError(t, store.ApplyDelta(context.Background(), &PeerSyncDelta{
+		AppliedAt:        wantAppliedAt,
+		LastSnapshotTime: wantAppliedAt,
+	}))
 
 	req := httptest.NewRequest(http.MethodGet, syncSnapshotPath, nil)
 	w := httptest.NewRecorder()
@@ -544,22 +601,39 @@ func TestPeerSyncCacheStore_HandleSnapshot_ServesGzippedDataWithAppliedAtHeader(
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "application/x-ndjson", resp.Header.Get("Content-Type"))
 	assert.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 
 	appliedAt, err := time.Parse(time.RFC3339Nano, resp.Header.Get(snapshotAppliedAtHeader))
 	require.NoError(t, err, "X-Snapshot-AppliedAt header should be parseable")
-	assert.True(t, !appliedAt.Before(before) && !appliedAt.After(after),
-		"appliedAt %v should fall between save bounds %v–%v", appliedAt, before, after)
+	assert.True(t, wantAppliedAt.Equal(appliedAt),
+		"appliedAt header should match the LastSnapshotTime set via ApplyDelta")
 
 	gr, err := gzip.NewReader(resp.Body)
 	require.NoError(t, err)
 	defer gr.Close()
 
-	data, err := io.ReadAll(gr)
-	require.NoError(t, err)
-
-	restored, err := unmarshalPeerSyncMessage(data)
-	require.NoError(t, err)
-	assert.Len(t, restored.Cache.CRDs, 1)
-	assert.Len(t, restored.Cache.CRs, 1)
+	dec := json.NewDecoder(gr)
+	var metaCount, crdCount, crCount int
+	for {
+		var frame peerSyncStreamFrame
+		if decodeErr := dec.Decode(&frame); decodeErr != nil {
+			if errors.Is(decodeErr, io.EOF) {
+				break
+			}
+			require.NoError(t, decodeErr)
+		}
+		switch frame.Type {
+		case streamFrameMeta:
+			metaCount++
+			assert.True(t, wantAppliedAt.Equal(frame.LastSnapshotTime))
+		case streamFrameCRD:
+			crdCount++
+		case streamFrameCR:
+			crCount++
+		}
+	}
+	assert.Equal(t, 1, metaCount, "exactly one meta frame")
+	assert.Equal(t, 1, crdCount)
+	assert.Equal(t, 1, crCount)
 }

@@ -103,7 +103,7 @@ func (ri *ResourceInformers) Start(ctx context.Context) error {
 	return nil
 }
 
-func (ri *ResourceInformers) Shutdown(_ context.Context) error {
+func (ri *ResourceInformers) Shutdown(ctx context.Context) error {
 	if ri.cancel != nil {
 		ri.cancel()
 	}
@@ -125,13 +125,27 @@ func (ri *ResourceInformers) Shutdown(_ context.Context) error {
 		close(ri.crdInformerStop)
 	}
 
-	ri.wg.Wait()
+	// Bail out if the shutdown context expires — a hung informer must not block
+	// the receiver.
+	done := make(chan struct{})
+	go func() {
+		ri.wg.Wait()
+		close(done)
+	}()
 
-	ri.settings.Logger.Debug("Resource informers shutdown",
-		zap.Int("cr_informers_stopped", crCount),
-	)
-
-	return nil
+	select {
+	case <-done:
+		ri.settings.Logger.Debug("Resource informers shutdown",
+			zap.Int("cr_informers_stopped", crCount),
+		)
+		return nil
+	case <-ctx.Done():
+		ri.settings.Logger.Warn("Resource informers shutdown timed out, exiting with goroutines still running",
+			zap.Int("cr_informers_stopped", crCount),
+			zap.Error(ctx.Err()),
+		)
+		return ctx.Err()
+	}
 }
 
 // startCRDInformer creates and starts the informer that watches CRDs.

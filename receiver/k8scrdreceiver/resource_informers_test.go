@@ -296,7 +296,9 @@ func TestResourceInformers_Shutdown(t *testing.T) {
 	ri.mu.RUnlock()
 
 	cancel()
-	err = ri.Shutdown(ctx)
+	// Use a fresh context for Shutdown — the caller's ctx is already cancelled,
+	// which Shutdown treats as "exit now without waiting for goroutines".
+	err = ri.Shutdown(context.Background())
 	require.NoError(t, err)
 
 	// All CR informers should be cleaned up

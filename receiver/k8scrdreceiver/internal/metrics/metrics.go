@@ -8,106 +8,53 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/types"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
 
-type ChangeType string
-
-const (
-	ChangeAdded    ChangeType = "added"
-	ChangeModified ChangeType = "modified"
-	ChangeDeleted  ChangeType = "deleted"
-	ChangeUnknown  ChangeType = "unknown"
-)
-
-type CycleMode string
-
-const (
-	ModeSnapshot  CycleMode = "snapshot"
-	ModeIncrement CycleMode = "increment"
-)
-
-type ResourceKind string
-
-const (
-	KindCRD ResourceKind = "crd"
-	KindCR  ResourceKind = "cr"
-)
-
-type BroadcastOutcome string
-
-const (
-	BroadcastSuccess BroadcastOutcome = "success"
-	BroadcastFailed  BroadcastOutcome = "failed"
-)
-
-// BroadcastFailureReason categorizes why a broadcast did not satisfy its ACK threshold.
-type BroadcastFailureReason string
-
-const (
-	BroadcastFailureNone        BroadcastFailureReason = ""
-	BroadcastFailureDNSLookup   BroadcastFailureReason = "dns_lookup"
-	BroadcastFailureGzip        BroadcastFailureReason = "gzip"
-	BroadcastFailureAckTimeout  BroadcastFailureReason = "ack_timeout"
-	BroadcastFailureNoAcks      BroadcastFailureReason = "no_acks"
-)
-
-// PushOutcome is the result of a single push attempt to a peer.
-type PushOutcome string
-
-const (
-	PushSuccess PushOutcome = "success"
-	PushFailed  PushOutcome = "failed"
-)
-
-// PushFailureReason categorizes why a push attempt failed. Empty string for success.
-type PushFailureReason string
-
-const (
-	PushFailureNone          PushFailureReason = ""
-	PushFailureTimeout       PushFailureReason = "timeout"
-	PushFailureConnection    PushFailureReason = "connection_error"
-	PushFailureHTTPStatus    PushFailureReason = "http_error"
-	PushFailureRequestFailed PushFailureReason = "request_failed"
-)
-
 // Recorder is the interface used by the receiver to record metrics.
 type Recorder interface {
-	RecordEmitted(ctx context.Context, change ChangeType, n int64)
-	RecordCycle(ctx context.Context, mode CycleMode, d time.Duration)
-	RecordCacheSize(ctx context.Context, kind ResourceKind, n int64)
-	RecordPeerBroadcast(ctx context.Context, outcome BroadcastOutcome, reason BroadcastFailureReason)
-	RecordPeerPushAttempt(ctx context.Context, outcome PushOutcome, reason PushFailureReason)
+	RecordEmitted(ctx context.Context, change types.ChangeType, n int64)
+	RecordCycle(ctx context.Context, mode types.CycleMode, d time.Duration)
+	RecordCacheSize(ctx context.Context, kind types.ResourceKind, n int64)
+	RecordPeerBroadcast(ctx context.Context, outcome types.BroadcastOutcome, reason types.BroadcastFailureReason)
+	RecordPeerPushAttempt(ctx context.Context, outcome types.PushOutcome, reason types.PushFailureReason)
 	RecordPeerPushBytes(ctx context.Context, n int64)
 	RecordPeerPushDuration(ctx context.Context, d time.Duration)
+	RecordBootstrap(ctx context.Context, outcome types.BootstrapOutcome)
+	RecordSnapshotStreamFailure(ctx context.Context)
 }
 
 // NoopRecorder is a Recorder that drops every measurement. Useful in tests.
 type NoopRecorder struct{}
 
-func (NoopRecorder) RecordEmitted(_ context.Context, _ ChangeType, _ int64)      {}
-func (NoopRecorder) RecordCycle(_ context.Context, _ CycleMode, _ time.Duration) {}
-func (NoopRecorder) RecordCacheSize(_ context.Context, _ ResourceKind, _ int64)  {}
-func (NoopRecorder) RecordPeerBroadcast(_ context.Context, _ BroadcastOutcome, _ BroadcastFailureReason) {
+func (NoopRecorder) RecordEmitted(_ context.Context, _ types.ChangeType, _ int64)      {}
+func (NoopRecorder) RecordCycle(_ context.Context, _ types.CycleMode, _ time.Duration) {}
+func (NoopRecorder) RecordCacheSize(_ context.Context, _ types.ResourceKind, _ int64)  {}
+func (NoopRecorder) RecordPeerBroadcast(_ context.Context, _ types.BroadcastOutcome, _ types.BroadcastFailureReason) {
 }
-func (NoopRecorder) RecordPeerPushAttempt(_ context.Context, _ PushOutcome, _ PushFailureReason) {
+func (NoopRecorder) RecordPeerPushAttempt(_ context.Context, _ types.PushOutcome, _ types.PushFailureReason) {
 }
-func (NoopRecorder) RecordPeerPushBytes(_ context.Context, _ int64)           {}
-func (NoopRecorder) RecordPeerPushDuration(_ context.Context, _ time.Duration) {}
+func (NoopRecorder) RecordPeerPushBytes(_ context.Context, _ int64)              {}
+func (NoopRecorder) RecordPeerPushDuration(_ context.Context, _ time.Duration)   {}
+func (NoopRecorder) RecordBootstrap(_ context.Context, _ types.BootstrapOutcome) {}
+func (NoopRecorder) RecordSnapshotStreamFailure(_ context.Context)               {}
 
 // Metrics is the live Recorder backed by a real Meter.
 type Metrics struct {
 	common []attribute.KeyValue
 
-	recordsEmitted    metric.Int64Counter
-	cycleDuration     metric.Float64Histogram
-	cachedResources   metric.Int64Gauge
-	peerBroadcasts    metric.Int64Counter
-	peerPushAttempts  metric.Int64Counter
-	peerPushBytes     metric.Int64Histogram
-	peerPushDuration  metric.Float64Histogram
+	recordsEmitted         metric.Int64Counter
+	cycleDuration          metric.Float64Histogram
+	cachedResources        metric.Int64Gauge
+	peerBroadcasts         metric.Int64Counter
+	peerPushAttempts       metric.Int64Counter
+	peerPushBytes          metric.Int64Histogram
+	peerPushDuration       metric.Float64Histogram
+	bootstrapTotal         metric.Int64Counter
+	snapshotStreamFailures metric.Int64Counter
 }
 
 // NewMetrics registers all instruments. Errors from the meter are dropped to match the
@@ -131,7 +78,7 @@ func NewMetrics(typeName, clusterName string, settings component.TelemetrySettin
 	)
 	peerBroadcasts, _ := meter.Int64Counter(
 		name("peer_broadcasts_total"),
-		metric.WithDescription("Peer cache broadcast outcomes per Save() call, labelled by outcome."),
+		metric.WithDescription("Peer broadcast outcomes per ApplyDelta call, labelled by outcome."),
 	)
 	peerPushAttempts, _ := meter.Int64Counter(
 		name("peer_push_attempts_total"),
@@ -147,16 +94,26 @@ func NewMetrics(typeName, clusterName string, settings component.TelemetrySettin
 		metric.WithDescription("Wall-clock duration of a single peer push, including all retries."),
 		metric.WithUnit("s"),
 	)
+	bootstrapTotal, _ := meter.Int64Counter(
+		name("bootstrap_total"),
+		metric.WithDescription("Bootstrap completion outcomes (applied, leader_empty, timed_out)."),
+	)
+	snapshotStreamFailures, _ := meter.Int64Counter(
+		name("snapshot_stream_failures_total"),
+		metric.WithDescription("Snapshot serve failures during NDJSON encoding (client gets a partial stream)."),
+	)
 
 	return &Metrics{
-		common:           []attribute.KeyValue{attribute.String("k8s.cluster.name", clusterName)},
-		recordsEmitted:   recordsEmitted,
-		cycleDuration:    cycleDuration,
-		cachedResources:  cachedResources,
-		peerBroadcasts:   peerBroadcasts,
-		peerPushAttempts: peerPushAttempts,
-		peerPushBytes:    peerPushBytes,
-		peerPushDuration: peerPushDuration,
+		common:                 []attribute.KeyValue{attribute.String("k8s.cluster.name", clusterName)},
+		recordsEmitted:         recordsEmitted,
+		cycleDuration:          cycleDuration,
+		cachedResources:        cachedResources,
+		peerBroadcasts:         peerBroadcasts,
+		peerPushAttempts:       peerPushAttempts,
+		peerPushBytes:          peerPushBytes,
+		peerPushDuration:       peerPushDuration,
+		bootstrapTotal:         bootstrapTotal,
+		snapshotStreamFailures: snapshotStreamFailures,
 	}
 }
 
@@ -166,7 +123,7 @@ func newMetricNameForType(typeName string) func(string) string {
 	}
 }
 
-func (m *Metrics) RecordEmitted(ctx context.Context, change ChangeType, n int64) {
+func (m *Metrics) RecordEmitted(ctx context.Context, change types.ChangeType, n int64) {
 	if n <= 0 {
 		return
 	}
@@ -175,29 +132,33 @@ func (m *Metrics) RecordEmitted(ctx context.Context, change ChangeType, n int64)
 	))
 }
 
-func (m *Metrics) RecordCycle(ctx context.Context, mode CycleMode, d time.Duration) {
+func (m *Metrics) RecordCycle(ctx context.Context, mode types.CycleMode, d time.Duration) {
 	m.cycleDuration.Record(ctx, d.Seconds(), metric.WithAttributeSet(
 		m.attrs(attribute.String("mode", string(mode))),
 	))
 }
 
-func (m *Metrics) RecordCacheSize(ctx context.Context, kind ResourceKind, n int64) {
+func (m *Metrics) RecordCacheSize(ctx context.Context, kind types.ResourceKind, n int64) {
 	m.cachedResources.Record(ctx, n, metric.WithAttributeSet(
 		m.attrs(attribute.String("kind", string(kind))),
 	))
 }
 
-func (m *Metrics) RecordPeerBroadcast(ctx context.Context, outcome BroadcastOutcome, reason BroadcastFailureReason) {
+func (m *Metrics) RecordPeerBroadcast(
+	ctx context.Context, outcome types.BroadcastOutcome, reason types.BroadcastFailureReason,
+) {
 	attrs := []attribute.KeyValue{attribute.String("outcome", string(outcome))}
-	if reason != BroadcastFailureNone {
+	if reason != types.BroadcastFailureNone {
 		attrs = append(attrs, attribute.String("reason", string(reason)))
 	}
 	m.peerBroadcasts.Add(ctx, 1, metric.WithAttributeSet(m.attrs(attrs...)))
 }
 
-func (m *Metrics) RecordPeerPushAttempt(ctx context.Context, outcome PushOutcome, reason PushFailureReason) {
+func (m *Metrics) RecordPeerPushAttempt(
+	ctx context.Context, outcome types.PushOutcome, reason types.PushFailureReason,
+) {
 	attrs := []attribute.KeyValue{attribute.String("outcome", string(outcome))}
-	if reason != PushFailureNone {
+	if reason != types.PushFailureNone {
 		attrs = append(attrs, attribute.String("reason", string(reason)))
 	}
 	m.peerPushAttempts.Add(ctx, 1, metric.WithAttributeSet(m.attrs(attrs...)))
@@ -209,6 +170,16 @@ func (m *Metrics) RecordPeerPushBytes(ctx context.Context, n int64) {
 
 func (m *Metrics) RecordPeerPushDuration(ctx context.Context, d time.Duration) {
 	m.peerPushDuration.Record(ctx, d.Seconds(), metric.WithAttributeSet(m.attrs()))
+}
+
+func (m *Metrics) RecordBootstrap(ctx context.Context, outcome types.BootstrapOutcome) {
+	m.bootstrapTotal.Add(ctx, 1, metric.WithAttributeSet(
+		m.attrs(attribute.String("outcome", string(outcome))),
+	))
+}
+
+func (m *Metrics) RecordSnapshotStreamFailure(ctx context.Context) {
+	m.snapshotStreamFailures.Add(ctx, 1, metric.WithAttributeSet(m.attrs()))
 }
 
 func (m *Metrics) attrs(extras ...attribute.KeyValue) attribute.Set {
