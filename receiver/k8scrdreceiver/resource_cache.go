@@ -9,28 +9,25 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 )
 
-// ResourceChange represents a detected change between the resource cache and current
-// informer state. It is also the wire format for delta pushes between replicas, so
-// fields are exported and JSON-tagged.
+// ResourceChange represents a detected change between the resource cache and
+// current informer state.
 type ResourceChange struct {
-	Obj       *unstructured.Unstructured  `json:"obj"`
-	EventType watch.EventType             `json:"event_type"`
-	IsCRD     bool                        `json:"is_crd"`
-	GVR       schema.GroupVersionResource `json:"gvr,omitempty"` // set for CR changes
+	Obj       *unstructured.Unstructured
+	EventType watch.EventType
+	IsCRD     bool
+	GVR       schema.GroupVersionResource // set for CR changes
 }
 
-// cachedCR stores a CR alongside its GVR for delta computation. Fields are exported
-// because the cache is shipped over the peer sync protocol via encoding/json.
+// cachedCR stores a CR alongside its GVR for delta computation.
 type cachedCR struct {
-	Obj *unstructured.Unstructured  `json:"object"`
-	GVR schema.GroupVersionResource `json:"gvr"`
+	Obj *unstructured.Unstructured
+	GVR schema.GroupVersionResource
 }
 
 // resourceCache tracks the last state emitted downstream.
-// Fields are exported so the cache can be JSON-marshaled directly for peer sync.
 type resourceCache struct {
-	CRDs map[string]*unstructured.Unstructured `json:"crds"` // key: CRD name
-	CRs  map[string]*cachedCR                  `json:"crs"`  // key: crResourceKey(gvr, namespace, name)
+	CRDs map[string]*unstructured.Unstructured // key: CRD name
+	CRs  map[string]*cachedCR                  // key: crResourceKey(gvr, namespace, name)
 }
 
 func newResourceCache() *resourceCache {
@@ -140,9 +137,7 @@ func (rc *resourceCache) applyAdditions(changes []ResourceChange) {
 	}
 }
 
-// applyDeletions removes DELETED entries from the cache. Used in the second phase of a
-// two-phase increment so the cache retains the soon-to-be-deleted resources until after
-// the platform has been notified.
+// applyDeletions removes DELETED entries from the cache.
 func (rc *resourceCache) applyDeletions(changes []ResourceChange) {
 	for _, ch := range changes {
 		if ch.EventType != watch.Deleted {
@@ -158,37 +153,9 @@ func (rc *resourceCache) applyDeletions(changes []ResourceChange) {
 }
 
 // applyDelta splits and applies all changes in a delta — adds/mods first, then deletes.
-// Used by secondaries when receiving a delta from the leader. The same ordering as the
-// leader's two-phase emit (state-after-add-but-before-delete is briefly visible) is not
-// material here since secondaries don't emit, but we use the same primitives.
 func (rc *resourceCache) applyDelta(changes []ResourceChange) {
 	rc.applyAdditions(changes)
 	rc.applyDeletions(changes)
-}
-
-// update replaces the resource cache with the current state. Objects are stored
-// by pointer (read-only per the informer convention).
-func (rc *resourceCache) update(
-	currentCRDs []*unstructured.Unstructured,
-	currentCRs map[schema.GroupVersionResource][]*unstructured.Unstructured,
-) {
-	newCRDs := make(map[string]*unstructured.Unstructured, len(currentCRDs))
-	for _, crd := range currentCRDs {
-		newCRDs[crd.GetName()] = crd
-	}
-	rc.CRDs = newCRDs
-
-	newCRs := make(map[string]*cachedCR)
-	for gvr, crs := range currentCRs {
-		for _, cr := range crs {
-			key := crResourceKey(gvr, cr.GetNamespace(), cr.GetName())
-			newCRs[key] = &cachedCR{
-				Obj: cr,
-				GVR: gvr,
-			}
-		}
-	}
-	rc.CRs = newCRs
 }
 
 // crResourceKey returns a unique key for a CR within the resource cache.

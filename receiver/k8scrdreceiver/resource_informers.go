@@ -32,14 +32,10 @@ type Informers interface {
 	// ReadCRDs returns all matching CRDs from the CRD informer cache.
 	ReadCRDs() []*unstructured.Unstructured
 
-	// ReadCRs returns all CRs from active, synced CR informer caches,
-	// grouped by GroupVersionResource.
+	// ReadCRs returns all CRs from active, synced CR informer caches.
 	ReadCRs() map[schema.GroupVersionResource][]*unstructured.Unstructured
 
-	// Start begins watching for CRDs and their custom resources.
 	Start(ctx context.Context) error
-
-	// Shutdown stops all informers and waits for goroutines to exit.
 	Shutdown(ctx context.Context) error
 }
 
@@ -176,7 +172,9 @@ func (ri *ResourceInformers) startCRDInformer() error {
 		},
 	}
 
-	// No resync for CRD informer — the collector handles periodic emission.
+	// resyncPeriod=0: skip the informer's periodic re-delivery of cached objects to
+	// event handlers. The collector polls the informer cache every IncrementInterval,
+	// so we don't need event-loop resync semantics on top.
 	ri.crdInformer = cache.NewSharedIndexInformer(
 		lw,
 		&unstructured.Unstructured{},
@@ -201,8 +199,9 @@ func (ri *ResourceInformers) startCRDInformer() error {
 		ri.crdInformer.Run(ri.crdInformerStop)
 	}()
 
-	// Wait for initial CRD list to sync — this triggers onCRDAdd for each existing CRD,
-	// which starts CR informers for matching API groups.
+	// Block until the initial List populates the CRD cache. This is the one-shot
+	// startup sync (distinct from the resyncPeriod above), and it triggers
+	// onCRDAdd for each existing CRD, which in turn starts CR informers.
 	if !cache.WaitForCacheSync(ri.ctx.Done(), ri.crdInformer.HasSynced) {
 		return fmt.Errorf("failed to sync CRD informer cache")
 	}
@@ -236,6 +235,11 @@ func (ri *ResourceInformers) waitForCRInformersSync() bool {
 // running informer. Recovers from transient startup errors and from RBAC being
 // granted after the receiver started — without it, those CRDs would stay blind
 // until the CRD object itself changed.
+//
+// Scope: covers the "informer was never created" case only. An informer that was
+// created but whose initial sync is stuck (HasSynced never true) is left alone —
+// the underlying k8s reflector retries watch failures internally, and ReadCRs
+// silently skips unsynced informers so partial state is never emitted.
 func (ri *ResourceInformers) runReconcileLoop(ctx context.Context) {
 	defer ri.wg.Done()
 

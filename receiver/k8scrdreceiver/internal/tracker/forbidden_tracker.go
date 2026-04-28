@@ -8,6 +8,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
+// DefaultRetryInterval is the gap before re-attempting a resource that returned
+// permission denied. Long enough that operators have time to grant RBAC without
+// the tracker spamming the API server with retries.
+const DefaultRetryInterval = 30 * time.Minute
+
 // ForbiddenTracker tracks resources with permission denied to avoid repeated attempts.
 type ForbiddenTracker struct {
 	mu            sync.RWMutex
@@ -15,7 +20,15 @@ type ForbiddenTracker struct {
 	retryInterval time.Duration
 }
 
-// NewForbiddenTracker creates a new tracker with the given retry interval.
+// NewDefault creates a tracker with DefaultRetryInterval — the standard choice
+// for production use.
+func NewDefault() *ForbiddenTracker {
+	return NewForbiddenTracker(DefaultRetryInterval)
+}
+
+// NewForbiddenTracker creates a new tracker with the given retry interval. Most
+// callers should use NewDefault; this constructor exists so tests can use a
+// shorter interval to exercise retry behaviour.
 func NewForbiddenTracker(retryInterval time.Duration) *ForbiddenTracker {
 	return &ForbiddenTracker{
 		forbidden:     make(map[string]time.Time),

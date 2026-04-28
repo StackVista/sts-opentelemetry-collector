@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/metrics"
@@ -14,11 +13,6 @@ import (
 	"go.opentelemetry.io/collector/receiver"
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
-)
-
-const (
-	// defaultForbiddenRetryInterval is how long to wait before retrying a resource that returned permission denied
-	defaultForbiddenRetryInterval = 30 * time.Minute
 )
 
 // k8scrdReceiver uses informers to watch CRDs and their custom resources.
@@ -63,8 +57,6 @@ func (r *k8scrdReceiver) Start(ctx context.Context, host component.Host) error {
 		r.dynamicClient = client
 	}
 
-	// Start peer sync cache store — runs regardless of leadership so that
-	// the HTTP server can receive pushes from the leader and serve pull requests.
 	r.peerStore = newPeerSyncCacheStore(
 		r.settings.Logger,
 		r.config.PeerSyncPort,
@@ -97,7 +89,7 @@ func (r *k8scrdReceiver) startCollector(ctx context.Context) error {
 	}
 	r.mu.Unlock()
 
-	ft := tracker.NewForbiddenTracker(defaultForbiddenRetryInterval)
+	ft := tracker.NewDefault()
 	informers := newResourceInformers(r.settings, r.config, r.dynamicClient, ft, r.metrics)
 	collector := newCRDCollector(r.settings.Logger, r.config, r.consumer, informers, r.peerStore, r.metrics)
 

@@ -124,23 +124,16 @@ func (c *crdCollector) runIncrement(ctx context.Context) {
 	start := time.Now()
 	currentCRDs := c.informers.ReadCRDs()
 	currentCRs := c.informers.ReadCRs()
+	changes := c.peerStore.ComputeChanges(currentCRDs, currentCRs)
 
 	if !c.config.IncludeInitialState && c.peerStore.IsEmpty() {
-		now := time.Now()
-		changes := c.peerStore.ComputeChanges(currentCRDs, currentCRs)
 		c.logger.Info("Initial state loaded into peer cache (not emitting)",
 			zap.Int("crds", len(currentCRDs)),
 			zap.Int("cr_types", len(currentCRs)),
 		)
-		// Mark this initial population as the first snapshot so the next snapshot
-		// is scheduled relative to it.
-		if err := c.peerStore.ApplyDelta(ctx, &PeerSyncDelta{
-			AppliedAt:        now,
-			LastSnapshotTime: now,
-			Changes:          changes,
-		}); err != nil {
-			c.logger.Debug("Failed to apply delta after initial population", zap.Error(err))
-		}
+		// Treat the initial population as a snapshot so the next snapshot tick
+		// is scheduled relative to now, even though we didn't emit anything.
+		c.recordSnapshotApplied(ctx, changes)
 		return
 	}
 
@@ -149,32 +142,42 @@ func (c *crdCollector) runIncrement(ctx context.Context) {
 	mode := types.ModeIncrement
 	if isSnapshot {
 		mode = types.ModeSnapshot
-		c.emitSnapshot(ctx, currentCRDs, currentCRs)
-		// Reset the snapshot timer: AppliedAt and LastSnapshotTime both reflect this
-		// moment because the delta IS the snapshot's broadcast. Increment cycles below
-		// only set AppliedAt — that's how secondaries distinguish snapshot ticks.
-		now := time.Now()
-		changes := c.peerStore.ComputeChanges(currentCRDs, currentCRs)
-		if err := c.peerStore.ApplyDelta(ctx, &PeerSyncDelta{
-			AppliedAt:        now,
-			LastSnapshotTime: now,
-			Changes:          changes,
-		}); err != nil {
-			c.logger.Debug("Failed to apply delta after snapshot", zap.Error(err))
-		}
+		c.emitSnapshot(ctx, currentCRDs, currentCRs, changes)
+		c.recordSnapshotApplied(ctx, changes)
 	} else {
-		c.emitIncrement(ctx, currentCRDs, currentCRs)
+		c.emitIncrement(ctx, changes)
 	}
 
 	c.metrics.RecordCycle(ctx, mode, time.Since(start))
 }
 
+// recordSnapshotApplied syncs the peer cache with the given changes, broadcasts
+// the diff to secondaries, and resets the snapshot timer to now. Called after a
+// snapshot is emitted (or after the initial-state population) to keep all three
+// pieces of state — cache, peers, snapshot clock — coherent.
+//
+// Increment cycles use ApplyDelta directly with LastSnapshotTime unset; only
+// this helper sets it, which is how secondaries distinguish snapshot ticks.
+func (c *crdCollector) recordSnapshotApplied(ctx context.Context, changes []ResourceChange) {
+	now := time.Now()
+	if err := c.peerStore.ApplyDelta(ctx, &PeerSyncDelta{
+		AppliedAt:        now,
+		LastSnapshotTime: now,
+		Changes:          changes,
+	}); err != nil {
+		c.logger.Debug("Failed to record snapshot applied", zap.Error(err))
+	}
+}
+
 // emitSnapshot emits all current resources as ADDED for downstream TTL freshness,
-// and emits DELETED for resources that were in the cache but are no longer present.
+// and emits DELETED for entries in `changes` that mark resources removed from
+// informer state. `changes` is the diff between peerStore cache and current
+// informer state — computed once per cycle by the caller.
 func (c *crdCollector) emitSnapshot(
 	ctx context.Context,
 	currentCRDs []*unstructured.Unstructured,
 	currentCRs map[schema.GroupVersionResource][]*unstructured.Unstructured,
+	changes []ResourceChange,
 ) {
 	var crdAdded, crAdded, crdDeleted, crDeleted int64
 
@@ -207,9 +210,7 @@ func (c *crdCollector) emitSnapshot(
 		}
 	}
 
-	// Cache entries absent from current informer state get DELETED. We use
-	// ComputeChanges since it already produces cache-vs-current diffs.
-	for _, ch := range c.peerStore.ComputeChanges(currentCRDs, currentCRs) {
+	for _, ch := range changes {
 		if ch.EventType != watch.Deleted {
 			continue
 		}
@@ -243,8 +244,8 @@ func (c *crdCollector) emitSnapshot(
 	)
 }
 
-// emitIncrement computes the delta between cache and informer state and emits
-// changes using a two-phase ordering chosen to minimise the impact of a leader crash:
+// emitIncrement emits the given changes using a two-phase ordering chosen to
+// minimise the impact of a leader crash:
 //
 //   - Adds/Mods: apply+broadcast BEFORE emitting. If we crash between apply and emit,
 //     the new leader's cache matches informer state and emits nothing — the platform
@@ -253,12 +254,7 @@ func (c *crdCollector) emitSnapshot(
 //     new leader's cache still contains the deleted resource while informer does not,
 //     so it re-emits the DELETE (idempotent duplicate). This avoids a missed DELETE
 //     lingering on the platform until TTL expiry.
-func (c *crdCollector) emitIncrement(
-	ctx context.Context,
-	currentCRDs []*unstructured.Unstructured,
-	currentCRs map[schema.GroupVersionResource][]*unstructured.Unstructured,
-) {
-	changes := c.peerStore.ComputeChanges(currentCRDs, currentCRs)
+func (c *crdCollector) emitIncrement(ctx context.Context, changes []ResourceChange) {
 	if len(changes) == 0 {
 		return
 	}

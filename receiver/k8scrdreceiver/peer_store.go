@@ -1,29 +1,36 @@
 package k8scrdreceiver
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/watch"
 )
 
-// PeerSyncSnapshot is the protocol payload exchanged between replicas.
+// PeerSyncSnapshot is the assembled snapshot a secondary builds up from the
+// streamed frames returned by /sync/snapshot.
 type PeerSyncSnapshot struct {
 	// Cache is the last-emitted resource state.
-	Cache *resourceCache `json:"cache"`
+	Cache *resourceCache
 
-	// LastSnapshotTime the time at which the previous leader emitted
-	// its most recent full snapshot. A new leader uses this to schedule its next
-	// snapshot relative to the cluster's history rather than restarting the timer
-	// from "now" — preventing a snapshot gap that exceeds the configured interval.
-	LastSnapshotTime time.Time `json:"last_snapshot_time"`
+	// LastSnapshotTime is the time at which the previous leader emitted its most
+	// recent full snapshot. A new leader uses this to schedule its next snapshot
+	// relative to the cluster's history rather than restarting the timer from
+	// "now" — preventing a snapshot gap that exceeds the configured interval.
+	LastSnapshotTime time.Time
 }
 
-// streamFrameType discriminates the frames in a peerSyncStream snapshot transfer.
+// streamFrameType discriminates the frames in a peer-sync stream. Both snapshot
+// pulls and delta pushes use the same frame schema and codec — the difference is
+// only which fields are populated on each frame type.
 type streamFrameType string
 
 const (
@@ -32,48 +39,129 @@ const (
 	streamFrameCR   streamFrameType = "cr"
 )
 
-// peerSyncStreamFrame is one record in the newline-delimited JSON snapshot format.
-// The leader emits one frame per entry; the client reads frames one at a time and
-// applies them to a fresh cache. This avoids ever holding the entire serialized or
-// deserialized snapshot in memory at once.
+// peerSyncStreamFrame is one record in the gzipped NDJSON wire format used by
+// both /sync/snapshot (server-streamed) and /sync/increments (encode-once-buffered).
+// All optional fields are tagged so unused fields don't appear on the wire.
 type peerSyncStreamFrame struct {
 	Type streamFrameType `json:"type"`
 
-	// Meta frame fields.
-	LastSnapshotTime time.Time `json:"last_snapshot_time,omitempty"`
+	// Meta frame fields. AppliedAt is delta-only; LastSnapshotTime appears on both.
+	AppliedAt        time.Time `json:"applied_at,omitzero"`
+	LastSnapshotTime time.Time `json:"last_snapshot_time,omitzero"`
 
-	// CRD/CR frame fields.
-	Key string                       `json:"key,omitempty"`
-	Obj *unstructured.Unstructured   `json:"obj,omitempty"`
-	GVR *schema.GroupVersionResource `json:"gvr,omitempty"`
+	// Resource frame fields. Key indexes the cache (snapshot path); Obj/GVR carry
+	// the resource itself. EventType is delta-only — empty on snapshot frames where
+	// every entry is implicitly Added.
+	Key       string                       `json:"key,omitempty"`
+	Obj       *unstructured.Unstructured   `json:"obj,omitempty"`
+	GVR       *schema.GroupVersionResource `json:"gvr,omitempty"`
+	EventType watch.EventType              `json:"event_type,omitempty"`
 }
 
 // PeerSyncDelta is the wire format for a leader→peer push of per-cycle changes.
 type PeerSyncDelta struct {
 	// AppliedAt is the leader's wall-clock time when this delta was generated.
 	// Secondaries use it to discard buffered deltas that predate their snapshot.
-	AppliedAt time.Time `json:"applied_at"`
+	AppliedAt time.Time
 
 	// LastSnapshotTime carries snapshot-timing continuity across leader changes.
-	LastSnapshotTime time.Time `json:"last_snapshot_time"`
+	LastSnapshotTime time.Time
 
 	// Changes is the list of resource changes (adds/mods/deletes) for this cycle.
-	Changes []ResourceChange `json:"changes"`
+	Changes []ResourceChange
 }
 
-func marshalPeerSyncDelta(delta *PeerSyncDelta) ([]byte, error) {
-	if delta == nil {
-		return nil, fmt.Errorf("marshalPeerSyncDelta: delta is nil")
+// encodeDeltaStream writes the delta as gzipped NDJSON frames into w. One meta
+// frame followed by one frame per change. Closes the gzip writer (flushing the
+// trailer) before returning.
+func encodeDeltaStream(w io.Writer, delta *PeerSyncDelta) error {
+	gz := gzip.NewWriter(w)
+	enc := json.NewEncoder(gz)
+
+	if err := enc.Encode(peerSyncStreamFrame{
+		Type:             streamFrameMeta,
+		AppliedAt:        delta.AppliedAt,
+		LastSnapshotTime: delta.LastSnapshotTime,
+	}); err != nil {
+		_ = gz.Close()
+		return fmt.Errorf("encode meta frame: %w", err)
 	}
-	return json.Marshal(delta)
+
+	for _, ch := range delta.Changes {
+		frame := peerSyncStreamFrame{
+			Obj:       ch.Obj,
+			EventType: ch.EventType,
+		}
+		if ch.IsCRD {
+			frame.Type = streamFrameCRD
+		} else {
+			frame.Type = streamFrameCR
+			gvr := ch.GVR
+			frame.GVR = &gvr
+		}
+		if err := enc.Encode(frame); err != nil {
+			_ = gz.Close()
+			return fmt.Errorf("encode change frame: %w", err)
+		}
+	}
+
+	return gz.Close()
 }
 
-func unmarshalPeerSyncDelta(data []byte) (*PeerSyncDelta, error) {
-	var delta PeerSyncDelta
-	if err := json.Unmarshal(data, &delta); err != nil {
-		return nil, fmt.Errorf("unmarshal peer sync delta: %w", err)
+// decodeDeltaStream reads gzipped NDJSON frames from r and assembles a PeerSyncDelta.
+// Returns an error if the meta frame is missing or any frame is malformed.
+func decodeDeltaStream(r io.Reader) (*PeerSyncDelta, error) {
+	gr, err := gzip.NewReader(r)
+	if err != nil {
+		return nil, fmt.Errorf("gzip reader: %w", err)
 	}
-	return &delta, nil
+	defer func() { _ = gr.Close() }()
+
+	dec := json.NewDecoder(gr)
+	delta := &PeerSyncDelta{}
+	metaSeen := false
+
+	for {
+		var frame peerSyncStreamFrame
+		if err := dec.Decode(&frame); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, fmt.Errorf("decode frame: %w", err)
+		}
+		switch frame.Type {
+		case streamFrameMeta:
+			delta.AppliedAt = frame.AppliedAt
+			delta.LastSnapshotTime = frame.LastSnapshotTime
+			metaSeen = true
+		case streamFrameCRD:
+			if frame.Obj == nil {
+				return nil, fmt.Errorf("CRD frame missing obj")
+			}
+			delta.Changes = append(delta.Changes, ResourceChange{
+				Obj:       frame.Obj,
+				EventType: frame.EventType,
+				IsCRD:     true,
+			})
+		case streamFrameCR:
+			if frame.Obj == nil {
+				return nil, fmt.Errorf("CR frame missing obj")
+			}
+			if frame.GVR == nil {
+				return nil, fmt.Errorf("CR frame missing gvr")
+			}
+			delta.Changes = append(delta.Changes, ResourceChange{
+				Obj:       frame.Obj,
+				EventType: frame.EventType,
+				GVR:       *frame.GVR,
+			})
+		}
+	}
+
+	if !metaSeen {
+		return nil, fmt.Errorf("missing meta frame")
+	}
+	return delta, nil
 }
 
 // PeerStore owns the synchronised resource cache and the peer-sync transport.

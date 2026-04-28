@@ -210,26 +210,6 @@ func TestResourceCache_ComputeChanges_MixedChanges(t *testing.T) {
 	assert.Equal(t, 1, changesByType[watch.Deleted])
 }
 
-// TestResourceCache_Update_SharesPointers documents that the cache stores object
-// pointers directly (no deep copy). Callers must not mutate cached objects after
-// inserting them — see applyAdditions for the rationale.
-func TestResourceCache_Update_SharesPointers(t *testing.T) {
-	rc := newResourceCache()
-
-	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "foos"}
-	crd := makeCachedCRD("foos.example.com", "1")
-	cr := makeCachedCR("my-foo", "default", "example.com", "v1", "Foo", "1")
-
-	rc.update(
-		[]*unstructured.Unstructured{crd},
-		map[schema.GroupVersionResource][]*unstructured.Unstructured{gvr: {cr}},
-	)
-
-	assert.Same(t, crd, rc.CRDs["foos.example.com"])
-	key := crResourceKey(gvr, "default", "my-foo")
-	assert.Same(t, cr, rc.CRs[key].Obj)
-}
-
 func TestResourceCache_ApplyAdditions(t *testing.T) {
 	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "foos"}
 	key := crResourceKey(gvr, "default", "my-foo")
