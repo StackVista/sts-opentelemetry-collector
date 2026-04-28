@@ -131,7 +131,16 @@ func newPeerSyncCacheStore(logger *zap.Logger, syncPort int, peerDNS string, rec
 // Start launches the HTTP server. Must be called before any other method and
 // regardless of leadership — secondaries also need the listener up so the leader
 // can push deltas to them.
+//
+// When peerDNS is empty (single-replica deployment) there are no peers to push
+// to or receive pushes from, so the listener is skipped — the store still works
+// as in-process cache state.
 func (p *peerSyncCacheStore) Start(_ context.Context) error {
+	if p.peerDNS == "" {
+		p.logger.Info("Peer sync cache store started (in-process only, no peer DNS)")
+		return nil
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc(syncIncrementsPath, p.handleIncrement)
 	mux.HandleFunc(syncSnapshotPath, p.handleSnapshot)
@@ -188,13 +197,19 @@ func (p *peerSyncCacheStore) Stop() {
 // AppliedAt at or after the snapshot's reference time — and ready flips back to
 // true. Subsequent deltas apply directly.
 func (p *peerSyncCacheStore) Bootstrap(ctx context.Context) error {
-	if !p.cache.isEmpty() {
-		// Already populated (e.g., a previous Bootstrap or local leader writes).
+	// Hold bufferMu across the empty check and the ready flip so a delta arriving
+	// concurrently via handleIncrement either fully applies before Bootstrap (and
+	// keeps the cache non-empty, so we bail out) or sees ready=false and buffers.
+	// Without this, a delta could apply between the check and the flip and then
+	// get clobbered by the snapshot below.
+	p.bufferMu.Lock()
+	p.cacheMu.RLock()
+	empty := p.cache.isEmpty()
+	p.cacheMu.RUnlock()
+	if !empty {
+		p.bufferMu.Unlock()
 		return nil
 	}
-
-	// Mark not-ready so concurrent handleIncrement calls buffer.
-	p.bufferMu.Lock()
 	p.ready = false
 	p.bufferMu.Unlock()
 

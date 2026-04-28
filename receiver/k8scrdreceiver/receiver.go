@@ -86,7 +86,17 @@ func (r *k8scrdReceiver) Start(ctx context.Context, host component.Host) error {
 }
 
 // startCollector creates and starts the collector (called directly or from leader election callback).
+// Idempotent: a duplicate onStartLeading callback (e.g., k8s lease re-acquisition firing twice)
+// is a no-op rather than spawning a second collector that would leak goroutines and informers.
 func (r *k8scrdReceiver) startCollector(ctx context.Context) error {
+	r.mu.Lock()
+	if r.collector != nil {
+		r.mu.Unlock()
+		r.settings.Logger.Warn("startCollector called while collector already running; ignoring")
+		return nil
+	}
+	r.mu.Unlock()
+
 	ft := tracker.NewForbiddenTracker(defaultForbiddenRetryInterval)
 	informers := newResourceInformers(r.settings, r.config, r.dynamicClient, ft)
 	collector := newCRDCollector(r.settings.Logger, r.config, r.consumer, informers, r.peerStore, r.metrics)
@@ -96,6 +106,16 @@ func (r *k8scrdReceiver) startCollector(ctx context.Context) error {
 	}
 
 	r.mu.Lock()
+	if r.collector != nil {
+		// A concurrent startCollector won the race between the check above and now.
+		// Shut down the collector we just started; the other one is the survivor.
+		r.mu.Unlock()
+		r.settings.Logger.Warn("startCollector raced with itself; shutting down duplicate collector")
+		if err := collector.Shutdown(ctx); err != nil {
+			r.settings.Logger.Debug("Error shutting down duplicate collector", zap.Error(err))
+		}
+		return nil
+	}
 	r.collector = collector
 	r.mu.Unlock()
 
