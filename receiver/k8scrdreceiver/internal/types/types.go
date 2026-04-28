@@ -76,3 +76,14 @@ const (
 	BootstrapLeaderEmpty BootstrapOutcome = "leader_empty"
 	BootstrapTimedOut    BootstrapOutcome = "timed_out"
 )
+
+// CRInformerOutcome categorises the result of a startCRInformer call. Used by the
+// reconciler metric to surface whether periodic recovery is doing useful work.
+type CRInformerOutcome string
+
+const (
+	CRInformerStarted   CRInformerOutcome = "started"
+	CRInformerExists    CRInformerOutcome = "exists"
+	CRInformerForbidden CRInformerOutcome = "forbidden"
+	CRInformerFailed    CRInformerOutcome = "failed"
+)

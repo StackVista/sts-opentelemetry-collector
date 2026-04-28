@@ -3,16 +3,40 @@ package k8scrdreceiver
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/tracker"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 )
+
+// recordingReconcileRecorder embeds NoopRecorder and captures CR informer
+// reconcile outcomes so tests can assert on them.
+type recordingReconcileRecorder struct {
+	metrics.NoopRecorder
+
+	mu       sync.Mutex
+	outcomes []types.CRInformerOutcome
+}
+
+func (r *recordingReconcileRecorder) RecordCRInformerReconcile(_ context.Context, outcome types.CRInformerOutcome) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.outcomes = append(r.outcomes, outcome)
+}
+
+func (r *recordingReconcileRecorder) snapshot() []types.CRInformerOutcome {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]types.CRInformerOutcome(nil), r.outcomes...)
+}
 
 func TestResourceInformers_ReadCRDs(t *testing.T) {
 	scheme := testScheme()
@@ -30,7 +54,7 @@ func TestResourceInformers_ReadCRDs(t *testing.T) {
 
 	config := testConfig([]string{"example.com"}, nil)
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
-	ri := newResourceInformers(testSettings(t), config, client, ft)
+	ri := newResourceInformers(testSettings(t), config, client, ft, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -61,7 +85,7 @@ func TestResourceInformers_ReadCRs(t *testing.T) {
 
 	config := testConfig([]string{"example.com"}, nil)
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
-	ri := newResourceInformers(testSettings(t), config, client, ft)
+	ri := newResourceInformers(testSettings(t), config, client, ft, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -93,7 +117,7 @@ func TestResourceInformers_CRDAddStartsCRInformer(t *testing.T) {
 
 	config := testConfig([]string{"example.com"}, nil)
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
-	ri := newResourceInformers(testSettings(t), config, client, ft)
+	ri := newResourceInformers(testSettings(t), config, client, ft, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -125,7 +149,7 @@ func TestResourceInformers_CRDDeleteStopsCRInformer(t *testing.T) {
 
 	config := testConfig([]string{"example.com"}, nil)
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
-	ri := newResourceInformers(testSettings(t), config, client, ft)
+	ri := newResourceInformers(testSettings(t), config, client, ft, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -172,7 +196,7 @@ func TestResourceInformers_FiltersAPIGroups(t *testing.T) {
 
 	config := testConfig([]string{"allowed.com"}, nil)
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
-	ri := newResourceInformers(testSettings(t), config, client, ft)
+	ri := newResourceInformers(testSettings(t), config, client, ft, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -214,7 +238,7 @@ func TestResourceInformers_ExcludeFilter(t *testing.T) {
 
 	config := testConfig([]string{"*"}, []string{"excluded.com"})
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
-	ri := newResourceInformers(testSettings(t), config, client, ft)
+	ri := newResourceInformers(testSettings(t), config, client, ft, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -251,7 +275,7 @@ func TestResourceInformers_ForbiddenTrackerSkipsResource(t *testing.T) {
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 	ft.MarkForbidden(crGVR)
 
-	ri := newResourceInformers(testSettings(t), config, client, ft)
+	ri := newResourceInformers(testSettings(t), config, client, ft, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -283,7 +307,7 @@ func TestResourceInformers_Shutdown(t *testing.T) {
 
 	config := testConfig([]string{"example.com"}, nil)
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
-	ri := newResourceInformers(testSettings(t), config, client, ft)
+	ri := newResourceInformers(testSettings(t), config, client, ft, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -305,4 +329,120 @@ func TestResourceInformers_Shutdown(t *testing.T) {
 	ri.mu.RLock()
 	assert.Empty(t, ri.crInformers)
 	ri.mu.RUnlock()
+}
+
+func TestResourceInformers_ReconcileStartsMissingInformer(t *testing.T) {
+	scheme := testScheme()
+	registerCRGVR(scheme, "example.com", "v1", "TestResource")
+
+	crd := makeTestCRDUnstructured("testresources.example.com", "example.com", "TestResource", "testresources")
+	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "testresources"}
+	key := "example.com/v1/testresources"
+
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme,
+		map[schema.GroupVersionResource]string{
+			crdGVR: "CustomResourceDefinitionList",
+			gvr:    "TestResourceList",
+		},
+		crd,
+	)
+
+	config := testConfig([]string{"example.com"}, nil)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
+	rec := &recordingReconcileRecorder{}
+	ri := newResourceInformers(testSettings(t), config, client, ft, rec)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	require.NoError(t, ri.Start(ctx))
+	defer func() { require.NoError(t, ri.Shutdown(ctx)) }()
+
+	// Simulate a CR informer that failed during initial startup: drop it from the
+	// map without going through stopCRInformer (which would also stop the goroutine).
+	ri.mu.Lock()
+	entry := ri.crInformers[key]
+	delete(ri.crInformers, key)
+	ri.mu.Unlock()
+	require.NotNil(t, entry, "expected initial CR informer for example.com to be running")
+	close(entry.stopCh)
+
+	ri.reconcileCRInformers(ctx)
+
+	ri.mu.RLock()
+	_, exists := ri.crInformers[key]
+	ri.mu.RUnlock()
+	assert.True(t, exists, "reconciler should have started the missing CR informer")
+
+	outcomes := rec.snapshot()
+	require.Len(t, outcomes, 1)
+	assert.Equal(t, types.CRInformerStarted, outcomes[0])
+}
+
+func TestResourceInformers_ReconcileNoOpForRunningInformer(t *testing.T) {
+	scheme := testScheme()
+	registerCRGVR(scheme, "example.com", "v1", "TestResource")
+
+	crd := makeTestCRDUnstructured("testresources.example.com", "example.com", "TestResource", "testresources")
+	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "testresources"}
+
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme,
+		map[schema.GroupVersionResource]string{
+			crdGVR: "CustomResourceDefinitionList",
+			gvr:    "TestResourceList",
+		},
+		crd,
+	)
+
+	config := testConfig([]string{"example.com"}, nil)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
+	rec := &recordingReconcileRecorder{}
+	ri := newResourceInformers(testSettings(t), config, client, ft, rec)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	require.NoError(t, ri.Start(ctx))
+	defer func() { require.NoError(t, ri.Shutdown(ctx)) }()
+
+	ri.reconcileCRInformers(ctx)
+
+	outcomes := rec.snapshot()
+	require.Len(t, outcomes, 1)
+	assert.Equal(t, types.CRInformerExists, outcomes[0])
+}
+
+func TestResourceInformers_ReconcileSkipsForbidden(t *testing.T) {
+	scheme := testScheme()
+	registerCRGVR(scheme, "example.com", "v1", "TestResource")
+
+	crd := makeTestCRDUnstructured("testresources.example.com", "example.com", "TestResource", "testresources")
+	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "testresources"}
+
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme,
+		map[schema.GroupVersionResource]string{
+			crdGVR: "CustomResourceDefinitionList",
+			gvr:    "TestResourceList",
+		},
+		crd,
+	)
+
+	config := testConfig([]string{"example.com"}, nil)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
+	ft.MarkForbidden(gvr)
+
+	rec := &recordingReconcileRecorder{}
+	ri := newResourceInformers(testSettings(t), config, client, ft, rec)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	require.NoError(t, ri.Start(ctx))
+	defer func() { require.NoError(t, ri.Shutdown(ctx)) }()
+
+	ri.reconcileCRInformers(ctx)
+
+	outcomes := rec.snapshot()
+	require.Len(t, outcomes, 1)
+	assert.Equal(t, types.CRInformerForbidden, outcomes[0])
 }

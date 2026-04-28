@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/emit"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/tracker"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/types"
 	"go.opentelemetry.io/collector/receiver"
 	"go.uber.org/zap"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -49,6 +52,10 @@ var crdGVR = schema.GroupVersionResource{
 	Resource: "customresourcedefinitions",
 }
 
+// crInformerReconcileInterval is how often the reconciler retries CR informers
+// that failed to start (transient API errors, RBAC granted later).
+const crInformerReconcileInterval = 1 * time.Minute
+
 // crInformerEntry wraps a CR informer with its lifecycle management.
 type crInformerEntry struct {
 	gvr      schema.GroupVersionResource
@@ -63,6 +70,7 @@ type ResourceInformers struct {
 	config           *Config
 	dynamicClient    dynamic.Interface
 	forbiddenTracker *tracker.ForbiddenTracker
+	metrics          metrics.Recorder
 
 	// CRD informer
 	crdInformer     cache.SharedIndexInformer
@@ -82,13 +90,18 @@ func newResourceInformers(
 	settings receiver.Settings,
 	config *Config,
 	dynamicClient dynamic.Interface,
-	ft *tracker.ForbiddenTracker,
+	forbiddenTracker *tracker.ForbiddenTracker,
+	metricsRecorder metrics.Recorder,
 ) *ResourceInformers {
+	if metricsRecorder == nil {
+		metricsRecorder = metrics.NoopRecorder{}
+	}
 	return &ResourceInformers{
 		settings:         settings,
 		config:           config,
 		dynamicClient:    dynamicClient,
-		forbiddenTracker: ft,
+		forbiddenTracker: forbiddenTracker,
+		metrics:          metricsRecorder,
 		crInformers:      make(map[string]*crInformerEntry),
 	}
 }
@@ -99,6 +112,9 @@ func (ri *ResourceInformers) Start(ctx context.Context) error {
 	if err := ri.startCRDInformer(); err != nil {
 		return fmt.Errorf("failed to start CRD informer: %w", err)
 	}
+
+	ri.wg.Add(1)
+	go ri.runReconcileLoop(ri.ctx)
 
 	return nil
 }
@@ -216,6 +232,58 @@ func (ri *ResourceInformers) waitForCRInformersSync() bool {
 	return true
 }
 
+// runReconcileLoop periodically retries startCRInformer for CRDs that lack a
+// running informer. Recovers from transient startup errors and from RBAC being
+// granted after the receiver started — without it, those CRDs would stay blind
+// until the CRD object itself changed.
+func (ri *ResourceInformers) runReconcileLoop(ctx context.Context) {
+	defer ri.wg.Done()
+
+	ticker := time.NewTicker(crInformerReconcileInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			ri.reconcileCRInformers(ctx)
+		}
+	}
+}
+
+// reconcileCRInformers walks the CRD informer cache and attempts to start a CR
+// informer for any CRD whose GVR is not currently in crInformers.
+func (ri *ResourceInformers) reconcileCRInformers(ctx context.Context) {
+	if ri.crdInformer == nil || !ri.crdInformer.HasSynced() {
+		return
+	}
+
+	for _, obj := range ri.crdInformer.GetStore().List() {
+		crd, ok := toUnstructured(obj)
+		if !ok {
+			continue
+		}
+		apiGroup, _, _ := unstructured.NestedString(crd.Object, "spec", "group")
+		if !ri.config.shouldWatchAPIGroup(apiGroup) {
+			continue
+		}
+		gvr, err := ri.crdToGVR(crd)
+		if err != nil {
+			continue
+		}
+
+		outcome, err := ri.startCRInformer(gvr)
+		ri.metrics.RecordCRInformerReconcile(ctx, outcome)
+		if err != nil {
+			ri.settings.Logger.Debug("Reconciler failed to start CR informer",
+				zap.String("gvr", emit.FormatGVRKey(gvr)),
+				zap.Error(err),
+			)
+		}
+	}
+}
+
 // --- CRD event handlers (lifecycle management only, no log emission) ---
 
 func (ri *ResourceInformers) onCRDAdd(obj interface{}) {
@@ -248,7 +316,7 @@ func (ri *ResourceInformers) onCRDAdd(obj interface{}) {
 		return
 	}
 
-	if err := ri.startCRInformer(gvr); err != nil {
+	if _, err := ri.startCRInformer(gvr); err != nil {
 		ri.settings.Logger.Error("Failed to start CR informer",
 			zap.String("gvr", emit.FormatGVRKey(gvr)),
 			zap.Error(err),
@@ -299,7 +367,7 @@ func (ri *ResourceInformers) onCRDUpdate(oldObj, newObj interface{}) {
 	ri.stopCRInformer(oldGVR)
 	ri.forbiddenTracker.Clear(oldGVR)
 
-	if err := ri.startCRInformer(newGVR); err != nil {
+	if _, err := ri.startCRInformer(newGVR); err != nil {
 		ri.settings.Logger.Error("Failed to restart CR informer after version change",
 			zap.String("gvr", emit.FormatGVRKey(newGVR)),
 			zap.Error(err),
@@ -345,7 +413,10 @@ func (ri *ResourceInformers) onCRDDelete(obj interface{}) {
 
 // startCRInformer creates and starts an informer for the given GVR.
 // The informer has no event handlers — the collector reads its cache directly.
-func (ri *ResourceInformers) startCRInformer(gvr schema.GroupVersionResource) error {
+//
+// Returns the outcome (started, exists, forbidden, failed) and an error if the
+// outcome is failed.
+func (ri *ResourceInformers) startCRInformer(gvr schema.GroupVersionResource) (types.CRInformerOutcome, error) {
 	key := emit.FormatGVRKey(gvr)
 
 	if shouldRetry, retryIn := ri.forbiddenTracker.ShouldRetry(gvr); !shouldRetry {
@@ -353,7 +424,7 @@ func (ri *ResourceInformers) startCRInformer(gvr schema.GroupVersionResource) er
 			zap.String("gvr", key),
 			zap.Duration("retry_in", retryIn),
 		)
-		return nil
+		return types.CRInformerForbidden, nil
 	}
 
 	// Check if already running
@@ -361,7 +432,7 @@ func (ri *ResourceInformers) startCRInformer(gvr schema.GroupVersionResource) er
 	_, exists := ri.crInformers[key]
 	ri.mu.RUnlock()
 	if exists {
-		return nil
+		return types.CRInformerExists, nil
 	}
 
 	// Permission pre-check — avoid creating an informer that will fail immediately
@@ -372,9 +443,9 @@ func (ri *ResourceInformers) startCRInformer(gvr schema.GroupVersionResource) er
 			ri.settings.Logger.Info("Skipping CR informer - insufficient RBAC permissions",
 				zap.String("gvr", key),
 			)
-			return nil
+			return types.CRInformerForbidden, nil
 		}
-		return fmt.Errorf("permission pre-check failed for %s: %w", key, err)
+		return types.CRInformerFailed, fmt.Errorf("permission pre-check failed for %s: %w", key, err)
 	}
 
 	lw := &cache.ListWatch{
@@ -406,7 +477,7 @@ func (ri *ResourceInformers) startCRInformer(gvr schema.GroupVersionResource) er
 	if _, exists := ri.crInformers[key]; exists {
 		ri.mu.Unlock()
 		close(stopCh)
-		return nil
+		return types.CRInformerExists, nil
 	}
 	ri.crInformers[key] = entry
 	ri.mu.Unlock()
@@ -418,7 +489,7 @@ func (ri *ResourceInformers) startCRInformer(gvr schema.GroupVersionResource) er
 	}()
 
 	ri.settings.Logger.Info("Started CR informer", zap.String("gvr", key))
-	return nil
+	return types.CRInformerStarted, nil
 }
 
 func (ri *ResourceInformers) stopCRInformer(gvr schema.GroupVersionResource) {

@@ -25,6 +25,7 @@ type Recorder interface {
 	RecordPeerPushDuration(ctx context.Context, d time.Duration)
 	RecordBootstrap(ctx context.Context, outcome types.BootstrapOutcome)
 	RecordSnapshotStreamFailure(ctx context.Context)
+	RecordCRInformerReconcile(ctx context.Context, outcome types.CRInformerOutcome)
 }
 
 // NoopRecorder is a Recorder that drops every measurement. Useful in tests.
@@ -37,10 +38,11 @@ func (NoopRecorder) RecordPeerBroadcast(_ context.Context, _ types.BroadcastOutc
 }
 func (NoopRecorder) RecordPeerPushAttempt(_ context.Context, _ types.PushOutcome, _ types.PushFailureReason) {
 }
-func (NoopRecorder) RecordPeerPushBytes(_ context.Context, _ int64)              {}
-func (NoopRecorder) RecordPeerPushDuration(_ context.Context, _ time.Duration)   {}
-func (NoopRecorder) RecordBootstrap(_ context.Context, _ types.BootstrapOutcome) {}
-func (NoopRecorder) RecordSnapshotStreamFailure(_ context.Context)               {}
+func (NoopRecorder) RecordPeerPushBytes(_ context.Context, _ int64)                         {}
+func (NoopRecorder) RecordPeerPushDuration(_ context.Context, _ time.Duration)              {}
+func (NoopRecorder) RecordBootstrap(_ context.Context, _ types.BootstrapOutcome)            {}
+func (NoopRecorder) RecordSnapshotStreamFailure(_ context.Context)                          {}
+func (NoopRecorder) RecordCRInformerReconcile(_ context.Context, _ types.CRInformerOutcome) {}
 
 // Metrics is the live Recorder backed by a real Meter.
 type Metrics struct {
@@ -55,6 +57,7 @@ type Metrics struct {
 	peerPushDuration       metric.Float64Histogram
 	bootstrapTotal         metric.Int64Counter
 	snapshotStreamFailures metric.Int64Counter
+	crInformerReconciles   metric.Int64Counter
 }
 
 // NewMetrics registers all instruments. Errors from the meter are dropped to match the
@@ -102,6 +105,10 @@ func NewMetrics(typeName, clusterName string, settings component.TelemetrySettin
 		name("snapshot_stream_failures_total"),
 		metric.WithDescription("Snapshot serve failures during NDJSON encoding (client gets a partial stream)."),
 	)
+	crInformerReconciles, _ := meter.Int64Counter(
+		name("cr_informer_reconciles_total"),
+		metric.WithDescription("Periodic reconciler attempts to start CR informers, labelled by outcome."),
+	)
 
 	return &Metrics{
 		common:                 []attribute.KeyValue{attribute.String("k8s.cluster.name", clusterName)},
@@ -114,6 +121,7 @@ func NewMetrics(typeName, clusterName string, settings component.TelemetrySettin
 		peerPushDuration:       peerPushDuration,
 		bootstrapTotal:         bootstrapTotal,
 		snapshotStreamFailures: snapshotStreamFailures,
+		crInformerReconciles:   crInformerReconciles,
 	}
 }
 
@@ -180,6 +188,12 @@ func (m *Metrics) RecordBootstrap(ctx context.Context, outcome types.BootstrapOu
 
 func (m *Metrics) RecordSnapshotStreamFailure(ctx context.Context) {
 	m.snapshotStreamFailures.Add(ctx, 1, metric.WithAttributeSet(m.attrs()))
+}
+
+func (m *Metrics) RecordCRInformerReconcile(ctx context.Context, outcome types.CRInformerOutcome) {
+	m.crInformerReconciles.Add(ctx, 1, metric.WithAttributeSet(
+		m.attrs(attribute.String("outcome", string(outcome))),
+	))
 }
 
 func (m *Metrics) attrs(extras ...attribute.KeyValue) attribute.Set {

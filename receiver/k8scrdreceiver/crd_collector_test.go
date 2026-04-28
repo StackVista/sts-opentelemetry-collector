@@ -159,7 +159,7 @@ func newTestCollectorWithPeerStore(
 ) *crdCollector {
 	t.Helper()
 	settings := testSettings(t)
-	informerSet := newResourceInformers(settings, config, client, ft)
+	informerSet := newResourceInformers(settings, config, client, ft, nil)
 	return newCRDCollector(settings.Logger, config, sink, informerSet, peerStore, nil)
 }
 

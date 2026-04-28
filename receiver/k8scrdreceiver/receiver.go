@@ -98,7 +98,7 @@ func (r *k8scrdReceiver) startCollector(ctx context.Context) error {
 	r.mu.Unlock()
 
 	ft := tracker.NewForbiddenTracker(defaultForbiddenRetryInterval)
-	informers := newResourceInformers(r.settings, r.config, r.dynamicClient, ft)
+	informers := newResourceInformers(r.settings, r.config, r.dynamicClient, ft, r.metrics)
 	collector := newCRDCollector(r.settings.Logger, r.config, r.consumer, informers, r.peerStore, r.metrics)
 
 	if err := collector.Start(ctx); err != nil {
