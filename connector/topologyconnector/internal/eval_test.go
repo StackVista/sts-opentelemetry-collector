@@ -2,12 +2,16 @@
 package internal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 
 	"github.com/stretchr/testify/assert"
@@ -241,4 +245,124 @@ func TestEvalVariables_withRealContext(t *testing.T) {
 		"var3": "world",
 		"var4": "infra",
 	}, got)
+}
+
+func TestFilterVarsByName(t *testing.T) {
+	t.Parallel()
+
+	all := varMappings(
+		pair{"a", "x"},
+		pair{"b", "y"},
+		pair{"c", "z"},
+	)
+
+	t.Run("nil names returns the original slice (no filtering)", func(t *testing.T) {
+		got := FilterVarsByName(&all, nil)
+		require.Equal(t, all, got)
+	})
+
+	t.Run("nil names with nil vars returns nil", func(t *testing.T) {
+		got := FilterVarsByName(nil, nil)
+		require.Nil(t, got)
+	})
+
+	t.Run("non-nil names with nil vars returns nil", func(t *testing.T) {
+		got := FilterVarsByName(nil, map[string]struct{}{"a": {}})
+		require.Nil(t, got)
+	})
+
+	t.Run("empty names returns empty slice", func(t *testing.T) {
+		got := FilterVarsByName(&all, map[string]struct{}{})
+		require.Empty(t, got)
+	})
+
+	t.Run("filters to the named subset, preserving order", func(t *testing.T) {
+		got := FilterVarsByName(&all, map[string]struct{}{"a": {}, "c": {}})
+		require.Len(t, got, 2)
+		require.Equal(t, "a", got[0].Name)
+		require.Equal(t, "c", got[1].Name)
+	})
+
+	t.Run("names containing entries not in vars are silently ignored (no false-add)", func(t *testing.T) {
+		got := FilterVarsByName(&all, map[string]struct{}{"a": {}, "ghost": {}})
+		require.Len(t, got, 1)
+		require.Equal(t, "a", got[0].Name)
+	})
+}
+
+func TestCollectVarReferences(t *testing.T) {
+	t.Parallel()
+
+	// Real evaluator: covers the happy paths where the AST is actually fetched.
+	realEval := newRealCelEvaluator(t)
+
+	t.Run("no expressions returns an empty (non-nil) map", func(t *testing.T) {
+		got := CollectVarReferences(realEval)
+		require.NotNil(t, got)
+		require.Empty(t, got)
+	})
+
+	t.Run("expression with no vars returns an empty map", func(t *testing.T) {
+		got := CollectVarReferences(
+			realEval,
+			settingsproto.OtelStringExpression{Expression: `resource.attributes["service.name"]`},
+		)
+		require.NotNil(t, got)
+		require.Empty(t, got)
+	})
+
+	t.Run("single expression with vars returns the referenced names", func(t *testing.T) {
+		got := CollectVarReferences(
+			realEval,
+			settingsproto.OtelStringExpression{Expression: `"urn:" + vars.ns + "/" + vars.name`},
+		)
+		require.Len(t, got, 2)
+		_, hasNs := got["ns"]
+		_, hasName := got["name"]
+		require.True(t, hasNs)
+		require.True(t, hasName)
+	})
+
+	t.Run("AST fetch failure returns nil (caller falls back to evaluating all vars)", func(t *testing.T) {
+		// mockEvalExpressionEvaluator.GetStringExpressionAST returns (nil, nil), which the
+		// helper must treat as "could not statically determine — assume all vars are needed".
+		got := CollectVarReferences(
+			&mockEvalExpressionEvaluator{},
+			settingsproto.OtelStringExpression{Expression: `vars.ns`},
+		)
+		require.Nil(t, got, "nil result is the safety signal for the DELETE path to fall back to evaluating all vars")
+	})
+
+	t.Run("AST fetch error returns nil", func(t *testing.T) {
+		got := CollectVarReferences(
+			&errorOnGetASTEvaluator{},
+			settingsproto.OtelStringExpression{Expression: `vars.ns`},
+		)
+		require.Nil(t, got)
+	})
+}
+
+// errorOnGetASTEvaluator returns an error from every Get*ExpressionAST call to exercise the
+// nil-fallback contract of CollectVarReferences.
+type errorOnGetASTEvaluator struct {
+	mockEvalExpressionEvaluator
+}
+
+func (e *errorOnGetASTEvaluator) GetStringExpressionAST(_ settingsproto.OtelStringExpression) (*GetASTResult, error) {
+	return nil, errors.New("boom")
+}
+
+func newRealCelEvaluator(t *testing.T) *CelEvaluator {
+	t.Helper()
+	eval, err := NewCELEvaluator(
+		context.Background(),
+		metrics.MeteredCacheSettings{
+			Size:              10,
+			EnableMetrics:     false,
+			TTL:               5 * time.Second,
+			TelemetrySettings: componenttest.NewNopTelemetrySettings(),
+		},
+	)
+	require.NoError(t, err)
+	return eval
 }

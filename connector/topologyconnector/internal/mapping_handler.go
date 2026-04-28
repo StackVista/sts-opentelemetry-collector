@@ -219,7 +219,12 @@ func (v *MappingContext[T]) handleComponentDelete(
 	evalCtx *ExpressionEvalContext,
 	mapping settingsproto.OtelComponentMapping,
 ) {
-	evaluatedVars, errs := EvalVariables(v.BaseCtx.Evaluator, evalCtx, mapping.Vars)
+	// Only evaluate variables referenced by the identifier — a delete-shaped input may
+	// be missing fields used by other variables, and forcing those to evaluate would
+	// fail the entire DELETE. nil neededVars falls back to evaluating all variables.
+	neededVars := CollectVarReferences(v.BaseCtx.Evaluator, mapping.Output.Identifier)
+	filteredVars := FilterVarsByName(mapping.Vars, neededVars)
+	evaluatedVars, errs := EvalVariables(v.BaseCtx.Evaluator, evalCtx, &filteredVars)
 	if errs != nil {
 		*v.BaseCtx.Results = append(
 			*v.BaseCtx.Results,
@@ -253,7 +258,10 @@ func (v *MappingContext[T]) handleRelationDelete(
 	evalCtx *ExpressionEvalContext,
 	mapping settingsproto.OtelRelationMapping,
 ) {
-	evaluatedVars, errs := EvalVariables(v.BaseCtx.Evaluator, evalCtx, mapping.Vars)
+	// Only evaluate variables referenced by sourceId/targetId — see handleComponentDelete for rationale.
+	neededVars := CollectVarReferences(v.BaseCtx.Evaluator, mapping.Output.SourceId, mapping.Output.TargetId)
+	filteredVars := FilterVarsByName(mapping.Vars, neededVars)
+	evaluatedVars, errs := EvalVariables(v.BaseCtx.Evaluator, evalCtx, &filteredVars)
 	if errs != nil {
 		*v.BaseCtx.Results = append(
 			*v.BaseCtx.Results,

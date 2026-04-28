@@ -1323,6 +1323,153 @@ func TestPipeline_ConvertLogToTopologyStreamMessage_DeleteRelation(t *testing.T)
 	require.Equal(t, []string{"policy-a-server-default"}, data.DeleteRelationExternalIds)
 }
 
+// TestPipeline_ConvertLogToTopologyStreamMessage_DeleteComponent_SkipsUnreferencedVars verifies that
+// for DELETE actions, only variables actually referenced by the identifier are evaluated. A variable
+// referencing a field absent on a delete-shaped log (here: log.body["spec"]) must not fail the DELETE.
+func TestPipeline_ConvertLogToTopologyStreamMessage_DeleteComponent_SkipsUnreferencedVars(t *testing.T) {
+	ctx := context.Background()
+	collectionTimestampMs := time.Now().UnixMilli()
+
+	// A delete log has only basic identifying attributes, no body.
+	logData := plog.NewLogs()
+	rl := logData.ResourceLogs().AppendEmpty()
+	_ = rl.Resource().Attributes().FromRaw(map[string]any{
+		"k8s.cluster.name": "production",
+	})
+	sl := rl.ScopeLogs().AppendEmpty()
+	lr := sl.LogRecords().AppendEmpty()
+	_ = lr.Attributes().FromRaw(map[string]any{
+		"k8s.resource.name": "default",
+	})
+
+	componentMappings := []settingsproto.OtelComponentMapping{
+		{
+			Id:            "delete-comp",
+			Identifier:    "urn:otel-component-mapping:delete-comp",
+			ExpireAfterMs: 60000,
+			Input: settingsproto.OtelInput{
+				Signal: settingsproto.OtelInputSignalList{settingsproto.LOGS},
+				Resource: settingsproto.OtelInputResource{
+					Scope: &settingsproto.OtelInputScope{
+						Log: &settingsproto.OtelInputLog{
+							Action: ptr(strExpr("'DELETE'")),
+						},
+					},
+				},
+			},
+			Vars: &[]settingsproto.OtelVariableMapping{
+				{Name: "serverName", Value: anyExpr(`log.attributes["k8s.resource.name"]`)},
+				// Used by the identifier — must evaluate.
+				{Name: "imageVersion", Value: anyExpr(`log.body["spec"]["image"]`)},
+				// NOT used by the identifier — would fail on this delete log,
+				// must be skipped on the DELETE path.
+			},
+			Output: settingsproto.OtelComponentMappingOutput{
+				Identifier: strExpr(`"urn:test:server/" + vars.serverName`),
+				Name:       strExpr(`vars.serverName`),
+				TypeName:   strExpr("'server'"),
+				DomainName: strExpr("'Kubernetes'"),
+				LayerName:  strExpr("'Infrastructure'"),
+			},
+		},
+	}
+
+	eval, _ := NewCELEvaluator(ctx, makeMeteredCacheSettings(100, 30*time.Second))
+	deduplicator := NewNoopDeduplicator()
+	mapper := NewMapper(ctx, makeMeteredCacheSettings(100, 30*time.Second), makeMeteredCacheSettings(100, 30*time.Second))
+	metricsReporter := &noopMetrics{}
+
+	result := ConvertLogToTopologyStreamMessage(
+		ctx,
+		zaptest.NewLogger(t),
+		eval,
+		deduplicator,
+		mapper,
+		logData,
+		componentMappings,
+		nil,
+		collectionTimestampMs,
+		metricsReporter,
+	)
+
+	require.Len(t, result, 1)
+	data := result[0].Message.GetTopologyStreamRepeatElementsData()
+	require.NotNil(t, data)
+	require.Empty(t, data.Errors, "unreferenced var failure must not surface as a mapping error")
+	require.Equal(t, []string{"urn:test:server/default"}, data.DeleteComponentExternalIds)
+}
+
+// TestPipeline_ConvertLogToTopologyStreamMessage_DeleteComponent_ReferencedVarFailureSurfaces verifies
+// that variables actually referenced by the identifier still fail the DELETE if they cannot be evaluated.
+// This preserves the current "loud failure" semantics for required vars on the DELETE path.
+func TestPipeline_ConvertLogToTopologyStreamMessage_DeleteComponent_ReferencedVarFailureSurfaces(t *testing.T) {
+	ctx := context.Background()
+	collectionTimestampMs := time.Now().UnixMilli()
+
+	logData := plog.NewLogs()
+	rl := logData.ResourceLogs().AppendEmpty()
+	_ = rl.Resource().Attributes().FromRaw(map[string]any{
+		"k8s.cluster.name": "production",
+	})
+	sl := rl.ScopeLogs().AppendEmpty()
+	lr := sl.LogRecords().AppendEmpty()
+	// Note: no "k8s.resource.name" attribute — the var below will fail to evaluate.
+	_ = lr.Attributes().FromRaw(map[string]any{})
+
+	componentMappings := []settingsproto.OtelComponentMapping{
+		{
+			Id:            "delete-comp",
+			Identifier:    "urn:otel-component-mapping:delete-comp",
+			ExpireAfterMs: 60000,
+			Input: settingsproto.OtelInput{
+				Signal: settingsproto.OtelInputSignalList{settingsproto.LOGS},
+				Resource: settingsproto.OtelInputResource{
+					Scope: &settingsproto.OtelInputScope{
+						Log: &settingsproto.OtelInputLog{
+							Action: ptr(strExpr("'DELETE'")),
+						},
+					},
+				},
+			},
+			Vars: &[]settingsproto.OtelVariableMapping{
+				// Referenced by the identifier but the field is missing on this log.
+				{Name: "serverName", Value: anyExpr(`log.attributes["k8s.resource.name"]`)},
+			},
+			Output: settingsproto.OtelComponentMappingOutput{
+				Identifier: strExpr(`"urn:test:server/" + vars.serverName`),
+				Name:       strExpr(`vars.serverName`),
+				TypeName:   strExpr("'server'"),
+				DomainName: strExpr("'Kubernetes'"),
+				LayerName:  strExpr("'Infrastructure'"),
+			},
+		},
+	}
+
+	eval, _ := NewCELEvaluator(ctx, makeMeteredCacheSettings(100, 30*time.Second))
+	deduplicator := NewNoopDeduplicator()
+	mapper := NewMapper(ctx, makeMeteredCacheSettings(100, 30*time.Second), makeMeteredCacheSettings(100, 30*time.Second))
+	metricsReporter := &noopMetrics{}
+
+	result := ConvertLogToTopologyStreamMessage(
+		ctx,
+		zaptest.NewLogger(t),
+		eval,
+		deduplicator,
+		mapper,
+		logData,
+		componentMappings,
+		nil,
+		collectionTimestampMs,
+		metricsReporter,
+	)
+
+	require.Len(t, result, 1)
+	data := result[0].Message.GetTopologyStreamRepeatElementsData()
+	require.NotNil(t, data)
+	require.Empty(t, data.DeleteComponentExternalIds, "DELETE must not be emitted when a referenced var fails")
+	require.NotEmpty(t, data.Errors, "referenced var failure must surface as a mapping error")
+}
+
 func createSimpleComponentMapping(id string) settingsproto.OtelComponentMapping {
 	return settingsproto.OtelComponentMapping{
 		Id:            id,
