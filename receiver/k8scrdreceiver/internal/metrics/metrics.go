@@ -23,7 +23,7 @@ type Recorder interface {
 	RecordPeerPushAttempt(ctx context.Context, outcome types.PushOutcome, reason types.PushFailureReason)
 	RecordPeerPushBytes(ctx context.Context, n int64)
 	RecordPeerPushDuration(ctx context.Context, d time.Duration)
-	RecordBootstrap(ctx context.Context, outcome types.BootstrapOutcome)
+	RecordBootstrap(ctx context.Context, outcome types.BootstrapOutcome, source types.BootstrapSource)
 	RecordSnapshotStreamFailure(ctx context.Context)
 	RecordCRInformerReconcile(ctx context.Context, outcome types.CRInformerOutcome)
 }
@@ -38,9 +38,10 @@ func (NoopRecorder) RecordPeerBroadcast(_ context.Context, _ types.BroadcastOutc
 }
 func (NoopRecorder) RecordPeerPushAttempt(_ context.Context, _ types.PushOutcome, _ types.PushFailureReason) {
 }
-func (NoopRecorder) RecordPeerPushBytes(_ context.Context, _ int64)                         {}
-func (NoopRecorder) RecordPeerPushDuration(_ context.Context, _ time.Duration)              {}
-func (NoopRecorder) RecordBootstrap(_ context.Context, _ types.BootstrapOutcome)            {}
+func (NoopRecorder) RecordPeerPushBytes(_ context.Context, _ int64)            {}
+func (NoopRecorder) RecordPeerPushDuration(_ context.Context, _ time.Duration) {}
+func (NoopRecorder) RecordBootstrap(_ context.Context, _ types.BootstrapOutcome, _ types.BootstrapSource) {
+}
 func (NoopRecorder) RecordSnapshotStreamFailure(_ context.Context)                          {}
 func (NoopRecorder) RecordCRInformerReconcile(_ context.Context, _ types.CRInformerOutcome) {}
 
@@ -99,7 +100,10 @@ func NewMetrics(typeName, clusterName string, settings component.TelemetrySettin
 	)
 	bootstrapTotal, _ := meter.Int64Counter(
 		name("bootstrap_total"),
-		metric.WithDescription("Bootstrap completion outcomes (applied, leader_empty, timed_out)."),
+		metric.WithDescription(
+			"Bootstrap completion outcomes, labelled by outcome (applied|leader_empty|timed_out) "+
+				"and source (leader|secondary|none — none for non-applied outcomes).",
+		),
 	)
 	snapshotStreamFailures, _ := meter.Int64Counter(
 		name("snapshot_stream_failures_total"),
@@ -180,9 +184,14 @@ func (m *Metrics) RecordPeerPushDuration(ctx context.Context, d time.Duration) {
 	m.peerPushDuration.Record(ctx, d.Seconds(), metric.WithAttributeSet(m.attrs()))
 }
 
-func (m *Metrics) RecordBootstrap(ctx context.Context, outcome types.BootstrapOutcome) {
+func (m *Metrics) RecordBootstrap(
+	ctx context.Context, outcome types.BootstrapOutcome, source types.BootstrapSource,
+) {
 	m.bootstrapTotal.Add(ctx, 1, metric.WithAttributeSet(
-		m.attrs(attribute.String("outcome", string(outcome))),
+		m.attrs(
+			attribute.String("outcome", string(outcome)),
+			attribute.String("source", string(source)),
+		),
 	))
 }
 

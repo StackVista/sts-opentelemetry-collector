@@ -217,7 +217,7 @@ func (p *peerSyncCacheStore) Bootstrap(ctx context.Context) error {
 
 	p.logger.Info("Bootstrapping peer cache from peers")
 	snap, outcome := p.pullSnapshotWithRetry(ctx)
-	p.metrics.RecordBootstrap(ctx, outcome)
+	p.metrics.RecordBootstrap(ctx, outcome, snapshotSource(snap))
 	switch outcome {
 	case types.BootstrapApplied:
 		// Successful pull; snap is non-nil and will populate the cache below.
@@ -920,4 +920,16 @@ func (p *peerSyncCacheStore) fetchPeerSnapshot(
 		}
 	}
 	return snap, resp.StatusCode, nil
+}
+
+// snapshotSource maps the snapshot's served-by tag to the metric source label.
+// Returns BootstrapSourceNone when the snapshot is nil (timed out or leader empty).
+func snapshotSource(snap *PeerSyncSnapshot) types.BootstrapSource {
+	if snap == nil {
+		return types.BootstrapSourceNone
+	}
+	if snap.Source == streamFrameSourceLeader {
+		return types.BootstrapSourceLeader
+	}
+	return types.BootstrapSourceSecondary
 }

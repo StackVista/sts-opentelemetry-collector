@@ -77,6 +77,18 @@ const (
 	BootstrapTimedOut    BootstrapOutcome = "timed_out"
 )
 
+// BootstrapSource reports which kind of peer the snapshot was pulled from.
+// Operationally important: a high rate of "secondary" bootstraps indicates
+// frequent leader churn (e.g., lease flapping or cold replacements winning the
+// election race), while "leader" is the steady-state expected source.
+type BootstrapSource string
+
+const (
+	BootstrapSourceNone      BootstrapSource = "none" // outcome was not "applied"
+	BootstrapSourceLeader    BootstrapSource = "leader"
+	BootstrapSourceSecondary BootstrapSource = "secondary"
+)
+
 // CRInformerOutcome categorises the result of a startCRInformer call. Used by the
 // reconciler metric to surface whether periodic recovery is doing useful work.
 type CRInformerOutcome string
