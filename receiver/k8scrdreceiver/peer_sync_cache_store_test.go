@@ -111,7 +111,7 @@ func TestPeerSyncCacheStore_IsEmpty_TrueByDefault(t *testing.T) {
 
 // --- HTTP handlers ---
 
-func TestPeerSyncCacheStore_HandleSnapshot_Returns503WhenNotLeader(t *testing.T) {
+func TestPeerSyncCacheStore_HandleSnapshot_SecondaryServesWithSourceTag(t *testing.T) {
 	t.Parallel()
 	store := newPeerSyncCacheStore(zaptest.NewLogger(t), 0, "", nil)
 	seedCache(store, testCacheWithData(t))
@@ -120,7 +120,18 @@ func TestPeerSyncCacheStore_HandleSnapshot_Returns503WhenNotLeader(t *testing.T)
 	w := httptest.NewRecorder()
 	store.handleSnapshot(w, req)
 
-	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	gr, err := gzip.NewReader(w.Body)
+	require.NoError(t, err)
+	defer gr.Close()
+	dec := json.NewDecoder(gr)
+
+	var meta peerSyncStreamFrame
+	require.NoError(t, dec.Decode(&meta))
+	assert.Equal(t, streamFrameMeta, meta.Type)
+	assert.Equal(t, streamFrameSourceSecondary, meta.Source,
+		"non-leader peer should advertise itself as secondary")
 }
 
 func TestPeerSyncCacheStore_HandleSnapshot_Returns204WhenLeaderHasNoData(t *testing.T) {
@@ -294,6 +305,60 @@ func TestPeerSyncCacheStore_Bootstrap_NoOpWhenAlreadyPopulated(t *testing.T) {
 	assert.Contains(t, store.cache.CRDs, "widgets.example.com")
 	assert.NotContains(t, store.cache.CRDs, "gadgets.example.com",
 		"populated store should not be overwritten by bootstrap")
+	store.cacheMu.RUnlock()
+}
+
+func TestPeerSyncCacheStore_Bootstrap_UsesLeaderSnapshot(t *testing.T) {
+	t.Parallel()
+	logger := zaptest.NewLogger(t)
+
+	// A leader peer with cached data. The "prefer leader" branch in
+	// pullSnapshotFromPeers returns on the first leader response without
+	// considering further peers, so a single-peer setup exercises that path.
+	// The inverse path (no leader → use freshest secondary) is covered by
+	// TestPeerSyncCacheStore_Bootstrap_FallsBackToSecondaryWhenNoLeader.
+	leaderCache := newResourceCache()
+	leaderCache.CRDs["from-leader.example.com"] = makeTestCRDUnstructured(
+		"from-leader.example.com", "example.com", "Foo", "foos")
+	leader := newPeerSyncCacheStore(logger, 0, "", nil)
+	leader.SetLeader(true)
+	seedCache(leader, leaderCache)
+
+	leaderServer := httptest.NewServer(http.HandlerFunc(leader.handleSnapshot))
+	defer leaderServer.Close()
+	_, leaderPortInt := peerPort(t, leaderServer.Listener.Addr().String())
+
+	store := newPeerSyncCacheStore(logger, leaderPortInt, "localhost", nil)
+	require.NoError(t, store.Bootstrap(context.Background()))
+
+	store.cacheMu.RLock()
+	assert.Contains(t, store.cache.CRDs, "from-leader.example.com")
+	store.cacheMu.RUnlock()
+}
+
+func TestPeerSyncCacheStore_Bootstrap_FallsBackToSecondaryWhenNoLeader(t *testing.T) {
+	t.Parallel()
+	logger := zaptest.NewLogger(t)
+
+	// Only a secondary is reachable (the leader is gone). Bootstrap should
+	// accept its snapshot rather than time out.
+	cache := newResourceCache()
+	cache.CRDs["from-secondary.example.com"] = makeTestCRDUnstructured(
+		"from-secondary.example.com", "example.com", "Bar", "bars")
+	secondary := newPeerSyncCacheStore(logger, 0, "", nil)
+	// Note: SetLeader(true) NOT called — secondary serves with Source=secondary.
+	seedCache(secondary, cache)
+
+	server := httptest.NewServer(http.HandlerFunc(secondary.handleSnapshot))
+	defer server.Close()
+	_, peerPortInt := peerPort(t, server.Listener.Addr().String())
+
+	store := newPeerSyncCacheStore(logger, peerPortInt, "localhost", nil)
+	require.NoError(t, store.Bootstrap(context.Background()))
+
+	store.cacheMu.RLock()
+	assert.Contains(t, store.cache.CRDs, "from-secondary.example.com",
+		"bootstrap should accept secondary's snapshot when no leader is reachable")
 	store.cacheMu.RUnlock()
 }
 

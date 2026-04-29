@@ -67,12 +67,21 @@ func (r *k8scrdReceiver) Start(ctx context.Context, host component.Host) error {
 		return fmt.Errorf("failed to start peer sync cache store: %w", err)
 	}
 
+	// Bootstrap on every replica — not just the leader. Secondaries need a warm
+	// cache too, otherwise their state only accumulates from received deltas
+	// (which are sparse on a stable cluster) and they can't serve a useful
+	// snapshot if a future leader has to bootstrap from them.
+	if err := r.peerStore.Bootstrap(ctx); err != nil {
+		r.settings.Logger.Debug("Initial bootstrap returned error, continuing", zap.Error(err))
+	}
+
 	if r.config.K8sLeaderElector != nil {
 		return r.startWithLeaderElection(ctx, host)
 	}
 
-	// Single-replica deploy: this instance is effectively always the leader, so it
-	// must serve snapshots to anyone who asks.
+	// Single-replica deploy: this instance is effectively always the leader.
+	// Marking it as such tags its served snapshots with Source=leader so any
+	// future bootstrapping peer treats them as authoritative.
 	r.peerStore.SetLeader(true)
 	return r.startCollector(ctx)
 }

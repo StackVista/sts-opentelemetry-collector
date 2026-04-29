@@ -26,6 +26,15 @@ type PeerSyncSnapshot struct {
 	// relative to the cluster's history rather than restarting the timer from
 	// "now" — preventing a snapshot gap that exceeds the configured interval.
 	LastSnapshotTime time.Time
+
+	// LastAppliedAt is the responding peer's local wall-clock when it last
+	// applied a delta. The bootstrapping peer uses this to pick the freshest
+	// secondary when no leader is reachable.
+	LastAppliedAt time.Time
+
+	// Source reports whether the responding peer was the current lease-holder
+	// (authoritative) or a secondary (best-effort, possibly one delta behind).
+	Source streamFrameSource
 }
 
 // streamFrameType discriminates the frames in a peer-sync stream. Both snapshot
@@ -39,6 +48,16 @@ const (
 	streamFrameCR   streamFrameType = "cr"
 )
 
+// streamFrameSource reports the role of the peer that served a snapshot. The
+// bootstrapping peer uses this to prefer the authoritative leader's response
+// over a secondary's best-effort cache.
+type streamFrameSource string
+
+const (
+	streamFrameSourceLeader    streamFrameSource = "leader"
+	streamFrameSourceSecondary streamFrameSource = "secondary"
+)
+
 // peerSyncStreamFrame is one record in the gzipped NDJSON wire format used by
 // both /sync/snapshot (server-streamed) and /sync/increments (encode-once-buffered).
 // All optional fields are tagged so unused fields don't appear on the wire.
@@ -46,8 +65,12 @@ type peerSyncStreamFrame struct {
 	Type streamFrameType `json:"type"`
 
 	// Meta frame fields. AppliedAt is delta-only; LastSnapshotTime appears on both.
-	AppliedAt        time.Time `json:"applied_at,omitzero"`
-	LastSnapshotTime time.Time `json:"last_snapshot_time,omitzero"`
+	// LastAppliedAt and Source are set on snapshot meta frames so the bootstrapping
+	// peer can judge freshness and prefer authoritative responses.
+	AppliedAt        time.Time         `json:"applied_at,omitzero"`
+	LastSnapshotTime time.Time         `json:"last_snapshot_time,omitzero"`
+	LastAppliedAt    time.Time         `json:"last_applied_at,omitzero"`
+	Source           streamFrameSource `json:"source,omitempty"`
 
 	// Resource frame fields. Key indexes the cache (snapshot path); Obj/GVR carry
 	// the resource itself. EventType is delta-only — empty on snapshot frames where

@@ -33,8 +33,9 @@ const (
 	// PeerSyncDelta with the per-cycle changes.
 	syncIncrementsPath = "/sync/increments"
 
-	// syncSnapshotPath is the bootstrap pull endpoint. GET only, served only by the
-	// current leader.
+	// syncSnapshotPath is the bootstrap pull endpoint. GET only. Served by any
+	// peer with non-empty cache; the response carries Source + LastAppliedAt so
+	// the caller can prefer the leader and fall back to the freshest secondary.
 	syncSnapshotPath = "/sync/snapshot"
 
 	defaultPeerPort = 4319
@@ -74,13 +75,20 @@ type peerSyncCacheStore struct {
 	peerDNS  string
 	metrics  metrics.Recorder
 
-	// cacheMu guards cache and lastSnapshotTime.
+	// cacheMu guards cache, lastSnapshotTime, and lastAppliedAt.
 	cacheMu          sync.RWMutex
 	cache            *resourceCache
 	lastSnapshotTime time.Time
+	// lastAppliedAt is the wall-clock at the most recent cache mutation;
+	// reported in served snapshots so callers can judge freshness.
+	lastAppliedAt time.Time
 
-	// isLeader gates the snapshot endpoint: only the current leader serves snapshots
-	// (peer caches can be stale). Set via SetLeader from the leader-election callbacks.
+	// isLeader is reported in served snapshots so a bootstrapping peer can prefer
+	// the leader's authoritative response over a secondary's. Set via SetLeader
+	// from the leader-election callbacks. NOT used to gate serving — secondaries
+	// also serve their (possibly slightly stale) cache, since "stale peer cache"
+	// is strictly better than "cold informer re-list" during a failover where the
+	// previous leader is gone.
 	isLeader atomic.Bool
 
 	// bufferMu serialises access to ready and deltaBuffer.
@@ -176,16 +184,23 @@ func (p *peerSyncCacheStore) Stop() {
 
 // --- PeerStore interface ---
 
-// Bootstrap pulls a snapshot from the leader and applies it to the local cache.
-// Retries with exponential backoff until either a snapshot is obtained or the
-// overall deadline (bootstrapMaxDuration) passes — in which case we fall back
-// to cold start with whatever was buffered.
+// Bootstrap pulls a snapshot from the best available peer (preferring the
+// current leader, falling back to the freshest secondary) and applies it to the
+// local cache. Retries with exponential backoff until either a snapshot is
+// obtained or the overall deadline (bootstrapMaxDuration) passes — in which
+// case we fall back to cold start with whatever was buffered.
 //
 // While Bootstrap runs, ready is false: incoming deltas (via handleIncrement) go
 // into deltaBuffer. On exit, the buffer is drained — applying only deltas with
 // AppliedAt at or after the snapshot's reference time — and ready flips back to
 // true. Subsequent deltas apply directly.
 func (p *peerSyncCacheStore) Bootstrap(ctx context.Context) error {
+	// No peer DNS configured → single-replica deploy, nothing to pull from.
+	// Skip the (otherwise pointless) 30s retry loop.
+	if p.peerDNS == "" {
+		return nil
+	}
+
 	// Hold bufferMu across the empty check and the ready flip so a delta arriving
 	// concurrently via handleIncrement either fully applies before Bootstrap (and
 	// keeps the cache non-empty, so we bail out) or sees ready=false and buffers.
@@ -200,7 +215,7 @@ func (p *peerSyncCacheStore) Bootstrap(ctx context.Context) error {
 	p.ready = false
 	p.bufferMu.Unlock()
 
-	p.logger.Info("Bootstrapping peer cache from leader")
+	p.logger.Info("Bootstrapping peer cache from peers")
 	snap, outcome := p.pullSnapshotWithRetry(ctx)
 	p.metrics.RecordBootstrap(ctx, outcome)
 	switch outcome {
@@ -262,6 +277,7 @@ func (p *peerSyncCacheStore) completeBootstrap(snapshot *PeerSyncSnapshot) {
 			zap.Int("crds", len(snapshot.Cache.CRDs)),
 			zap.Int("crs", len(snapshot.Cache.CRs)),
 			zap.Time("last_snapshot_time", snapshot.LastSnapshotTime),
+			zap.String("source", string(snapshot.Source)),
 		)
 	}
 
@@ -277,6 +293,9 @@ func (p *peerSyncCacheStore) completeBootstrap(snapshot *PeerSyncSnapshot) {
 			p.lastSnapshotTime = delta.LastSnapshotTime
 		}
 		applied++
+	}
+	if snapshot != nil || applied > 0 {
+		p.lastAppliedAt = time.Now()
 	}
 	bufferedCount := len(p.deltaBuffer)
 	p.deltaBuffer = nil
@@ -319,6 +338,7 @@ func (p *peerSyncCacheStore) ApplyDelta(ctx context.Context, delta *PeerSyncDelt
 	if !delta.LastSnapshotTime.IsZero() {
 		p.lastSnapshotTime = delta.LastSnapshotTime
 	}
+	p.lastAppliedAt = time.Now()
 	delta.LastSnapshotTime = p.lastSnapshotTime
 	crds, crs := len(p.cache.CRDs), len(p.cache.CRs)
 	p.cacheMu.Unlock()
@@ -401,6 +421,7 @@ func (p *peerSyncCacheStore) handleIncrement(w http.ResponseWriter, r *http.Requ
 	if !delta.LastSnapshotTime.IsZero() {
 		p.lastSnapshotTime = delta.LastSnapshotTime
 	}
+	p.lastAppliedAt = time.Now()
 	crds, crs := len(p.cache.CRDs), len(p.cache.CRs)
 	p.cacheMu.Unlock()
 	p.bufferMu.Unlock()
@@ -416,9 +437,13 @@ func (p *peerSyncCacheStore) handleIncrement(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusOK)
 }
 
-// handleSnapshot serves the leader's cache to a peer that's bootstrapping. Non-leader
-// replicas return 503 — peer caches can be stale (their last delta may have been missed)
-// so only the lease-holder is authoritative.
+// handleSnapshot serves the local cache to a peer that's bootstrapping. Both
+// leaders and secondaries serve — the meta frame's Source field tells the caller
+// which it's talking to, and LastAppliedAt lets the caller pick the freshest
+// secondary if no leader is reachable. Allowing secondaries to serve is the
+// fix for the failover gap where a fresh replacement pod wins the lease over a
+// warm secondary: without it, the new leader has no way to retrieve any peer's
+// cache and ends up doing a cold informer re-list.
 //
 // The body is newline-delimited JSON: one meta frame followed by one frame per CRD
 // and CR entry. Each frame is encoded and written through gzip immediately; nothing
@@ -429,16 +454,15 @@ func (p *peerSyncCacheStore) handleSnapshot(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if !p.isLeader.Load() {
-		w.Header().Set("Retry-After", "1")
-		http.Error(w, "not leader", http.StatusServiceUnavailable)
-		return
-	}
-
-	crdsCopy, crsCopy, lastSnapshotTime, isEmpty := p.snapshotCopyForServe()
+	crdsCopy, crsCopy, lastSnapshotTime, lastAppliedAt, isEmpty := p.snapshotCopyForServe()
 	if isEmpty {
 		w.WriteHeader(http.StatusNoContent)
 		return
+	}
+
+	source := streamFrameSourceSecondary
+	if p.isLeader.Load() {
+		source = streamFrameSourceLeader
 	}
 
 	w.Header().Set("Content-Type", "application/x-ndjson")
@@ -455,6 +479,8 @@ func (p *peerSyncCacheStore) handleSnapshot(w http.ResponseWriter, r *http.Reque
 	if err := enc.Encode(peerSyncStreamFrame{
 		Type:             streamFrameMeta,
 		LastSnapshotTime: lastSnapshotTime,
+		LastAppliedAt:    lastAppliedAt,
+		Source:           source,
 	}); err != nil {
 		// Body has started; client will see a truncated stream.
 		p.metrics.RecordSnapshotStreamFailure(r.Context())
@@ -492,16 +518,18 @@ func (p *peerSyncCacheStore) handleSnapshot(w http.ResponseWriter, r *http.Reque
 // snapshotCopyForServe takes a shallow copy of the cache maps under read lock
 // so the caller can iterate them lock-free. Object pointers are shared with the
 // cache; safe because all readers treat them as read-only (informer convention).
+// Also returns lastSnapshotTime and lastAppliedAt for the meta frame.
 func (p *peerSyncCacheStore) snapshotCopyForServe() (
 	map[string]*unstructured.Unstructured,
 	map[string]*cachedCR,
-	time.Time,
-	bool,
+	time.Time, // lastSnapshotTime
+	time.Time, // lastAppliedAt
+	bool, // isEmpty
 ) {
 	p.cacheMu.RLock()
 	defer p.cacheMu.RUnlock()
 	if p.cache.isEmpty() {
-		return nil, nil, time.Time{}, true
+		return nil, nil, time.Time{}, time.Time{}, true
 	}
 	crds := make(map[string]*unstructured.Unstructured, len(p.cache.CRDs))
 	for k, v := range p.cache.CRDs {
@@ -511,7 +539,7 @@ func (p *peerSyncCacheStore) snapshotCopyForServe() (
 	for k, v := range p.cache.CRs {
 		crs[k] = v
 	}
-	return crds, crs, p.lastSnapshotTime, false
+	return crds, crs, p.lastSnapshotTime, p.lastAppliedAt, false
 }
 
 // --- Push broadcast ---
@@ -737,11 +765,15 @@ func classifyPushError(err error) types.PushFailureReason {
 
 // --- Bootstrap pull ---
 
-// pullSnapshotFromPeers asks each DNS-resolved peer for a snapshot, returning the
-// first successful response (which will be the current leader). The bool reports
-// whether any peer authoritatively said "I'm leader but empty" (HTTP 204) — the
-// caller uses it to skip retries when the cluster is cold. Otherwise the caller
-// should retry (no peer reachable, or all returned 503 = "not leader").
+// pullSnapshotFromPeers asks each DNS-resolved peer for a snapshot and picks
+// the best response: the leader's if any peer responded as leader (authoritative,
+// current), otherwise the secondary with the most recent LastAppliedAt (warm but
+// possibly one delta behind). The bool reports whether any peer authoritatively
+// said "I have no data" (HTTP 204) — the caller uses it to skip retries when
+// the cluster is cold.
+//
+// Returns early on a leader response since secondaries can't supersede it.
+// Otherwise pulls from every reachable peer so the freshest is chosen.
 func (p *peerSyncCacheStore) pullSnapshotFromPeers(
 	ctx context.Context, timeout time.Duration,
 ) (*PeerSyncSnapshot, bool) {
@@ -760,7 +792,11 @@ func (p *peerSyncCacheStore) pullSnapshotFromPeers(
 
 	podIP := os.Getenv("POD_IP")
 	client := &http.Client{Timeout: timeout}
-	leaderRespondedEmpty := false
+
+	var (
+		bestSecondary *PeerSyncSnapshot
+		anyEmpty      bool
+	)
 
 	for _, ip := range ips {
 		if ip == podIP {
@@ -786,15 +822,28 @@ func (p *peerSyncCacheStore) pullSnapshotFromPeers(
 				zap.String("peer", ip),
 				zap.Int("crds", crds),
 				zap.Int("crs", crs),
+				zap.String("source", string(fetched.Source)),
+				zap.Time("last_applied_at", fetched.LastAppliedAt),
 			)
-			return fetched, false
+			if fetched.Source == streamFrameSourceLeader {
+				return fetched, false
+			}
+			if bestSecondary == nil || fetched.LastAppliedAt.After(bestSecondary.LastAppliedAt) {
+				bestSecondary = fetched
+			}
 		case http.StatusNoContent:
-			leaderRespondedEmpty = true
+			anyEmpty = true
 		}
-		// 503 / other: try next peer.
 	}
 
-	return nil, leaderRespondedEmpty
+	if bestSecondary != nil {
+		p.logger.Info("No leader peer responded; falling back to freshest secondary snapshot",
+			zap.Time("last_applied_at", bestSecondary.LastAppliedAt),
+			zap.Duration("staleness", time.Since(bestSecondary.LastAppliedAt)),
+		)
+		return bestSecondary, false
+	}
+	return nil, anyEmpty
 }
 
 // fetchPeerSnapshot pulls a snapshot from a single peer and assembles it from a
@@ -854,6 +903,8 @@ func (p *peerSyncCacheStore) fetchPeerSnapshot(
 		switch frame.Type {
 		case streamFrameMeta:
 			snap.LastSnapshotTime = frame.LastSnapshotTime
+			snap.LastAppliedAt = frame.LastAppliedAt
+			snap.Source = frame.Source
 		case streamFrameCRD:
 			snap.Cache.CRDs[frame.Key] = frame.Obj
 		case streamFrameCR:
