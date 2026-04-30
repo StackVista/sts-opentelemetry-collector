@@ -223,11 +223,16 @@ func TestExpressionAstWalker_GetVarReferences(t *testing.T) {
 		{
 			name:     "no vars referenced",
 			expr:     `resource.attributes["service.name"]`,
-			wantVars: nil,
+			wantVars: []string{},
 		},
 		{
-			name:     "single var",
+			name:     "single var with dot notation",
 			expr:     `"urn:server/" + vars.serverName`,
+			wantVars: []string{"serverName"},
+		},
+		{
+			name:     "single var with bracket/index notation",
+			expr:     `"urn:server/" + vars['serverName']`,
 			wantVars: []string{"serverName"},
 		},
 		{

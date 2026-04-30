@@ -32,19 +32,17 @@ func CollectVarReferences(
 }
 
 // FilterVarsByName returns the subset of vars whose Name is present in `names`.
-// Returns the original slice if names is nil (no filtering); returns an empty slice if vars is nil or empty.
+// Returns the original slice if names is nil (no filtering).
+// Returns nil if vars is nil; otherwise returns an empty slice when no names match.
 func FilterVarsByName(
 	vars *[]settingsproto.OtelVariableMapping,
 	names map[string]struct{},
 ) []settingsproto.OtelVariableMapping {
-	if names == nil {
-		if vars == nil {
-			return nil
-		}
-		return *vars
-	}
 	if vars == nil {
 		return nil
+	}
+	if names == nil {
+		return *vars
 	}
 	filtered := make([]settingsproto.OtelVariableMapping, 0, len(names))
 	for _, v := range *vars {
