@@ -13,6 +13,7 @@ env:
   IMAGE_NAME: stackstate/sts-opentelemetry-collector
   GO_VERSION: 1.25.8
   GOLANGCI_LINT_VERSION: v2.4
+  TRIVY_IMAGE: ${{ vars.TRIVY_IMAGE }}
 
 jobs:
   build:
@@ -54,6 +55,7 @@ jobs:
       - name: Build and scan amd64 image locally
         env:
           IMAGE_LABELS: ${{ steps.meta.outputs.labels }}
+          TRIVY_IMAGE: ${{ env.TRIVY_IMAGE }}
         run: scripts/build-and-scan-image.sh
 
       - name: Login to the container registry after scan

@@ -5,7 +5,7 @@ set -euo pipefail
 DOCKERFILE="${DOCKERFILE:-Dockerfile}"
 IMAGE_LABELS="${IMAGE_LABELS:-}"
 SCAN_PLATFORM="${SCAN_PLATFORM:-linux/amd64}"
-TRIVY_IMAGE="${TRIVY_IMAGE:-aquasec/trivy:0.70.0}"
+: "${TRIVY_IMAGE:?TRIVY_IMAGE is required}"
 TRIVY_CACHE_DIR="${TRIVY_CACHE_DIR:-.trivy-cache}"
 SCAN_RESULT_FILE="${SCAN_RESULT_FILE:-${RUNNER_TEMP:-/tmp}/scan-passed.txt}"
 
