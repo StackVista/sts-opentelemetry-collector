@@ -23,15 +23,22 @@ mkdir -p "${TRIVY_CACHE_DIR}" "$(dirname "${SCAN_RESULT_FILE}")"
 rm -f "${SCAN_RESULT_FILE}"
 
 echo "Building ${LOCAL_IMAGE} for ${SCAN_PLATFORM}"
-docker buildx build \
-  --platform "${SCAN_PLATFORM}" \
-  --load \
-  --provenance=false \
-  --sbom=false \
-  --tag "${LOCAL_IMAGE}" \
-  --file "${DOCKERFILE}" \
-  "${label_args[@]}" \
-  .
+build_args=(
+  buildx
+  build
+  --platform "${SCAN_PLATFORM}"
+  --load
+  --provenance=false
+  --sbom=false
+  --tag "${LOCAL_IMAGE}"
+  --file "${DOCKERFILE}"
+)
+if [[ "${#label_args[@]}" -gt 0 ]]; then
+  build_args+=("${label_args[@]}")
+fi
+build_args+=(.)
+
+docker "${build_args[@]}"
 
 echo "Pulling scanner image ${TRIVY_IMAGE}"
 docker pull "${TRIVY_IMAGE}"

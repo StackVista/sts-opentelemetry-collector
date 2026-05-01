@@ -138,8 +138,8 @@ jobs:
         uses: docker/setup-buildx-action@v3
       - name: Run integration tests
         run: |
-          go test -tags=integration ./exporter/stskafkaexporter/...
-          go test -tags=integration ./extension/settingsproviderextension/...
+          (cd exporter/stskafkaexporter/integration && GOWORK=off go test -tags=integration ./...)
+          (cd extension/settingsproviderextension/integration && GOWORK=off go test -tags=integration ./...)
   e2e-test:
     needs: build
     runs-on: ubuntu-latest

@@ -107,15 +107,22 @@ for platform in "${platform_list[@]}"; do
     done
 
     echo "Publishing unscanned ${platform} image"
-    docker buildx build \
-      --platform "${platform}" \
-      --push \
-      --provenance=false \
-      --sbom=false \
-      "${tag_args[@]}" \
-      --file "${DOCKERFILE}" \
-      "${label_args[@]}" \
-      .
+    build_args=(
+      buildx
+      build
+      --platform "${platform}"
+      --push
+      --provenance=false
+      --sbom=false
+    )
+    build_args+=("${tag_args[@]}")
+    build_args+=(--file "${DOCKERFILE}")
+    if [[ "${#label_args[@]}" -gt 0 ]]; then
+      build_args+=("${label_args[@]}")
+    fi
+    build_args+=(.)
+
+    docker "${build_args[@]}"
   fi
 
   image_refs+=("${primary_platform_tag}")
