@@ -17,7 +17,7 @@ env:
 
 jobs:
   build:
-    name: Docker image build, Trivy scan, and publish
+    name: Docker image build, Trivy secret/vulnerability scan, and publish
     runs-on: ubuntu-latest
     # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
     permissions:
@@ -52,7 +52,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and scan amd64 image locally
+      - name: Build and Trivy secret/vulnerability scan amd64 image locally
         env:
           IMAGE_LABELS: ${{ steps.meta.outputs.labels }}
           TRIVY_IMAGE: ${{ env.TRIVY_IMAGE }}
