@@ -134,10 +134,42 @@ func TestPeerSyncCacheStore_HandleSnapshot_SecondaryServesWithSourceTag(t *testi
 		"non-leader peer should advertise itself as secondary")
 }
 
-func TestPeerSyncCacheStore_HandleSnapshot_Returns204WhenLeaderHasNoData(t *testing.T) {
+func TestPeerSyncCacheStore_HandleSnapshot_LeaderEmptyStreamsMetaOnly(t *testing.T) {
 	t.Parallel()
+	// An empty leader streams a meta frame (Source=leader, zero entries) rather
+	// than 204, so a bootstrapping caller can distinguish "leader is empty
+	// (cluster is cold)" from "secondary is empty (uninformative)".
 	store := newPeerSyncCacheStore(zaptest.NewLogger(t), 0, "", nil)
 	store.SetLeader(true)
+
+	req := httptest.NewRequest(http.MethodGet, syncSnapshotPath, nil)
+	w := httptest.NewRecorder()
+	store.handleSnapshot(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	gr, err := gzip.NewReader(w.Body)
+	require.NoError(t, err)
+	defer gr.Close()
+	dec := json.NewDecoder(gr)
+
+	var meta peerSyncStreamFrame
+	require.NoError(t, dec.Decode(&meta))
+	assert.Equal(t, streamFrameMeta, meta.Type)
+	assert.Equal(t, streamFrameSourceLeader, meta.Source)
+
+	// No further frames — empty cache means meta-only response.
+	var extra peerSyncStreamFrame
+	assert.ErrorIs(t, dec.Decode(&extra), io.EOF)
+}
+
+func TestPeerSyncCacheStore_HandleSnapshot_EmptySecondaryReturns204(t *testing.T) {
+	t.Parallel()
+	// Empty secondary still returns 204 — its emptiness signals nothing useful
+	// (cache hasn't filled yet via received deltas), so we save the gzipped
+	// meta-frame bytes.
+	store := newPeerSyncCacheStore(zaptest.NewLogger(t), 0, "", nil)
+	// SetLeader NOT called — store is a secondary by default.
 
 	req := httptest.NewRequest(http.MethodGet, syncSnapshotPath, nil)
 	w := httptest.NewRecorder()

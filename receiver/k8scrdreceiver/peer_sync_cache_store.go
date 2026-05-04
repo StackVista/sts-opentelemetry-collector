@@ -194,7 +194,7 @@ func (p *peerSyncCacheStore) Stop() {
 // AppliedAt at or after the snapshot's reference time — and ready flips back to
 // true. Subsequent deltas apply directly.
 func (p *peerSyncCacheStore) Bootstrap(ctx context.Context) error {
-	// No peer DNS configured → single-replica deploy, nothing to pull from.
+	// No peer DNS configured -> single-replica deploy, nothing to pull from.
 	// Skip the (otherwise pointless) 30s retry loop.
 	if p.peerDNS == "" {
 		return nil
@@ -454,14 +454,19 @@ func (p *peerSyncCacheStore) handleSnapshot(w http.ResponseWriter, r *http.Reque
 	}
 
 	crdsCopy, crsCopy, lastSnapshotTime, lastAppliedAt, isEmpty := p.snapshotCopyForServe()
-	if isEmpty {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
 
 	source := streamFrameSourceSecondary
 	if p.isLeader.Load() {
 		source = streamFrameSourceLeader
+	}
+
+	// Empty secondary → 204 (its emptiness tells the caller nothing useful — its
+	// cache just hasn't filled yet via received deltas). Empty leader → still
+	// stream the meta frame so the caller can read Source=leader + zero entries
+	// and conclude the cluster is genuinely cold (no point retrying bootstrap).
+	if isEmpty && source != streamFrameSourceLeader {
+		w.WriteHeader(http.StatusNoContent)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/x-ndjson")
@@ -767,9 +772,10 @@ func classifyPushError(err error) metrics.PushFailureReason {
 // pullSnapshotFromPeers asks each DNS-resolved peer for a snapshot and picks
 // the best response: the leader's if any peer responded as leader (authoritative,
 // current), otherwise the secondary with the most recent LastAppliedAt (warm but
-// possibly one delta behind). The bool reports whether any peer authoritatively
-// said "I have no data" (HTTP 204) — the caller uses it to skip retries when
-// the cluster is cold.
+// possibly one delta behind). The bool is true only when the LEADER itself
+// responded as empty — the caller uses it to skip retries when the cluster is
+// genuinely cold. An empty secondary (HTTP 204) does not set this flag, since
+// its emptiness only means the secondary hasn't yet filled via received deltas.
 //
 // Returns early on a leader response since secondaries can't supersede it.
 // Otherwise pulls from every reachable peer so the freshest is chosen.
@@ -794,7 +800,7 @@ func (p *peerSyncCacheStore) pullSnapshotFromPeers(
 
 	var (
 		bestSecondary *PeerSyncSnapshot
-		anyEmpty      bool
+		leaderEmpty   bool
 	)
 
 	for _, ip := range ips {
@@ -811,27 +817,45 @@ func (p *peerSyncCacheStore) pullSnapshotFromPeers(
 			continue
 		}
 
-		switch status {
-		case http.StatusOK:
-			crds, crs := 0, 0
-			if fetched != nil && fetched.Cache != nil {
-				crds, crs = len(fetched.Cache.CRDs), len(fetched.Cache.CRs)
-			}
-			p.logger.Debug("Pulled snapshot from peer",
-				zap.String("peer", ip),
-				zap.Int("crds", crds),
-				zap.Int("crs", crs),
-				zap.String("source", string(fetched.Source)),
-				zap.Time("last_applied_at", fetched.LastAppliedAt),
-			)
-			if fetched.Source == streamFrameSourceLeader {
-				return fetched, false
-			}
-			if bestSecondary == nil || fetched.LastAppliedAt.After(bestSecondary.LastAppliedAt) {
-				bestSecondary = fetched
-			}
-		case http.StatusNoContent:
-			anyEmpty = true
+		// 204 == empty secondary (leader-empty arrives as 200 with zero entries).
+		if status != http.StatusOK {
+			continue
+		}
+
+		crds, crs := 0, 0
+		if fetched.Cache != nil {
+			crds, crs = len(fetched.Cache.CRDs), len(fetched.Cache.CRs)
+		}
+		empty := crds == 0 && crs == 0
+		p.logger.Debug("Pulled snapshot from peer",
+			zap.String("peer", ip),
+			zap.Int("crds", crds),
+			zap.Int("crs", crs),
+			zap.String("source", string(fetched.Source)),
+			zap.Time("last_applied_at", fetched.LastAppliedAt),
+		)
+
+		isLeader := fetched.Source == streamFrameSourceLeader
+
+		// Empty leader: authoritative cold-cluster signal — stop and discard any
+		// secondary candidate, since secondary data would be stale relative to
+		// the leader's "no data" state.
+		if empty && isLeader {
+			leaderEmpty = true
+			bestSecondary = nil
+			break
+		}
+		// Empty secondary: uninformative (cache hasn't filled via received deltas yet).
+		if empty {
+			continue
+		}
+		// Non-empty leader: authoritative current data — use immediately.
+		if isLeader {
+			return fetched, false
+		}
+		// Non-empty secondary: track as fallback in case no leader responds.
+		if bestSecondary == nil || fetched.LastAppliedAt.After(bestSecondary.LastAppliedAt) {
+			bestSecondary = fetched
 		}
 	}
 
@@ -842,7 +866,7 @@ func (p *peerSyncCacheStore) pullSnapshotFromPeers(
 		)
 		return bestSecondary, false
 	}
-	return nil, anyEmpty
+	return nil, leaderEmpty
 }
 
 // fetchPeerSnapshot pulls a snapshot from a single peer and assembles it from a
