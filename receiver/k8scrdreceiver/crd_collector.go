@@ -125,17 +125,6 @@ func (c *crdCollector) runIncrement(ctx context.Context) {
 	currentCRs := c.informers.ReadCRs()
 	changes := c.peerStore.ComputeChanges(currentCRDs, currentCRs)
 
-	if !c.config.IncludeInitialState && c.peerStore.IsEmpty() {
-		c.logger.Info("Initial state loaded into peer cache (not emitting)",
-			zap.Int("crds", len(currentCRDs)),
-			zap.Int("cr_types", len(currentCRs)),
-		)
-		// Treat the initial population as a snapshot so the next snapshot tick
-		// is scheduled relative to now, even though we didn't emit anything.
-		c.recordSnapshotApplied(ctx, changes)
-		return
-	}
-
 	if c.peerStore.IsEmpty() || time.Since(c.peerStore.LastSnapshotTime()) >= c.config.SnapshotInterval {
 		c.emitSnapshot(ctx, currentCRDs, currentCRs, changes)
 		c.recordSnapshotApplied(ctx, changes)

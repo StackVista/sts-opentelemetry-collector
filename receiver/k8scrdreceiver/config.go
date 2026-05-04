@@ -34,10 +34,6 @@ type Config struct {
 	// Default: 5m, min: 1m.
 	SnapshotInterval time.Duration `mapstructure:"snapshot_interval"`
 
-	// IncludeInitialState emits all existing CRDs/CRs on startup before the first interval tick.
-	// When false, the first increment populates the process cache without emitting.
-	IncludeInitialState bool `mapstructure:"include_initial_state"`
-
 	// ClusterName identifies the observed cluster. Added to log records as k8s.cluster.name.
 	ClusterName string `mapstructure:"cluster_name"`
 

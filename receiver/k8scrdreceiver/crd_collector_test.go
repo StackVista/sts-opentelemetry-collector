@@ -61,10 +61,9 @@ func testSettings(t *testing.T) receiver.Settings {
 
 func testConfig(includes []string, excludes []string) *Config {
 	cfg := &Config{
-		IncrementInterval:   1 * time.Second,
-		SnapshotInterval:    1 * time.Hour, // Long to prevent snapshots during tests
-		IncludeInitialState: true,
-		DiscoveryMode:       DiscoveryModeAPIGroups,
+		IncrementInterval: 1 * time.Second,
+		SnapshotInterval:  1 * time.Hour, // Long to prevent snapshots during tests
+		DiscoveryMode:     DiscoveryModeAPIGroups,
 		APIGroupFilters: &APIGroupFilters{
 			Include: includes,
 			Exclude: excludes,
@@ -378,52 +377,6 @@ func TestCRDCollector_SnapshotEmitsAllResources(t *testing.T) {
 	}, 10*time.Second, 100*time.Millisecond, "snapshot should emit 1 CRD + 2 CRs")
 }
 
-func TestCRDCollector_IncludeInitialStateFalse(t *testing.T) {
-	scheme := testScheme()
-	registerCRGVR(scheme, "example.com", "v1", "TestResource")
-
-	crd := makeTestCRDUnstructured("testresources.example.com", "example.com", "TestResource", "testresources")
-	cr := makeTestCR("my-resource", "default", "example.com", "v1", "TestResource")
-
-	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme,
-		map[schema.GroupVersionResource]string{
-			crdGVR: "CustomResourceDefinitionList",
-			{Group: "example.com", Version: "v1", Resource: "testresources"}: "TestResourceList",
-		},
-		crd, cr,
-	)
-
-	sink := &consumertest.LogsSink{}
-	config := testConfig([]string{"example.com"}, nil)
-	config.IncludeInitialState = false
-	ft := tracker.NewForbiddenTracker(1 * time.Hour)
-	collector := newTestCollector(t, config, sink, client, ft)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	err := collector.Start(ctx)
-	require.NoError(t, err)
-	defer func() { require.NoError(t, collector.Shutdown(ctx)) }()
-
-	// Wait for a few increment cycles (increment interval is 1s)
-	time.Sleep(2 * time.Second)
-
-	// No logs should have been emitted — initial state was loaded silently
-	assert.Equal(t, 0, sink.LogRecordCount(), "should not emit initial state when IncludeInitialState is false")
-
-	// Verify the cache is populated by creating a new CR — the increment loop should
-	// detect it as ADDED (proving the initial state was loaded into the cache).
-	crGVR := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "testresources"}
-	newCR := makeTestCR("new-cr", "default", "example.com", "v1", "TestResource")
-	_, err = client.Resource(crGVR).Namespace("default").Create(ctx, newCR, metav1.CreateOptions{})
-	require.NoError(t, err)
-
-	assert.Eventually(t, func() bool {
-		return sink.LogRecordCount() > 0
-	}, 10*time.Second, 100*time.Millisecond, "new CR should be detected as ADDED after initial cache load")
-}
-
 // TestCRDCollector_TwoPhaseSaveOrdering verifies the asymmetric apply/emit ordering in
 // the increment loop:
 //   - adds/mods: ApplyDelta runs BEFORE emit, so peers see the new state first
@@ -571,10 +524,9 @@ func TestCRDCollector_TwoPhaseSaveOrdering(t *testing.T) {
 func TestConfig_Simplified(t *testing.T) {
 	t.Run("valid config", func(t *testing.T) {
 		cfg := &Config{
-			IncrementInterval:   10 * time.Second,
-			SnapshotInterval:    5 * time.Minute,
-			IncludeInitialState: true,
-			DiscoveryMode:       DiscoveryModeAPIGroups,
+			IncrementInterval: 10 * time.Second,
+			SnapshotInterval:  5 * time.Minute,
+			DiscoveryMode:     DiscoveryModeAPIGroups,
 			APIGroupFilters: &APIGroupFilters{
 				Include: []string{"example.com"},
 				Exclude: []string{},

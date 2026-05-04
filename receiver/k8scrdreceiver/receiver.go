@@ -123,7 +123,6 @@ func (r *k8scrdReceiver) startCollector(ctx context.Context) error {
 	r.settings.Logger.Info("K8s CRD Receiver started",
 		zap.Duration("increment_interval", r.config.IncrementInterval),
 		zap.Duration("snapshot_interval", r.config.SnapshotInterval),
-		zap.Bool("include_initial_state", r.config.IncludeInitialState),
 		zap.String("discovery_mode", string(r.config.DiscoveryMode)),
 	)
 
