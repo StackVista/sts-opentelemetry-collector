@@ -7,7 +7,6 @@ import (
 
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/emit"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/metrics"
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/types"
 	"go.opentelemetry.io/collector/consumer"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -137,18 +136,14 @@ func (c *crdCollector) runIncrement(ctx context.Context) {
 		return
 	}
 
-	isSnapshot := c.peerStore.IsEmpty() || time.Since(c.peerStore.LastSnapshotTime()) >= c.config.SnapshotInterval
-
-	mode := types.ModeIncrement
-	if isSnapshot {
-		mode = types.ModeSnapshot
+	if c.peerStore.IsEmpty() || time.Since(c.peerStore.LastSnapshotTime()) >= c.config.SnapshotInterval {
 		c.emitSnapshot(ctx, currentCRDs, currentCRs, changes)
 		c.recordSnapshotApplied(ctx, changes)
+		c.metrics.RecordCycle(ctx, metrics.ModeSnapshot, time.Since(start))
 	} else {
 		c.emitIncrement(ctx, changes)
+		c.metrics.RecordCycle(ctx, metrics.ModeIncrement, time.Since(start))
 	}
-
-	c.metrics.RecordCycle(ctx, mode, time.Since(start))
 }
 
 // recordSnapshotApplied syncs the peer cache with the given changes, broadcasts
@@ -234,8 +229,8 @@ func (c *crdCollector) emitSnapshot(
 		}
 	}
 
-	c.metrics.RecordEmitted(ctx, types.ChangeAdded, crdAdded+crAdded)
-	c.metrics.RecordEmitted(ctx, types.ChangeDeleted, crdDeleted+crDeleted)
+	c.metrics.RecordEmitted(ctx, metrics.ChangeAdded, crdAdded+crAdded)
+	c.metrics.RecordEmitted(ctx, metrics.ChangeDeleted, crdDeleted+crDeleted)
 
 	c.logger.Debug("Snapshot complete",
 		zap.Int64("crds", crdAdded),
@@ -295,7 +290,7 @@ func (c *crdCollector) emitIncrement(ctx context.Context, changes []ResourceChan
 
 // emitChanges sends a list of changes to the consumer and records per-type counters.
 func (c *crdCollector) emitChanges(ctx context.Context, changes []ResourceChange) {
-	counts := map[types.ChangeType]int64{}
+	counts := map[metrics.ChangeType]int64{}
 	for _, change := range changes {
 		var err error
 		if change.IsCRD {
@@ -318,16 +313,16 @@ func (c *crdCollector) emitChanges(ctx context.Context, changes []ResourceChange
 	}
 }
 
-func (c *crdCollector) watchEventToChangeType(e watch.EventType) types.ChangeType {
+func (c *crdCollector) watchEventToChangeType(e watch.EventType) metrics.ChangeType {
 	switch e {
 	case watch.Added:
-		return types.ChangeAdded
+		return metrics.ChangeAdded
 	case watch.Modified:
-		return types.ChangeModified
+		return metrics.ChangeModified
 	case watch.Deleted:
-		return types.ChangeDeleted
+		return metrics.ChangeDeleted
 	default:
 		c.logger.Warn("Unexpected watch event type", zap.String("event", string(e)))
-		return types.ChangeUnknown
+		return metrics.ChangeUnknown
 	}
 }

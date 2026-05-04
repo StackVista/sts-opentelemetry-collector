@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/metrics"
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/types"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -219,11 +218,11 @@ func (p *peerSyncCacheStore) Bootstrap(ctx context.Context) error {
 	snap, outcome := p.pullSnapshotWithRetry(ctx)
 	p.metrics.RecordBootstrap(ctx, outcome, snapshotSource(snap))
 	switch outcome {
-	case types.BootstrapApplied:
+	case metrics.BootstrapApplied:
 		// Successful pull; snap is non-nil and will populate the cache below.
-	case types.BootstrapLeaderEmpty:
+	case metrics.BootstrapLeaderEmpty:
 		p.logger.Info("Leader has no data, starting fresh")
-	case types.BootstrapTimedOut:
+	case metrics.BootstrapTimedOut:
 		// Cache stays empty; resources existing before this replica started won't
 		// appear on the platform until the next snapshot cycle.
 		p.logger.Warn("Bootstrap timed out, secondary cache may be incomplete until next snapshot",
@@ -236,26 +235,26 @@ func (p *peerSyncCacheStore) Bootstrap(ctx context.Context) error {
 
 // pullSnapshotWithRetry attempts to fetch a snapshot until success, the deadline
 // passes, or a peer authoritatively says it has no data. Returns (snapshot, outcome).
-func (p *peerSyncCacheStore) pullSnapshotWithRetry(ctx context.Context) (*PeerSyncSnapshot, types.BootstrapOutcome) {
+func (p *peerSyncCacheStore) pullSnapshotWithRetry(ctx context.Context) (*PeerSyncSnapshot, metrics.BootstrapOutcome) {
 	deadline := time.Now().Add(bootstrapMaxDuration)
 	backoff := bootstrapBaseBackoff
 
 	for {
 		snap, leaderEmpty := p.pullSnapshotFromPeers(ctx, bootstrapPullTimeout)
 		if snap != nil {
-			return snap, types.BootstrapApplied
+			return snap, metrics.BootstrapApplied
 		}
 		if leaderEmpty {
-			return nil, types.BootstrapLeaderEmpty
+			return nil, metrics.BootstrapLeaderEmpty
 		}
 
 		if time.Now().After(deadline) {
-			return nil, types.BootstrapTimedOut
+			return nil, metrics.BootstrapTimedOut
 		}
 
 		select {
 		case <-ctx.Done():
-			return nil, types.BootstrapTimedOut
+			return nil, metrics.BootstrapTimedOut
 		case <-time.After(backoff):
 		}
 		backoff = min(backoff*2, bootstrapMaxBackoff)
@@ -343,8 +342,8 @@ func (p *peerSyncCacheStore) ApplyDelta(ctx context.Context, delta *PeerSyncDelt
 	crds, crs := len(p.cache.CRDs), len(p.cache.CRs)
 	p.cacheMu.Unlock()
 
-	p.metrics.RecordCacheSize(ctx, types.KindCRD, int64(crds))
-	p.metrics.RecordCacheSize(ctx, types.KindCR, int64(crs))
+	p.metrics.RecordCacheSize(ctx, metrics.KindCRD, int64(crds))
+	p.metrics.RecordCacheSize(ctx, metrics.KindCR, int64(crs))
 
 	p.logger.Debug("Applied delta",
 		zap.Int("changes", len(delta.Changes)),
@@ -426,8 +425,8 @@ func (p *peerSyncCacheStore) handleIncrement(w http.ResponseWriter, r *http.Requ
 	p.cacheMu.Unlock()
 	p.bufferMu.Unlock()
 
-	p.metrics.RecordCacheSize(r.Context(), types.KindCRD, int64(crds))
-	p.metrics.RecordCacheSize(r.Context(), types.KindCR, int64(crs))
+	p.metrics.RecordCacheSize(r.Context(), metrics.KindCRD, int64(crds))
+	p.metrics.RecordCacheSize(r.Context(), metrics.KindCR, int64(crs))
 
 	p.logger.Debug("Applied delta from leader",
 		zap.Int("changes", len(delta.Changes)),
@@ -557,7 +556,7 @@ func (p *peerSyncCacheStore) broadcastToPeers(ctx context.Context, delta *PeerSy
 			zap.String("dns", p.peerDNS),
 			zap.Error(err),
 		)
-		p.recordBroadcastFailure(types.BroadcastFailureDNSLookup)
+		p.recordBroadcastFailure(metrics.BroadcastFailureDNSLookup)
 		return
 	}
 
@@ -578,7 +577,7 @@ func (p *peerSyncCacheStore) broadcastToPeers(ctx context.Context, delta *PeerSy
 	var buf bytes.Buffer
 	if err := encodeDeltaStream(&buf, delta); err != nil {
 		p.logger.Warn("Failed to encode delta for broadcast", zap.Error(err))
-		p.recordBroadcastFailure(types.BroadcastFailureGzip)
+		p.recordBroadcastFailure(metrics.BroadcastFailureGzip)
 		return
 	}
 	payload := buf.Bytes()
@@ -590,9 +589,9 @@ func (p *peerSyncCacheStore) broadcastToPeers(ctx context.Context, delta *PeerSy
 	case acked == len(peers):
 		p.recordBroadcastSuccess()
 	case timedOut:
-		p.recordBroadcastFailure(types.BroadcastFailureAckTimeout)
+		p.recordBroadcastFailure(metrics.BroadcastFailureAckTimeout)
 	default:
-		p.recordBroadcastFailure(types.BroadcastFailureNoAcks)
+		p.recordBroadcastFailure(metrics.BroadcastFailureNoAcks)
 	}
 }
 
@@ -643,7 +642,7 @@ func (p *peerSyncCacheStore) pushConcurrently(
 
 func (p *peerSyncCacheStore) recordBroadcastSuccess() {
 	prev := p.consecutiveBroadcastFailures.Swap(0)
-	p.metrics.RecordPeerBroadcast(context.Background(), types.BroadcastSuccess, types.BroadcastFailureNone)
+	p.metrics.RecordPeerBroadcast(context.Background(), metrics.BroadcastSuccess, metrics.BroadcastFailureNone)
 	if prev >= broadcastFailureErrorThreshold {
 		p.logger.Info("Peer broadcast recovered after consecutive failures",
 			zap.Int32("previous_failures", prev),
@@ -655,9 +654,9 @@ func (p *peerSyncCacheStore) recordBroadcastSuccess() {
 // metric. Logs once at Error when the threshold is crossed; further occurrences are
 // surfaced via the peer_broadcasts_total metric to avoid log spam from a chronically
 // misconfigured peer DNS.
-func (p *peerSyncCacheStore) recordBroadcastFailure(reason types.BroadcastFailureReason) {
+func (p *peerSyncCacheStore) recordBroadcastFailure(reason metrics.BroadcastFailureReason) {
 	n := p.consecutiveBroadcastFailures.Add(1)
-	p.metrics.RecordPeerBroadcast(context.Background(), types.BroadcastFailed, reason)
+	p.metrics.RecordPeerBroadcast(context.Background(), metrics.BroadcastFailed, reason)
 	if n == broadcastFailureErrorThreshold {
 		p.logger.Error("Peer broadcast failing repeatedly — check peer DNS and network reachability",
 			zap.String("reason", string(reason)),
@@ -692,7 +691,7 @@ func (p *peerSyncCacheStore) pushToPeer(ctx context.Context, client *http.Client
 			req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
 			if err != nil {
 				p.logger.Debug("Failed to create push request", zap.String("peer", ip), zap.Error(err))
-				p.metrics.RecordPeerPushAttempt(context.Background(), types.PushFailed, types.PushFailureRequestFailed)
+				p.metrics.RecordPeerPushAttempt(context.Background(), metrics.PushFailed, metrics.PushFailureRequestFailed)
 				return false, false
 			}
 			req.Header.Set("Content-Type", "application/x-ndjson")
@@ -707,7 +706,7 @@ func (p *peerSyncCacheStore) pushToPeer(ctx context.Context, client *http.Client
 					zap.String("reason", string(reason)),
 					zap.Error(err),
 				)
-				p.metrics.RecordPeerPushAttempt(context.Background(), types.PushFailed, reason)
+				p.metrics.RecordPeerPushAttempt(context.Background(), metrics.PushFailed, reason)
 				return false, true
 			}
 			defer func() {
@@ -721,7 +720,7 @@ func (p *peerSyncCacheStore) pushToPeer(ctx context.Context, client *http.Client
 					zap.String("peer", ip),
 					zap.Int("bytes", len(payload)),
 				)
-				p.metrics.RecordPeerPushAttempt(context.Background(), types.PushSuccess, types.PushFailureNone)
+				p.metrics.RecordPeerPushAttempt(context.Background(), metrics.PushSuccess, metrics.PushFailureNone)
 				return true, false
 			}
 
@@ -730,7 +729,7 @@ func (p *peerSyncCacheStore) pushToPeer(ctx context.Context, client *http.Client
 				zap.Int("status", resp.StatusCode),
 				zap.Int("attempt", attempt+1),
 			)
-			p.metrics.RecordPeerPushAttempt(context.Background(), types.PushFailed, types.PushFailureHTTPStatus)
+			p.metrics.RecordPeerPushAttempt(context.Background(), metrics.PushFailed, metrics.PushFailureHTTPStatus)
 			return false, true
 		}()
 
@@ -752,15 +751,15 @@ func (p *peerSyncCacheStore) pushToPeer(ctx context.Context, client *http.Client
 // classifyPushError maps a transport-layer error from client.Do into a metric reason.
 // Timeouts (including context deadline) are distinguished from other transport errors so
 // operators can tell whether the peer was slow vs. unreachable.
-func classifyPushError(err error) types.PushFailureReason {
+func classifyPushError(err error) metrics.PushFailureReason {
 	if errors.Is(err, context.DeadlineExceeded) {
-		return types.PushFailureTimeout
+		return metrics.PushFailureTimeout
 	}
 	var netErr net.Error
 	if errors.As(err, &netErr) && netErr.Timeout() {
-		return types.PushFailureTimeout
+		return metrics.PushFailureTimeout
 	}
-	return types.PushFailureConnection
+	return metrics.PushFailureConnection
 }
 
 // --- Bootstrap pull ---
@@ -924,12 +923,12 @@ func (p *peerSyncCacheStore) fetchPeerSnapshot(
 
 // snapshotSource maps the snapshot's served-by tag to the metric source label.
 // Returns BootstrapSourceNone when the snapshot is nil (timed out or leader empty).
-func snapshotSource(snap *PeerSyncSnapshot) types.BootstrapSource {
+func snapshotSource(snap *PeerSyncSnapshot) metrics.BootstrapSource {
 	if snap == nil {
-		return types.BootstrapSourceNone
+		return metrics.BootstrapSourceNone
 	}
 	if snap.Source == streamFrameSourceLeader {
-		return types.BootstrapSourceLeader
+		return metrics.BootstrapSourceLeader
 	}
-	return types.BootstrapSourceSecondary
+	return metrics.BootstrapSourceSecondary
 }

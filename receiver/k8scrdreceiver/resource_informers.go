@@ -9,7 +9,6 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/emit"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/tracker"
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/types"
 	"go.opentelemetry.io/collector/receiver"
 	"go.uber.org/zap"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -420,7 +419,7 @@ func (ri *ResourceInformers) onCRDDelete(obj interface{}) {
 //
 // Returns the outcome (started, exists, forbidden, failed) and an error if the
 // outcome is failed.
-func (ri *ResourceInformers) startCRInformer(gvr schema.GroupVersionResource) (types.CRInformerOutcome, error) {
+func (ri *ResourceInformers) startCRInformer(gvr schema.GroupVersionResource) (metrics.CRInformerOutcome, error) {
 	key := emit.FormatGVRKey(gvr)
 
 	if shouldRetry, retryIn := ri.forbiddenTracker.ShouldRetry(gvr); !shouldRetry {
@@ -428,7 +427,7 @@ func (ri *ResourceInformers) startCRInformer(gvr schema.GroupVersionResource) (t
 			zap.String("gvr", key),
 			zap.Duration("retry_in", retryIn),
 		)
-		return types.CRInformerForbidden, nil
+		return metrics.CRInformerForbidden, nil
 	}
 
 	// Check if already running
@@ -436,7 +435,7 @@ func (ri *ResourceInformers) startCRInformer(gvr schema.GroupVersionResource) (t
 	_, exists := ri.crInformers[key]
 	ri.mu.RUnlock()
 	if exists {
-		return types.CRInformerExists, nil
+		return metrics.CRInformerExists, nil
 	}
 
 	// Permission pre-check — avoid creating an informer that will fail immediately
@@ -447,9 +446,9 @@ func (ri *ResourceInformers) startCRInformer(gvr schema.GroupVersionResource) (t
 			ri.settings.Logger.Info("Skipping CR informer - insufficient RBAC permissions",
 				zap.String("gvr", key),
 			)
-			return types.CRInformerForbidden, nil
+			return metrics.CRInformerForbidden, nil
 		}
-		return types.CRInformerFailed, fmt.Errorf("permission pre-check failed for %s: %w", key, err)
+		return metrics.CRInformerFailed, fmt.Errorf("permission pre-check failed for %s: %w", key, err)
 	}
 
 	lw := &cache.ListWatch{
@@ -481,7 +480,7 @@ func (ri *ResourceInformers) startCRInformer(gvr schema.GroupVersionResource) (t
 	if _, exists := ri.crInformers[key]; exists {
 		ri.mu.Unlock()
 		close(stopCh)
-		return types.CRInformerExists, nil
+		return metrics.CRInformerExists, nil
 	}
 	ri.crInformers[key] = entry
 	ri.mu.Unlock()
@@ -493,7 +492,7 @@ func (ri *ResourceInformers) startCRInformer(gvr schema.GroupVersionResource) (t
 	}()
 
 	ri.settings.Logger.Info("Started CR informer", zap.String("gvr", key))
-	return types.CRInformerStarted, nil
+	return metrics.CRInformerStarted, nil
 }
 
 func (ri *ResourceInformers) stopCRInformer(gvr schema.GroupVersionResource) {

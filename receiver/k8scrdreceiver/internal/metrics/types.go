@@ -1,7 +1,8 @@
-// Package types holds the shared enums that describe receiver state and outcomes.
-// They live here (rather than in the metrics package that records them) so that
-// domain code doesn't depend on the observability layer for its own concepts.
-package types
+package metrics
+
+// This file holds the enums used as metric attribute values. They live in the
+// metrics package because they describe values that are recorded as labels —
+// callers that don't record metrics generally don't need them.
 
 // ChangeType is the kind of resource change emitted to the platform.
 type ChangeType string

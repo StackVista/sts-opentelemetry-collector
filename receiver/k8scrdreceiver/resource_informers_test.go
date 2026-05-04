@@ -9,7 +9,6 @@ import (
 
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/tracker"
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,19 +22,19 @@ type recordingReconcileRecorder struct {
 	metrics.NoopRecorder
 
 	mu       sync.Mutex
-	outcomes []types.CRInformerOutcome
+	outcomes []metrics.CRInformerOutcome
 }
 
-func (r *recordingReconcileRecorder) RecordCRInformerReconcile(_ context.Context, outcome types.CRInformerOutcome) {
+func (r *recordingReconcileRecorder) RecordCRInformerReconcile(_ context.Context, outcome metrics.CRInformerOutcome) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.outcomes = append(r.outcomes, outcome)
 }
 
-func (r *recordingReconcileRecorder) snapshot() []types.CRInformerOutcome {
+func (r *recordingReconcileRecorder) snapshot() []metrics.CRInformerOutcome {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return append([]types.CRInformerOutcome(nil), r.outcomes...)
+	return append([]metrics.CRInformerOutcome(nil), r.outcomes...)
 }
 
 func TestResourceInformers_ReadCRDs(t *testing.T) {
@@ -376,7 +375,7 @@ func TestResourceInformers_ReconcileStartsMissingInformer(t *testing.T) {
 
 	outcomes := rec.snapshot()
 	require.Len(t, outcomes, 1)
-	assert.Equal(t, types.CRInformerStarted, outcomes[0])
+	assert.Equal(t, metrics.CRInformerStarted, outcomes[0])
 }
 
 func TestResourceInformers_ReconcileNoOpForRunningInformer(t *testing.T) {
@@ -409,7 +408,7 @@ func TestResourceInformers_ReconcileNoOpForRunningInformer(t *testing.T) {
 
 	outcomes := rec.snapshot()
 	require.Len(t, outcomes, 1)
-	assert.Equal(t, types.CRInformerExists, outcomes[0])
+	assert.Equal(t, metrics.CRInformerExists, outcomes[0])
 }
 
 func TestResourceInformers_ReconcileSkipsForbidden(t *testing.T) {
@@ -444,5 +443,5 @@ func TestResourceInformers_ReconcileSkipsForbidden(t *testing.T) {
 
 	outcomes := rec.snapshot()
 	require.Len(t, outcomes, 1)
-	assert.Equal(t, types.CRInformerForbidden, outcomes[0])
+	assert.Equal(t, metrics.CRInformerForbidden, outcomes[0])
 }

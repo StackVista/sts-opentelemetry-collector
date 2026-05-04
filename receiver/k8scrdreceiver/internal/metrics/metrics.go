@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/types"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -16,34 +15,34 @@ import (
 
 // Recorder is the interface used by the receiver to record metrics.
 type Recorder interface {
-	RecordEmitted(ctx context.Context, change types.ChangeType, n int64)
-	RecordCycle(ctx context.Context, mode types.CycleMode, d time.Duration)
-	RecordCacheSize(ctx context.Context, kind types.ResourceKind, n int64)
-	RecordPeerBroadcast(ctx context.Context, outcome types.BroadcastOutcome, reason types.BroadcastFailureReason)
-	RecordPeerPushAttempt(ctx context.Context, outcome types.PushOutcome, reason types.PushFailureReason)
+	RecordEmitted(ctx context.Context, change ChangeType, n int64)
+	RecordCycle(ctx context.Context, mode CycleMode, d time.Duration)
+	RecordCacheSize(ctx context.Context, kind ResourceKind, n int64)
+	RecordPeerBroadcast(ctx context.Context, outcome BroadcastOutcome, reason BroadcastFailureReason)
+	RecordPeerPushAttempt(ctx context.Context, outcome PushOutcome, reason PushFailureReason)
 	RecordPeerPushBytes(ctx context.Context, n int64)
 	RecordPeerPushDuration(ctx context.Context, d time.Duration)
-	RecordBootstrap(ctx context.Context, outcome types.BootstrapOutcome, source types.BootstrapSource)
+	RecordBootstrap(ctx context.Context, outcome BootstrapOutcome, source BootstrapSource)
 	RecordSnapshotStreamFailure(ctx context.Context)
-	RecordCRInformerReconcile(ctx context.Context, outcome types.CRInformerOutcome)
+	RecordCRInformerReconcile(ctx context.Context, outcome CRInformerOutcome)
 }
 
 // NoopRecorder is a Recorder that drops every measurement. Useful in tests.
 type NoopRecorder struct{}
 
-func (NoopRecorder) RecordEmitted(_ context.Context, _ types.ChangeType, _ int64)      {}
-func (NoopRecorder) RecordCycle(_ context.Context, _ types.CycleMode, _ time.Duration) {}
-func (NoopRecorder) RecordCacheSize(_ context.Context, _ types.ResourceKind, _ int64)  {}
-func (NoopRecorder) RecordPeerBroadcast(_ context.Context, _ types.BroadcastOutcome, _ types.BroadcastFailureReason) {
+func (NoopRecorder) RecordEmitted(_ context.Context, _ ChangeType, _ int64)      {}
+func (NoopRecorder) RecordCycle(_ context.Context, _ CycleMode, _ time.Duration) {}
+func (NoopRecorder) RecordCacheSize(_ context.Context, _ ResourceKind, _ int64)  {}
+func (NoopRecorder) RecordPeerBroadcast(_ context.Context, _ BroadcastOutcome, _ BroadcastFailureReason) {
 }
-func (NoopRecorder) RecordPeerPushAttempt(_ context.Context, _ types.PushOutcome, _ types.PushFailureReason) {
+func (NoopRecorder) RecordPeerPushAttempt(_ context.Context, _ PushOutcome, _ PushFailureReason) {
 }
 func (NoopRecorder) RecordPeerPushBytes(_ context.Context, _ int64)            {}
 func (NoopRecorder) RecordPeerPushDuration(_ context.Context, _ time.Duration) {}
-func (NoopRecorder) RecordBootstrap(_ context.Context, _ types.BootstrapOutcome, _ types.BootstrapSource) {
+func (NoopRecorder) RecordBootstrap(_ context.Context, _ BootstrapOutcome, _ BootstrapSource) {
 }
-func (NoopRecorder) RecordSnapshotStreamFailure(_ context.Context)                          {}
-func (NoopRecorder) RecordCRInformerReconcile(_ context.Context, _ types.CRInformerOutcome) {}
+func (NoopRecorder) RecordSnapshotStreamFailure(_ context.Context)                    {}
+func (NoopRecorder) RecordCRInformerReconcile(_ context.Context, _ CRInformerOutcome) {}
 
 // Metrics is the live Recorder backed by a real Meter.
 type Metrics struct {
@@ -135,7 +134,7 @@ func newMetricNameForType(typeName string) func(string) string {
 	}
 }
 
-func (m *Metrics) RecordEmitted(ctx context.Context, change types.ChangeType, n int64) {
+func (m *Metrics) RecordEmitted(ctx context.Context, change ChangeType, n int64) {
 	if n <= 0 {
 		return
 	}
@@ -144,33 +143,33 @@ func (m *Metrics) RecordEmitted(ctx context.Context, change types.ChangeType, n 
 	))
 }
 
-func (m *Metrics) RecordCycle(ctx context.Context, mode types.CycleMode, d time.Duration) {
+func (m *Metrics) RecordCycle(ctx context.Context, mode CycleMode, d time.Duration) {
 	m.cycleDuration.Record(ctx, d.Seconds(), metric.WithAttributeSet(
 		m.attrs(attribute.String("mode", string(mode))),
 	))
 }
 
-func (m *Metrics) RecordCacheSize(ctx context.Context, kind types.ResourceKind, n int64) {
+func (m *Metrics) RecordCacheSize(ctx context.Context, kind ResourceKind, n int64) {
 	m.cachedResources.Record(ctx, n, metric.WithAttributeSet(
 		m.attrs(attribute.String("kind", string(kind))),
 	))
 }
 
 func (m *Metrics) RecordPeerBroadcast(
-	ctx context.Context, outcome types.BroadcastOutcome, reason types.BroadcastFailureReason,
+	ctx context.Context, outcome BroadcastOutcome, reason BroadcastFailureReason,
 ) {
 	attrs := []attribute.KeyValue{attribute.String("outcome", string(outcome))}
-	if reason != types.BroadcastFailureNone {
+	if reason != BroadcastFailureNone {
 		attrs = append(attrs, attribute.String("reason", string(reason)))
 	}
 	m.peerBroadcasts.Add(ctx, 1, metric.WithAttributeSet(m.attrs(attrs...)))
 }
 
 func (m *Metrics) RecordPeerPushAttempt(
-	ctx context.Context, outcome types.PushOutcome, reason types.PushFailureReason,
+	ctx context.Context, outcome PushOutcome, reason PushFailureReason,
 ) {
 	attrs := []attribute.KeyValue{attribute.String("outcome", string(outcome))}
-	if reason != types.PushFailureNone {
+	if reason != PushFailureNone {
 		attrs = append(attrs, attribute.String("reason", string(reason)))
 	}
 	m.peerPushAttempts.Add(ctx, 1, metric.WithAttributeSet(m.attrs(attrs...)))
@@ -185,7 +184,7 @@ func (m *Metrics) RecordPeerPushDuration(ctx context.Context, d time.Duration) {
 }
 
 func (m *Metrics) RecordBootstrap(
-	ctx context.Context, outcome types.BootstrapOutcome, source types.BootstrapSource,
+	ctx context.Context, outcome BootstrapOutcome, source BootstrapSource,
 ) {
 	m.bootstrapTotal.Add(ctx, 1, metric.WithAttributeSet(
 		m.attrs(
@@ -199,7 +198,7 @@ func (m *Metrics) RecordSnapshotStreamFailure(ctx context.Context) {
 	m.snapshotStreamFailures.Add(ctx, 1, metric.WithAttributeSet(m.attrs()))
 }
 
-func (m *Metrics) RecordCRInformerReconcile(ctx context.Context, outcome types.CRInformerOutcome) {
+func (m *Metrics) RecordCRInformerReconcile(ctx context.Context, outcome CRInformerOutcome) {
 	m.crInformerReconciles.Add(ctx, 1, metric.WithAttributeSet(
 		m.attrs(attribute.String("outcome", string(outcome))),
 	))
