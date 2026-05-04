@@ -216,25 +216,15 @@ func (p *peerSyncCacheStore) Bootstrap(ctx context.Context) error {
 
 	p.logger.Info("Bootstrapping peer cache from peers")
 	snap, outcome := p.pullSnapshotWithRetry(ctx)
-	p.metrics.RecordBootstrap(ctx, outcome, snapshotSource(snap))
-	switch outcome {
-	case metrics.BootstrapApplied:
-		// Successful pull; snap is non-nil and will populate the cache below.
-	case metrics.BootstrapLeaderEmpty:
-		p.logger.Info("Leader has no data, starting fresh")
-	case metrics.BootstrapTimedOut:
-		// Cache stays empty; resources existing before this replica started won't
-		// appear on the platform until the next snapshot cycle.
-		p.logger.Warn("Bootstrap timed out, secondary cache may be incomplete until next snapshot",
-			zap.Duration("max_duration", bootstrapMaxDuration),
-		)
-	}
 	p.completeBootstrap(snap)
+	p.metrics.RecordBootstrap(ctx, outcome, snapshotSource(snap))
 	return nil
 }
 
 // pullSnapshotWithRetry attempts to fetch a snapshot until success, the deadline
 // passes, or a peer authoritatively says it has no data. Returns (snapshot, outcome).
+// Each terminal outcome is logged at the call site so future readers can correlate
+// the log with the decision that produced it.
 func (p *peerSyncCacheStore) pullSnapshotWithRetry(ctx context.Context) (*PeerSyncSnapshot, metrics.BootstrapOutcome) {
 	deadline := time.Now().Add(bootstrapMaxDuration)
 	backoff := bootstrapBaseBackoff
@@ -245,15 +235,22 @@ func (p *peerSyncCacheStore) pullSnapshotWithRetry(ctx context.Context) (*PeerSy
 			return snap, metrics.BootstrapApplied
 		}
 		if leaderEmpty {
+			p.logger.Info("Leader has no data, starting fresh")
 			return nil, metrics.BootstrapLeaderEmpty
 		}
 
 		if time.Now().After(deadline) {
+			p.logger.Warn("Bootstrap timed out, secondary cache may be incomplete until next snapshot",
+				zap.Duration("max_duration", bootstrapMaxDuration),
+			)
 			return nil, metrics.BootstrapTimedOut
 		}
 
 		select {
 		case <-ctx.Done():
+			p.logger.Warn("Bootstrap cancelled, secondary cache may be incomplete until next snapshot",
+				zap.Error(ctx.Err()),
+			)
 			return nil, metrics.BootstrapTimedOut
 		case <-time.After(backoff):
 		}
