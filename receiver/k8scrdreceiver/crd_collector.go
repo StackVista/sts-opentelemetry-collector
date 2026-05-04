@@ -59,14 +59,6 @@ func (c *crdCollector) Start(ctx context.Context) error {
 	loopCtx, cancel := context.WithCancel(ctx)
 	c.cancel = cancel
 
-	// Bootstrap the peer cache from the leader (if any). Idempotent — if the cache
-	// is already populated (e.g., this node was a secondary receiving deltas), it's
-	// a no-op. If no peer can serve a snapshot, the cache stays empty and the first
-	// increment becomes a full snapshot from informer state.
-	if err := c.peerStore.Bootstrap(ctx); err != nil {
-		c.logger.Debug("Bootstrap failed, starting fresh", zap.Error(err))
-	}
-
 	if err := c.informers.Start(ctx); err != nil {
 		cancel()
 		return err
