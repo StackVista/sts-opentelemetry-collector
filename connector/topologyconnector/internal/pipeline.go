@@ -115,6 +115,7 @@ func convertSignalDataToTopologyStreamMessage(
 	result := make([]MessageWithKey, 0)
 
 	baseCtx := BaseContext{
+		Logger:              logger,
 		Signal:              signal,
 		Mapper:              mapper,
 		Evaluator:           eval,

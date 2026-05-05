@@ -10,5 +10,6 @@ use (
 	./extension/servicetokenauthextension
 	./extension/settingsproviderextension
 	./processor/stsusageprocessor
+	./receiver/k8scrdreceiver
 	./test/e2e
 )

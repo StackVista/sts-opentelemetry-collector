@@ -22,8 +22,8 @@ func TestNewLog_StructuredMapBody(t *testing.T) {
 	}
 
 	m := log.ToMap()
-	if m["name"] != "test_event" {
-		t.Errorf("expected name 'test_event', got %v", m["name"])
+	if m["eventName"] != "test_event" {
+		t.Errorf("expected eventName 'test_event', got %v", m["eventName"])
 	}
 
 	bodyMap, ok := m["body"].(map[string]any)
