@@ -3,7 +3,3 @@ dev-config.yaml
 
 .claude
 .trivy-cache/
-# TODO: remove
-test/log-mappings/
-docs/
-examples/
