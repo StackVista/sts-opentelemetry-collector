@@ -58,5 +58,3 @@ func TestIsPermissionDenied(t *testing.T) {
 		})
 	}
 }
-
-// Forbidden resource tracking tests have been moved to forbidden_tracker_test.go

@@ -3,6 +3,7 @@ package k8scrdreceiver
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -82,6 +83,52 @@ func TestConfigValidate(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "zero increment_interval gets default",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+			},
+			wantErr: false,
+		},
+		{
+			name: "increment_interval below 1s rejected",
+			config: &Config{
+				DiscoveryMode:     DiscoveryModeAll,
+				IncrementInterval: 500 * time.Millisecond,
+				SnapshotInterval:  5 * time.Minute,
+			},
+			wantErr: true,
+			errMsg:  "increment_interval must be at least 1 second",
+		},
+		{
+			name: "snapshot_interval below 1m rejected",
+			config: &Config{
+				DiscoveryMode:     DiscoveryModeAll,
+				IncrementInterval: 10 * time.Second,
+				SnapshotInterval:  30 * time.Second,
+			},
+			wantErr: true,
+			errMsg:  "snapshot_interval must be at least 1 minute",
+		},
+		{
+			name: "snapshot_interval below increment_interval rejected",
+			config: &Config{
+				DiscoveryMode:     DiscoveryModeAll,
+				IncrementInterval: 10 * time.Minute,
+				SnapshotInterval:  5 * time.Minute,
+			},
+			wantErr: true,
+			errMsg:  "snapshot_interval must be greater than or equal to increment_interval",
+		},
+		{
+			name: "snapshot_interval equal to increment_interval accepted",
+			config: &Config{
+				DiscoveryMode:     DiscoveryModeAll,
+				IncrementInterval: 1 * time.Minute,
+				SnapshotInterval:  1 * time.Minute,
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -99,7 +146,11 @@ func TestConfigValidate(t *testing.T) {
 	}
 }
 
-func TestMatchesPattern(t *testing.T) {
+// TestCompiledPatternMatches verifies that the glob-to-regex translation done by compilePattern
+// produces the expected match/non-match behaviour. The test exercises compilePattern directly
+// (instead of going through Config.shouldWatchAPIGroup) so each glob feature can be pinned down
+// in isolation.
+func TestCompiledPatternMatches(t *testing.T) {
 	tests := []struct {
 		pattern string
 		str     string
@@ -132,7 +183,7 @@ func TestMatchesPattern(t *testing.T) {
 		{"policies.*.io", "policies.example.io", true},
 		{"policies.*.io", "policies.io", false},
 
-		// Special characters in domain (should be escaped)
+		// Special characters in domain (should be escaped, not interpreted as regex)
 		{"example.com", "exampleXcom", false}, // . should not match any char
 		{"test-domain.io", "test-domain.io", true},
 		{"test_domain.io", "test_domain.io", true},
@@ -140,7 +191,9 @@ func TestMatchesPattern(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.pattern+" matches "+tt.str, func(t *testing.T) {
-			got := matchesPattern(tt.pattern, tt.str)
+			regex, err := compilePattern(tt.pattern)
+			require.NoError(t, err)
+			got := regex.MatchString(tt.str)
 			assert.Equal(t, tt.want, got, "pattern=%q str=%q", tt.pattern, tt.str)
 		})
 	}
