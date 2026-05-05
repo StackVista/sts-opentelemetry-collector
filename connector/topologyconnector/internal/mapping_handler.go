@@ -9,6 +9,7 @@ import (
 
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
+	"go.uber.org/zap"
 )
 
 // MappingHandler evaluates mapping conditions and triggers mapping execution.
@@ -89,14 +90,34 @@ func (h *MappingHandler[T]) evaluateCondition(
 
 	ok, err := h.MappingCtx.BaseCtx.Evaluator.EvalBooleanExpression(*condition, evalCtx)
 	if err != nil {
-		// On evaluation error, treat the condition as false
+		h.MappingCtx.BaseCtx.Logger.Debug("Condition evaluation error (treated as false)",
+			zap.String("mapping", h.MappingCtx.Mapping.GetIdentifier()),
+			zap.String("condition", condition.Expression),
+			zap.Error(err),
+			h.evalCtxSummary(evalCtx),
+		)
 		return false
 	}
 	return ok
 }
 
+// evalCtxSummary returns a zap field summarizing what data is available in the eval context.
+func (h *MappingHandler[T]) evalCtxSummary(evalCtx *ExpressionEvalContext) zap.Field {
+	summary := make(map[string]any)
+	if evalCtx.Log != nil {
+		logMap := evalCtx.Log.ToMap()
+		summary["log.eventName"] = logMap["eventName"]
+		summary["log.attributes"] = logMap["attributes"]
+	}
+	if evalCtx.Resource != nil {
+		summary["resource.attributes"] = evalCtx.Resource.ToMap()["attributes"]
+	}
+	return zap.Any("evalCtx", summary)
+}
+
 // BaseContext contains shared dependencies used by all mapping contexts.
 type BaseContext struct {
+	Logger                 *zap.Logger
 	Signal                 settingsproto.OtelInputSignal
 	Mapper                 *Mapper
 	Evaluator              ExpressionEvaluator

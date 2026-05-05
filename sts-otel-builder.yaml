@@ -29,6 +29,8 @@ exporters:
 receivers:
   - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.150.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.150.0
+  - gomod: github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver v0.0.0
+    path: ./receiver/k8scrdreceiver
 
 extensions:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.150.0
@@ -38,6 +40,7 @@ extensions:
   - gomod: github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension v0.0.0
     path: ./extension/settingsproviderextension
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/pprofextension v0.150.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector v0.150.0
 
 processors:
   - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.150.0

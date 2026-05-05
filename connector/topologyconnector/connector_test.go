@@ -836,7 +836,7 @@ func testResourceLogsWithAttributes(attrs map[string]interface{}) plog.Logs {
 func createSimpleLogComponentMapping() settingsproto.OtelComponentMapping {
 	return settingsproto.OtelComponentMapping{
 		Id:            "log-comp-policy-server",
-		Identifier:    "urn:stackpack:kubewarden:shared:otel-component-mapping:policy-server",
+		Identifier:    "urn:stackpack:kubewarden:otel-component-mapping:policy-server",
 		Name:          "Kubewarden Policy Server",
 		ExpireAfterMs: 300000,
 		Input: settingsproto.OtelInput{
@@ -867,7 +867,7 @@ func createSimpleLogComponentMapping() settingsproto.OtelComponentMapping {
 func createSimpleLogRelationMapping() settingsproto.OtelRelationMapping {
 	return settingsproto.OtelRelationMapping{
 		Id:            "log-rel-policy-enforced-by-server",
-		Identifier:    "urn:stackpack:kubewarden:shared:otel-relation-mapping:policy-enforced-by-server",
+		Identifier:    "urn:stackpack:kubewarden:otel-relation-mapping:policy-enforced-by-server",
 		ExpireAfterMs: 300000,
 		Input: settingsproto.OtelInput{
 			Signal: settingsproto.OtelInputSignalList{
