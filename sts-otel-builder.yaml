@@ -54,9 +54,20 @@ processors:
 
 replaces:
   - github.com/stackvista/sts-opentelemetry-collector/common => ../common
-  # Force prometheus/prometheus to the patched release. prometheusreceiver v0.150.0
-  # still pulls in a vulnerable version transitively. v0.311.3 fixes:
-  # - CVE-2026-40179 (stored XSS, originally addressed by a 2026-04-10 pseudo-version pin)
-  # - CVE-2026-42151
-  # - CVE-2026-42154
-  - github.com/prometheus/prometheus => github.com/prometheus/prometheus v0.311.3
+  # CVE-2026-40179 (stored XSS): prometheusreceiver v0.150.0 transitively pulls a
+  # prometheus/prometheus pseudo-version from 2026-04-09, but the fix landed on
+  # 2026-04-10 (commit 07c6232d159b on main:
+  # https://github.com/prometheus/prometheus/commit/07c6232d159b ).
+  # Force a pseudo-version that includes that commit.
+  #
+  # NOTE: prometheusreceiver depends on a `discovery.Metrics` struct (with
+  # MechanismMetrics / RefreshManager fields) that exists ONLY on prometheus' main
+  # branch — it was never carried into the release-3.11 maintenance lineage. So we
+  # cannot bump to the tagged v0.311.3 release: that tag was cut from release-3.11
+  # and the receiver fails to compile against it. Two HIGH CVEs that are also fixed
+  # in v0.311.3 are therefore unpatched here:
+  #   - CVE-2026-42151 (Azure AD OAuth client_secret leaked via /-/config)
+  #   - CVE-2026-42154 (DoS via crafted snappy payload on remote read)
+  # Both will remain accepted as known issues until upstream prometheusreceiver
+  # ships a release compatible with the v0.311.3 / release-3.11 API shape.
+  - github.com/prometheus/prometheus => github.com/prometheus/prometheus v0.311.2-0.20260410083055-07c6232d159b

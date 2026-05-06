@@ -1,0 +1,38 @@
+# Temporary CVE acceptances for the sts-opentelemetry-collector image scan.
+#
+# Each entry MUST include:
+# - a `statement` explaining why the CVE cannot be patched today
+# - an `expired_at` date — Trivy will start failing the scan again past this date,
+#   forcing a re-evaluation rather than letting the exception linger forever
+#
+# When fixing or extending an exception, also update the comment block in
+# `sts-otel-builder.yaml` next to the prometheus/prometheus replace directive.
+
+vulnerabilities:
+  - id: CVE-2026-42151
+    paths:
+      - "usr/bin/sts-opentelemetry-collector"
+    statement: |
+      HIGH — Prometheus Azure AD remote write OAuth client_secret exposed via the
+      /-/config endpoint (GHSA-wg65-39gg-5wfj). Patched in prometheus 3.11.3
+      (Go module v0.311.3). We cannot bump to v0.311.3 because
+      opentelemetry-collector-contrib's prometheusreceiver (v0.150.0 and v0.151.0)
+      depends on a `discovery.Metrics` struct that exists only on prometheus' main
+      branch; v0.311.3 was cut from the release-3.11 maintenance lineage which
+      does not carry that struct, and the receiver fails to compile against it.
+      Blocked on an upstream prometheusreceiver release that targets the
+      release-3.11 API. See sts-otel-builder.yaml for the full context.
+      This collector does not expose Prometheus' /-/config endpoint, so the
+      practical impact in our deployment is limited.
+    expired_at: 2026-05-30
+
+  - id: CVE-2026-42154
+    paths:
+      - "usr/bin/sts-opentelemetry-collector"
+    statement: |
+      HIGH — Prometheus remote read endpoint denial-of-service via crafted snappy
+      payload (GHSA-8rm2-7qqf-34qm). Patched in prometheus 3.11.3
+      (Go module v0.311.3). Same upstream blocker as CVE-2026-42151 — see that
+      entry above. This collector does not expose Prometheus' remote read
+      endpoint, so the practical impact in our deployment is limited.
+    expired_at: 2026-05-30
