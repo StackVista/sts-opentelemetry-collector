@@ -262,11 +262,11 @@ func (x *TopologyStreamRelation) GetTags() []string {
 }
 
 // *
-// Delete message for any datasource:shardId
+// Delete message for an entire datasource:shardId.
+// Removes all components and relations associated with this datasource:shardId.
 type TopologyStreamRemove struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Do we need to track the cause of removal? Is it always the OtelMapping settings being deleted?
-	RemovalCause  string `protobuf:"bytes,1,opt,name=removal_cause,json=removalCause,proto3" json:"removal_cause,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RemovalCause  string                 `protobuf:"bytes,1,opt,name=removal_cause,json=removalCause,proto3" json:"removal_cause,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -478,9 +478,13 @@ type TopologyStreamRepeatElementsData struct {
 	Components       []*TopologyStreamComponent `protobuf:"bytes,2,rep,name=components,proto3" json:"components,omitempty"`
 	Relations        []*TopologyStreamRelation  `protobuf:"bytes,3,rep,name=relations,proto3" json:"relations,omitempty"`
 	// In case the Mapping fails and the Otel collector would like to push some messages that we can display when the user requests the TopologyStream status via the cli
-	Errors        []*TopoStreamError `protobuf:"bytes,4,rep,name=errors,proto3" json:"errors,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Errors []*TopoStreamError `protobuf:"bytes,4,rep,name=errors,proto3" json:"errors,omitempty"`
+	// External IDs of components to delete for low-latency removal without waiting for expiry
+	DeleteComponentExternalIds []string `protobuf:"bytes,5,rep,name=delete_component_external_ids,json=deleteComponentExternalIds,proto3" json:"delete_component_external_ids,omitempty"`
+	// External IDs of relations to delete for low-latency removal without waiting for expiry
+	DeleteRelationExternalIds []string `protobuf:"bytes,6,rep,name=delete_relation_external_ids,json=deleteRelationExternalIds,proto3" json:"delete_relation_external_ids,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *TopologyStreamRepeatElementsData) Reset() {
@@ -537,6 +541,20 @@ func (x *TopologyStreamRepeatElementsData) GetRelations() []*TopologyStreamRelat
 func (x *TopologyStreamRepeatElementsData) GetErrors() []*TopoStreamError {
 	if x != nil {
 		return x.Errors
+	}
+	return nil
+}
+
+func (x *TopologyStreamRepeatElementsData) GetDeleteComponentExternalIds() []string {
+	if x != nil {
+		return x.DeleteComponentExternalIds
+	}
+	return nil
+}
+
+func (x *TopologyStreamRepeatElementsData) GetDeleteRelationExternalIds() []string {
+	if x != nil {
+		return x.DeleteRelationExternalIds
 	}
 	return nil
 }
@@ -720,14 +738,16 @@ const file_topo_stream_proto_rawDesc = "" +
 	"\x06errors\x18\a \x03(\v2\x1f.topo_stream.v1.TopoStreamErrorR\x06errorsB\x15\n" +
 	"\x13_expiry_interval_msB\x11\n" +
 	"\x0f_snapshot_startB\x10\n" +
-	"\x0e_snapshot_stop\"\x98\x02\n" +
+	"\x0e_snapshot_stop\"\x9c\x03\n" +
 	" TopologyStreamRepeatElementsData\x12,\n" +
 	"\x12expiry_interval_ms\x18\x01 \x01(\x03R\x10expiryIntervalMs\x12G\n" +
 	"\n" +
 	"components\x18\x02 \x03(\v2'.topo_stream.v1.TopologyStreamComponentR\n" +
 	"components\x12D\n" +
 	"\trelations\x18\x03 \x03(\v2&.topo_stream.v1.TopologyStreamRelationR\trelations\x127\n" +
-	"\x06errors\x18\x04 \x03(\v2\x1f.topo_stream.v1.TopoStreamErrorR\x06errors\"\xda\x03\n" +
+	"\x06errors\x18\x04 \x03(\v2\x1f.topo_stream.v1.TopoStreamErrorR\x06errors\x12A\n" +
+	"\x1ddelete_component_external_ids\x18\x05 \x03(\tR\x1adeleteComponentExternalIds\x12?\n" +
+	"\x1cdelete_relation_external_ids\x18\x06 \x03(\tR\x19deleteRelationExternalIds\"\xda\x03\n" +
 	"\x15TopologyStreamMessage\x121\n" +
 	"\x14collection_timestamp\x18\x01 \x01(\x03R\x13collectionTimestamp\x12/\n" +
 	"\x13submitted_timestamp\x18\x02 \x01(\x03R\x12submittedTimestamp\x12o\n" +

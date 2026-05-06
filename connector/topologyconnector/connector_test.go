@@ -689,7 +689,7 @@ func createSimpleTraceComponentMapping(id string) settingsproto.OtelComponentMap
 				Scope: &settingsproto.OtelInputScope{
 					Span: &settingsproto.OtelInputSpan{
 						Condition: ptr(boolExpr(`span.attributes["http.method"] == "GET"`)),
-						Action:    ptr(settingsproto.CREATE),
+						Action:    ptr(strExpr("'CREATE'")),
 					},
 				},
 			},
@@ -725,7 +725,7 @@ func createSimpleTraceRelationMapping(id string) settingsproto.OtelRelationMappi
 				Scope: &settingsproto.OtelInputScope{
 					Span: &settingsproto.OtelInputSpan{
 						Condition: ptr(boolExpr(`span.attributes["http.status_code"] == "200"`)),
-						Action:    ptr(settingsproto.CREATE),
+						Action:    ptr(strExpr("'CREATE'")),
 					},
 				},
 			},
@@ -752,7 +752,7 @@ func createSimpleMetricComponentMapping(id string) settingsproto.OtelComponentMa
 					Metric: &settingsproto.OtelInputMetric{
 						Datapoint: &settingsproto.OtelInputDatapoint{
 							Condition: ptr(boolExpr(`datapoint.attributes["http.method"] == "GET"`)),
-							Action:    ptr(settingsproto.CREATE),
+							Action:    ptr(strExpr("'CREATE'")),
 						},
 					},
 				},
@@ -790,7 +790,7 @@ func createSimpleMetricRelationMapping(id string) settingsproto.OtelRelationMapp
 					Metric: &settingsproto.OtelInputMetric{
 						Datapoint: &settingsproto.OtelInputDatapoint{
 							Condition: ptr(boolExpr(`datapoint.attributes["http.status_code"] == "200"`)),
-							Action:    ptr(settingsproto.CREATE),
+							Action:    ptr(strExpr("'CREATE'")),
 						},
 					},
 				},
@@ -846,7 +846,7 @@ func createSimpleLogComponentMapping() settingsproto.OtelComponentMapping {
 			Resource: settingsproto.OtelInputResource{
 				Scope: &settingsproto.OtelInputScope{
 					Log: &settingsproto.OtelInputLog{
-						Action: ptr(settingsproto.CREATE),
+						Action: ptr(strExpr("'CREATE'")),
 						Condition: ptr(boolExpr(
 							`log.attributes["k8s.resource.kind"] == "PolicyServer" && log.attributes["k8s.resource.api_group"] == "policies.kubewarden.io"`,
 						)),
@@ -876,7 +876,7 @@ func createSimpleLogRelationMapping() settingsproto.OtelRelationMapping {
 			Resource: settingsproto.OtelInputResource{
 				Scope: &settingsproto.OtelInputScope{
 					Log: &settingsproto.OtelInputLog{
-						Action: ptr(settingsproto.CREATE),
+						Action: ptr(strExpr("'CREATE'")),
 						Condition: ptr(boolExpr(
 							`log.attributes["k8s.resource.api_group"] == "policies.kubewarden.io" && ` +
 								`log.attributes["k8s.resource.kind"] == "AdmissionPolicy" && ` +

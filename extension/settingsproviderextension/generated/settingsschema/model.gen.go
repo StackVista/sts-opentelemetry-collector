@@ -591,8 +591,9 @@ type OverviewColumnDefinition struct {
 type PresentationDefinition struct {
 	Filters *[]ComponentPresentationFilter `json:"filters,omitempty"`
 
-	// Highlight Highlight presentation definition. The `fields` define the fields to show in the ab. The `flags` field can be used to enable/disable functionalities.
-	// If multiple ComponentPresentations match, columns are merged by `columnId` according to binding rank. Absence of the field means no overview is shown.
+	// Highlight Highlight presentation definition. The `fields` define the fields to show in the highlight page.
+	// If multiple ComponentPresentations match, fields are merged by `fieldId` according to binding rank.
+	// Related resources follow the same merge semantics using `resourceId` as the identity key.
 	Highlight *PresentationHighlight `json:"highlight,omitempty"`
 	Icon      *string                `json:"icon,omitempty"`
 
@@ -601,11 +602,24 @@ type PresentationDefinition struct {
 	Overview *PresentationOverview `json:"overview,omitempty"`
 }
 
-// PresentationHighlight Highlight presentation definition. The `fields` define the fields to show in the ab. The `flags` field can be used to enable/disable functionalities.
-// If multiple ComponentPresentations match, columns are merged by `columnId` according to binding rank. Absence of the field means no overview is shown.
+// PresentationHighlight Highlight presentation definition. The `fields` define the fields to show in the highlight page.
+// If multiple ComponentPresentations match, fields are merged by `fieldId` according to binding rank.
+// Related resources follow the same merge semantics using `resourceId` as the identity key.
 type PresentationHighlight struct {
+	Events *PresentationHighlightEvents `json:"events,omitempty"`
 	Fields []PresentationHighlightField `json:"fields"`
-	Title  string                       `json:"title"`
+
+	// Provisioning Provisioning section of a component in the highlight presentation. The `externalComponentSelector` field is used to identify the external component with provisioning details for this component.
+	Provisioning     *PresentationHighlightProvisioning `json:"provisioning,omitempty"`
+	RelatedResources *[]PresentationRelatedResource     `json:"relatedResources,omitempty"`
+	Title            string                             `json:"title"`
+}
+
+// PresentationHighlightEvents defines model for PresentationHighlightEvents.
+type PresentationHighlightEvents struct {
+	ExcludedRelatedResourcesQuery *string `json:"excludedRelatedResourcesQuery,omitempty"`
+	RelatedResourcesQuery         *string `json:"relatedResourcesQuery,omitempty"`
+	ShowEvents                    bool    `json:"showEvents"`
 }
 
 // PresentationHighlightField Definition of a field in the highlight presentation. The `fieldId` field is used to identify the field and merge fields from different presentations.
@@ -617,6 +631,14 @@ type PresentationHighlightField struct {
 	// Projection Display type and value for the field.
 	Projection *ComponentHighlightProjection `json:"projection,omitempty"`
 	Title      string                        `json:"title"`
+}
+
+// PresentationHighlightProvisioning Provisioning section of a component in the highlight presentation. The `externalComponentSelector` field is used to identify the external component with provisioning details for this component.
+type PresentationHighlightProvisioning struct {
+	// ExternalComponentSelector Cel expression that selects the external component with provisioning details
+	ExternalComponentSelector *string `json:"externalComponentSelector,omitempty"`
+	ShowConfiguration         *bool   `json:"showConfiguration,omitempty"`
+	ShowStatus                *bool   `json:"showStatus,omitempty"`
 }
 
 // PresentationMainMenu defines model for PresentationMainMenu.
@@ -640,6 +662,33 @@ type PresentationOverview struct {
 	FixedColumns *int                       `json:"fixedColumns,omitempty"`
 	MainMenu     *PresentationMainMenu      `json:"mainMenu,omitempty"`
 	Name         PresentationName           `json:"name"`
+}
+
+// PresentationRelatedResource Related resource definition for the highlight page. Each entry defines a section showing components
+// related to the one being viewed, rendered using the referenced presentation's overview spec.
+// Merge semantics follow highlight field rules:
+// - All presentations whose binding matches the component contribute related resources.
+// - Same resourceId with higher specificity wins (override).
+// - Different resourceId entries are appended.
+// - Display order is determined by the order field.
+type PresentationRelatedResource struct {
+	// Order Display order. Higher value means it shows first in UI.
+	Order float64 `json:"order"`
+
+	// PresentationIdentifier References a ComponentPresentation by identifier to reuse its overview spec (columns, name, filters)
+	// for rendering this related resource section. Must be within the same stackpack.
+	PresentationIdentifier *string `json:"presentationIdentifier,omitempty"`
+
+	// ResourceId Stable identity key for merging across presentations, analogous to fieldId and filterId.
+	ResourceId string `json:"resourceId"`
+
+	// Title Section heading displayed in the UI for this related resource.
+	Title string `json:"title"`
+
+	// TopologyQuery STQL query scoping the related components. Supports template interpolation with ${*} placeholders
+	// (e.g. ${identifiers[0]}, ${tags['namespace']}).
+	// The backend intersects this query with the referenced presentation's binding query.
+	TopologyQuery *string `json:"topologyQuery,omitempty"`
 }
 
 // PromqlDisplay defines model for PromqlDisplay.

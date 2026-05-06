@@ -117,7 +117,7 @@ func ExtractComponentsAndRelations(
 ) {
 	components := make(map[string]*topostreamv1.TopologyStreamComponent)
 	relations := make(map[string]*topostreamv1.TopologyStreamRelation)
-	errs := make([]*topostreamv1.TopoStreamError, 0)
+	errs := make([]*topostreamv1.TopoStreamError, 0, len(recs))
 
 	for _, rec := range recs {
 		var topoMsg topostreamv1.TopologyStreamMessage
@@ -158,6 +158,32 @@ func BoolExpr(s string) settingsproto.OtelBooleanExpression {
 
 func PtrBoolExpr(s string) *settingsproto.OtelBooleanExpression {
 	return Ptr(BoolExpr(s))
+}
+
+func PtrStrExpr(s string) *settingsproto.OtelStringExpression {
+	return Ptr(StrExpr(s))
+}
+
+// ExtractDeletes extracts delete external IDs from topology (Kafka) records.
+func ExtractDeletes(
+	t *testing.T,
+	recs []*kgo.Record,
+) ([]string, []string) {
+	var componentDeleteIDs, relationDeleteIDs []string
+
+	for _, rec := range recs {
+		var topoMsg topostreamv1.TopologyStreamMessage
+		require.NoError(t, proto.Unmarshal(rec.Value, &topoMsg))
+		require.NotNil(t, topoMsg.Payload)
+
+		data := topoMsg.GetTopologyStreamRepeatElementsData()
+		if data == nil {
+			continue
+		}
+		componentDeleteIDs = append(componentDeleteIDs, data.DeleteComponentExternalIds...)
+		relationDeleteIDs = append(relationDeleteIDs, data.DeleteRelationExternalIds...)
+	}
+	return componentDeleteIDs, relationDeleteIDs
 }
 
 func Ptr[T any](v T) *T { return &v }

@@ -9,6 +9,8 @@ import (
 const (
 	indexFuncName = "_[_]"
 	inFuncName    = "@in"
+	// varsReferenceRoot root identifier used for user-defined variables (e.g. `vars.serverName`).
+	varsReferenceRoot = "vars"
 )
 
 type Reference struct {
@@ -45,6 +47,18 @@ func (w *ExpressionAstWalker) GetReferences() []Reference {
 		refs = append(refs, ref)
 	}
 	return refs
+}
+
+// GetVarReferences returns the set of variable names referenced as `vars.<name>` in the walked AST.
+// Only the first path segment is used (e.g. `vars.serverName.field` contributes "serverName").
+func (w *ExpressionAstWalker) GetVarReferences() map[string]struct{} {
+	names := make(map[string]struct{})
+	for _, ref := range w.References {
+		if ref.Root == varsReferenceRoot && len(ref.Path) > 0 {
+			names[ref.Path[0]] = struct{}{}
+		}
+	}
+	return names
 }
 
 func (w *ExpressionAstWalker) Walk(expr ast.Expr) {

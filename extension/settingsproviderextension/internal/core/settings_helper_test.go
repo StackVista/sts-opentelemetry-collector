@@ -101,7 +101,7 @@ func newOtelComponentMapping(id string) stsSettingsModel.OtelComponentMapping {
 				stsSettingsModel.TRACES,
 			},
 			Resource: stsSettingsModel.OtelInputResource{
-				Action:    ptr(stsSettingsModel.CREATE),
+				Action:    newOtelStringExpression("'CREATE'"),
 				Condition: ptr(stsSettingsModel.OtelBooleanExpression{Expression: "${input.attributes['service.name'] == 'test'}"}),
 			},
 		},

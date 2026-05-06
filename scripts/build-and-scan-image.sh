@@ -48,6 +48,18 @@ scanner_args=(
   --rm
   -v /var/run/docker.sock:/var/run/docker.sock
   -v "${PWD}/${TRIVY_CACHE_DIR}:/root/.cache/trivy"
+)
+
+# Mount the project's .trivyignore.yaml so accepted CVE exceptions
+# (with expiration dates) apply to the vuln scan below. See the file
+# itself for entry format and rationale.
+ignorefile_args=()
+if [[ -f "${PWD}/.trivyignore.yaml" ]]; then
+  scanner_args+=(-v "${PWD}/.trivyignore.yaml:/scan/.trivyignore.yaml:ro")
+  ignorefile_args=(--ignorefile /scan/.trivyignore.yaml)
+fi
+
+scanner_args+=(
   "${TRIVY_IMAGE}"
   image
   --no-progress
@@ -64,6 +76,7 @@ echo "Scanning ${LOCAL_IMAGE} for HIGH/CRITICAL vulnerabilities"
 docker "${scanner_args[@]}" \
   --scanners vuln \
   --severity HIGH,CRITICAL \
+  "${ignorefile_args[@]}" \
   "${LOCAL_IMAGE}"
 
 {

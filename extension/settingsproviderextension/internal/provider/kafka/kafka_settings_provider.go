@@ -124,6 +124,7 @@ func (k *SettingsProvider) Start(ctx context.Context, _ component.Host) error {
 	}
 
 	// Setup cancellation
+	//nolint:gosec // cancel func stored in struct field, called in Shutdown
 	readerCtx, readerCancel := context.WithCancel(ctx)
 	k.readerCancelFunc = readerCancel
 
@@ -135,7 +136,7 @@ func (k *SettingsProvider) Start(ctx context.Context, _ component.Host) error {
 		}
 	}()
 
-	return nil // started successfully
+	return nil
 }
 
 func (k *SettingsProvider) Shutdown(_ context.Context) error {

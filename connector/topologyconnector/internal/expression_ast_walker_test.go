@@ -214,6 +214,91 @@ func TestPickOmitExpressionAstWalker_Walk(t *testing.T) {
 	}
 }
 
+func TestExpressionAstWalker_GetVarReferences(t *testing.T) {
+	tests := []struct {
+		name     string
+		expr     string
+		wantVars []string
+	}{
+		{
+			name:     "no vars referenced",
+			expr:     `resource.attributes["service.name"]`,
+			wantVars: []string{},
+		},
+		{
+			name:     "single var with dot notation",
+			expr:     `"urn:server/" + vars.serverName`,
+			wantVars: []string{"serverName"},
+		},
+		{
+			name:     "single var with bracket/index notation",
+			expr:     `"urn:server/" + vars['serverName']`,
+			wantVars: []string{"serverName"},
+		},
+		{
+			name:     "multiple vars",
+			expr:     `"urn:" + vars.namespace + "/" + vars.serverName + "/" + vars.kind`,
+			wantVars: []string{"namespace", "serverName", "kind"},
+		},
+		{
+			name:     "ternary with vars on both branches",
+			expr:     `vars.kind == "X" ? vars.a : vars.b`,
+			wantVars: []string{"kind", "a", "b"},
+		},
+		{
+			name:     "nested var path collapses to root name",
+			expr:     `vars.config.host`,
+			wantVars: []string{"config"},
+		},
+		{
+			name:     "var alongside other roots",
+			expr:     `resource.attributes["k"] + vars.serverName + log.attributes["x"]`,
+			wantVars: []string{"serverName"},
+		},
+	}
+
+	eval := newTestEvaluator(t)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := eval.GetStringExpressionAST(settingsproto.OtelStringExpression{Expression: tt.expr})
+			require.NoError(t, err)
+			walker := internal.NewExpressionAstWalker()
+			walker.Walk(res.CheckedAST.NativeRep().Expr())
+
+			got := walker.GetVarReferences()
+			require.Len(t, got, len(tt.wantVars))
+			for _, name := range tt.wantVars {
+				_, ok := got[name]
+				require.True(t, ok, "missing var: %s", name)
+			}
+		})
+	}
+}
+
+func TestCollectVarReferences_UnionAcrossExpressions(t *testing.T) {
+	eval := newTestEvaluator(t)
+
+	got := internal.CollectVarReferences(
+		eval,
+		settingsproto.OtelStringExpression{Expression: `"urn:" + vars.a + "/" + vars.b`},
+		settingsproto.OtelStringExpression{Expression: `"urn:" + vars.b + "/" + vars.c`},
+	)
+
+	require.Len(t, got, 3)
+	for _, name := range []string{"a", "b", "c"} {
+		_, ok := got[name]
+		require.True(t, ok, "missing var: %s", name)
+	}
+}
+
+func TestCollectVarReferences_NoExpressions(t *testing.T) {
+	eval := newTestEvaluator(t)
+	got := internal.CollectVarReferences(eval)
+	require.NotNil(t, got)
+	require.Empty(t, got)
+}
+
 func newTestEvaluator(t *testing.T) *internal.CelEvaluator {
 	t.Helper()
 
