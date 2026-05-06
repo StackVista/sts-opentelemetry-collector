@@ -54,7 +54,9 @@ processors:
 
 replaces:
   - github.com/stackvista/sts-opentelemetry-collector/common => ../common
-  # CVE-2026-40179: prometheusreceiver v0.150.0 still pins a vulnerable
-  # prometheus/prometheus pseudo-version from 2026-04-09, but the stored-XSS
-  # fix landed on 2026-04-10. Force the fixed minor release.
-  - github.com/prometheus/prometheus => github.com/prometheus/prometheus v0.311.2-0.20260410083055-07c6232d159b
+  # Force prometheus/prometheus to the patched release. prometheusreceiver v0.150.0
+  # still pulls in a vulnerable version transitively. v0.311.3 fixes:
+  # - CVE-2026-40179 (stored XSS, originally addressed by a 2026-04-10 pseudo-version pin)
+  # - CVE-2026-42151
+  # - CVE-2026-42154
+  - github.com/prometheus/prometheus => github.com/prometheus/prometheus v0.311.3
