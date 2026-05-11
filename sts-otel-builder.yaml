@@ -8,66 +8,49 @@ dist:
   build_tags: remove_all_sd,enable_aws_sd,enable_azure_sd,enable_consul_sd,enable_digitalocean_sd,enable_dns_sd,enable_eureka_sd,enable_gce_sd,enable_hetzner_sd,enable_ionos_sd,enable_kubernetes_sd,enable_linode_sd,enable_marathon_sd,enable_nomad_sd,enable_openstack_sd,enable_ovhcloud_sd,enable_puppetdb_sd,enable_scaleway_sd,enable_stackit_sd,enable_triton_sd,enable_uyuni_sd,enable_vultr_sd,enable_xds_sd,enable_zookeeper_sd
 
 connectors:
-  - gomod: go.opentelemetry.io/collector/connector/forwardconnector v0.150.0
+  - gomod: go.opentelemetry.io/collector/connector/forwardconnector v0.152.0
   - gomod: github.com/stackvista/sts-opentelemetry-collector/connector/stsservicegraphconnector v0.0.0
     path: ./connector/stsservicegraphconnector
   - gomod: github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector v0.0.0
     path: ./connector/topologyconnector
 
 exporters:
-  - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.150.0
+  - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.152.0
   - gomod: github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter v0.0.0
     path: ./exporter/clickhousestsexporter
   - gomod: github.com/stackvista/sts-opentelemetry-collector/exporter/ststopologyexporter v0.0.0
     path: ./exporter/ststopologyexporter
-  - gomod: go.opentelemetry.io/collector/exporter/otlpexporter v0.150.0
-  - gomod: go.opentelemetry.io/collector/exporter/otlphttpexporter v0.150.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter v0.150.0
+  - gomod: go.opentelemetry.io/collector/exporter/otlpexporter v0.152.0
+  - gomod: go.opentelemetry.io/collector/exporter/otlphttpexporter v0.152.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter v0.152.0
   - gomod: github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter v0.0.0
     path: ./exporter/stskafkaexporter
 
 receivers:
-  - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.150.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.150.0
+  - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.152.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.152.0
   - gomod: github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver v0.0.0
     path: ./receiver/k8scrdreceiver
 
 extensions:
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.150.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/bearertokenauthextension v0.150.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.152.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/bearertokenauthextension v0.152.0
   - gomod: github.com/stackvista/sts-opentelemetry-collector/extension/servicetokenauthextension v0.0.0
     path: ./extension/servicetokenauthextension
   - gomod: github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension v0.0.0
     path: ./extension/settingsproviderextension
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/pprofextension v0.150.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector v0.150.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/pprofextension v0.152.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector v0.152.0
 
 processors:
-  - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.150.0
-  - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.150.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/attributesprocessor v0.150.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.150.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor v0.150.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.150.0
+  - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.152.0
+  - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.152.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/attributesprocessor v0.152.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.152.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor v0.152.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.152.0
   - gomod: github.com/stackvista/sts-opentelemetry-collector/processor/stsusageprocessor v0.0.0
     path: ./processor/stsusageprocessor
 
 replaces:
   - github.com/stackvista/sts-opentelemetry-collector/common => ../common
-  # CVE-2026-40179 (stored XSS): prometheusreceiver v0.150.0 transitively pulls a
-  # prometheus/prometheus pseudo-version from 2026-04-09, but the fix landed on
-  # 2026-04-10 (commit 07c6232d159b on main:
-  # https://github.com/prometheus/prometheus/commit/07c6232d159b ).
-  # Force a pseudo-version that includes that commit.
-  #
-  # NOTE: prometheusreceiver depends on a `discovery.Metrics` struct (with
-  # MechanismMetrics / RefreshManager fields) that exists ONLY on prometheus' main
-  # branch — it was never carried into the release-3.11 maintenance lineage. So we
-  # cannot bump to the tagged v0.311.3 release: that tag was cut from release-3.11
-  # and the receiver fails to compile against it. Two HIGH CVEs that are also fixed
-  # in v0.311.3 are therefore unpatched here:
-  #   - CVE-2026-42151 (Azure AD OAuth client_secret leaked via /-/config)
-  #   - CVE-2026-42154 (DoS via crafted snappy payload on remote read)
-  # Both will remain accepted as known issues until upstream prometheusreceiver
-  # ships a release compatible with the v0.311.3 / release-3.11 API shape.
-  - github.com/prometheus/prometheus => github.com/prometheus/prometheus v0.311.2-0.20260410083055-07c6232d159b
