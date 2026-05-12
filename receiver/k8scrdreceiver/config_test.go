@@ -39,7 +39,7 @@ func TestConfigValidate(t *testing.T) {
 			config: &Config{
 				DiscoveryMode: DiscoveryModeAPIGroups,
 				APIGroupFilters: &APIGroupFilters{
-					Include: []string{"policies.kubewarden.io", "*.suse.com"},
+					Include: []string{testPoliciesKubewarden, testSuseWildcard},
 					Exclude: []string{"internal.suse.com"},
 				},
 			},
@@ -60,7 +60,7 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "invalid discovery mode",
 			config: &Config{
-				DiscoveryMode: "invalid",
+				DiscoveryMode: testInvalid,
 			},
 			wantErr: true,
 			errMsg:  "invalid discovery_mode",
@@ -158,33 +158,33 @@ func TestCompiledPatternMatches(t *testing.T) {
 	}{
 		// Wildcard tests
 		{"*", "anything", true},
-		{"*", "example.com", true},
+		{"*", testExampleGroup, true},
 		{"*", "", true},
 
 		// Subdomain wildcard tests
-		{"*.example.com", "foo.example.com", true},
-		{"*.example.com", "bar.example.com", true},
-		{"*.example.com", "nested.foo.example.com", true},
-		{"*.example.com", "example.com", false}, // Should NOT match bare domain
+		{testExampleWildcard, "foo.example.com", true},
+		{testExampleWildcard, "bar.example.com", true},
+		{testExampleWildcard, "nested.foo.example.com", true},
+		{testExampleWildcard, testExampleGroup, false}, // Should NOT match bare domain
 
 		// Exact match tests
-		{"exact.match.io", "exact.match.io", true},
-		{"exact.match.io", "not.exact.match.io", false},
-		{"exact.match.io", "exact.match", false},
+		{testExactMatchIO, testExactMatchIO, true},
+		{testExactMatchIO, "not.exact.match.io", false},
+		{testExactMatchIO, "exact.match", false},
 
 		// Multiple wildcard tests
-		{"foo.*.bar", "foo.baz.bar", true},
-		{"foo.*.bar", "foo.anything.bar", true},
-		{"foo.*.bar", "foo.nested.path.bar", true},
-		{"foo.*.bar", "foo.bar", false}, // * requires at least one char
+		{testFooWildcardBar, "foo.baz.bar", true},
+		{testFooWildcardBar, "foo.anything.bar", true},
+		{testFooWildcardBar, "foo.nested.path.bar", true},
+		{testFooWildcardBar, "foo.bar", false}, // * requires at least one char
 
 		// Complex patterns
-		{"policies.*.io", "policies.kubewarden.io", true},
-		{"policies.*.io", "policies.example.io", true},
-		{"policies.*.io", "policies.io", false},
+		{testPoliciesWildcardIO, testPoliciesKubewarden, true},
+		{testPoliciesWildcardIO, "policies.example.io", true},
+		{testPoliciesWildcardIO, "policies.io", false},
 
 		// Special characters in domain (should be escaped, not interpreted as regex)
-		{"example.com", "exampleXcom", false}, // . should not match any char
+		{testExampleGroup, "exampleXcom", false}, // . should not match any char
 		{"test-domain.io", "test-domain.io", true},
 		{"test_domain.io", "test_domain.io", true},
 	}
@@ -251,7 +251,7 @@ func TestShouldWatchAPIGroup(t *testing.T) {
 					Include: []string{"*"},
 				},
 			},
-			apiGroup: "example.com",
+			apiGroup: testExampleGroup,
 			want:     true,
 		},
 		{
@@ -259,10 +259,10 @@ func TestShouldWatchAPIGroup(t *testing.T) {
 			config: &Config{
 				DiscoveryMode: DiscoveryModeAPIGroups,
 				APIGroupFilters: &APIGroupFilters{
-					Include: []string{"policies.kubewarden.io"},
+					Include: []string{testPoliciesKubewarden},
 				},
 			},
-			apiGroup: "policies.kubewarden.io",
+			apiGroup: testPoliciesKubewarden,
 			want:     true,
 		},
 		{
@@ -270,7 +270,7 @@ func TestShouldWatchAPIGroup(t *testing.T) {
 			config: &Config{
 				DiscoveryMode: DiscoveryModeAPIGroups,
 				APIGroupFilters: &APIGroupFilters{
-					Include: []string{"policies.kubewarden.io"},
+					Include: []string{testPoliciesKubewarden},
 				},
 			},
 			apiGroup: "other.io",
@@ -281,7 +281,7 @@ func TestShouldWatchAPIGroup(t *testing.T) {
 			config: &Config{
 				DiscoveryMode: DiscoveryModeAPIGroups,
 				APIGroupFilters: &APIGroupFilters{
-					Include: []string{"*.suse.com"},
+					Include: []string{testSuseWildcard},
 				},
 			},
 			apiGroup: "rancher.suse.com",
@@ -304,7 +304,7 @@ func TestShouldWatchAPIGroup(t *testing.T) {
 			config: &Config{
 				DiscoveryMode: DiscoveryModeAPIGroups,
 				APIGroupFilters: &APIGroupFilters{
-					Include: []string{"*.example.com"},
+					Include: []string{testExampleWildcard},
 					Exclude: []string{"test.*.example.com"},
 				},
 			},
@@ -317,9 +317,9 @@ func TestShouldWatchAPIGroup(t *testing.T) {
 				DiscoveryMode: DiscoveryModeAPIGroups,
 				APIGroupFilters: &APIGroupFilters{
 					Include: []string{
-						"policies.kubewarden.io",
+						testPoliciesKubewarden,
 						"longhorn.io",
-						"*.suse.com",
+						testSuseWildcard,
 					},
 				},
 			},

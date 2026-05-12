@@ -20,6 +20,8 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
+const testServiceNameAttr = "service.name"
+
 func TestLogsExporter_New(t *testing.T) {
 	type validate func(*testing.T, *clickhousestsexporter.LogsExporter, error)
 
@@ -96,7 +98,7 @@ func TestExporter_pushLogsData(t *testing.T) {
 			if strings.HasPrefix(query, "INSERT") {
 				require.Equal(t, "https://opentelemetry.io/schemas/1.4.0", values[8])
 				require.Equal(t, map[string]string{
-					"service.name": "test-service",
+					testServiceNameAttr: "test-service",
 				}, values[9])
 			}
 			return nil
@@ -132,7 +134,7 @@ func newTestLogsExporter(t *testing.T, dsn string, fns ...func(*clickhousestsexp
 
 func withTestExporterConfig(t *testing.T, fns ...func(*clickhousestsexporter.Config)) func(string) *clickhousestsexporter.Config {
 	return func(endpoint string) *clickhousestsexporter.Config {
-		var configMods []func(*clickhousestsexporter.Config)
+		configMods := make([]func(*clickhousestsexporter.Config), 0, 1+len(fns))
 		configMods = append(configMods, func(cfg *clickhousestsexporter.Config) {
 			cfg.Endpoint = endpoint
 			cfg.SetDriverName(t.Name())
@@ -146,7 +148,7 @@ func simpleLogs(count int) plog.Logs {
 	logs := plog.NewLogs()
 	rl := logs.ResourceLogs().AppendEmpty()
 	rl.SetSchemaUrl("https://opentelemetry.io/schemas/1.4.0")
-	rl.Resource().Attributes().PutStr("service.name", "test-service")
+	rl.Resource().Attributes().PutStr(testServiceNameAttr, "test-service")
 	sl := rl.ScopeLogs().AppendEmpty()
 	sl.SetSchemaUrl("https://opentelemetry.io/schemas/1.7.0")
 	sl.Scope().SetName("io.opentelemetry.contrib.clickhouse")

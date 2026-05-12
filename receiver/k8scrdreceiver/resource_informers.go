@@ -24,6 +24,8 @@ import (
 // Compile-time check that ResourceInformers implements Informers.
 var _ Informers = (*ResourceInformers)(nil)
 
+const apiExtensionsGroup = "apiextensions.k8s.io"
+
 // Informers abstracts the Kubernetes informer layer for reading CRDs and CRs.
 // The collector reads current state through this interface, enabling the emission
 // logic to be tested independently of the Kubernetes client.
@@ -42,7 +44,7 @@ type Informers interface {
 //
 //nolint:gochecknoglobals
 var crdGVR = schema.GroupVersionResource{
-	Group:    "apiextensions.k8s.io",
+	Group:    apiExtensionsGroup,
 	Version:  "v1",
 	Resource: "customresourcedefinitions",
 }

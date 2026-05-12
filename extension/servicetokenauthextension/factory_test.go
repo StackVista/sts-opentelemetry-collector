@@ -19,7 +19,7 @@ func TestCreateDefaultConfig(t *testing.T) {
 			ValidTTL:    5 * time.Minute,
 			InvalidSize: 100,
 		},
-		Schema: "StackState",
+		Schema: stackStateSchema,
 	}
 	actual := factory.CreateDefaultConfig()
 	assert.Equal(t, expected, actual)
@@ -29,14 +29,14 @@ func TestCreateDefaultConfig(t *testing.T) {
 func TestCreateExtension_ValidConfig(t *testing.T) {
 	cfg := &servicetokenauthextension.Config{
 		Endpoint: &servicetokenauthextension.EndpointSettings{
-			URL: "http://localhost:8091/authorize",
+			URL: defaultAuthURL,
 		},
 		Cache: &servicetokenauthextension.CacheSettings{
 			ValidSize:   2,
 			ValidTTL:    30 * time.Second,
 			InvalidSize: 3,
 		},
-		Schema: "StackState",
+		Schema: stackStateSchema,
 	}
 
 	ext, err := servicetokenauthextension.CreateExtension(context.Background(), extensiontest.NewNopSettings(servicetokenauthextension.Type), cfg)

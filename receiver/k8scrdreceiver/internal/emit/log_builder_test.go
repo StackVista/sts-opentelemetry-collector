@@ -12,6 +12,14 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 )
 
+const (
+	testAPIVersionKey = "apiVersion"
+	testKindKey       = "kind"
+	testMetadataKey   = "metadata"
+	testNameKey       = "name"
+	testSpecKey       = "spec"
+)
+
 func TestBuildCRLogRecord(t *testing.T) {
 	timestamp := time.Date(2026, 4, 8, 12, 0, 0, 0, time.UTC)
 	clusterName := "test-cluster"
@@ -26,14 +34,14 @@ func TestBuildCRLogRecord(t *testing.T) {
 			name: "valid CR with namespace",
 			cr: &unstructured.Unstructured{
 				Object: map[string]interface{}{
-					"apiVersion": "policies.kubewarden.io/v1",
-					"kind":       "PolicyServer",
-					"metadata": map[string]interface{}{
-						"name":      "default",
+					testAPIVersionKey: "policies.kubewarden.io/v1",
+					testKindKey:       "PolicyServer",
+					testMetadataKey: map[string]interface{}{
+						testNameKey: "default",
 						"namespace": "kubewarden",
 						"uid":       "abc-123",
 					},
-					"spec": map[string]interface{}{
+					testSpecKey: map[string]interface{}{
 						"image": "ghcr.io/kubewarden/policy-server:v1.0.0",
 					},
 				},
@@ -45,11 +53,11 @@ func TestBuildCRLogRecord(t *testing.T) {
 			name: "cluster-scoped CR without namespace",
 			cr: &unstructured.Unstructured{
 				Object: map[string]interface{}{
-					"apiVersion": "policies.kubewarden.io/v1",
-					"kind":       "ClusterAdmissionPolicy",
-					"metadata": map[string]interface{}{
-						"name": "pod-privileged",
-						"uid":  "def-456",
+					testAPIVersionKey: "policies.kubewarden.io/v1",
+					testKindKey:       "ClusterAdmissionPolicy",
+					testMetadataKey: map[string]interface{}{
+						testNameKey: "pod-privileged",
+						"uid":       "def-456",
 					},
 				},
 			},
@@ -170,16 +178,16 @@ func TestBuildCRDLogRecord(t *testing.T) {
 			name: "CRD added",
 			crd: &unstructured.Unstructured{
 				Object: map[string]interface{}{
-					"apiVersion": "apiextensions.k8s.io/v1",
-					"kind":       "CustomResourceDefinition",
-					"metadata": map[string]interface{}{
-						"name": "policyservers.policies.kubewarden.io",
+					testAPIVersionKey: "apiextensions.k8s.io/v1",
+					testKindKey:       "CustomResourceDefinition",
+					testMetadataKey: map[string]interface{}{
+						testNameKey: "policyservers.policies.kubewarden.io",
 					},
-					"spec": map[string]interface{}{
+					testSpecKey: map[string]interface{}{
 						"group": "policies.kubewarden.io",
 						"names": map[string]interface{}{
-							"kind":   "PolicyServer",
-							"plural": "policyservers",
+							testKindKey: "PolicyServer",
+							"plural":    "policyservers",
 						},
 						"scope": "Namespaced",
 						"versions": []interface{}{

@@ -20,6 +20,8 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
+const testTraceIDHex = "01020300000000000000000000000000"
+
 func TestExporter_pushMetricsData(t *testing.T) {
 	t.Parallel()
 	t.Run("push success", func(t *testing.T) {
@@ -103,19 +105,19 @@ func TestExporter_pushMetricsData(t *testing.T) {
 		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
 			if strings.HasPrefix(query, "INSERT INTO otel_metrics_gauge") {
 				require.Equal(t, clickhouse.ArraySet{"0102030000000000"}, values[18])
-				require.Equal(t, clickhouse.ArraySet{"01020300000000000000000000000000"}, values[19])
+				require.Equal(t, clickhouse.ArraySet{testTraceIDHex}, values[19])
 			}
 			if strings.HasPrefix(query, "INSERT INTO otel_metrics_histogram") {
 				require.Equal(t, clickhouse.ArraySet{"0102030000000000"}, values[20])
-				require.Equal(t, clickhouse.ArraySet{"01020300000000000000000000000000"}, values[21])
+				require.Equal(t, clickhouse.ArraySet{testTraceIDHex}, values[21])
 			}
 			if strings.HasPrefix(query, "INSERT INTO otel_metrics_sum ") {
 				require.Equal(t, clickhouse.ArraySet{"0102030000000000"}, values[18])
-				require.Equal(t, clickhouse.ArraySet{"01020300000000000000000000000000"}, values[19])
+				require.Equal(t, clickhouse.ArraySet{testTraceIDHex}, values[19])
 			}
 			if strings.HasPrefix(query, "INSERT INTO otel_metrics_exponential_histogram") {
 				require.Equal(t, clickhouse.ArraySet{"0102030000000000"}, values[24])
-				require.Equal(t, clickhouse.ArraySet{"01020300000000000000000000000000"}, values[25])
+				require.Equal(t, clickhouse.ArraySet{testTraceIDHex}, values[25])
 			}
 			return nil
 		})

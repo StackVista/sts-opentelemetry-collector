@@ -176,10 +176,10 @@ func NewConnector(set component.TelemetrySettings, config component.Config, next
 	}
 }
 
-func (s *ServiceGraphConnector) Start(_ context.Context, _ component.Host) error {
+func (s *ServiceGraphConnector) Start(ctx context.Context, _ component.Host) error {
 	s.store = store.NewStore(s.config.Store.TTL, s.config.Store.MaxItems, s.onComplete, s.onExpire, s.onReschedule)
 
-	go s.metricFlushLoop(s.config.MetricsFlushInterval)
+	go s.metricFlushLoop(ctx, s.config.MetricsFlushInterval)
 
 	go s.cacheLoop(s.config.CacheLoop)
 
@@ -189,7 +189,7 @@ func (s *ServiceGraphConnector) Start(_ context.Context, _ component.Host) error
 	return nil
 }
 
-func (s *ServiceGraphConnector) metricFlushLoop(flushInterval time.Duration) {
+func (s *ServiceGraphConnector) metricFlushLoop(ctx context.Context, flushInterval time.Duration) {
 	if flushInterval <= 0 {
 		return
 	}
@@ -200,7 +200,7 @@ func (s *ServiceGraphConnector) metricFlushLoop(flushInterval time.Duration) {
 	for {
 		select {
 		case <-ticker.C:
-			if err := s.flushMetrics(context.Background()); err != nil {
+			if err := s.flushMetrics(ctx); err != nil {
 				s.logger.Error("failed to flush metrics", zap.Error(err))
 			}
 		case <-s.shutdownCh:

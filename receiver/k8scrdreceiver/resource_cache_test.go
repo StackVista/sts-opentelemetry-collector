@@ -15,14 +15,14 @@ import (
 func makeCachedCRD(name, resourceVersion string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]interface{}{
-			"apiVersion": "apiextensions.k8s.io/v1",
-			"kind":       "CustomResourceDefinition",
-			"metadata": map[string]interface{}{
-				"name":            name,
-				"resourceVersion": resourceVersion,
+			testAPIVersionKey: apiExtensionsGroup + "/v1",
+			testKindKey:       testCRDKind,
+			testMetadataKey: map[string]interface{}{
+				testNameKey:            name,
+				testResourceVersionKey: resourceVersion,
 			},
-			"spec": map[string]interface{}{
-				"group": "example.com",
+			testSpecKey: map[string]interface{}{
+				testGroupKey: testExampleGroup,
 			},
 		},
 	}
@@ -32,11 +32,11 @@ func makeCachedCRD(name, resourceVersion string) *unstructured.Unstructured {
 func makeCachedCR(name, namespace, group, version, kind, resourceVersion string) *unstructured.Unstructured {
 	obj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
-			"apiVersion": group + "/" + version,
-			"kind":       kind,
-			"metadata": map[string]interface{}{
-				"name":            name,
-				"resourceVersion": resourceVersion,
+			testAPIVersionKey: group + "/" + version,
+			testKindKey:       kind,
+			testMetadataKey: map[string]interface{}{
+				testNameKey:            name,
+				testResourceVersionKey: resourceVersion,
 			},
 		},
 	}
@@ -113,10 +113,10 @@ func TestResourceCache_ComputeChanges_CRDUnchanged(t *testing.T) {
 func TestResourceCache_ComputeChanges_CRAdded(t *testing.T) {
 	rc := newResourceCache()
 
-	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "foos"}
+	gvr := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: testFoosResource}
 	currentCRs := map[schema.GroupVersionResource][]*unstructured.Unstructured{
 		gvr: {
-			makeCachedCR("my-foo", "default", "example.com", "v1", "Foo", "1"),
+			makeCachedCR("my-foo", "default", testExampleGroup, "v1", "Foo", "1"),
 		},
 	}
 
@@ -130,18 +130,18 @@ func TestResourceCache_ComputeChanges_CRAdded(t *testing.T) {
 }
 
 func TestResourceCache_ComputeChanges_CRModified(t *testing.T) {
-	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "foos"}
+	gvr := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: testFoosResource}
 	key := crResourceKey(gvr, "default", "my-foo")
 
 	rc := newResourceCache()
 	rc.CRs[key] = &cachedCR{
-		Obj: makeCachedCR("my-foo", "default", "example.com", "v1", "Foo", "1"),
+		Obj: makeCachedCR("my-foo", "default", testExampleGroup, "v1", "Foo", "1"),
 		GVR: gvr,
 	}
 
 	currentCRs := map[schema.GroupVersionResource][]*unstructured.Unstructured{
 		gvr: {
-			makeCachedCR("my-foo", "default", "example.com", "v1", "Foo", "2"),
+			makeCachedCR("my-foo", "default", testExampleGroup, "v1", "Foo", "2"),
 		},
 	}
 

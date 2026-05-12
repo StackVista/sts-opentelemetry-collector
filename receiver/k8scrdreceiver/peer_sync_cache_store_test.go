@@ -28,12 +28,12 @@ func testCacheWithData(t *testing.T) *resourceCache {
 	t.Helper()
 	cache := newResourceCache()
 
-	crd := makeTestCRDUnstructured("widgets.example.com", "example.com", "Widget", "widgets")
+	crd := makeTestCRDUnstructured("widgets.example.com", testExampleGroup, "Widget", testWidgetsResource)
 	crd.SetResourceVersion("42")
 	cache.CRDs["widgets.example.com"] = crd
 
-	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"}
-	cr := makeTestCR("my-widget", "default", "example.com", "v1", "Widget")
+	gvr := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: testWidgetsResource}
+	cr := makeTestCR("my-widget", "default", testExampleGroup, "v1", "Widget")
 	cr.SetResourceVersion("7")
 	key := crResourceKey(gvr, "default", "my-widget")
 	cache.CRs[key] = &cachedCR{Obj: cr, GVR: gvr}

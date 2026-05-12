@@ -11,6 +11,11 @@ import (
 	"testing"
 )
 
+const (
+	labelEnv = "env"
+	envDev   = "dev"
+)
+
 func newSettingsCache(t *testing.T, subscriptionService Subscriber) *DefaultSettingsCache {
 	t.Helper()
 
@@ -66,7 +71,7 @@ func TestSettingsCache_GetConcreteSettingsByType_DeepCopy(t *testing.T) {
 	registerConverter(settingType, func(_ stsSettingsModel.Setting) (any, error) {
 		return &complexSetting{
 			Name:   "original",
-			Labels: map[string]string{"env": "dev"},
+			Labels: map[string]string{labelEnv: envDev},
 			Values: []int{1, 2, 3},
 		}, nil
 	})
@@ -81,12 +86,12 @@ func TestSettingsCache_GetConcreteSettingsByType_DeepCopy(t *testing.T) {
 	first, ok := vals[0].(*complexSetting)
 	require.True(t, ok)
 	require.Equal(t, "original", first.Name)
-	require.Equal(t, map[string]string{"env": "dev"}, first.Labels)
+	require.Equal(t, map[string]string{labelEnv: envDev}, first.Labels)
 	require.Equal(t, []int{1, 2, 3}, first.Values)
 
 	// Mutate the returned copy
 	first.Name = "mutated"
-	first.Labels["env"] = "prod"
+	first.Labels[labelEnv] = "prod"
 	first.Values[0] = 99
 
 	// Fetch again
@@ -99,7 +104,7 @@ func TestSettingsCache_GetConcreteSettingsByType_DeepCopy(t *testing.T) {
 	// Ensure deepcopy worked (no mutations leaked back)
 	require.True(t, ok)
 	require.Equal(t, "original", second.Name)
-	require.Equal(t, map[string]string{"env": "dev"}, second.Labels)
+	require.Equal(t, map[string]string{labelEnv: envDev}, second.Labels)
 	require.Equal(t, []int{1, 2, 3}, second.Values)
 }
 

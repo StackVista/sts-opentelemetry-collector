@@ -40,8 +40,8 @@ func roundtripCache(t *testing.T, c *resourceCache) *resourceCache {
 func TestSnapshotRoundtrip_PreservesCRWithGVR(t *testing.T) {
 	original := newResourceCache()
 
-	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"}
-	cr := makeTestCR("my-widget", "default", "example.com", "v1", "Widget")
+	gvr := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: testWidgetsResource}
+	cr := makeTestCR("my-widget", "default", testExampleGroup, "v1", "Widget")
 	cr.SetResourceVersion("7")
 
 	key := crResourceKey(gvr, "default", "my-widget")
@@ -63,14 +63,14 @@ func TestSnapshotRoundtrip_PreservesNestedSpecAndStatus(t *testing.T) {
 
 	cr := &unstructured.Unstructured{
 		Object: map[string]interface{}{
-			"apiVersion": "example.com/v1",
-			"kind":       "Widget",
-			"metadata": map[string]interface{}{
-				"name":            "complex-widget",
-				"namespace":       "prod",
-				"resourceVersion": "999",
+			testAPIVersionKey: testExampleGroup + "/v1",
+			testKindKey:       "Widget",
+			testMetadataKey: map[string]interface{}{
+				"name":                 "complex-widget",
+				"namespace":            "prod",
+				testResourceVersionKey: "999",
 			},
-			"spec": map[string]interface{}{
+			testSpecKey: map[string]interface{}{
 				"replicas": int64(3),
 				"template": map[string]interface{}{
 					"containers": []interface{}{
@@ -87,7 +87,7 @@ func TestSnapshotRoundtrip_PreservesNestedSpecAndStatus(t *testing.T) {
 		},
 	}
 
-	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"}
+	gvr := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: testWidgetsResource}
 	key := crResourceKey(gvr, "prod", "complex-widget")
 	original.CRs[key] = &cachedCR{Obj: cr, GVR: gvr}
 

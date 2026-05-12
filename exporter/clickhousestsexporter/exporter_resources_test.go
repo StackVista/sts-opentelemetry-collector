@@ -40,7 +40,7 @@ func TestExporter_pushResourcesData(t *testing.T) {
 	t.Run("check insert resources with service name and attributes", func(t *testing.T) {
 		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
 			if strings.HasPrefix(query, "INSERT") && strings.Contains(query, "otel_resources") {
-				require.Equal(t, map[string]string{"key": "value", "service.name": "test-service-0"}, values[2])
+				require.Equal(t, map[string]string{"key": "value", testServiceNameAttr: "test-service-0"}, values[2])
 			}
 			return nil
 		})
@@ -63,7 +63,7 @@ func testResources(count int) []pcommon.Resource {
 	resources := []pcommon.Resource{}
 	for i := 0; i < count; i++ {
 		resource := pcommon.NewResource()
-		resource.Attributes().PutStr("service.name", fmt.Sprintf("test-service-%d", i))
+		resource.Attributes().PutStr(testServiceNameAttr, fmt.Sprintf("test-service-%d", i))
 		resource.Attributes().PutStr("key", "value")
 		resources = append(resources, resource)
 	}
@@ -71,7 +71,7 @@ func testResources(count int) []pcommon.Resource {
 }
 
 func mustWriteResourceData(t *testing.T, exporter *clickhousestsexporter.ResourcesExporter, resources []pcommon.Resource) {
-	resourceModels := []*clickhousestsexporter.ResourceModel{}
+	resourceModels := make([]*clickhousestsexporter.ResourceModel, 0, len(resources))
 	for _, resource := range resources {
 		model, err := clickhousestsexporter.NewResourceModel(resource)
 		require.NoError(t, err)

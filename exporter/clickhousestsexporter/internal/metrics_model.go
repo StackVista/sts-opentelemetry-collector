@@ -188,7 +188,7 @@ func attributesToMap(attributes pcommon.Map) map[string]string {
 }
 
 func convertSliceToArraySet[T any](slice []T) clickhouse.ArraySet {
-	var set clickhouse.ArraySet
+	set := make(clickhouse.ArraySet, 0, len(slice))
 	for _, item := range slice {
 		set = append(set, item)
 	}

@@ -1,11 +1,11 @@
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.3-alpine AS builder
 
 RUN apk add --no-cache git
 
 WORKDIR /go/src/github.com/stackvista/sts-opentelemetry-collector
 COPY . .
 
-RUN go install go.opentelemetry.io/collector/cmd/builder@v0.150.0
+RUN go install go.opentelemetry.io/collector/cmd/builder@v0.152.0
 RUN builder --config ./sts-otel-builder.yaml
 
 FROM gcr.io/distroless/static-debian12

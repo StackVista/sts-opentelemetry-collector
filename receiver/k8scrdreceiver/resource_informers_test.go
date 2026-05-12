@@ -39,19 +39,19 @@ func (r *recordingReconcileRecorder) snapshot() []metrics.CRInformerOutcome {
 
 func TestResourceInformers_ReadCRDs(t *testing.T) {
 	scheme := testScheme()
-	registerCRGVR(scheme, "example.com", "v1", "TestResource")
+	registerCRGVR(scheme, testExampleGroup, "v1", "TestResource")
 
-	crd := makeTestCRDUnstructured("testresources.example.com", "example.com", "TestResource", "testresources")
+	crd := makeTestCRDUnstructured("testresources.example.com", testExampleGroup, "TestResource", testTestResources)
 
 	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme,
 		map[schema.GroupVersionResource]string{
-			crdGVR: "CustomResourceDefinitionList",
-			{Group: "example.com", Version: "v1", Resource: "testresources"}: "TestResourceList",
+			crdGVR: testCRDListKind,
+			{Group: testExampleGroup, Version: "v1", Resource: testTestResources}: testResourceListKind,
 		},
 		crd,
 	)
 
-	config := testConfig([]string{"example.com"}, nil)
+	config := testConfig([]string{testExampleGroup}, nil)
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 	ri := newResourceInformers(testSettings(t), config, client, ft, nil)
 
@@ -69,20 +69,20 @@ func TestResourceInformers_ReadCRDs(t *testing.T) {
 
 func TestResourceInformers_ReadCRs(t *testing.T) {
 	scheme := testScheme()
-	registerCRGVR(scheme, "example.com", "v1", "TestResource")
+	registerCRGVR(scheme, testExampleGroup, "v1", "TestResource")
 
-	crd := makeTestCRDUnstructured("testresources.example.com", "example.com", "TestResource", "testresources")
-	cr := makeTestCR("my-resource", "default", "example.com", "v1", "TestResource")
+	crd := makeTestCRDUnstructured("testresources.example.com", testExampleGroup, "TestResource", testTestResources)
+	cr := makeTestCR("my-resource", "default", testExampleGroup, "v1", "TestResource")
 
 	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme,
 		map[schema.GroupVersionResource]string{
-			crdGVR: "CustomResourceDefinitionList",
-			{Group: "example.com", Version: "v1", Resource: "testresources"}: "TestResourceList",
+			crdGVR: testCRDListKind,
+			{Group: testExampleGroup, Version: "v1", Resource: testTestResources}: testResourceListKind,
 		},
 		crd, cr,
 	)
 
-	config := testConfig([]string{"example.com"}, nil)
+	config := testConfig([]string{testExampleGroup}, nil)
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 	ri := newResourceInformers(testSettings(t), config, client, ft, nil)
 
@@ -93,7 +93,7 @@ func TestResourceInformers_ReadCRs(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { require.NoError(t, ri.Shutdown(ctx)) }()
 
-	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "testresources"}
+	gvr := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: testTestResources}
 	crs := ri.ReadCRs()
 	require.Contains(t, crs, gvr)
 	require.Len(t, crs[gvr], 1)
@@ -102,19 +102,19 @@ func TestResourceInformers_ReadCRs(t *testing.T) {
 
 func TestResourceInformers_CRDAddStartsCRInformer(t *testing.T) {
 	scheme := testScheme()
-	registerCRGVR(scheme, "example.com", "v1", "TestResource")
+	registerCRGVR(scheme, testExampleGroup, "v1", "TestResource")
 
-	crd := makeTestCRDUnstructured("testresources.example.com", "example.com", "TestResource", "testresources")
+	crd := makeTestCRDUnstructured("testresources.example.com", testExampleGroup, "TestResource", testTestResources)
 
 	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme,
 		map[schema.GroupVersionResource]string{
-			crdGVR: "CustomResourceDefinitionList",
-			{Group: "example.com", Version: "v1", Resource: "testresources"}: "TestResourceList",
+			crdGVR: testCRDListKind,
+			{Group: testExampleGroup, Version: "v1", Resource: testTestResources}: testResourceListKind,
 		},
 		crd,
 	)
 
-	config := testConfig([]string{"example.com"}, nil)
+	config := testConfig([]string{testExampleGroup}, nil)
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 	ri := newResourceInformers(testSettings(t), config, client, ft, nil)
 

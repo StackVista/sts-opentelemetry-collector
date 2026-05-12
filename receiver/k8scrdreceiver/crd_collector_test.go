@@ -26,11 +26,11 @@ func testScheme() *runtime.Scheme {
 	s := runtime.NewScheme()
 	// Register the GVRs we'll use so the fake client can handle them
 	s.AddKnownTypeWithName(
-		schema.GroupVersionKind{Group: "apiextensions.k8s.io", Version: "v1", Kind: "CustomResourceDefinitionList"},
+		schema.GroupVersionKind{Group: apiExtensionsGroup, Version: "v1", Kind: testCRDListKind},
 		&unstructured.UnstructuredList{},
 	)
 	s.AddKnownTypeWithName(
-		schema.GroupVersionKind{Group: "apiextensions.k8s.io", Version: "v1", Kind: "CustomResourceDefinition"},
+		schema.GroupVersionKind{Group: apiExtensionsGroup, Version: "v1", Kind: testCRDKind},
 		&unstructured.Unstructured{},
 	)
 	return s
@@ -78,7 +78,7 @@ func testConfig(includes []string, excludes []string) *Config {
 
 func makeTestCRDUnstructured(name, group, kind, plural string) *unstructured.Unstructured {
 	return makeTestCRDWithVersions(name, group, kind, plural, []map[string]interface{}{
-		{"name": "v1", "storage": true, "served": true},
+		{testNameKey: "v1", "storage": true, "served": true},
 	})
 }
 
@@ -89,16 +89,16 @@ func makeTestCRDWithVersions(name, group, kind, plural string, versions []map[st
 	}
 	return &unstructured.Unstructured{
 		Object: map[string]interface{}{
-			"apiVersion": "apiextensions.k8s.io/v1",
-			"kind":       "CustomResourceDefinition",
-			"metadata": map[string]interface{}{
-				"name": name,
+			testAPIVersionKey: apiExtensionsGroup + "/v1",
+			testKindKey:       testCRDKind,
+			testMetadataKey: map[string]interface{}{
+				testNameKey: name,
 			},
-			"spec": map[string]interface{}{
-				"group": group,
+			testSpecKey: map[string]interface{}{
+				testGroupKey: group,
 				"names": map[string]interface{}{
-					"kind":   kind,
-					"plural": plural,
+					testKindKey: kind,
+					"plural":    plural,
 				},
 				"scope":    "Namespaced",
 				"versions": versionList,
@@ -111,12 +111,12 @@ func makeTestCRDWithVersions(name, group, kind, plural string, versions []map[st
 func makeTestCR(name, namespace, group, version, kind string) *unstructured.Unstructured {
 	obj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
-			"apiVersion": group + "/" + version,
-			"kind":       kind,
-			"metadata": map[string]interface{}{
-				"name": name,
+			testAPIVersionKey: group + "/" + version,
+			testKindKey:       kind,
+			testMetadataKey: map[string]interface{}{
+				testNameKey: name,
 			},
-			"spec": map[string]interface{}{},
+			testSpecKey: map[string]interface{}{},
 		},
 	}
 	if namespace != "" {
@@ -248,14 +248,14 @@ func TestCRDCollector_EmitsInitialCRDAndCR(t *testing.T) {
 
 	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme,
 		map[schema.GroupVersionResource]string{
-			{Group: "apiextensions.k8s.io", Version: "v1", Resource: "customresourcedefinitions"}: "CustomResourceDefinitionList",
-			{Group: "example.com", Version: "v1", Resource: "testresources"}:                      "TestResourceList",
+			{Group: apiExtensionsGroup, Version: "v1", Resource: "customresourcedefinitions"}: testCRDListKind,
+			{Group: testExampleGroup, Version: "v1", Resource: testTestResources}:             testResourceListKind,
 		},
 		crd, cr,
 	)
 
 	sink := &consumertest.LogsSink{}
-	config := testConfig([]string{"example.com"}, nil)
+	config := testConfig([]string{testExampleGroup}, nil)
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 	collector := newTestCollector(t, config, sink, client, ft)
 
@@ -274,21 +274,21 @@ func TestCRDCollector_EmitsInitialCRDAndCR(t *testing.T) {
 
 func TestCRDCollector_CRLifecycleEvents(t *testing.T) {
 	scheme := testScheme()
-	registerCRGVR(scheme, "example.com", "v1", "TestResource")
+	registerCRGVR(scheme, testExampleGroup, "v1", "TestResource")
 
-	crd := makeTestCRDUnstructured("testresources.example.com", "example.com", "TestResource", "testresources")
-	crGVR := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "testresources"}
+	crd := makeTestCRDUnstructured("testresources.example.com", testExampleGroup, "TestResource", "testresources")
+	crGVR := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: "testresources"}
 
 	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme,
 		map[schema.GroupVersionResource]string{
-			crdGVR: "CustomResourceDefinitionList",
-			crGVR:  "TestResourceList",
+			crdGVR: testCRDListKind,
+			crGVR:  testResourceListKind,
 		},
 		crd,
 	)
 
 	sink := &consumertest.LogsSink{}
-	config := testConfig([]string{"example.com"}, nil)
+	config := testConfig([]string{testExampleGroup}, nil)
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 	collector := newTestCollector(t, config, sink, client, ft)
 
@@ -342,24 +342,24 @@ func TestCRDCollector_CRLifecycleEvents(t *testing.T) {
 
 func TestCRDCollector_SnapshotEmitsAllResources(t *testing.T) {
 	scheme := testScheme()
-	registerCRGVR(scheme, "example.com", "v1", "TestResource")
+	registerCRGVR(scheme, testExampleGroup, "v1", "TestResource")
 
-	crd := makeTestCRDUnstructured("testresources.example.com", "example.com", "TestResource", "testresources")
-	cr1 := makeTestCR("cr-1", "default", "example.com", "v1", "TestResource")
-	cr2 := makeTestCR("cr-2", "default", "example.com", "v1", "TestResource")
+	crd := makeTestCRDUnstructured("testresources.example.com", testExampleGroup, "TestResource", "testresources")
+	cr1 := makeTestCR("cr-1", "default", testExampleGroup, "v1", "TestResource")
+	cr2 := makeTestCR("cr-2", "default", testExampleGroup, "v1", "TestResource")
 
-	crGVR := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "testresources"}
+	crGVR := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: "testresources"}
 
 	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme,
 		map[schema.GroupVersionResource]string{
-			crdGVR: "CustomResourceDefinitionList",
-			crGVR:  "TestResourceList",
+			crdGVR: testCRDListKind,
+			crGVR:  testResourceListKind,
 		},
 		crd, cr1, cr2,
 	)
 
 	sink := &consumertest.LogsSink{}
-	config := testConfig([]string{"example.com"}, nil)
+	config := testConfig([]string{testExampleGroup}, nil)
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 	collector := newTestCollector(t, config, sink, client, ft)
 
@@ -387,14 +387,14 @@ func TestCRDCollector_SnapshotEmitsAllResources(t *testing.T) {
 // that moment, then checking the number of applies and what each apply contained per cycle.
 func TestCRDCollector_TwoPhaseSaveOrdering(t *testing.T) {
 	scheme := testScheme()
-	registerCRGVR(scheme, "example.com", "v1", "TestResource")
+	registerCRGVR(scheme, testExampleGroup, "v1", "TestResource")
 
-	crd := makeTestCRDUnstructured("testresources.example.com", "example.com", "TestResource", "testresources")
-	crGVR := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "testresources"}
+	crd := makeTestCRDUnstructured("testresources.example.com", testExampleGroup, "TestResource", "testresources")
+	crGVR := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: "testresources"}
 
-	keepCR := makeTestCR("keep", "default", "example.com", "v1", "TestResource")
+	keepCR := makeTestCR("keep", "default", testExampleGroup, "v1", "TestResource")
 	keepCR.SetResourceVersion("1")
-	dropCR := makeTestCR("drop", "default", "example.com", "v1", "TestResource")
+	dropCR := makeTestCR("drop", "default", testExampleGroup, "v1", "TestResource")
 	dropCR.SetResourceVersion("1")
 
 	tests := []struct {
@@ -417,7 +417,7 @@ func TestCRDCollector_TwoPhaseSaveOrdering(t *testing.T) {
 		{
 			name: "only adds: single save with the added CR present",
 			mutate: func(t *testing.T, ctx context.Context, client *dynamicfake.FakeDynamicClient) {
-				newCR := makeTestCR("new", "default", "example.com", "v1", "TestResource")
+				newCR := makeTestCR("new", "default", testExampleGroup, "v1", "TestResource")
 				newCR.SetResourceVersion("1")
 				_, err := client.Resource(crGVR).Namespace("default").Create(ctx, newCR, metav1.CreateOptions{})
 				require.NoError(t, err)
@@ -444,7 +444,7 @@ func TestCRDCollector_TwoPhaseSaveOrdering(t *testing.T) {
 		{
 			name: "mixed: phase-1 save retains to-be-deleted CR; phase-2 save removes it",
 			mutate: func(t *testing.T, ctx context.Context, client *dynamicfake.FakeDynamicClient) {
-				newCR := makeTestCR("new", "default", "example.com", "v1", "TestResource")
+				newCR := makeTestCR("new", "default", testExampleGroup, "v1", "TestResource")
 				newCR.SetResourceVersion("1")
 				_, err := client.Resource(crGVR).Namespace("default").Create(ctx, newCR, metav1.CreateOptions{})
 				require.NoError(t, err)
@@ -471,14 +471,14 @@ func TestCRDCollector_TwoPhaseSaveOrdering(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme,
 				map[schema.GroupVersionResource]string{
-					crdGVR: "CustomResourceDefinitionList",
-					crGVR:  "TestResourceList",
+					crdGVR: testCRDListKind,
+					crGVR:  testResourceListKind,
 				},
 				crd, keepCR.DeepCopy(), dropCR.DeepCopy(),
 			)
 
 			sink := &consumertest.LogsSink{}
-			config := testConfig([]string{"example.com"}, nil)
+			config := testConfig([]string{testExampleGroup}, nil)
 			ft := tracker.NewForbiddenTracker(1 * time.Hour)
 			peerStore := newRecordingPeerStore()
 			collector := newTestCollectorWithPeerStore(t, config, sink, client, ft, peerStore)
@@ -528,7 +528,7 @@ func TestConfig_Simplified(t *testing.T) {
 			SnapshotInterval:  5 * time.Minute,
 			DiscoveryMode:     DiscoveryModeAPIGroups,
 			APIGroupFilters: &APIGroupFilters{
-				Include: []string{"example.com"},
+				Include: []string{testExampleGroup},
 				Exclude: []string{},
 			},
 		}
@@ -613,7 +613,7 @@ func TestConfig_Simplified(t *testing.T) {
 		cfg := &Config{
 			IncrementInterval: 10 * time.Second,
 			SnapshotInterval:  5 * time.Minute,
-			DiscoveryMode:     "invalid",
+			DiscoveryMode:     testInvalid,
 		}
 		err := cfg.Validate()
 		require.Error(t, err)
@@ -638,7 +638,7 @@ func TestConfig_Simplified(t *testing.T) {
 		cfg := &Config{
 			DiscoveryMode: DiscoveryModeAPIGroups,
 			APIGroupFilters: &APIGroupFilters{
-				Include: []string{"*.suse.com", "longhorn.io"},
+				Include: []string{testSuseWildcard, "longhorn.io"},
 				Exclude: []string{"internal.suse.com"},
 			},
 		}

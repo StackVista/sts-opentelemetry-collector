@@ -9,6 +9,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const (
+	testBroker       = "localhost:9092"
+	testTopic        = "test-topic"
+	requiredAcksNone = "none"
+)
+
 func TestConfig_Validation(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -18,59 +24,59 @@ func TestConfig_Validation(t *testing.T) {
 		{
 			name: "valid config",
 			cfg: &stskafkaexporter.Config{
-				Brokers:        []string{"localhost:9092"},
-				Topic:          "test-topic",
+				Brokers:        []string{testBroker},
+				Topic:          testTopic,
 				ReadTimeout:    2 * time.Second,
 				ProduceTimeout: 5 * time.Second,
-				RequiredAcks:   "none",
+				RequiredAcks:   requiredAcksNone,
 			},
 			wantErr: nil,
 		},
 		{
 			name: "missing brokers",
 			cfg: &stskafkaexporter.Config{
-				Topic:          "test-topic",
+				Topic:          testTopic,
 				ReadTimeout:    2 * time.Second,
 				ProduceTimeout: 5 * time.Second,
-				RequiredAcks:   "none",
+				RequiredAcks:   requiredAcksNone,
 			},
 			wantErr: errors.New("at least one kafka broker must be specified"),
 		},
 		{
 			name: "missing topic",
 			cfg: &stskafkaexporter.Config{
-				Brokers:        []string{"localhost:9092"},
+				Brokers:        []string{testBroker},
 				ReadTimeout:    2 * time.Second,
 				ProduceTimeout: 5 * time.Second,
-				RequiredAcks:   "none",
+				RequiredAcks:   requiredAcksNone,
 			},
 			wantErr: errors.New("'topic' must be specified"),
 		},
 		{
 			name: "missing read timeout",
 			cfg: &stskafkaexporter.Config{
-				Brokers:        []string{"localhost:9092"},
-				Topic:          "test-topic",
+				Brokers:        []string{testBroker},
+				Topic:          testTopic,
 				ProduceTimeout: 5 * time.Second,
-				RequiredAcks:   "none",
+				RequiredAcks:   requiredAcksNone,
 			},
 			wantErr: errors.New("'read_timeout' must be greater than 0"),
 		},
 		{
 			name: "missing produce timeout",
 			cfg: &stskafkaexporter.Config{
-				Brokers:      []string{"localhost:9092"},
-				Topic:        "test-topic",
+				Brokers:      []string{testBroker},
+				Topic:        testTopic,
 				ReadTimeout:  2 * time.Second,
-				RequiredAcks: "none",
+				RequiredAcks: requiredAcksNone,
 			},
 			wantErr: errors.New("'produce_timeout' must be greater than 0"),
 		},
 		{
 			name: "missing required acks",
 			cfg: &stskafkaexporter.Config{
-				Brokers:        []string{"localhost:9092"},
-				Topic:          "test-topic",
+				Brokers:        []string{testBroker},
+				Topic:          testTopic,
 				ReadTimeout:    2 * time.Second,
 				ProduceTimeout: 5 * time.Second,
 			},
@@ -79,8 +85,8 @@ func TestConfig_Validation(t *testing.T) {
 		{
 			name: "invalid required acks",
 			cfg: &stskafkaexporter.Config{
-				Brokers:        []string{"localhost:9092"},
-				Topic:          "test-topic",
+				Brokers:        []string{testBroker},
+				Topic:          testTopic,
 				ReadTimeout:    2 * time.Second,
 				ProduceTimeout: 5 * time.Second,
 				RequiredAcks:   "foo",

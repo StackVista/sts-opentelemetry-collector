@@ -15,7 +15,7 @@ linters:
     - goconst
     - gocritic
     - gomoddirectives
-    - gomodguard
+    - gomodguard_v2
     - gosec
     - importas
     - lll
@@ -41,6 +41,15 @@ linters:
       - linters:
           - lll
         path: _test\.go
+      - linters:
+          - goconst
+        path: ^connector/topologyconnector/.*_test\.go$
+      - linters:
+          - goconst
+        path: ^receiver/k8scrdreceiver/.*_test\.go$
+      - linters:
+          - goconst
+        path: ^test/e2e/.*_test\.go$
     paths:
       - third_party$
       - builtin$

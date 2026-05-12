@@ -32,7 +32,7 @@ func TestGetStorageVersion(t *testing.T) {
 			crd: &apiextensionsv1.CustomResourceDefinition{
 				Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 					Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
-						{Name: "v1alpha1", Storage: false},
+						{Name: testV1Alpha1, Storage: false},
 						{Name: "v1beta1", Storage: false},
 						{Name: "v1", Storage: true},
 					},
@@ -81,23 +81,23 @@ func TestConvertUnstructuredToCRD(t *testing.T) {
 			name: "valid CRD object",
 			input: &unstructured.Unstructured{
 				Object: map[string]interface{}{
-					"apiVersion": "apiextensions.k8s.io/v1",
-					"kind":       "CustomResourceDefinition",
-					"metadata": map[string]interface{}{
-						"name": "policiesservers.policies.kubewarden.io",
+					testAPIVersionKey: apiExtensionsGroup + "/v1",
+					testKindKey:       testCRDKind,
+					testMetadataKey: map[string]interface{}{
+						testNameKey: "policiesservers.policies.kubewarden.io",
 					},
-					"spec": map[string]interface{}{
-						"group": "policies.kubewarden.io",
+					testSpecKey: map[string]interface{}{
+						testGroupKey: testPoliciesKubewarden,
 						"names": map[string]interface{}{
-							"kind":   "PolicyServer",
-							"plural": "policyservers",
+							testKindKey: "PolicyServer",
+							"plural":    "policyservers",
 						},
 						"scope": "Namespaced",
 						"versions": []interface{}{
 							map[string]interface{}{
-								"name":    "v1",
-								"storage": true,
-								"served":  true,
+								testNameKey: "v1",
+								"storage":   true,
+								"served":    true,
 							},
 						},
 					},
@@ -109,7 +109,7 @@ func TestConvertUnstructuredToCRD(t *testing.T) {
 			name: "invalid JSON structure",
 			input: &unstructured.Unstructured{
 				Object: map[string]interface{}{
-					"invalid": make(chan int), // Cannot be marshaled to JSON
+					testInvalid: make(chan int), // Cannot be marshaled to JSON
 				},
 			},
 			wantErr: true,
