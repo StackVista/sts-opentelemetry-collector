@@ -9,6 +9,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const (
+	testFilePath = "/some/path"
+	testBroker   = "localhost:9092"
+	testTopic    = "test-topic"
+)
+
 func TestConfig_Validate(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -17,12 +23,12 @@ func TestConfig_Validate(t *testing.T) {
 	}{
 		{
 			name:    "Valid File Config",
-			cfg:     &config.Config{File: &config.FileSettingsProviderConfig{Path: "/some/path"}},
+			cfg:     &config.Config{File: &config.FileSettingsProviderConfig{Path: testFilePath}},
 			wantErr: nil,
 		},
 		{
 			name:    "Valid Kafka Config",
-			cfg:     &config.Config{Kafka: &config.KafkaSettingsProviderConfig{Brokers: []string{"localhost:9092"}, Topic: "test-topic"}},
+			cfg:     &config.Config{Kafka: &config.KafkaSettingsProviderConfig{Brokers: []string{testBroker}, Topic: testTopic}},
 			wantErr: nil,
 		},
 		{
@@ -32,7 +38,7 @@ func TestConfig_Validate(t *testing.T) {
 		},
 		{
 			name:    "Both Configs Specified",
-			cfg:     &config.Config{File: &config.FileSettingsProviderConfig{Path: "/some/path"}, Kafka: &config.KafkaSettingsProviderConfig{Brokers: []string{"localhost:9092"}, Topic: "test-topic"}},
+			cfg:     &config.Config{File: &config.FileSettingsProviderConfig{Path: testFilePath}, Kafka: &config.KafkaSettingsProviderConfig{Brokers: []string{testBroker}, Topic: testTopic}},
 			wantErr: errors.New("cannot specify both 'file' and 'kafka' configuration"),
 		},
 		{
@@ -42,22 +48,22 @@ func TestConfig_Validate(t *testing.T) {
 		},
 		{
 			name:    "Kafka Config Missing Brokers",
-			cfg:     &config.Config{Kafka: &config.KafkaSettingsProviderConfig{Topic: "test-topic"}},
+			cfg:     &config.Config{Kafka: &config.KafkaSettingsProviderConfig{Topic: testTopic}},
 			wantErr: errors.New("at least one kafka broker must be specified"),
 		},
 		{
 			name:    "Kafka Config Missing Topic",
-			cfg:     &config.Config{Kafka: &config.KafkaSettingsProviderConfig{Brokers: []string{"localhost:9092"}}},
+			cfg:     &config.Config{Kafka: &config.KafkaSettingsProviderConfig{Brokers: []string{testBroker}}},
 			wantErr: errors.New("'topic' must be specified when using kafka source"),
 		},
 		{
 			name:    "File Config with Zero UpdateInterval (should be defaulted)",
-			cfg:     &config.Config{File: &config.FileSettingsProviderConfig{Path: "/some/path", UpdateInterval: 0}},
+			cfg:     &config.Config{File: &config.FileSettingsProviderConfig{Path: testFilePath, UpdateInterval: 0}},
 			wantErr: nil,
 		},
 		{
 			name:    "Kafka Config with Zero BufferSize (should be defaulted)",
-			cfg:     &config.Config{Kafka: &config.KafkaSettingsProviderConfig{Brokers: []string{"localhost:9092"}, Topic: "test-topic", BufferSize: 0}},
+			cfg:     &config.Config{Kafka: &config.KafkaSettingsProviderConfig{Brokers: []string{testBroker}, Topic: testTopic, BufferSize: 0}},
 			wantErr: nil,
 		},
 	}

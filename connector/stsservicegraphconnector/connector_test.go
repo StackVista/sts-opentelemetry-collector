@@ -31,6 +31,12 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
+const (
+	someAttribute        = "some-attribute"
+	nonExistingAttribute = "non-existing-attribute"
+	mockExporterName     = "mock"
+)
+
 func TestConnectorStart(t *testing.T) {
 	// Create servicegraph connector
 	factory := servicegraphconnector.NewFactory()
@@ -72,7 +78,7 @@ func TestConnectorShutdown(t *testing.T) {
 func TestConnectorConsume(t *testing.T) {
 	// Prepare
 	cfg := &servicegraphconnector.Config{
-		Dimensions: []string{"some-attribute", "non-existing-attribute"},
+		Dimensions: []string{someAttribute, nonExistingAttribute},
 		Store:      servicegraphconnector.StoreConfig{MaxItems: 10},
 	}
 
@@ -201,7 +207,7 @@ func buildSampleTrace(t *testing.T, attrValue string) ptrace.Traces {
 	clientSpan.SetKind(ptrace.SpanKindClient)
 	clientSpan.SetStartTimestamp(pcommon.NewTimestampFromTime(tStart))
 	clientSpan.SetEndTimestamp(pcommon.NewTimestampFromTime(tEnd))
-	clientSpan.Attributes().PutStr("some-attribute", attrValue) // Attribute selected as dimension for metrics
+	clientSpan.Attributes().PutStr(someAttribute, attrValue) // Attribute selected as dimension for metrics
 
 	serverSpan := scopeSpans.Spans().AppendEmpty()
 	serverSpan.SetName("server span")
@@ -274,8 +280,8 @@ func TestCorrectForExpiredEdges(t *testing.T) {
 
 	// Prepare
 	cfg := &servicegraphconnector.Config{
-		MetricsExporter: "mock",
-		Dimensions:      []string{"some-attribute", "non-existing-attribute"},
+		MetricsExporter: mockExporterName,
+		Dimensions:      []string{someAttribute, nonExistingAttribute},
 		Store: servicegraphconnector.StoreConfig{
 			MaxItems: testSize,
 			TTL:      time.Millisecond,
@@ -345,8 +351,8 @@ func TestCorrectForExpiredEdges(t *testing.T) {
 func TestStaleSeriesCleanup(t *testing.T) {
 	// Prepare
 	cfg := &servicegraphconnector.Config{
-		MetricsExporter: "mock",
-		Dimensions:      []string{"some-attribute", "non-existing-attribute"},
+		MetricsExporter: mockExporterName,
+		Dimensions:      []string{someAttribute, nonExistingAttribute},
 		Store: servicegraphconnector.StoreConfig{
 			MaxItems: 10,
 			TTL:      time.Second,
@@ -383,8 +389,8 @@ func TestStaleSeriesCleanup(t *testing.T) {
 func TestMapsAreConsistentDuringCleanup(t *testing.T) {
 	// Prepare
 	cfg := &servicegraphconnector.Config{
-		MetricsExporter: "mock",
-		Dimensions:      []string{"some-attribute", "non-existing-attribute"},
+		MetricsExporter: mockExporterName,
+		Dimensions:      []string{someAttribute, nonExistingAttribute},
 		Store: servicegraphconnector.StoreConfig{
 			MaxItems: 10,
 			TTL:      time.Second,
@@ -448,8 +454,8 @@ func setupTelemetry(reader *sdkmetric.ManualReader) component.TelemetrySettings 
 
 func TestValidateOwnTelemetry(t *testing.T) {
 	cfg := &servicegraphconnector.Config{
-		MetricsExporter: "mock",
-		Dimensions:      []string{"some-attribute", "non-existing-attribute"},
+		MetricsExporter: mockExporterName,
+		Dimensions:      []string{someAttribute, nonExistingAttribute},
 		Store: servicegraphconnector.StoreConfig{
 			MaxItems: 10,
 			TTL:      time.Second,

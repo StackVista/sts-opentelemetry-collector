@@ -23,7 +23,14 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter/internal/metadata"
 )
 
-const defaultEndpoint = "clickhouse://127.0.0.1:9000"
+const (
+	defaultEndpoint = "clickhouse://127.0.0.1:9000"
+	testUsername    = "foo"
+	testPassword    = "bar"
+	testDatabase    = "otel"
+	testCredsDSN    = "clickhouse://" + testUsername + ":" + testPassword + "@127.0.0.1:9000/otel"
+	testDSNWithAuth = "clickhouse://" + testUsername + ":" + testPassword + "@127.0.0.1:9000/otel"
+)
 
 func TestLoadConfig(t *testing.T) {
 	t.Parallel()
@@ -50,9 +57,9 @@ func TestLoadConfig(t *testing.T) {
 			id: component.NewIDWithName(metadata.Type, "full"),
 			expected: &clickhousestsexporter.Config{
 				Endpoint:           defaultEndpoint,
-				Database:           "otel",
-				Username:           "foo",
-				Password:           "bar",
+				Database:           testDatabase,
+				Username:           testUsername,
+				Password:           testPassword,
 				TTL:                72 * time.Hour,
 				LogsTableName:      "otel_logs",
 				TracesTableName:    "otel_traces",
@@ -160,24 +167,24 @@ func TestConfig_buildDSN(t *testing.T) {
 			name: "prefers database name from config over from DSN",
 			fields: fields{
 				Endpoint: defaultEndpoint,
-				Username: "foo",
-				Password: "bar",
-				Database: "otel",
+				Username: testUsername,
+				Password: testPassword,
+				Database: testDatabase,
 			},
 			args: args{
-				database: "otel",
+				database: testDatabase,
 			},
 			wantChOptions: ChOptions{
 				Secure: false,
 			},
-			want: "clickhouse://foo:bar@127.0.0.1:9000/otel",
+			want: testCredsDSN,
 		},
 		{
 			name: "use database name from DSN if not set in config",
 			fields: fields{
-				Endpoint: "clickhouse://foo:bar@127.0.0.1:9000/otel",
-				Username: "foo",
-				Password: "bar",
+				Endpoint: testDSNWithAuth,
+				Username: testUsername,
+				Password: testPassword,
 				Database: "",
 			},
 			args: args{
@@ -186,7 +193,7 @@ func TestConfig_buildDSN(t *testing.T) {
 			wantChOptions: ChOptions{
 				Secure: false,
 			},
-			want: "clickhouse://foo:bar@127.0.0.1:9000/otel",
+			want: testDSNWithAuth,
 		},
 		{
 			name: "invalid config",

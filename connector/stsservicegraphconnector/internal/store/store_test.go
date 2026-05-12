@@ -5,6 +5,7 @@ package store_test
 
 import (
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"math"
 	"math/big"
@@ -120,8 +121,10 @@ func TestStoreExpire(t *testing.T) {
 
 	keys := map[store.Key]struct{}{}
 	for i := 0; i < testSize; i++ {
+		traceID := [16]byte{}
+		binary.BigEndian.PutUint32(traceID[:4], uint32(i))
 		keys[store.NewKey(
-			pcommon.TraceID([16]byte{byte(i >> 24), byte(i >> 16), byte(i >> 8), byte(i)}),
+			pcommon.TraceID(traceID),
 			pcommon.SpanID([8]byte{1, 2, 3}),
 		)] = struct{}{}
 	}

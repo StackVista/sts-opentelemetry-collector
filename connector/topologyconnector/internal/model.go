@@ -5,6 +5,13 @@ import (
 	"fmt"
 )
 
+const (
+	mapKeyAttributes = "attributes"
+	mapKeyBody       = "body"
+	mapKeyName       = "name"
+	mapKeyKind       = "kind"
+)
+
 // -----------------------------
 // Intermediate OTel model types used to cache relevant data for expressions at various levels.
 // -----------------------------
@@ -28,7 +35,7 @@ func NewResource(attrs map[string]any) *Resource {
 	stripSensitiveAttributes(attrs)
 	return &Resource{
 		cachedMap: map[string]any{
-			"attributes": attrs,
+			mapKeyAttributes: attrs,
 		},
 	}
 }
@@ -47,9 +54,9 @@ type Scope struct {
 func NewScope(name, version string, attrs map[string]any) *Scope {
 	return &Scope{
 		cachedMap: map[string]any{
-			"name":       name,
-			"version":    version,
-			"attributes": attrs,
+			mapKeyName:       name,
+			"version":        version,
+			mapKeyAttributes: attrs,
 		},
 	}
 }
@@ -69,11 +76,11 @@ func NewSpan(name, kind, statusCode, statusMessage string, attrs map[string]any)
 	stripSensitiveAttributes(attrs)
 	return &Span{
 		cachedMap: map[string]any{
-			"name":          name,
-			"kind":          kind,
-			"statusCode":    statusCode,
-			"statusMessage": statusMessage,
-			"attributes":    attrs,
+			mapKeyName:       name,
+			mapKeyKind:       kind,
+			"statusCode":     statusCode,
+			"statusMessage":  statusMessage,
+			mapKeyAttributes: attrs,
 		},
 	}
 }
@@ -89,7 +96,7 @@ type Metric struct {
 func NewMetric(name, description, unit string) *Metric {
 	return &Metric{
 		cachedMap: map[string]any{
-			"name":        name,
+			mapKeyName:    name,
 			"description": description,
 			"unit":        unit,
 		},
@@ -108,7 +115,7 @@ func NewDatapoint(attrs map[string]any) *Datapoint {
 	stripSensitiveAttributes(attrs)
 	return &Datapoint{
 		cachedMap: map[string]any{
-			"attributes": attrs,
+			mapKeyAttributes: attrs,
 		},
 	}
 }
@@ -152,9 +159,9 @@ func NewLog(
 
 	return &Log{
 		cachedMap: map[string]any{
-			"eventName":  name,
-			"body":       processedBody,
-			"attributes": attrs,
+			"eventName":      name,
+			mapKeyBody:       processedBody,
+			mapKeyAttributes: attrs,
 		},
 	}
 }

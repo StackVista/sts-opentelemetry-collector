@@ -37,12 +37,13 @@ type KafkaExporter struct {
 
 func NewKafkaExporter(cfg Config, set exporter.Settings) (*KafkaExporter, error) {
 	clientID := fmt.Sprintf("stskafkaexporter-%s", uuid.New().String())
-	opts := []kgo.Opt{
+	opts := make([]kgo.Opt, 0, 4+len(requiredAcksFromConfig(cfg.RequiredAcks)))
+	opts = append(opts,
 		kgo.SeedBrokers(cfg.Brokers...),
 		kgo.ClientID(clientID),
 		kgo.ProducerBatchCompression(kgo.SnappyCompression()),
-		kgo.ProducerLinger(10 * time.Millisecond),
-	}
+		kgo.ProducerLinger(10*time.Millisecond),
+	)
 	opts = append(opts, requiredAcksFromConfig(cfg.RequiredAcks)...)
 
 	set.Logger.Info("Creating Kafka exporter", zap.String("clientID", clientID))

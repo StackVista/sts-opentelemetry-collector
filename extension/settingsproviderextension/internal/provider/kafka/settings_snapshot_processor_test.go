@@ -16,6 +16,11 @@ import (
 	stsSettingsModel "github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 )
 
+const (
+	testSnapshotID  = "snap-1"
+	testSettingType = "foo"
+)
+
 type mockSettingsCache struct {
 	mock.Mock
 }
@@ -48,7 +53,7 @@ func TestHandleSnapshotStart_AddsNewSnapshot(t *testing.T) {
 	p, _ := newProcessorWithMockCache(t)
 
 	start := stsSettingsModel.SettingsSnapshotStart{
-		Id:          "snap-1",
+		Id:          testSnapshotID,
 		SettingType: "testType",
 		Type:        "SettingsSnapshotStart", // explicitly set the discriminator
 	}
@@ -59,7 +64,7 @@ func TestHandleSnapshotStart_AddsNewSnapshot(t *testing.T) {
 
 	snap, ok := p.InProgressSnapshots["testType"]
 	assert.True(t, ok)
-	assert.Equal(t, "snap-1", snap.snapshotID)
+	assert.Equal(t, testSnapshotID, snap.snapshotID)
 	assert.Empty(t, snap.settings)
 }
 
@@ -91,14 +96,14 @@ func TestHandleSettingsEnvelope_AppendsSetting(t *testing.T) {
 	p, _ := newProcessorWithMockCache(t)
 
 	// Seed snapshot
-	p.InProgressSnapshots["foo"] = &InProgressSnapshot{
-		snapshotID: "snap-1",
+	p.InProgressSnapshots[testSettingType] = &InProgressSnapshot{
+		snapshotID: testSnapshotID,
 		settings:   []stsSettingsModel.Setting{},
 	}
 
 	env := stsSettingsModel.SettingsEnvelope{
-		Id:      "snap-1",
-		Setting: stsSettingsModel.Setting{Type: "foo"},
+		Id:      testSnapshotID,
+		Setting: stsSettingsModel.Setting{Type: testSettingType},
 		Type:    "SettingsEnvelope", // explicitly set the discriminator
 	}
 
@@ -108,9 +113,9 @@ func TestHandleSettingsEnvelope_AppendsSetting(t *testing.T) {
 	err = p.ProcessSettingsProtocol(&settingsProtocol)
 	assert.NoError(t, err)
 
-	snap := p.InProgressSnapshots["foo"]
+	snap := p.InProgressSnapshots[testSettingType]
 	assert.Len(t, snap.settings, 1)
-	assert.Equal(t, "foo", snap.settings[0].Type)
+	assert.Equal(t, testSettingType, snap.settings[0].Type)
 }
 
 func TestHandleSettingsEnvelope_OrphanEnvelope(t *testing.T) {
@@ -118,7 +123,7 @@ func TestHandleSettingsEnvelope_OrphanEnvelope(t *testing.T) {
 
 	env := stsSettingsModel.SettingsEnvelope{
 		Id:      "unknown-snap",
-		Setting: stsSettingsModel.Setting{Type: "foo"},
+		Setting: stsSettingsModel.Setting{Type: testSettingType},
 		Type:    "SettingsEnvelope", // explicitly set the discriminator
 	}
 
@@ -129,7 +134,7 @@ func TestHandleSettingsEnvelope_OrphanEnvelope(t *testing.T) {
 	assert.NoError(t, err)
 
 	// orphan envelopes are ignored
-	_, exists := p.InProgressSnapshots["foo"]
+	_, exists := p.InProgressSnapshots[testSettingType]
 	assert.False(t, exists)
 }
 
@@ -137,16 +142,16 @@ func TestHandleSnapshotStop_UpdatesCache(t *testing.T) {
 	p, cache := newProcessorWithMockCache(t)
 
 	// Seed snapshot
-	p.InProgressSnapshots["foo"] = &InProgressSnapshot{
-		snapshotID:  "snap-1",
-		settingType: "foo",
+	p.InProgressSnapshots[testSettingType] = &InProgressSnapshot{
+		snapshotID:  testSnapshotID,
+		settingType: testSettingType,
 		settings: []stsSettingsModel.Setting{
-			{Type: "foo"},
+			{Type: testSettingType},
 		},
 	}
 
-	stop := stsSettingsModel.SettingsSnapshotStop{Id: "snap-1", Type: "SettingsSnapshotStop"}
-	cache.On("UpdateSettingsForType", stsSettingsModel.SettingType("foo"), mock.Anything).Once()
+	stop := stsSettingsModel.SettingsSnapshotStop{Id: testSnapshotID, Type: "SettingsSnapshotStop"}
+	cache.On("UpdateSettingsForType", stsSettingsModel.SettingType(testSettingType), mock.Anything).Once()
 
 	settingsProtocol := stsSettingsModel.SettingsProtocol{}
 	err := settingsProtocol.FromSettingsSnapshotStop(stop)
@@ -157,7 +162,7 @@ func TestHandleSnapshotStop_UpdatesCache(t *testing.T) {
 	cache.AssertExpectations(t)
 
 	// should be removed from the in progress snapshot cache
-	_, exists := p.InProgressSnapshots["foo"]
+	_, exists := p.InProgressSnapshots[testSettingType]
 	assert.False(t, exists)
 }
 

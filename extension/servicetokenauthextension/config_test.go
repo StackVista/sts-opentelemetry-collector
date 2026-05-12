@@ -35,35 +35,35 @@ func TestLoadConfig(t *testing.T) {
 			id: component.NewIDWithName(servicetokenauthextension.Type, "missing_cache"),
 			expected: &servicetokenauthextension.Config{
 				Endpoint: &servicetokenauthextension.EndpointSettings{
-					URL: "http://localhost:8091/authorize",
+					URL: defaultAuthURL,
 				},
 				Cache: &servicetokenauthextension.CacheSettings{
 					ValidSize:   100,
 					ValidTTL:    5 * time.Minute,
 					InvalidSize: 100,
 				},
-				Schema: "StackState",
+				Schema: stackStateSchema,
 			},
 		},
 		{
 			id: component.NewIDWithName(servicetokenauthextension.Type, "empty_cache"),
 			expected: &servicetokenauthextension.Config{
 				Endpoint: &servicetokenauthextension.EndpointSettings{
-					URL: "http://localhost:8091/authorize",
+					URL: defaultAuthURL,
 				},
 				Cache: &servicetokenauthextension.CacheSettings{
 					ValidSize:   100,
 					ValidTTL:    5 * time.Minute,
 					InvalidSize: 100,
 				},
-				Schema: "StackState",
+				Schema: stackStateSchema,
 			},
 		},
 		{
 			id: component.NewIDWithName(servicetokenauthextension.Type, "valid"),
 			expected: &servicetokenauthextension.Config{
 				Endpoint: &servicetokenauthextension.EndpointSettings{
-					URL: "http://localhost:8091/authorize",
+					URL: defaultAuthURL,
 				},
 				Cache: &servicetokenauthextension.CacheSettings{
 					ValidSize:   10,

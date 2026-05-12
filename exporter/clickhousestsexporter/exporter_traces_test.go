@@ -45,7 +45,7 @@ func TestExporter_pushTracesData(t *testing.T) {
 	t.Run("check insert resources with service name and attributes", func(t *testing.T) {
 		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
 			if strings.HasPrefix(query, "INSERT") && strings.Contains(query, "otel_resources") {
-				require.Equal(t, map[string]string{"service.name": "test-service"}, values[2])
+				require.Equal(t, map[string]string{testServiceNameAttr: "test-service"}, values[2])
 			}
 			return nil
 		})
@@ -99,7 +99,7 @@ func simpleTraces(count int) ptrace.Traces {
 	rs := traces.ResourceSpans().AppendEmpty()
 	rs.SetSchemaUrl("https://opentelemetry.io/schemas/1.4.0")
 	rs.Resource().SetDroppedAttributesCount(10)
-	rs.Resource().Attributes().PutStr("service.name", "test-service")
+	rs.Resource().Attributes().PutStr(testServiceNameAttr, "test-service")
 	ss := rs.ScopeSpans().AppendEmpty()
 	ss.Scope().SetName("io.opentelemetry.contrib.clickhouse")
 	ss.Scope().SetVersion("1.0.0")
