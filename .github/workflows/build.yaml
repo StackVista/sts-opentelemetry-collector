@@ -13,33 +13,32 @@ env:
   IMAGE_NAME: stackstate/sts-opentelemetry-collector
   GO_VERSION: 1.25.8
   GOLANGCI_LINT_VERSION: v2.4
-  TRIVY_IMAGE: ${{ vars.TRIVY_IMAGE }}
+
+# NOTE: three occurrences of REPLACE_WITH_MERGE_SHA below — pin all to the
+# merge SHA of the StackVista/scan-pipeline PR introducing promote-image.yml
+# (STAC-24747) before this lands. Keep `uses: ...@<SHA>` on the scan/promote
+# jobs and `scan_pipeline_ref` input in lockstep.
 
 jobs:
   build:
-    name: Docker image build, Trivy secret/vulnerability scan, and publish
+    name: Build & push to scan tag
     runs-on: ubuntu-latest
-    # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
     permissions:
-        contents: read
-        packages: write
+      contents: read
+      packages: write
     outputs:
-      image: ${{ steps.meta.outputs.tags }}
-      digest: ${{ steps.publish.outputs.digest }}
+      scan-tag: ${{ steps.tags.outputs.scan-tag }}
+      release-tags: ${{ steps.meta.outputs.tags }}
+      digest: ${{ steps.push.outputs.digest }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          labels: |
-            org.opencontainers.image.source=https://github.com/${{github.repository_owner}}/${{ github.repository }}
+
       - name: Install protoc # TODO create a docker image with protoc installed
         run: |
           sudo apt-get install -y protobuf-compiler
           go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.8
+
       - name: Generate go model
         env:
           GITLAB_READ_TOKEN: ${{ secrets.GITLAB_READ_TOKEN }}
@@ -47,30 +46,91 @@ jobs:
           ./connector/topologyconnector/scripts/generate_protobuf_model.sh
           ./extension/settingsproviderextension/scripts/generate_openapi_model.sh
           ./scripts/check_no_changes.sh
+
+      - name: Compute transient scan tag
+        id: tags
+        env:
+          REG: ${{ env.REGISTRY }}
+          IMG: ${{ env.IMAGE_NAME }}
+        run: |
+          short_sha="${GITHUB_SHA:0:8}"
+          echo "scan-tag=${REG}/${IMG}:scan-${short_sha}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+
+      - name: Docker meta (release tags + labels)
+        # Only the labels are applied to the build below. Tags are forwarded
+        # to the promote job, which anchors them to the digest on a passing
+        # scan + main/v* push.
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{github.repository_owner}}/${{ github.repository }}
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and Trivy secret/vulnerability scan amd64 image locally
-        env:
-          IMAGE_LABELS: ${{ steps.meta.outputs.labels }}
-          TRIVY_IMAGE: ${{ env.TRIVY_IMAGE }}
-        run: scripts/build-and-scan-image.sh
-
-      - name: Login to the container registry after scan
+      - name: Log in to Quay
         uses: docker/login-action@v3
         with:
-          registry: quay.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ secrets.QUAY_USER }}
           password: ${{ secrets.QUAY_PASSWORD }}
 
-      - name: Publish scanned image
-        id: publish
-        env:
-          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
-          IMAGE_LABELS: ${{ steps.meta.outputs.labels }}
-        run: scripts/publish-scanned-image.sh
+      - name: Build & push multi-arch to scan tag
+        # Single multi-arch push, replacing today's "build amd64 locally,
+        # scan, then rebuild amd64+arm64 for publish" flow. Both platforms
+        # are now part of the manifest list that gets scanned, so arm64 no
+        # longer ships unscanned.
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.scan-tag }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          sbom: false
+
+  scan:
+    name: Scan
+    needs: build
+    permissions:
+      contents: read
+      security-events: write
+    # See SCAN_PIPELINE_REF anchor at top of file — keep this and
+    # scan_pipeline_ref below in lockstep with the merge SHA.
+    uses: StackVista/scan-pipeline/.github/workflows/scan-image.yml@REPLACE_WITH_MERGE_SHA
+    with:
+      image: ${{ needs.build.outputs.scan-tag }}
+      # Stays `inform` until the consumer-repo exception migration lands.
+      # Flip to `gate` then so a failing scan blocks `promote` below.
+      mode: inform
+      sarif-category: sts-opentelemetry-collector
+      scan_pipeline_app_client_id: ${{ vars.SCAN_PIPELINE_GH_APP_CLIENT_ID }}
+      scan_pipeline_ref: REPLACE_WITH_MERGE_SHA
+    secrets:
+      scan_pipeline_app_private_key: ${{ secrets.SCAN_PIPELINE_GH_APP_PRIVATE_KEY }}
+
+  promote:
+    name: Promote
+    needs: [build, scan]
+    # Only anchor release tags on a passing scan, and only for main or v*
+    # pushes. Branch/PR builds keep just the (expiring) scan tag.
+    if: >-
+      needs.scan.outputs.decision == 'passed' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    uses: StackVista/scan-pipeline/.github/workflows/promote-image.yml@REPLACE_WITH_MERGE_SHA
+    with:
+      source-image: ${{ needs.build.outputs.scan-tag }}
+      target-tags: ${{ needs.build.outputs.release-tags }}
+    secrets:
+      registry-username: ${{ secrets.QUAY_USER }}
+      registry-password: ${{ secrets.QUAY_PASSWORD }}
 
   detect-modules:
     runs-on: ubuntu-latest
@@ -125,6 +185,7 @@ jobs:
           go test ./extension/settingsproviderextension/...
           go test ./connector/stsservicegraphconnector/...
           go test ./connector/topologyconnector/...
+
   integration-test:
     runs-on: ubuntu-latest
     steps:
@@ -140,6 +201,7 @@ jobs:
         run: |
           (cd exporter/stskafkaexporter/integration && GOWORK=off go test -tags=integration ./...)
           (cd extension/settingsproviderextension/integration && GOWORK=off go test -tags=integration ./...)
+
   e2e-test:
     needs: build
     runs-on: ubuntu-latest
@@ -152,13 +214,7 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
       - name: Set up Docker
         uses: docker/setup-buildx-action@v3
-      # The metadata-action produces multi-line tags when a git tag is pushed.
-      # Example: "quay.io/stackstate/sts-opentelemetry-collector:v0.0.24\nquay.io/stackstate/sts-opentelemetry-collector:latest"
-      # Extract only the first tag so OTEL_COLLECTOR_IMAGE gets a clean value.
-      - name: Select first image tag
-        id: select_tag
-        run: echo "tag=$(echo '${{ needs.build.outputs.image }}' | head -n 1)" >> "$GITHUB_OUTPUT"
       - name: Run E2E tests
         env:
-          OTEL_COLLECTOR_IMAGE: ${{ steps.select_tag.outputs.tag }}@${{ needs.build.outputs.digest }}
+          OTEL_COLLECTOR_IMAGE: ${{ needs.build.outputs.scan-tag }}@${{ needs.build.outputs.digest }}
         run: go test -v ./test/e2e/...
