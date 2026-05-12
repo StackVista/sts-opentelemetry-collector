@@ -13,6 +13,10 @@ require (
 	go.opentelemetry.io/otel v1.43.0
 	go.opentelemetry.io/otel/metric v1.43.0
 	go.uber.org/zap v1.28.0
+	// Keep the Kubernetes dependency set aligned with
+	// github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor v0.152.0.
+	// Bumping k8s.io/* beyond v0.35.4 pulls in client-go API changes that make the
+	// collector distribution fail to compile.
 	k8s.io/apiextensions-apiserver v0.35.4
 	k8s.io/apimachinery v0.35.4
 	k8s.io/client-go v0.35.4
