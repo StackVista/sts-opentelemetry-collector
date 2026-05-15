@@ -13,33 +13,42 @@ env:
   IMAGE_NAME: stackstate/sts-opentelemetry-collector
   GO_VERSION: 1.26.3
   GOLANGCI_LINT_VERSION: v2.12.2
-  TRIVY_IMAGE: ${{ vars.TRIVY_IMAGE }}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
-    name: Docker image build, Trivy secret/vulnerability scan, and publish
+    name: Build (${{ matrix.platform }})
     runs-on: ubuntu-latest
-    # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
     permissions:
-        contents: read
-        packages: write
-    outputs:
-      image: ${{ steps.meta.outputs.tags }}
-      digest: ${{ steps.publish.outputs.digest }}
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: linux-amd64
+            platform: linux/amd64
+          - arch: linux-arm64
+            platform: linux/arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Docker meta
+
+      - name: Docker meta (labels only)
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{github.repository_owner}}/${{ github.repository }}
+
       - name: Install protoc # TODO create a docker image with protoc installed
         run: |
           sudo apt-get install -y protobuf-compiler
           go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.8
+
       - name: Generate go model
         env:
           GITLAB_READ_TOKEN: ${{ secrets.GITLAB_READ_TOKEN }}
@@ -47,30 +56,159 @@ jobs:
           ./connector/topologyconnector/scripts/generate_protobuf_model.sh
           ./extension/settingsproviderextension/scripts/generate_openapi_model.sh
           ./scripts/check_no_changes.sh
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and Trivy secret/vulnerability scan amd64 image locally
-        env:
-          IMAGE_LABELS: ${{ steps.meta.outputs.labels }}
-          TRIVY_IMAGE: ${{ env.TRIVY_IMAGE }}
-        run: scripts/build-and-scan-image.sh
+      - name: Build ${{ matrix.platform }} to local docker tarball
+        # Per-arch single-platform build, output as a docker-format tarball
+        # (not pushed). The tarball is uploaded as an artifact so scan, e2e,
+        # and publish can each `docker load` it without the registry seeing
+        # bytes that have not yet passed scan.
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          outputs: type=docker,dest=/tmp/image.tar
+          tags: sts-opentelemetry-collector:build
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          sbom: false
 
-      - name: Login to the container registry after scan
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-${{ matrix.arch }}
+          path: /tmp/image.tar
+          retention-days: 1
+
+  scan:
+    name: Scan (${{ matrix.arch }})
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # for SARIF upload from inside the action
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [linux-amd64, linux-arm64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: image-${{ matrix.arch }}
+          path: /tmp
+
+      - name: Load image into local docker daemon
+        run: |
+          set -euo pipefail
+          loaded=$(docker load -i /tmp/image.tar | awk -F': ' '/Loaded image/ {print $NF}')
+          echo "Loaded $loaded"
+          docker tag "$loaded" scan-target:${{ matrix.arch }}
+
+      - name: Run scan-pipeline
+        # Pinned to the merge SHA of StackVista/scan-pipeline#22 ("ci: add
+        # github action") which introduced action.yml. syft and trivy
+        # auto-detect local docker daemon images, so handing them
+        # `scan-target:<arch>` (a single-platform image we just loaded)
+        # avoids the manifest-list platform-default trap that would
+        # silently scan only linux/amd64.
+        uses: StackVista/scan-pipeline@8c809403e921491c7c34989439b1d2296074909e
+        with:
+          image: scan-target:${{ matrix.arch }}
+          mode: gate
+          sarif-category: sts-opentelemetry-collector-${{ matrix.arch }}
+
+  publish:
+    name: Publish release tags
+    needs: [build, scan]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Quay
         uses: docker/login-action@v3
         with:
-          registry: quay.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ secrets.QUAY_USER }}
           password: ${{ secrets.QUAY_PASSWORD }}
 
-      - name: Publish scanned image
-        id: publish
+      - name: Compute scan-handle tag base
+        id: scan_base
         env:
-          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
-          IMAGE_LABELS: ${{ steps.meta.outputs.labels }}
-        run: scripts/publish-scanned-image.sh
+          REGISTRY: ${{ env.REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+        run: |
+          sanitized="${GITHUB_REF_NAME//\//-}"
+          echo "tag=${REGISTRY}/${IMAGE_NAME}:scan-${sanitized}" >> "$GITHUB_OUTPUT"
+
+      - name: Docker meta (release tags)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: Download all image artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/artifacts
+
+      - name: Push per-arch and assemble multi-arch manifest
+        # Two-stage push:
+        #   1. Each per-arch tarball is loaded, tagged with a mutable
+        #      per-ref handle (`scan-<ref>-<arch>`), and pushed. The handle
+        #      tag exists only so `imagetools create` can address the
+        #      per-arch manifest by digest.
+        #   2. `docker buildx imagetools create` assembles a fresh
+        #      multi-arch manifest list from the per-arch digests and
+        #      attaches every release tag emitted by metadata-action in one
+        #      operation.
+        env:
+          SCAN_BASE: ${{ steps.scan_base.outputs.tag }}
+          RELEASE_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+
+          per_arch_refs=()
+          for arch in linux-amd64 linux-arm64; do
+            tarball="/tmp/artifacts/image-${arch}/image.tar"
+            loaded=$(docker load -i "$tarball" | awk -F': ' '/Loaded image/ {print $NF}')
+            arch_tag="${SCAN_BASE}-${arch}"
+            docker tag "$loaded" "$arch_tag"
+            docker push "$arch_tag"
+            # Resolve the manifest digest via inspect rather than parsing
+            # `docker push` stdout — the `digest:` line format has shifted
+            # between docker versions.
+            digest=$(docker buildx imagetools inspect "$arch_tag" --format '{{.Manifest.Digest}}')
+            per_arch_refs+=("${SCAN_BASE%:*}@${digest}")
+          done
+
+          tag_args=()
+          while IFS= read -r tag; do
+            [ -z "$tag" ] && continue
+            tag_args+=(--tag "$tag")
+          done <<< "$RELEASE_TAGS"
+
+          if [ "${#tag_args[@]}" -eq 0 ]; then
+            echo "::notice::metadata-action produced no release tags for this ref; skipping multi-arch assembly"
+            exit 0
+          fi
+
+          docker buildx imagetools create "${tag_args[@]}" "${per_arch_refs[@]}"
 
   detect-modules:
     runs-on: ubuntu-latest
@@ -125,6 +263,7 @@ jobs:
           go test ./extension/settingsproviderextension/...
           go test ./connector/stsservicegraphconnector/...
           go test ./connector/topologyconnector/...
+
   integration-test:
     runs-on: ubuntu-latest
     steps:
@@ -140,6 +279,7 @@ jobs:
         run: |
           (cd exporter/stskafkaexporter/integration && GOWORK=off go test -tags=integration ./...)
           (cd extension/settingsproviderextension/integration && GOWORK=off go test -tags=integration ./...)
+
   e2e-test:
     needs: build
     runs-on: ubuntu-latest
@@ -152,13 +292,20 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
       - name: Set up Docker
         uses: docker/setup-buildx-action@v3
-      # The metadata-action produces multi-line tags when a git tag is pushed.
-      # Example: "quay.io/stackstate/sts-opentelemetry-collector:v0.0.24\nquay.io/stackstate/sts-opentelemetry-collector:latest"
-      # Extract only the first tag so OTEL_COLLECTOR_IMAGE gets a clean value.
-      - name: Select first image tag
-        id: select_tag
-        run: echo "tag=$(echo '${{ needs.build.outputs.image }}' | head -n 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Download amd64 image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: image-linux-amd64
+          path: /tmp
+
+      - name: Load image into local docker daemon
+        run: |
+          set -euo pipefail
+          loaded=$(docker load -i /tmp/image.tar | awk -F': ' '/Loaded image/ {print $NF}')
+          docker tag "$loaded" sts-opentelemetry-collector:e2e
+
       - name: Run E2E tests
         env:
-          OTEL_COLLECTOR_IMAGE: ${{ steps.select_tag.outputs.tag }}@${{ needs.build.outputs.digest }}
+          OTEL_COLLECTOR_IMAGE: sts-opentelemetry-collector:e2e
         run: go test -v ./test/e2e/...
