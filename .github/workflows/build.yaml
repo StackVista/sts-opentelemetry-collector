@@ -34,11 +34,11 @@ jobs:
             platform: linux/arm64
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Docker meta (labels only)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           labels: |
@@ -58,17 +58,17 @@ jobs:
           ./scripts/check_no_changes.sh
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build ${{ matrix.platform }} to local docker tarball
         # Per-arch single-platform build, output as a docker-format tarball
         # (not pushed). The tarball is uploaded as an artifact so scan, e2e,
         # and publish can each `docker load` it without the registry seeing
         # bytes that have not yet passed scan.
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: ${{ matrix.platform }}
@@ -79,7 +79,7 @@ jobs:
           sbom: false
 
       - name: Upload image artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: image-${{ matrix.arch }}
           path: /tmp/image.tar
@@ -98,10 +98,10 @@ jobs:
         arch: [linux-amd64, linux-arm64]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download image artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: image-${{ matrix.arch }}
           path: /tmp
@@ -113,14 +113,8 @@ jobs:
           echo "Loaded $loaded"
           docker tag "$loaded" scan-target:${{ matrix.arch }}
 
-      - name: Run scan-pipeline
-        # Pinned to the merge SHA of StackVista/scan-pipeline#22 ("ci: add
-        # github action") which introduced action.yml. syft and trivy
-        # auto-detect local docker daemon images, so handing them
-        # `scan-target:<arch>` (a single-platform image we just loaded)
-        # avoids the manifest-list platform-default trap that would
-        # silently scan only linux/amd64.
-        uses: StackVista/scan-pipeline@8c809403e921491c7c34989439b1d2296074909e
+      - name: Run image-pipeline scan-image
+        uses: StackVista/image-pipeline/.github/actions/scan-image@dfbfa39e887dfdce25e185b6fac52e325de811af
         with:
           image: scan-target:${{ matrix.arch }}
           mode: gate
@@ -135,13 +129,13 @@ jobs:
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to Quay
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.QUAY_USER }}
@@ -158,13 +152,14 @@ jobs:
 
       - name: Docker meta (release tags)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
       - name: Download all image artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
+          pattern: image-*
           path: /tmp/artifacts
 
       - name: Push per-arch and assemble multi-arch manifest
@@ -215,10 +210,11 @@ jobs:
     outputs:
       modules: ${{ steps.set-modules.outputs.modules }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache: false
       - id: set-modules
         run: echo "modules=$(go list -m -json | jq -s '.' | jq -c '[.[].Dir]')" >> $GITHUB_OUTPUT
 
@@ -229,12 +225,13 @@ jobs:
       matrix:
         modules: ${{ fromJSON(needs.detect-modules.outputs.modules) }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: ${{ matrix.modules }}/go.sum
       - name: golangci-lint ${{ matrix.modules }}
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
           working-directory: ${{ matrix.modules }}
@@ -249,11 +246,12 @@ jobs:
           - "8123:8123"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: '**/go.sum'
       - name: Run tests
         run: |
           go test ./exporter/clickhousestsexporter/...
@@ -268,13 +266,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: |
+            exporter/stskafkaexporter/integration/go.sum
+            extension/settingsproviderextension/integration/go.sum
       - name: Set up Docker
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
       - name: Run integration tests
         run: |
           (cd exporter/stskafkaexporter/integration && GOWORK=off go test -tags=integration ./...)
@@ -285,16 +286,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: test/e2e/go.sum
       - name: Set up Docker
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Download amd64 image artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: image-linux-amd64
           path: /tmp
