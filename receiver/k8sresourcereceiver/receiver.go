@@ -28,7 +28,7 @@ type k8sresourceReceiver struct {
 
 	// Collector lifecycle — guarded by leader election when enabled.
 	mu        sync.Mutex
-	collector *crdCollector
+	collector *resourceCollector
 }
 
 func newReceiver(
@@ -100,10 +100,10 @@ func (r *k8sresourceReceiver) startCollector(ctx context.Context) error {
 
 	ft := tracker.NewDefault()
 	informers := newResourceInformers(r.settings, r.config, r.dynamicClient, ft, r.metrics)
-	collector := newCRDCollector(r.settings.Logger, r.config, r.consumer, informers, r.peerStore, r.metrics)
+	collector := newResourceCollector(r.settings.Logger, r.config, r.consumer, informers, r.peerStore, r.metrics)
 
 	if err := collector.Start(ctx); err != nil {
-		return fmt.Errorf("failed to start CRD collector: %w", err)
+		return fmt.Errorf("failed to start resource collector: %w", err)
 	}
 
 	r.mu.Lock()
@@ -120,7 +120,7 @@ func (r *k8sresourceReceiver) startCollector(ctx context.Context) error {
 	r.collector = collector
 	r.mu.Unlock()
 
-	r.settings.Logger.Info("K8s CRD Receiver started",
+	r.settings.Logger.Info("K8s Resource Receiver started",
 		zap.Duration("increment_interval", r.config.IncrementInterval),
 		zap.Duration("snapshot_interval", r.config.SnapshotInterval),
 		zap.String("discovery_mode", string(r.config.DiscoveryMode)),
@@ -162,14 +162,14 @@ func (r *k8sresourceReceiver) startWithLeaderElection(_ context.Context, host co
 
 	elector.SetCallBackFuncs(
 		func(ctx context.Context) {
-			r.settings.Logger.Info("Became leader, starting CRD collection")
+			r.settings.Logger.Info("Became leader, starting resource collection")
 			r.peerStore.SetLeader(true)
 			if err := r.startCollector(ctx); err != nil {
 				r.settings.Logger.Error("Failed to start collector after acquiring leadership", zap.Error(err))
 			}
 		},
 		func() {
-			r.settings.Logger.Info("Lost leadership, stopping CRD collection")
+			r.settings.Logger.Info("Lost leadership, stopping resource collection")
 			r.peerStore.SetLeader(false)
 			r.stopCollector(context.Background())
 		},
@@ -181,7 +181,7 @@ func (r *k8sresourceReceiver) startWithLeaderElection(_ context.Context, host co
 // --- Shutdown ---
 
 func (r *k8sresourceReceiver) Shutdown(ctx context.Context) error {
-	r.settings.Logger.Info("Shutting down K8s CRD Receiver")
+	r.settings.Logger.Info("Shutting down K8s Resource Receiver")
 	r.stopCollector(ctx)
 	if r.peerStore != nil {
 		r.peerStore.Stop()
