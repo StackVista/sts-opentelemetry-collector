@@ -177,7 +177,7 @@ func (ri *ResourceInformers) startCRDInformer() error {
 	// event handlers. The collector polls the informer cache every IncrementInterval,
 	// so we don't need event-loop resync semantics on top.
 	ri.crdInformer = cache.NewSharedIndexInformer(
-		lw,
+		cache.ToListWatcherWithWatchListSemantics(lw, ri.dynamicClient),
 		&unstructured.Unstructured{},
 		0,
 		cache.Indexers{},
@@ -464,7 +464,7 @@ func (ri *ResourceInformers) startCRInformer(gvr schema.GroupVersionResource) (m
 
 	// No resync and no event handlers — the collector reads the cache directly.
 	informer := cache.NewSharedIndexInformer(
-		lw,
+		cache.ToListWatcherWithWatchListSemantics(lw, ri.dynamicClient),
 		&unstructured.Unstructured{},
 		0,
 		cache.Indexers{},
