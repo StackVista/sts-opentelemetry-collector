@@ -46,7 +46,7 @@ linters:
         path: ^connector/topologyconnector/.*_test\.go$
       - linters:
           - goconst
-        path: ^receiver/k8scrdreceiver/.*_test\.go$
+        path: ^receiver/k8sresourcereceiver/.*_test\.go$
       - linters:
           - goconst
         path: ^test/e2e/.*_test\.go$

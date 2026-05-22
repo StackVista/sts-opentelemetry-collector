@@ -1,6 +1,6 @@
 # Peer-sync protocol
 
-A short reference for the in-process peer sync that keeps `k8scrdreceiver`
+A short reference for the in-process peer sync that keeps `k8sresourcereceiver`
 replicas warm. The goal is to avoid a cold informer LIST during failover: when
 the leader dies, a secondary should be able to take over with a cache that is
 no more than a few seconds stale.

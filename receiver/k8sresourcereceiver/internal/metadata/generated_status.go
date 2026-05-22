@@ -6,7 +6,7 @@ import (
 
 var (
 	//nolint:gochecknoglobals
-	Type = component.MustNewType("k8scrd")
+	Type = component.MustNewType("k8sresource")
 )
 
 const (

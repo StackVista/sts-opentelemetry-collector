@@ -1,4 +1,4 @@
-module github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver
+module github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver
 
 go 1.26.3
 

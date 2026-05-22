@@ -2,7 +2,7 @@ package emit
 
 const (
 	// ScopeName is the instrumentation scope name for logs emitted by this receiver.
-	ScopeName = "github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver"
+	ScopeName = "github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver"
 
 	// Attribute keys for log records
 	AttrK8sResourceName    = "k8s.resource.name"

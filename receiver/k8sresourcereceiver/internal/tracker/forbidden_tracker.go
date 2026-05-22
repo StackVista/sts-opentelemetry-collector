@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/emit"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/emit"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 

@@ -1,5 +1,5 @@
 //nolint:testpackage // Tests require access to internal functions
-package k8scrdreceiver
+package k8sresourcereceiver
 
 import (
 	"testing"
