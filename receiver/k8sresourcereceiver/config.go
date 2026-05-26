@@ -105,6 +105,7 @@ type ObjectWatch struct {
 	FieldSelector string `mapstructure:"field_selector"`
 
 	// gvr is resolved at startup; unexported so mapstructure ignores it.
+	// nolint: unused
 	gvr *schema.GroupVersionResource
 }
 
@@ -193,6 +194,8 @@ func (c *Config) Validate() error {
 
 // defaultDeniedObjects are built-in denied resource types whose contents
 // commonly hold sensitive material. Always applied, not removable.
+//
+// nolint:gochecknoglobals
 var defaultDeniedObjects = []ObjectMatcher{
 	{Name: "secrets", Group: ""},
 	{Name: "configmaps", Group: ""},
