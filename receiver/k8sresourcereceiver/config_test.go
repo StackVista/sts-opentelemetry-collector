@@ -129,6 +129,137 @@ func TestConfigValidate(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "valid objects watch on core pods",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				Objects: []ObjectWatch{
+					{Name: "pods", Namespaces: []string{"runtime-enforcer"}, LabelSelector: "app=foo"},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid objects watch on grouped deployments",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				Objects: []ObjectWatch{
+					{Name: "deployments", Group: "apps", Namespaces: []string{"runtime-enforcer"}},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid cluster-wide objects watch with empty namespaces",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				Objects: []ObjectWatch{
+					{Name: "namespaces"},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid objects watch with explicit version override",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				Objects: []ObjectWatch{
+					{Name: "events", Group: "events.k8s.io", Version: "v1"},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "objects entry missing name rejected",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				Objects: []ObjectWatch{
+					{Namespaces: []string{"runtime-enforcer"}},
+				},
+			},
+			wantErr: true,
+			errMsg:  "objects[0]: name is required",
+		},
+		{
+			name: "objects entry with invalid label_selector rejected",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				Objects: []ObjectWatch{
+					{Name: "pods", LabelSelector: "!!!invalid==="},
+				},
+			},
+			wantErr: true,
+			errMsg:  "invalid label_selector",
+		},
+		{
+			name: "objects entry with invalid field_selector rejected",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				Objects: []ObjectWatch{
+					{Name: "pods", FieldSelector: "status.phase!!Running"},
+				},
+			},
+			wantErr: true,
+			errMsg:  "invalid field_selector",
+		},
+		{
+			name: "objects exact-duplicate rejected",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				Objects: []ObjectWatch{
+					{Name: "pods", Namespaces: []string{"a"}},
+					{Name: "pods", Namespaces: []string{"a"}},
+				},
+			},
+			wantErr: true,
+			errMsg:  "objects[1] duplicates objects[0]",
+		},
+		{
+			name: "objects namespace-overlap rejected",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				Objects: []ObjectWatch{
+					{Name: "pods", Namespaces: []string{"a", "b"}},
+					{Name: "pods", Namespaces: []string{"b"}},
+				},
+			},
+			wantErr: true,
+			errMsg:  "objects[1] duplicates objects[0]",
+		},
+		{
+			name: "objects with different namespaces accepted",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				Objects: []ObjectWatch{
+					{Name: "pods", Namespaces: []string{"a"}},
+					{Name: "pods", Namespaces: []string{"b"}},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "objects with different selectors accepted",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				Objects: []ObjectWatch{
+					{Name: "pods", Namespaces: []string{"a"}, LabelSelector: "app=foo"},
+					{Name: "pods", Namespaces: []string{"a"}, LabelSelector: "app=bar"},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "objects cluster-wide duplicate rejected",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				Objects: []ObjectWatch{
+					{Name: "namespaces"},
+					{Name: "namespaces"},
+				},
+			},
+			wantErr: true,
+			errMsg:  "objects[1] duplicates objects[0]",
+		},
 	}
 
 	for _, tt := range tests {

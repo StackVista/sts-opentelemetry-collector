@@ -8,6 +8,9 @@ import (
 	"time"
 
 	"go.opentelemetry.io/collector/component"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 )
 
@@ -56,6 +59,45 @@ type Config struct {
 	// K8sLeaderElector is the component ID of a k8sleaderelector extension.
 	// When set, only the leader replica actively watches CRDs/CRs.
 	K8sLeaderElector *component.ID `mapstructure:"k8s_leader_elector"`
+
+	// Objects declares static Kubernetes resources to watch in addition to
+	// CRD-discovered custom resources. Each entry produces one informer per
+	// (resolved GVR, namespace) combination with optional label/field selectors.
+	// The resolved GVR is looked up from the Kubernetes discovery client at
+	// startup; Group/Version are optional disambiguation knobs.
+	Objects []ObjectWatch `mapstructure:"objects"`
+}
+
+// ObjectWatch declares a Kubernetes resource for the receiver to watch alongside
+// CRD-discovered custom resources.
+type ObjectWatch struct {
+	// Name is the Kubernetes plural resource name, e.g. "pods", "deployments".
+	Name string `mapstructure:"name"`
+
+	// Group optionally disambiguates resources that exist in multiple API
+	// groups. Empty means core API group ("")
+	Group string `mapstructure:"group"`
+
+	// Version optionally pins to a specific API version. When empty, the
+	// preferred version is resolved from the Kubernetes discovery client.
+	Version string `mapstructure:"version"`
+
+	// Namespaces is an explicit namespace list. Empty means cluster-wide
+	// (a single watch with no namespace scope). Cluster-scoped resources
+	// should also leave this empty.
+	Namespaces []string `mapstructure:"namespaces"`
+
+	// LabelSelector is a standard k8s label selector string,
+	// e.g. "security.rancher.io/policy" or "app in (foo,bar)".
+	LabelSelector string `mapstructure:"label_selector"`
+
+	// FieldSelector is a standard k8s field selector string,
+	// e.g. "status.phase=Running".
+	FieldSelector string `mapstructure:"field_selector"`
+
+	// gvr is the resolved GroupVersionResource. Populated at receiver startup
+	// from the discovery client; unexported so mapstructure ignores it.
+	gvr *schema.GroupVersionResource
 }
 
 // APIGroupFilters defines inclusion and exclusion patterns for API groups
@@ -134,6 +176,56 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	if err := c.validateObjects(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateObjects performs static validation on every entry in c.Objects:
+//   - name must be set,
+//   - selectors must parse,
+//   - the (name, group, version, namespace, label_selector, field_selector)
+//     tuple must be unique after expanding empty Namespaces to a single
+//     cluster-wide watch (denoted by namespace "").
+//
+// GVR-resolution validation (ambiguity, missing-from-server, version-mismatch)
+// runs at receiver startup against the discovery client — that data isn't
+// available here.
+func (c *Config) validateObjects() error {
+	if len(c.Objects) == 0 {
+		return nil
+	}
+	seen := make(map[string]int, len(c.Objects))
+	for i := range c.Objects {
+		ow := &c.Objects[i]
+		if ow.Name == "" {
+			return fmt.Errorf("objects[%d]: name is required", i)
+		}
+		if ow.LabelSelector != "" {
+			if _, err := labels.Parse(ow.LabelSelector); err != nil {
+				return fmt.Errorf("objects[%d]: invalid label_selector %q: %w", i, ow.LabelSelector, err)
+			}
+		}
+		if ow.FieldSelector != "" {
+			if _, err := fields.ParseSelector(ow.FieldSelector); err != nil {
+				return fmt.Errorf("objects[%d]: invalid field_selector %q: %w", i, ow.FieldSelector, err)
+			}
+		}
+		namespaces := ow.Namespaces
+		if len(namespaces) == 0 {
+			namespaces = []string{""}
+		}
+		for _, ns := range namespaces {
+			key := strings.Join([]string{ow.Name, ow.Group, ow.Version, ns, ow.LabelSelector, ow.FieldSelector}, "|")
+			if prev, ok := seen[key]; ok {
+				return fmt.Errorf("objects[%d] duplicates objects[%d]: name=%q group=%q version=%q namespace=%q",
+					i, prev, ow.Name, ow.Group, ow.Version, ns)
+			}
+			seen[key] = i
+		}
+	}
 	return nil
 }
 
