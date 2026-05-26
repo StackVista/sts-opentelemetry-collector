@@ -1,12 +1,12 @@
-package k8scrdreceiver
+package k8sresourcereceiver
 
 import (
 	"context"
 	"sync"
 	"time"
 
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/emit"
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/metrics"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/emit"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/metrics"
 	"go.opentelemetry.io/collector/consumer"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -14,10 +14,10 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 )
 
-// crdCollector reads from Informers, compares against the peerStore's cache, and
+// resourceCollector reads from Informers, compares against the peerStore's cache, and
 // emits deltas (ADDED/MODIFIED/DELETED) or periodic full snapshots as log records.
 // Cache state lives in peerStore - the collector is a stateless worker.
-type crdCollector struct {
+type resourceCollector struct {
 	logger    *zap.Logger
 	config    *Config
 	consumer  consumer.Logs
@@ -31,21 +31,21 @@ type crdCollector struct {
 	cancel context.CancelFunc
 }
 
-func newCRDCollector(
+func newResourceCollector(
 	logger *zap.Logger,
 	config *Config,
 	cons consumer.Logs,
 	informers Informers,
 	peerStore PeerStore,
 	metricsRecorder metrics.Recorder,
-) *crdCollector {
+) *resourceCollector {
 	if peerStore == nil {
 		peerStore = &noopPeerStore{}
 	}
 	if metricsRecorder == nil {
 		metricsRecorder = metrics.NoopRecorder{}
 	}
-	return &crdCollector{
+	return &resourceCollector{
 		logger:    logger,
 		config:    config,
 		consumer:  cons,
@@ -55,7 +55,7 @@ func newCRDCollector(
 	}
 }
 
-func (c *crdCollector) Start(ctx context.Context) error {
+func (c *resourceCollector) Start(ctx context.Context) error {
 	loopCtx, cancel := context.WithCancel(ctx)
 	c.cancel = cancel
 
@@ -70,7 +70,7 @@ func (c *crdCollector) Start(ctx context.Context) error {
 	return nil
 }
 
-func (c *crdCollector) Shutdown(ctx context.Context) error {
+func (c *resourceCollector) Shutdown(ctx context.Context) error {
 	if c.cancel != nil {
 		c.cancel()
 	}
@@ -90,7 +90,7 @@ func (c *crdCollector) Shutdown(ctx context.Context) error {
 
 // runIncrementLoop is the single polling loop that reads informers caches, compares
 // against the resource resourceCache, and emits deltas or periodic snapshots.
-func (c *crdCollector) runIncrementLoop(ctx context.Context) {
+func (c *resourceCollector) runIncrementLoop(ctx context.Context) {
 	defer c.wg.Done()
 
 	ticker := time.NewTicker(c.config.IncrementInterval)
@@ -111,7 +111,7 @@ func (c *crdCollector) runIncrementLoop(ctx context.Context) {
 
 // runIncrement reads the current informer state, compares it against the peerStore
 // cache, and emits changes. Periodically emits full snapshots for TTL freshness.
-func (c *crdCollector) runIncrement(ctx context.Context) {
+func (c *resourceCollector) runIncrement(ctx context.Context) {
 	start := time.Now()
 	currentCRDs := c.informers.ReadCRDs()
 	currentCRs := c.informers.ReadCRs()
@@ -134,7 +134,7 @@ func (c *crdCollector) runIncrement(ctx context.Context) {
 //
 // Increment cycles use ApplyDelta directly with LastSnapshotTime unset; only
 // this helper sets it, which is how secondaries distinguish snapshot ticks.
-func (c *crdCollector) recordSnapshotApplied(ctx context.Context, changes []ResourceChange) {
+func (c *resourceCollector) recordSnapshotApplied(ctx context.Context, changes []ResourceChange) {
 	now := time.Now()
 	if err := c.peerStore.ApplyDelta(ctx, &PeerSyncDelta{
 		AppliedAt:        now,
@@ -149,7 +149,7 @@ func (c *crdCollector) recordSnapshotApplied(ctx context.Context, changes []Reso
 // and emits DELETED for entries in `changes` that mark resources removed from
 // informer state. `changes` is the diff between peerStore cache and current
 // informer state — computed once per cycle by the caller.
-func (c *crdCollector) emitSnapshot(
+func (c *resourceCollector) emitSnapshot(
 	ctx context.Context,
 	currentCRDs []*unstructured.Unstructured,
 	currentCRs map[schema.GroupVersionResource][]*unstructured.Unstructured,
@@ -230,7 +230,7 @@ func (c *crdCollector) emitSnapshot(
 //     new leader's cache still contains the deleted resource while informer does not,
 //     so it re-emits the DELETE (idempotent duplicate). This avoids a missed DELETE
 //     lingering on the platform until TTL expiry.
-func (c *crdCollector) emitIncrement(ctx context.Context, changes []ResourceChange) {
+func (c *resourceCollector) emitIncrement(ctx context.Context, changes []ResourceChange) {
 	if len(changes) == 0 {
 		return
 	}
@@ -270,7 +270,7 @@ func (c *crdCollector) emitIncrement(ctx context.Context, changes []ResourceChan
 }
 
 // emitChanges sends a list of changes to the consumer and records per-type counters.
-func (c *crdCollector) emitChanges(ctx context.Context, changes []ResourceChange) {
+func (c *resourceCollector) emitChanges(ctx context.Context, changes []ResourceChange) {
 	counts := map[metrics.ChangeType]int64{}
 	for _, change := range changes {
 		var err error
@@ -294,7 +294,7 @@ func (c *crdCollector) emitChanges(ctx context.Context, changes []ResourceChange
 	}
 }
 
-func (c *crdCollector) watchEventToChangeType(e watch.EventType) metrics.ChangeType {
+func (c *resourceCollector) watchEventToChangeType(e watch.EventType) metrics.ChangeType {
 	switch e {
 	case watch.Added:
 		return metrics.ChangeAdded

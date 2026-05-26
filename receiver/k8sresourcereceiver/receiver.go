@@ -1,4 +1,4 @@
-package k8scrdreceiver
+package k8sresourcereceiver
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector"
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/metrics"
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/tracker"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/metrics"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/tracker"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/receiver"
@@ -15,8 +15,8 @@ import (
 	"k8s.io/client-go/dynamic"
 )
 
-// k8scrdReceiver uses informers to watch CRDs and their custom resources.
-type k8scrdReceiver struct {
+// k8sresourceReceiver uses informers to watch CRDs and their custom resources.
+type k8sresourceReceiver struct {
 	settings      receiver.Settings
 	config        *Config
 	consumer      consumer.Logs
@@ -28,7 +28,7 @@ type k8scrdReceiver struct {
 
 	// Collector lifecycle — guarded by leader election when enabled.
 	mu        sync.Mutex
-	collector *crdCollector
+	collector *resourceCollector
 }
 
 func newReceiver(
@@ -40,7 +40,7 @@ func newReceiver(
 	if rec == nil {
 		rec = metrics.NoopRecorder{}
 	}
-	return &k8scrdReceiver{
+	return &k8sresourceReceiver{
 		settings: params,
 		config:   config,
 		consumer: consumer,
@@ -48,7 +48,7 @@ func newReceiver(
 	}, nil
 }
 
-func (r *k8scrdReceiver) Start(ctx context.Context, host component.Host) error {
+func (r *k8sresourceReceiver) Start(ctx context.Context, host component.Host) error {
 	if r.dynamicClient == nil {
 		client, err := r.config.getDynamicClient()
 		if err != nil {
@@ -89,7 +89,7 @@ func (r *k8scrdReceiver) Start(ctx context.Context, host component.Host) error {
 // startCollector creates and starts the collector (called directly or from leader election callback).
 // Idempotent: a duplicate onStartLeading callback (e.g., k8s lease re-acquisition firing twice)
 // is a no-op rather than spawning a second collector that would leak goroutines and informers.
-func (r *k8scrdReceiver) startCollector(ctx context.Context) error {
+func (r *k8sresourceReceiver) startCollector(ctx context.Context) error {
 	r.mu.Lock()
 	if r.collector != nil {
 		r.mu.Unlock()
@@ -100,10 +100,10 @@ func (r *k8scrdReceiver) startCollector(ctx context.Context) error {
 
 	ft := tracker.NewDefault()
 	informers := newResourceInformers(r.settings, r.config, r.dynamicClient, ft, r.metrics)
-	collector := newCRDCollector(r.settings.Logger, r.config, r.consumer, informers, r.peerStore, r.metrics)
+	collector := newResourceCollector(r.settings.Logger, r.config, r.consumer, informers, r.peerStore, r.metrics)
 
 	if err := collector.Start(ctx); err != nil {
-		return fmt.Errorf("failed to start CRD collector: %w", err)
+		return fmt.Errorf("failed to start resource collector: %w", err)
 	}
 
 	r.mu.Lock()
@@ -120,7 +120,7 @@ func (r *k8scrdReceiver) startCollector(ctx context.Context) error {
 	r.collector = collector
 	r.mu.Unlock()
 
-	r.settings.Logger.Info("K8s CRD Receiver started",
+	r.settings.Logger.Info("K8s Resource Receiver started",
 		zap.Duration("increment_interval", r.config.IncrementInterval),
 		zap.Duration("snapshot_interval", r.config.SnapshotInterval),
 		zap.String("discovery_mode", string(r.config.DiscoveryMode)),
@@ -130,7 +130,7 @@ func (r *k8scrdReceiver) startCollector(ctx context.Context) error {
 }
 
 // stopCollector shuts down the collector (called directly or from leader election callback).
-func (r *k8scrdReceiver) stopCollector(ctx context.Context) {
+func (r *k8sresourceReceiver) stopCollector(ctx context.Context) {
 	r.mu.Lock()
 	collector := r.collector
 	r.collector = nil
@@ -145,7 +145,7 @@ func (r *k8scrdReceiver) stopCollector(ctx context.Context) {
 
 // --- Leader election via k8sleaderelector extension ---
 
-func (r *k8scrdReceiver) startWithLeaderElection(_ context.Context, host component.Host) error {
+func (r *k8sresourceReceiver) startWithLeaderElection(_ context.Context, host component.Host) error {
 	ext, ok := host.GetExtensions()[*r.config.K8sLeaderElector]
 	if !ok {
 		return fmt.Errorf("k8s leader elector extension %q not found", r.config.K8sLeaderElector)
@@ -162,14 +162,14 @@ func (r *k8scrdReceiver) startWithLeaderElection(_ context.Context, host compone
 
 	elector.SetCallBackFuncs(
 		func(ctx context.Context) {
-			r.settings.Logger.Info("Became leader, starting CRD collection")
+			r.settings.Logger.Info("Became leader, starting resource collection")
 			r.peerStore.SetLeader(true)
 			if err := r.startCollector(ctx); err != nil {
 				r.settings.Logger.Error("Failed to start collector after acquiring leadership", zap.Error(err))
 			}
 		},
 		func() {
-			r.settings.Logger.Info("Lost leadership, stopping CRD collection")
+			r.settings.Logger.Info("Lost leadership, stopping resource collection")
 			r.peerStore.SetLeader(false)
 			r.stopCollector(context.Background())
 		},
@@ -180,8 +180,8 @@ func (r *k8scrdReceiver) startWithLeaderElection(_ context.Context, host compone
 
 // --- Shutdown ---
 
-func (r *k8scrdReceiver) Shutdown(ctx context.Context) error {
-	r.settings.Logger.Info("Shutting down K8s CRD Receiver")
+func (r *k8sresourceReceiver) Shutdown(ctx context.Context) error {
+	r.settings.Logger.Info("Shutting down K8s Resource Receiver")
 	r.stopCollector(ctx)
 	if r.peerStore != nil {
 		r.peerStore.Stop()

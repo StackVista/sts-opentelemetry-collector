@@ -1,4 +1,4 @@
-package k8scrdreceiver
+package k8sresourcereceiver
 
 // Consistency model: the leader broadcasts per-cycle deltas to all replicas
 // concurrently and waits up to broadcastAckTimeout for every peer to ACK before
@@ -21,7 +21,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/metrics"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/metrics"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"

@@ -1,6 +1,6 @@
 # Peer-sync protocol
 
-A short reference for the in-process peer sync that keeps `k8scrdreceiver`
+A short reference for the in-process peer sync that keeps `k8sresourcereceiver`
 replicas warm. The goal is to avoid a cold informer LIST during failover: when
 the leader dies, a secondary should be able to take over with a cache that is
 no more than a few seconds stale.
@@ -12,7 +12,7 @@ Source files: `peer_sync_cache_store.go`, `peer_store.go`, `crd_collector.go`,
 
 - **peerSyncCacheStore** — owns the synchronised `resourceCache`, runs on every
   replica, exposes two HTTP endpoints, and broadcasts deltas when leader.
-- **crdCollector** — runs only on the leader. Each cycle it reads informer
+- **resourceCollector** — runs only on the leader. Each cycle it reads informer
   state, asks the peer store for a delta, and emits + applies + broadcasts.
 - **Leader election** (`k8sleaderelector` extension) — flips the leader bit on
   the peer store via `SetLeader(bool)` and starts/stops the collector.
@@ -45,7 +45,7 @@ so callers can rank candidates.
    skipping any delta with `AppliedAt` before the snapshot's `LastSnapshotTime`.
 4. Mark `ready = true`. Subsequent deltas apply directly.
 
-### Leader cycle (`crdCollector.runIncrement`, every `IncrementInterval`)
+### Leader cycle (`resourceCollector.runIncrement`, every `IncrementInterval`)
 
 1. Read current informer state.
 2. `peerStore.ComputeChanges(currentCRDs, currentCRs)` diffs cache vs informer:
@@ -70,7 +70,7 @@ so callers can rank candidates.
 
 ## Crash-safety: asymmetric apply ordering
 
-Within `crdCollector.emitIncrement` adds and deletes are handled in different
+Within `resourceCollector.emitIncrement` adds and deletes are handled in different
 orders to bias the failure mode toward duplicate emits rather than missed ones
 (duplicates are idempotent on the platform side).
 

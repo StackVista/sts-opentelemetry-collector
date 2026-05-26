@@ -1,4 +1,4 @@
-package k8scrdreceiver
+package k8sresourcereceiver
 
 import (
 	"errors"
@@ -18,7 +18,7 @@ const (
 	DiscoveryModeAll       DiscoveryMode = "all"
 )
 
-// Config defines configuration for the k8scrd receiver.
+// Config defines configuration for the k8sresource receiver.
 // The receiver watches CRDs/CRs via informers and uses a consolidated increment loop
 // to detect changes and emit snapshots.
 type Config struct {

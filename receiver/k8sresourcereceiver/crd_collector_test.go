@@ -1,5 +1,5 @@
 //nolint:testpackage
-package k8scrdreceiver
+package k8sresourcereceiver
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8scrdreceiver/internal/tracker"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/tracker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
@@ -134,14 +134,14 @@ func waitForInitialEmissions(t *testing.T, sink *consumertest.LogsSink, minCount
 	}, 10*time.Second, 100*time.Millisecond, "should emit initial state")
 }
 
-// newTestCollector creates a crdCollector backed by a real ResourceInformers for integration tests.
+// newTestCollector creates a resourceCollector backed by a real ResourceInformers for integration tests.
 func newTestCollector(
 	t *testing.T,
 	config *Config,
 	sink *consumertest.LogsSink,
 	client *dynamicfake.FakeDynamicClient,
 	ft *tracker.ForbiddenTracker,
-) *crdCollector {
+) *resourceCollector {
 	t.Helper()
 	return newTestCollectorWithPeerStore(t, config, sink, client, ft, nil)
 }
@@ -155,11 +155,11 @@ func newTestCollectorWithPeerStore(
 	client *dynamicfake.FakeDynamicClient,
 	ft *tracker.ForbiddenTracker,
 	peerStore PeerStore,
-) *crdCollector {
+) *resourceCollector {
 	t.Helper()
 	settings := testSettings(t)
 	informerSet := newResourceInformers(settings, config, client, ft, nil)
-	return newCRDCollector(settings.Logger, config, sink, informerSet, peerStore, nil)
+	return newResourceCollector(settings.Logger, config, sink, informerSet, peerStore, nil)
 }
 
 // recordingPeerStore captures each ApplyDelta invocation as a snapshot of the cache
@@ -239,7 +239,7 @@ func (r *recordingPeerStore) snapshot() []recordedSave {
 	return out
 }
 
-func TestCRDCollector_EmitsInitialCRDAndCR(t *testing.T) {
+func TestResourceCollector_EmitsInitialCRDAndCR(t *testing.T) {
 	scheme := testScheme()
 	registerCRGVR(scheme, "example.com", "v1", "TestResource")
 
@@ -272,7 +272,7 @@ func TestCRDCollector_EmitsInitialCRDAndCR(t *testing.T) {
 	}, 10*time.Second, 100*time.Millisecond, "should emit CRD and CR logs")
 }
 
-func TestCRDCollector_CRLifecycleEvents(t *testing.T) {
+func TestResourceCollector_CRLifecycleEvents(t *testing.T) {
 	scheme := testScheme()
 	registerCRGVR(scheme, testExampleGroup, "v1", "TestResource")
 
@@ -340,7 +340,7 @@ func TestCRDCollector_CRLifecycleEvents(t *testing.T) {
 	}, 10*time.Second, 100*time.Millisecond, "should emit CR delete log")
 }
 
-func TestCRDCollector_SnapshotEmitsAllResources(t *testing.T) {
+func TestResourceCollector_SnapshotEmitsAllResources(t *testing.T) {
 	scheme := testScheme()
 	registerCRGVR(scheme, testExampleGroup, "v1", "TestResource")
 
@@ -377,7 +377,7 @@ func TestCRDCollector_SnapshotEmitsAllResources(t *testing.T) {
 	}, 10*time.Second, 100*time.Millisecond, "snapshot should emit 1 CRD + 2 CRs")
 }
 
-// TestCRDCollector_TwoPhaseSaveOrdering verifies the asymmetric apply/emit ordering in
+// TestResourceCollector_TwoPhaseSaveOrdering verifies the asymmetric apply/emit ordering in
 // the increment loop:
 //   - adds/mods: ApplyDelta runs BEFORE emit, so peers see the new state first
 //   - deletes:   ApplyDelta runs AFTER emit, so peers retain the resource until the platform
@@ -385,7 +385,7 @@ func TestCRDCollector_SnapshotEmitsAllResources(t *testing.T) {
 //
 // We assert this by recording each ApplyDelta invocation along with the cache contents at
 // that moment, then checking the number of applies and what each apply contained per cycle.
-func TestCRDCollector_TwoPhaseSaveOrdering(t *testing.T) {
+func TestResourceCollector_TwoPhaseSaveOrdering(t *testing.T) {
 	scheme := testScheme()
 	registerCRGVR(scheme, testExampleGroup, "v1", "TestResource")
 
