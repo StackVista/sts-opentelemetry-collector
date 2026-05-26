@@ -19,6 +19,9 @@ type DiscoveryMode string
 const (
 	DiscoveryModeAPIGroups DiscoveryMode = "api_groups"
 	DiscoveryModeAll       DiscoveryMode = "all"
+
+	resourceSecrets   = "secrets"
+	resourceConfigMap = "configmaps"
 )
 
 // Config defines configuration for the k8sresource receiver.
@@ -197,8 +200,8 @@ func (c *Config) Validate() error {
 //
 // nolint:gochecknoglobals
 var defaultDeniedObjects = []ObjectMatcher{
-	{Name: "secrets", Group: ""},
-	{Name: "configmaps", Group: ""},
+	{Name: resourceSecrets, Group: ""},
+	{Name: resourceConfigMap, Group: ""},
 }
 
 // validateObjects enforces static rules on c.Objects: required name, not

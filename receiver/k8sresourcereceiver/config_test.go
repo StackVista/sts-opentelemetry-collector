@@ -255,7 +255,7 @@ func TestConfigValidate(t *testing.T) {
 			config: &Config{
 				DiscoveryMode: DiscoveryModeAll,
 				Objects: []ObjectWatch{
-					{Name: "secrets"},
+					{Name: resourceSecrets},
 				},
 			},
 			wantErr: true,
@@ -277,7 +277,7 @@ func TestConfigValidate(t *testing.T) {
 			config: &Config{
 				DiscoveryMode: DiscoveryModeAll,
 				Objects: []ObjectWatch{
-					{Name: "secrets", Group: "vault.example.com"},
+					{Name: resourceSecrets, Group: "vault.example.com"},
 				},
 			},
 			wantErr: false,
