@@ -151,7 +151,7 @@ jobs:
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.QUAY_USER }}
+          username: ${{ vars.QUAY_USER }}
           password: ${{ secrets.QUAY_PASSWORD }}
 
       - name: Compute scan-handle tag base
