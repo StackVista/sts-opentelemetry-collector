@@ -80,6 +80,9 @@ type ObjectMatcher struct {
 }
 
 // ObjectWatch declares a Kubernetes resource to watch.
+//
+// The shape of this type was inspired by the `K8sObjectConfig` type in the upstream `k8sobectsreceiver` -
+// https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/receiver/k8sobjectsreceiver/config.go#L43
 type ObjectWatch struct {
 	// Name is the plural resource name, e.g. "pods", "deployments".
 	Name string `mapstructure:"name"`
