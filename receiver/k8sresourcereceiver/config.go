@@ -60,43 +60,48 @@ type Config struct {
 	// When set, only the leader replica actively watches CRDs/CRs.
 	K8sLeaderElector *component.ID `mapstructure:"k8s_leader_elector"`
 
-	// Objects declares static Kubernetes resources to watch in addition to
-	// CRD-discovered custom resources. Each entry produces one informer per
-	// (resolved GVR, namespace) combination with optional label/field selectors.
-	// The resolved GVR is looked up from the Kubernetes discovery client at
-	// startup; Group/Version are optional disambiguation knobs.
+	// Objects declares Kubernetes resources to watch alongside CRD-discovered
+	// custom resources. See ObjectWatch.
 	Objects []ObjectWatch `mapstructure:"objects"`
+
+	// DeniedObjects extends the built-in denylist (core Secrets and ConfigMaps)
+	// with additional resources that must not appear under Objects. The built-in
+	// defaults always apply and cannot be removed. Use this to block third-party
+	// resources with sensitive contents (e.g. cert-manager Certificates).
+	DeniedObjects []ObjectMatcher `mapstructure:"denied_objects"`
 }
 
-// ObjectWatch declares a Kubernetes resource for the receiver to watch alongside
-// CRD-discovered custom resources.
-type ObjectWatch struct {
-	// Name is the Kubernetes plural resource name, e.g. "pods", "deployments".
+// ObjectMatcher identifies a Kubernetes resource by plural name and API group.
+type ObjectMatcher struct {
 	Name string `mapstructure:"name"`
 
-	// Group optionally disambiguates resources that exist in multiple API
-	// groups. Empty means core API group ("")
+	// Group is the API group. Empty matches the core API group.
+	Group string `mapstructure:"group"`
+}
+
+// ObjectWatch declares a Kubernetes resource to watch.
+type ObjectWatch struct {
+	// Name is the plural resource name, e.g. "pods", "deployments".
+	Name string `mapstructure:"name"`
+
+	// Group disambiguates resources that exist in multiple API groups.
+	// Empty matches the core API group.
 	Group string `mapstructure:"group"`
 
-	// Version optionally pins to a specific API version. When empty, the
-	// preferred version is resolved from the Kubernetes discovery client.
+	// Version pins a specific API version. Empty uses the preferred version
+	// from the Kubernetes discovery client.
 	Version string `mapstructure:"version"`
 
-	// Namespaces is an explicit namespace list. Empty means cluster-wide
-	// (a single watch with no namespace scope). Cluster-scoped resources
-	// should also leave this empty.
+	// Namespaces lists namespaces to watch. Empty means cluster-wide.
 	Namespaces []string `mapstructure:"namespaces"`
 
-	// LabelSelector is a standard k8s label selector string,
-	// e.g. "security.rancher.io/policy" or "app in (foo,bar)".
+	// LabelSelector is a standard k8s label selector, e.g. "app in (foo,bar)".
 	LabelSelector string `mapstructure:"label_selector"`
 
-	// FieldSelector is a standard k8s field selector string,
-	// e.g. "status.phase=Running".
+	// FieldSelector is a standard k8s field selector, e.g. "status.phase=Running".
 	FieldSelector string `mapstructure:"field_selector"`
 
-	// gvr is the resolved GroupVersionResource. Populated at receiver startup
-	// from the discovery client; unexported so mapstructure ignores it.
+	// gvr is resolved at startup; unexported so mapstructure ignores it.
 	gvr *schema.GroupVersionResource
 }
 
@@ -183,25 +188,37 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// validateObjects performs static validation on every entry in c.Objects:
-//   - name must be set,
-//   - selectors must parse,
-//   - the (name, group, version, namespace, label_selector, field_selector)
-//     tuple must be unique after expanding empty Namespaces to a single
-//     cluster-wide watch (denoted by namespace "").
-//
-// GVR-resolution validation (ambiguity, missing-from-server, version-mismatch)
-// runs at receiver startup against the discovery client — that data isn't
-// available here.
+// defaultDeniedObjects are built-in denied resource types whose contents
+// commonly hold sensitive material. Always applied, not removable.
+var defaultDeniedObjects = []ObjectMatcher{
+	{Name: "secrets", Group: ""},
+	{Name: "configmaps", Group: ""},
+}
+
+// validateObjects enforces static rules on c.Objects: required name, not
+// denied, parseable selectors, and uniqueness across namespace expansion.
+// GVR resolution (ambiguity, missing-from-server, version-mismatch) is
+// deferred to receiver startup, where the discovery client is available.
 func (c *Config) validateObjects() error {
 	if len(c.Objects) == 0 {
 		return nil
+	}
+	denied := make(map[ObjectMatcher]struct{}, len(defaultDeniedObjects)+len(c.DeniedObjects))
+	for _, m := range defaultDeniedObjects {
+		denied[m] = struct{}{}
+	}
+	for _, m := range c.DeniedObjects {
+		denied[m] = struct{}{}
 	}
 	seen := make(map[string]int, len(c.Objects))
 	for i := range c.Objects {
 		ow := &c.Objects[i]
 		if ow.Name == "" {
 			return fmt.Errorf("objects[%d]: name is required", i)
+		}
+		if _, blocked := denied[ObjectMatcher{Name: ow.Name, Group: ow.Group}]; blocked {
+			return fmt.Errorf("objects[%d]: resource %q in group %q is denied (sensitive content)",
+				i, ow.Name, ow.Group)
 		}
 		if ow.LabelSelector != "" {
 			if _, err := labels.Parse(ow.LabelSelector); err != nil {

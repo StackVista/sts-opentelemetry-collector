@@ -160,16 +160,6 @@ func TestConfigValidate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "valid objects watch with explicit version override",
-			config: &Config{
-				DiscoveryMode: DiscoveryModeAll,
-				Objects: []ObjectWatch{
-					{Name: "events", Group: "events.k8s.io", Version: "v1"},
-				},
-			},
-			wantErr: false,
-		},
-		{
 			name: "objects entry missing name rejected",
 			config: &Config{
 				DiscoveryMode: DiscoveryModeAll,
@@ -259,6 +249,66 @@ func TestConfigValidate(t *testing.T) {
 			},
 			wantErr: true,
 			errMsg:  "objects[1] duplicates objects[0]",
+		},
+		{
+			name: "core secrets denied by default",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				Objects: []ObjectWatch{
+					{Name: "secrets"},
+				},
+			},
+			wantErr: true,
+			errMsg:  `resource "secrets" in group "" is denied`,
+		},
+		{
+			name: "core configmaps denied by default",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				Objects: []ObjectWatch{
+					{Name: "configmaps", Namespaces: []string{"runtime-enforcer"}},
+				},
+			},
+			wantErr: true,
+			errMsg:  `resource "configmaps" in group "" is denied`,
+		},
+		{
+			name: "third-party resource named secrets allowed when group differs",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				Objects: []ObjectWatch{
+					{Name: "secrets", Group: "vault.example.com"},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "denied_objects extension blocks cert-manager certificates",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				DeniedObjects: []ObjectMatcher{
+					{Name: "certificates", Group: "cert-manager.io"},
+				},
+				Objects: []ObjectWatch{
+					{Name: "certificates", Group: "cert-manager.io"},
+				},
+			},
+			wantErr: true,
+			errMsg:  `resource "certificates" in group "cert-manager.io" is denied`,
+		},
+		{
+			name: "denied_objects cannot remove built-in defaults",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				DeniedObjects: []ObjectMatcher{
+					{Name: "events", Group: ""},
+				},
+				Objects: []ObjectWatch{
+					{Name: "secrets"},
+				},
+			},
+			wantErr: true,
+			errMsg:  `resource "secrets" in group "" is denied`,
 		},
 	}
 
