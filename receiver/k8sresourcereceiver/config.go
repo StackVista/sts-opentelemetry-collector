@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 )
 
@@ -106,10 +106,6 @@ type ObjectWatch struct {
 
 	// FieldSelector is a standard k8s field selector, e.g. "status.phase=Running".
 	FieldSelector string `mapstructure:"field_selector"`
-
-	// gvr is resolved at startup; unexported so mapstructure ignores it.
-	// nolint: unused
-	gvr *schema.GroupVersionResource
 }
 
 // APIGroupFilters defines inclusion and exclusion patterns for API groups
@@ -257,6 +253,10 @@ func (c *Config) validateObjects() error {
 
 func (c *Config) getDynamicClient() (dynamic.Interface, error) {
 	return MakeDynamicClient(c.APIConfig)
+}
+
+func (c *Config) getDiscoveryClient() (discovery.DiscoveryInterface, error) {
+	return MakeDiscoveryClient(c.APIConfig)
 }
 
 // shouldWatchAPIGroup determines if a CRD's API group should be watched based on filters
