@@ -8,6 +8,9 @@ import (
 	"time"
 
 	"go.opentelemetry.io/collector/component"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 )
 
@@ -16,6 +19,9 @@ type DiscoveryMode string
 const (
 	DiscoveryModeAPIGroups DiscoveryMode = "api_groups"
 	DiscoveryModeAll       DiscoveryMode = "all"
+
+	resourceSecrets   = "secrets"
+	resourceConfigMap = "configmaps"
 )
 
 // Config defines configuration for the k8sresource receiver.
@@ -56,6 +62,54 @@ type Config struct {
 	// K8sLeaderElector is the component ID of a k8sleaderelector extension.
 	// When set, only the leader replica actively watches CRDs/CRs.
 	K8sLeaderElector *component.ID `mapstructure:"k8s_leader_elector"`
+
+	// Objects declares Kubernetes resources to watch alongside CRD-discovered
+	// custom resources. See ObjectWatch.
+	Objects []ObjectWatch `mapstructure:"objects"`
+
+	// DeniedObjects extends the built-in denylist (core Secrets and ConfigMaps)
+	// with additional resources that must not appear under Objects. The built-in
+	// defaults always apply and cannot be removed. Use this to block third-party
+	// resources with sensitive contents (e.g. cert-manager Certificates).
+	DeniedObjects []ObjectMatcher `mapstructure:"denied_objects"`
+}
+
+// ObjectMatcher identifies a Kubernetes resource by plural name and API group.
+type ObjectMatcher struct {
+	Name string `mapstructure:"name"`
+
+	// Group is the API group. Empty matches the core API group.
+	Group string `mapstructure:"group"`
+}
+
+// ObjectWatch declares a Kubernetes resource to watch.
+//
+// The shape of this type was inspired by the `K8sObjectConfig` type in the upstream `k8sobectsreceiver` -
+// https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/receiver/k8sobjectsreceiver/config.go#L43
+type ObjectWatch struct {
+	// Name is the plural resource name, e.g. "pods", "deployments".
+	Name string `mapstructure:"name"`
+
+	// Group disambiguates resources that exist in multiple API groups.
+	// Empty matches the core API group.
+	Group string `mapstructure:"group"`
+
+	// Version pins a specific API version. Empty uses the preferred version
+	// from the Kubernetes discovery client.
+	Version string `mapstructure:"version"`
+
+	// Namespaces lists namespaces to watch. Empty means cluster-wide.
+	Namespaces []string `mapstructure:"namespaces"`
+
+	// LabelSelector is a standard k8s label selector, e.g. "app in (foo,bar)".
+	LabelSelector string `mapstructure:"label_selector"`
+
+	// FieldSelector is a standard k8s field selector, e.g. "status.phase=Running".
+	FieldSelector string `mapstructure:"field_selector"`
+
+	// gvr is resolved at startup; unexported so mapstructure ignores it.
+	// nolint: unused
+	gvr *schema.GroupVersionResource
 }
 
 // APIGroupFilters defines inclusion and exclusion patterns for API groups
@@ -134,6 +188,70 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	if err := c.validateObjects(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// defaultDeniedObjects are built-in denied resource types whose contents
+// commonly hold sensitive material. Always applied, not removable.
+//
+// nolint:gochecknoglobals
+var defaultDeniedObjects = []ObjectMatcher{
+	{Name: resourceSecrets, Group: ""},
+	{Name: resourceConfigMap, Group: ""},
+}
+
+// validateObjects enforces static rules on c.Objects: required name, not
+// denied, parseable selectors, and uniqueness across namespace expansion.
+// GVR resolution (ambiguity, missing-from-server, version-mismatch) is
+// deferred to receiver startup, where the discovery client is available.
+func (c *Config) validateObjects() error {
+	if len(c.Objects) == 0 {
+		return nil
+	}
+	denied := make(map[ObjectMatcher]struct{}, len(defaultDeniedObjects)+len(c.DeniedObjects))
+	for _, m := range defaultDeniedObjects {
+		denied[m] = struct{}{}
+	}
+	for _, m := range c.DeniedObjects {
+		denied[m] = struct{}{}
+	}
+	seen := make(map[string]int, len(c.Objects))
+	for i := range c.Objects {
+		ow := &c.Objects[i]
+		if ow.Name == "" {
+			return fmt.Errorf("objects[%d]: name is required", i)
+		}
+		if _, blocked := denied[ObjectMatcher{Name: ow.Name, Group: ow.Group}]; blocked {
+			return fmt.Errorf("objects[%d]: resource %q in group %q is denied (sensitive content)",
+				i, ow.Name, ow.Group)
+		}
+		if ow.LabelSelector != "" {
+			if _, err := labels.Parse(ow.LabelSelector); err != nil {
+				return fmt.Errorf("objects[%d]: invalid label_selector %q: %w", i, ow.LabelSelector, err)
+			}
+		}
+		if ow.FieldSelector != "" {
+			if _, err := fields.ParseSelector(ow.FieldSelector); err != nil {
+				return fmt.Errorf("objects[%d]: invalid field_selector %q: %w", i, ow.FieldSelector, err)
+			}
+		}
+		namespaces := ow.Namespaces
+		if len(namespaces) == 0 {
+			namespaces = []string{""}
+		}
+		for _, ns := range namespaces {
+			key := strings.Join([]string{ow.Name, ow.Group, ow.Version, ns, ow.LabelSelector, ow.FieldSelector}, "|")
+			if prev, ok := seen[key]; ok {
+				return fmt.Errorf("objects[%d] duplicates objects[%d]: name=%q group=%q version=%q namespace=%q",
+					i, prev, ow.Name, ow.Group, ow.Version, ns)
+			}
+			seen[key] = i
+		}
+	}
 	return nil
 }
 
