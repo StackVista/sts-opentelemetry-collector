@@ -90,13 +90,23 @@ const (
 	BootstrapSourceSecondary BootstrapSource = "secondary"
 )
 
-// CRInformerOutcome categorises the result of a startCRInformer call. Used by the
-// reconciler metric to surface whether periodic recovery is doing useful work.
-type CRInformerOutcome string
+// InformerKind distinguishes the two informer flavours that share the reconcile
+// metric: CRD-discovered CR informers and statically-configured object informers.
+type InformerKind string
 
 const (
-	CRInformerStarted   CRInformerOutcome = "started"
-	CRInformerExists    CRInformerOutcome = "exists"
-	CRInformerForbidden CRInformerOutcome = "forbidden"
-	CRInformerFailed    CRInformerOutcome = "failed"
+	InformerKindCR     InformerKind = "cr"
+	InformerKindStatic InformerKind = "static"
+)
+
+// InformerOutcome categorises the result of a (re-)attempt to start an informer.
+// Used by the reconciler metric to surface whether periodic recovery is doing
+// useful work.
+type InformerOutcome string
+
+const (
+	InformerStarted   InformerOutcome = "started"
+	InformerExists    InformerOutcome = "exists"
+	InformerForbidden InformerOutcome = "forbidden"
+	InformerFailed    InformerOutcome = "failed"
 )

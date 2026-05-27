@@ -158,7 +158,7 @@ func newTestCollectorWithPeerStore(
 ) *resourceCollector {
 	t.Helper()
 	settings := testSettings(t)
-	informerSet := newResourceInformers(settings, config, client, ft, nil)
+	informerSet := newResourceInformers(settings, config, client, nil, ft, nil)
 	return newResourceCollector(settings.Logger, config, sink, informerSet, peerStore, nil)
 }
 

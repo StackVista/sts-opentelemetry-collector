@@ -120,7 +120,7 @@ func (r *k8sresourceReceiver) startCollector(ctx context.Context) error {
 	r.mu.Unlock()
 
 	ft := tracker.NewDefault()
-	informers := newResourceInformers(r.settings, r.config, r.dynamicClient, ft, r.metrics)
+	informers := newResourceInformers(r.settings, r.config, r.dynamicClient, r.resolvedObjects, ft, r.metrics)
 	collector := newResourceCollector(r.settings.Logger, r.config, r.consumer, informers, r.peerStore, r.metrics)
 
 	if err := collector.Start(ctx); err != nil {

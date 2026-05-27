@@ -114,7 +114,7 @@ func (c *resourceCollector) runIncrementLoop(ctx context.Context) {
 func (c *resourceCollector) runIncrement(ctx context.Context) {
 	start := time.Now()
 	currentCRDs := c.informers.ReadCRDs()
-	currentCRs := c.informers.ReadCRs()
+	currentCRs := c.informers.ReadObjects()
 	changes := c.peerStore.ComputeChanges(currentCRDs, currentCRs)
 
 	if c.peerStore.IsEmpty() || time.Since(c.peerStore.LastSnapshotTime()) >= c.config.SnapshotInterval {
