@@ -771,7 +771,7 @@ func TestPeerSyncCacheStore_HandleSnapshot_ServesNDJSONStream(t *testing.T) {
 				"meta frame should carry the snapshot time")
 		case streamFrameCRD:
 			crdCount++
-		case streamFrameCR:
+		case streamFrameObject:
 			crCount++
 		}
 	}

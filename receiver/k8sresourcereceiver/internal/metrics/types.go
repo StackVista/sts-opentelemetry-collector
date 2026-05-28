@@ -27,8 +27,8 @@ const (
 type ResourceKind string
 
 const (
-	KindCRD ResourceKind = "crd"
-	KindCR  ResourceKind = "cr"
+	KindCRD    ResourceKind = "crd"
+	KindObject ResourceKind = "object"
 )
 
 // BroadcastOutcome is the result of a peer broadcast (one ApplyDelta call).

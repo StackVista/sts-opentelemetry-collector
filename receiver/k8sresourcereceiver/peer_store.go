@@ -43,9 +43,9 @@ type PeerSyncSnapshot struct {
 type streamFrameType string
 
 const (
-	streamFrameMeta streamFrameType = "meta"
-	streamFrameCRD  streamFrameType = "crd"
-	streamFrameCR   streamFrameType = "cr"
+	streamFrameMeta   streamFrameType = "meta"
+	streamFrameCRD    streamFrameType = "crd"
+	streamFrameObject streamFrameType = "object"
 )
 
 // streamFrameSource reports the role of the peer that served a snapshot. The
@@ -120,7 +120,7 @@ func encodeDeltaStream(w io.Writer, delta *PeerSyncDelta) error {
 		if ch.IsCRD {
 			frame.Type = streamFrameCRD
 		} else {
-			frame.Type = streamFrameCR
+			frame.Type = streamFrameObject
 			frame.GVR = new(ch.GVR)
 			frame.ObjectSource = ch.Source
 		}
@@ -168,7 +168,7 @@ func decodeDeltaStream(r io.Reader) (*PeerSyncDelta, error) {
 				EventType: frame.EventType,
 				IsCRD:     true,
 			})
-		case streamFrameCR:
+		case streamFrameObject:
 			if frame.Obj == nil {
 				return nil, fmt.Errorf("object frame missing obj")
 			}

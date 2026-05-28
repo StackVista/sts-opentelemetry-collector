@@ -340,7 +340,7 @@ func (p *peerSyncCacheStore) ApplyDelta(ctx context.Context, delta *PeerSyncDelt
 	p.cacheMu.Unlock()
 
 	p.metrics.RecordCacheSize(ctx, metrics.KindCRD, int64(crds))
-	p.metrics.RecordCacheSize(ctx, metrics.KindCR, int64(objs))
+	p.metrics.RecordCacheSize(ctx, metrics.KindObject, int64(objs))
 
 	p.logger.Debug("Applied delta",
 		zap.Int("changes", len(delta.Changes)),
@@ -357,7 +357,7 @@ func (p *peerSyncCacheStore) ApplyDelta(ctx context.Context, delta *PeerSyncDelt
 	return nil
 }
 
-// IsEmpty returns true when the cache contains no CRDs or CRs.
+// IsEmpty returns true when the cache contains no CRDs or objects.
 func (p *peerSyncCacheStore) IsEmpty() bool {
 	p.cacheMu.RLock()
 	defer p.cacheMu.RUnlock()
@@ -423,7 +423,7 @@ func (p *peerSyncCacheStore) handleIncrement(w http.ResponseWriter, r *http.Requ
 	p.bufferMu.Unlock()
 
 	p.metrics.RecordCacheSize(r.Context(), metrics.KindCRD, int64(crds))
-	p.metrics.RecordCacheSize(r.Context(), metrics.KindCR, int64(objs))
+	p.metrics.RecordCacheSize(r.Context(), metrics.KindObject, int64(objs))
 
 	p.logger.Debug("Applied delta from leader",
 		zap.Int("changes", len(delta.Changes)),
@@ -442,8 +442,8 @@ func (p *peerSyncCacheStore) handleIncrement(w http.ResponseWriter, r *http.Requ
 // cache and ends up doing a cold informer re-list.
 //
 // The body is newline-delimited JSON: one meta frame followed by one frame per CRD
-// and CR entry. Each frame is encoded and written through gzip immediately; nothing
-// buffers the full marshaled snapshot.
+// and object entry. Each frame is encoded and written through gzip immediately;
+// nothing buffers the full marshaled snapshot.
 func (p *peerSyncCacheStore) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -503,7 +503,7 @@ func (p *peerSyncCacheStore) handleSnapshot(w http.ResponseWriter, r *http.Reque
 	for key, obj := range objsCopy {
 		gvr := obj.GVR
 		if err := enc.Encode(peerSyncStreamFrame{
-			Type:         streamFrameCR,
+			Type:         streamFrameObject,
 			Key:          key,
 			Obj:          obj.Obj,
 			GVR:          &gvr,
@@ -928,7 +928,7 @@ func (p *peerSyncCacheStore) fetchPeerSnapshot(
 			snap.Source = frame.Source
 		case streamFrameCRD:
 			snap.Cache.CRDs[frame.Key] = frame.Obj
-		case streamFrameCR:
+		case streamFrameObject:
 			if frame.GVR == nil {
 				return nil, resp.StatusCode, fmt.Errorf("object frame for %q missing gvr", frame.Key)
 			}
