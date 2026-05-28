@@ -37,7 +37,9 @@ type resolvedObjectWatch struct {
 // resolution as long as every requested resource is still resolvable from the
 // returned data. This matches upstream k8sobjectsreceiver behaviour and keeps
 // the receiver functional when unrelated extension APIs are unhealthy.
-func resolveObjectGVRs(disc discovery.DiscoveryInterface, watches []ObjectWatch, logger *zap.Logger) ([]resolvedObjectWatch, error) {
+func resolveObjectGVRs(
+	disc discovery.DiscoveryInterface, watches []ObjectWatch, logger *zap.Logger,
+) ([]resolvedObjectWatch, error) {
 	if len(watches) == 0 {
 		return nil, nil
 	}
@@ -273,8 +275,10 @@ func classifyStaticObjectsCRDOverlap(
 		}
 		if info.discovered {
 			overlaps = append(overlaps,
-				fmt.Sprintf("objects[%d] (%s) is defined by a CRD already covered by api_group_filters; remove the entry or exclude its group",
-					i, formatGVR(resolved[i].GVR)))
+				fmt.Sprintf(
+					"objects[%d] (%s) is defined by a CRD already covered by api_group_filters; "+
+						"remove the entry or exclude its group", i, formatGVR(resolved[i].GVR),
+				))
 			continue
 		}
 		resolved[i].CRDBacked = true

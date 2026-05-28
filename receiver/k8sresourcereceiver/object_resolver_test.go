@@ -98,7 +98,7 @@ func TestResolveObjectGVRs(t *testing.T) {
 			wantGVRs:      []schema.GroupVersionResource{{Group: "apps", Version: "v1", Resource: "deployments"}},
 		},
 		{
-			name: "multiple non-core candidates without group fail with ambiguity error",
+			name:    "multiple non-core candidates without group fail with ambiguity error",
 			watches: []ObjectWatch{{Name: "widgets"}},
 			discResources: []*metav1.APIResourceList{
 				{

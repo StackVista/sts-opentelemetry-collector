@@ -432,6 +432,7 @@ func TestResourceInformers_ReconcileNoOpForRunningInformer(t *testing.T) {
 //nolint:gochecknoglobals
 var podsGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
 
+//nolint:unparam
 func makeTestPod(name, namespace string, labels map[string]interface{}) *unstructured.Unstructured {
 	meta := map[string]interface{}{
 		testNameKey: name,
@@ -470,8 +471,8 @@ func staticPodClient(pods ...*unstructured.Unstructured) *dynamicfake.FakeDynami
 	}
 	return dynamicfake.NewSimpleDynamicClientWithCustomListKinds(s,
 		map[schema.GroupVersionResource]string{
-			crdGVR:   testCRDListKind,
-			podsGVR:  "PodList",
+			crdGVR:  testCRDListKind,
+			podsGVR: "PodList",
 		},
 		objs...,
 	)
@@ -721,7 +722,7 @@ func TestResourceInformers_StaticInformer_PerEntryForbidden(t *testing.T) {
 	podB := makeTestPod("b", "ns-b", nil)
 	client := staticPodClient(podA, podB)
 
-	client.Fake.PrependReactor("list", "pods", func(action clienttesting.Action) (bool, runtime.Object, error) {
+	client.PrependReactor("list", "pods", func(action clienttesting.Action) (bool, runtime.Object, error) {
 		if action.GetNamespace() == "ns-a" {
 			return true, nil, apierrors.NewForbidden(
 				schema.GroupResource{Group: "", Resource: "pods"},

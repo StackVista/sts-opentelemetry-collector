@@ -278,7 +278,9 @@ func (c *resourceCollector) emitChanges(ctx context.Context, changes []ResourceC
 		if change.IsCRD {
 			err = emit.LogCRD(ctx, c.consumer, change.Obj, change.EventType, c.config.ClusterName)
 		} else {
-			err = emit.LogObject(ctx, c.consumer, change.Obj, change.EventType, c.config.ClusterName, eventNameForSource(change.Source))
+			err = emit.LogObject(
+				ctx, c.consumer, change.Obj, change.EventType, c.config.ClusterName, eventNameForSource(change.Source),
+			)
 		}
 		if err != nil {
 			c.logger.Debug("Failed to emit change log",

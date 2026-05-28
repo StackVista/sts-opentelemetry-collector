@@ -820,7 +820,9 @@ func expandNamespaces(ow *resolvedObjectWatch) []string {
 
 // resourceClientFor returns the dynamic client scoped to a namespace, or the
 // cluster-wide client when namespace is empty.
-func resourceClientFor(dc dynamic.Interface, gvr schema.GroupVersionResource, namespace string) dynamic.ResourceInterface {
+func resourceClientFor(
+	dc dynamic.Interface, gvr schema.GroupVersionResource, namespace string,
+) dynamic.ResourceInterface {
 	if namespace == "" {
 		return dc.Resource(gvr)
 	}
