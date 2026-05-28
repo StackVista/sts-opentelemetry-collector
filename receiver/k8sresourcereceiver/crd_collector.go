@@ -158,8 +158,8 @@ func (c *resourceCollector) emitSnapshot(
 	var crdAdded, objAdded, crdDeleted, objDeleted int64
 
 	for _, crd := range currentCRDs {
-		if err := emit.Log(
-			ctx, c.consumer, crd, watch.Added, c.config.ClusterName, emit.BuildCRDLogRecord,
+		if err := emit.LogCRD(
+			ctx, c.consumer, crd, watch.Added, c.config.ClusterName,
 		); err != nil {
 			c.logger.Debug("Failed to emit CRD snapshot log",
 				zap.String("name", crd.GetName()),
@@ -171,9 +171,10 @@ func (c *resourceCollector) emitSnapshot(
 	}
 
 	for gvr, group := range currentObjects {
+		eventName := eventNameForSource(group.Source)
 		for _, obj := range group.Objects {
-			if err := emit.Log(
-				ctx, c.consumer, obj, watch.Added, c.config.ClusterName, emit.BuildCRLogRecord,
+			if err := emit.LogObject(
+				ctx, c.consumer, obj, watch.Added, c.config.ClusterName, eventName,
 			); err != nil {
 				c.logger.Debug("Failed to emit object snapshot log",
 					zap.String("gvr", emit.FormatGVRKey(gvr)),
@@ -192,9 +193,9 @@ func (c *resourceCollector) emitSnapshot(
 		}
 		var err error
 		if ch.IsCRD {
-			err = emit.Log(ctx, c.consumer, ch.Obj, watch.Deleted, c.config.ClusterName, emit.BuildCRDLogRecord)
+			err = emit.LogCRD(ctx, c.consumer, ch.Obj, watch.Deleted, c.config.ClusterName)
 		} else {
-			err = emit.Log(ctx, c.consumer, ch.Obj, watch.Deleted, c.config.ClusterName, emit.BuildCRLogRecord)
+			err = emit.LogObject(ctx, c.consumer, ch.Obj, watch.Deleted, c.config.ClusterName, eventNameForSource(ch.Source))
 		}
 		if err != nil {
 			c.logger.Debug("Failed to emit deletion in snapshot",
@@ -275,9 +276,9 @@ func (c *resourceCollector) emitChanges(ctx context.Context, changes []ResourceC
 	for _, change := range changes {
 		var err error
 		if change.IsCRD {
-			err = emit.Log(ctx, c.consumer, change.Obj, change.EventType, c.config.ClusterName, emit.BuildCRDLogRecord)
+			err = emit.LogCRD(ctx, c.consumer, change.Obj, change.EventType, c.config.ClusterName)
 		} else {
-			err = emit.Log(ctx, c.consumer, change.Obj, change.EventType, c.config.ClusterName, emit.BuildCRLogRecord)
+			err = emit.LogObject(ctx, c.consumer, change.Obj, change.EventType, c.config.ClusterName, eventNameForSource(change.Source))
 		}
 		if err != nil {
 			c.logger.Debug("Failed to emit change log",

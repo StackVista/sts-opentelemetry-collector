@@ -17,6 +17,16 @@ const (
 	ObjectSourceStatic ObjectSource = "static"
 )
 
+// eventNameForSource maps an ObjectSource to the emit event name that controls
+// the downstream log shape. CR-sourced objects (CRD-discovered or CRD-backed
+// statics) keep the CR shape; plain static objects use the neutral Object shape.
+func eventNameForSource(s ObjectSource) string {
+	if s == ObjectSourceCR {
+		return emit.EventNameCR
+	}
+	return emit.EventNameObject
+}
+
 // ObjectGroup pairs a list of objects with the source they came from. Returned
 // per-GVR by Informers.ReadObjects.
 type ObjectGroup struct {

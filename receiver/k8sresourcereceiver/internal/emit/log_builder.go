@@ -13,19 +13,22 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 )
 
-// BuildCRLogRecord creates an OTLP log record from a CR and event type.
-func BuildCRLogRecord(
-	cr *unstructured.Unstructured, eventType watch.EventType, timestamp time.Time, clusterName string,
+// BuildObjectLogRecord creates an OTLP log record from a k8s object and event
+// type. eventName lets the caller pick the downstream log shape: EventNameCR
+// for CR-sourced objects (CRD-discovered or CRD-backed statics), EventNameObject
+// for plain static objects.
+func BuildObjectLogRecord(
+	obj *unstructured.Unstructured, eventType watch.EventType, timestamp time.Time,
+	clusterName, eventName string,
 ) (plog.Logs, error) {
 	logs := plog.NewLogs()
 	resourceLogs := logs.ResourceLogs().AppendEmpty()
 
-	// Set resource attributes
 	if clusterName != "" {
 		resourceLogs.Resource().Attributes().PutStr(AttrK8sClusterName, clusterName)
 	}
-	if cr.GetNamespace() != "" {
-		resourceLogs.Resource().Attributes().PutStr(AttrK8sNamespaceName, cr.GetNamespace())
+	if obj.GetNamespace() != "" {
+		resourceLogs.Resource().Attributes().PutStr(AttrK8sNamespaceName, obj.GetNamespace())
 	}
 
 	scopeLogs := resourceLogs.ScopeLogs().AppendEmpty()
@@ -34,26 +37,20 @@ func BuildCRLogRecord(
 	logRecord := scopeLogs.LogRecords().AppendEmpty()
 	logRecord.SetObservedTimestamp(pcommon.NewTimestampFromTime(timestamp))
 
-	// Build log body with the CR object + event type
 	bodyMap := logRecord.Body().SetEmptyMap()
-
-	// Add the CR object (use .Object directly - already a map[string]interface{})
-	if err := bodyMap.PutEmptyMap("object").FromRaw(cr.Object); err != nil {
+	if err := bodyMap.PutEmptyMap("object").FromRaw(obj.Object); err != nil {
 		return logs, fmt.Errorf("failed to set object in body: %w", err)
 	}
-
-	// Add event type
 	bodyMap.PutStr("type", string(eventType))
 
-	// Add attributes for easier filtering
-	logRecord.SetEventName(EventNameCR)
-	logRecord.Attributes().PutStr(AttrK8sResourceName, cr.GetKind())
-	logRecord.Attributes().PutStr(AttrK8sResourceGroup, cr.GroupVersionKind().Group)
-	logRecord.Attributes().PutStr(AttrK8sResourceVersion, cr.GroupVersionKind().Version)
+	logRecord.SetEventName(eventName)
+	logRecord.Attributes().PutStr(AttrK8sResourceKind, obj.GetKind())
+	logRecord.Attributes().PutStr(AttrK8sResourceGroup, obj.GroupVersionKind().Group)
+	logRecord.Attributes().PutStr(AttrK8sResourceVersion, obj.GroupVersionKind().Version)
 	logRecord.Attributes().PutStr(AttrEventDomain, EventDomainK8s)
-	logRecord.Attributes().PutStr(AttrK8sObjectName, cr.GetName())
-	if cr.GetNamespace() != "" {
-		logRecord.Attributes().PutStr(AttrK8sNamespaceName, cr.GetNamespace())
+	logRecord.Attributes().PutStr(AttrK8sObjectName, obj.GetName())
+	if obj.GetNamespace() != "" {
+		logRecord.Attributes().PutStr(AttrK8sNamespaceName, obj.GetNamespace())
 	}
 
 	return logs, nil
@@ -78,15 +75,10 @@ func BuildCRDLogRecord(
 	logRecord := scopeLogs.LogRecords().AppendEmpty()
 	logRecord.SetObservedTimestamp(pcommon.NewTimestampFromTime(timestamp))
 
-	// Build log body with the CRD object + event type
 	bodyMap := logRecord.Body().SetEmptyMap()
-
-	// Add the CRD object (use .Object directly - already a map[string]interface{})
 	if err := bodyMap.PutEmptyMap("object").FromRaw(crd.Object); err != nil {
 		return logs, fmt.Errorf("failed to set object in body: %w", err)
 	}
-
-	// Add event type
 	bodyMap.PutStr("type", string(eventType))
 
 	// Extract the CRD's defined group and kind from spec — these identify what
@@ -95,7 +87,7 @@ func BuildCRDLogRecord(
 	crdKind, _, _ := unstructured.NestedString(crd.Object, "spec", "names", "kind")
 
 	logRecord.SetEventName(EventNameCRD)
-	logRecord.Attributes().PutStr(AttrK8sResourceName, crdKind)
+	logRecord.Attributes().PutStr(AttrK8sResourceKind, crdKind)
 	logRecord.Attributes().PutStr(AttrK8sResourceGroup, crdGroup)
 	logRecord.Attributes().PutStr(AttrK8sResourceVersion, "v1")
 	logRecord.Attributes().PutStr(AttrEventDomain, EventDomainK8s)
@@ -109,16 +101,25 @@ func FormatGVRKey(gvr schema.GroupVersionResource) string {
 	return fmt.Sprintf("%s/%s/%s", gvr.Group, gvr.Version, gvr.Resource)
 }
 
-// Log builds and sends a log record to the consumer.
-func Log(
-	ctx context.Context,
-	cons consumer.Logs,
-	obj *unstructured.Unstructured,
-	eventType watch.EventType,
-	clusterName string,
-	buildLogFn func(*unstructured.Unstructured, watch.EventType, time.Time, string) (plog.Logs, error),
+// LogCRD builds and sends a CRD log record to the consumer.
+func LogCRD(
+	ctx context.Context, cons consumer.Logs, crd *unstructured.Unstructured,
+	eventType watch.EventType, clusterName string,
 ) error {
-	logs, err := buildLogFn(obj, eventType, time.Now(), clusterName)
+	logs, err := BuildCRDLogRecord(crd, eventType, time.Now(), clusterName)
+	if err != nil {
+		return err
+	}
+	return cons.ConsumeLogs(ctx, logs)
+}
+
+// LogObject builds and sends an object log record to the consumer. eventName
+// selects the downstream log shape (CR vs Object); see BuildObjectLogRecord.
+func LogObject(
+	ctx context.Context, cons consumer.Logs, obj *unstructured.Unstructured,
+	eventType watch.EventType, clusterName, eventName string,
+) error {
+	logs, err := BuildObjectLogRecord(obj, eventType, time.Now(), clusterName, eventName)
 	if err != nil {
 		return err
 	}
