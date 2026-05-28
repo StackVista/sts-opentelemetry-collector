@@ -193,7 +193,7 @@ func TestClassifyStaticObjectsCRDOverlap(t *testing.T) {
 		name          string
 		crds          []*unstructured.Unstructured
 		resolved      []resolvedObjectWatch
-		filters       *APIGroupFilters
+		filters       *CRDAPIGroupFilters
 		wantErr       string
 		wantCRDBacked []bool // one entry per resolved index
 	}{
@@ -218,16 +218,16 @@ func TestClassifyStaticObjectsCRDOverlap(t *testing.T) {
 			name:          "static GVR matches a CRD whose group is excluded → allowed and marked CRDBacked",
 			crds:          []*unstructured.Unstructured{makeTestCRDUnstructured("widgets.example.com", "example.com", "Widget", "widgets")},
 			resolved:      []resolvedObjectWatch{{GVR: widgetGVR}},
-			filters:       &APIGroupFilters{Include: []string{"*"}, Exclude: []string{"example.com"}},
+			filters:       &CRDAPIGroupFilters{Include: []string{"*"}, Exclude: []string{"example.com"}},
 			wantCRDBacked: []bool{true},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := &Config{DiscoveryMode: DiscoveryModeAPIGroups, APIGroupFilters: tt.filters}
-			if cfg.APIGroupFilters == nil {
-				cfg.APIGroupFilters = &APIGroupFilters{Include: []string{"*"}}
+			cfg := &Config{DiscoveryMode: DiscoveryModeAPIGroups, CRDAPIGroupFilters: tt.filters}
+			if cfg.CRDAPIGroupFilters == nil {
+				cfg.CRDAPIGroupFilters = &CRDAPIGroupFilters{Include: []string{"*"}}
 			}
 			require.NoError(t, cfg.Validate())
 

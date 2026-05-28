@@ -67,7 +67,7 @@ func testConfig(includes []string, excludes []string) *Config {
 		IncrementInterval: 1 * time.Second,
 		SnapshotInterval:  1 * time.Hour, // Long to prevent snapshots during tests
 		DiscoveryMode:     DiscoveryModeAPIGroups,
-		APIGroupFilters: &APIGroupFilters{
+		CRDAPIGroupFilters: &CRDAPIGroupFilters{
 			Include: includes,
 			Exclude: excludes,
 		},
@@ -609,7 +609,7 @@ func TestConfig_Simplified(t *testing.T) {
 			IncrementInterval: 10 * time.Second,
 			SnapshotInterval:  5 * time.Minute,
 			DiscoveryMode:     DiscoveryModeAPIGroups,
-			APIGroupFilters: &APIGroupFilters{
+			CRDAPIGroupFilters: &CRDAPIGroupFilters{
 				Include: []string{testExampleGroup},
 				Exclude: []string{},
 			},
@@ -622,7 +622,7 @@ func TestConfig_Simplified(t *testing.T) {
 	t.Run("default intervals", func(t *testing.T) {
 		cfg := &Config{
 			DiscoveryMode: DiscoveryModeAPIGroups,
-			APIGroupFilters: &APIGroupFilters{
+			CRDAPIGroupFilters: &CRDAPIGroupFilters{
 				Include: []string{"*"},
 			},
 		}
@@ -675,14 +675,14 @@ func TestConfig_Simplified(t *testing.T) {
 			DiscoveryMode: DiscoveryModeAPIGroups,
 		}
 		require.NoError(t, cfg.Validate())
-		require.NotNil(t, cfg.APIGroupFilters)
-		assert.Equal(t, []string{"*"}, cfg.APIGroupFilters.Include)
+		require.NotNil(t, cfg.CRDAPIGroupFilters)
+		assert.Equal(t, []string{"*"}, cfg.CRDAPIGroupFilters.Include)
 	})
 
 	t.Run("empty include", func(t *testing.T) {
 		cfg := &Config{
 			DiscoveryMode: DiscoveryModeAPIGroups,
-			APIGroupFilters: &APIGroupFilters{
+			CRDAPIGroupFilters: &CRDAPIGroupFilters{
 				Include: []string{},
 			},
 		}
@@ -705,7 +705,7 @@ func TestConfig_Simplified(t *testing.T) {
 	t.Run("special chars in patterns are literal", func(t *testing.T) {
 		cfg := &Config{
 			DiscoveryMode: DiscoveryModeAPIGroups,
-			APIGroupFilters: &APIGroupFilters{
+			CRDAPIGroupFilters: &CRDAPIGroupFilters{
 				Include: []string{"example.com"},
 			},
 		}
@@ -719,7 +719,7 @@ func TestConfig_Simplified(t *testing.T) {
 	t.Run("shouldWatchAPIGroup with wildcard and exclude", func(t *testing.T) {
 		cfg := &Config{
 			DiscoveryMode: DiscoveryModeAPIGroups,
-			APIGroupFilters: &APIGroupFilters{
+			CRDAPIGroupFilters: &CRDAPIGroupFilters{
 				Include: []string{testSuseWildcard, "longhorn.io"},
 				Exclude: []string{"internal.suse.com"},
 			},

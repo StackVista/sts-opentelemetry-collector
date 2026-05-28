@@ -33,7 +33,7 @@ func createDefaultConfig() component.Config {
 		IncrementInterval: 10 * time.Second,
 		SnapshotInterval:  5 * time.Minute,
 		DiscoveryMode:     DiscoveryModeAPIGroups,
-		APIGroupFilters: &APIGroupFilters{
+		CRDAPIGroupFilters: &CRDAPIGroupFilters{
 			Include: []string{"*"},
 			Exclude: []string{},
 		},

@@ -46,9 +46,9 @@ type Config struct {
 	// DiscoveryMode controls how CRDs are discovered: "api_groups" (filtered) or "all".
 	DiscoveryMode DiscoveryMode `mapstructure:"discovery_mode"`
 
-	// APIGroupFilters defines inclusion/exclusion patterns for API groups.
+	// CRDAPIGroupFilters defines inclusion/exclusion patterns for CRD-discovered API groups.
 	// Only used when DiscoveryMode is "api_groups".
-	APIGroupFilters *APIGroupFilters `mapstructure:"api_group_filters"`
+	CRDAPIGroupFilters *CRDAPIGroupFilters `mapstructure:"crd_api_group_filters"`
 
 	// PeerSyncPort is the port on which the HTTP server listens for peer sync requests.
 	// Each replica serves its serialized cache on this port. Default: 4319.
@@ -108,8 +108,8 @@ type ObjectWatch struct {
 	FieldSelector string `mapstructure:"field_selector"`
 }
 
-// APIGroupFilters defines inclusion and exclusion patterns for API groups
-type APIGroupFilters struct {
+// CRDAPIGroupFilters defines inclusion and exclusion patterns for API groups
+type CRDAPIGroupFilters struct {
 	// Include defines patterns to include (glob). Default: ["*"] (all groups)
 	Include []string `mapstructure:"include"`
 
@@ -152,35 +152,35 @@ func (c *Config) Validate() error {
 	}
 
 	if c.DiscoveryMode == DiscoveryModeAPIGroups {
-		if c.APIGroupFilters == nil {
-			c.APIGroupFilters = &APIGroupFilters{
+		if c.CRDAPIGroupFilters == nil {
+			c.CRDAPIGroupFilters = &CRDAPIGroupFilters{
 				Include: []string{"*"},
 				Exclude: []string{},
 			}
 		}
 
-		if len(c.APIGroupFilters.Include) == 0 {
-			return errors.New("api_group_filters.include cannot be empty when discovery_mode is 'api_groups'")
+		if len(c.CRDAPIGroupFilters.Include) == 0 {
+			return errors.New("crd_api_group_filters.include cannot be empty when discovery_mode is 'api_groups'")
 		}
 
 		// Pre-compile and cache include patterns for performance
-		c.APIGroupFilters.includeRegexes = make([]*regexp.Regexp, 0, len(c.APIGroupFilters.Include))
-		for _, pattern := range c.APIGroupFilters.Include {
+		c.CRDAPIGroupFilters.includeRegexes = make([]*regexp.Regexp, 0, len(c.CRDAPIGroupFilters.Include))
+		for _, pattern := range c.CRDAPIGroupFilters.Include {
 			regex, err := compilePattern(pattern)
 			if err != nil {
 				return fmt.Errorf("invalid include pattern %q: %w", pattern, err)
 			}
-			c.APIGroupFilters.includeRegexes = append(c.APIGroupFilters.includeRegexes, regex)
+			c.CRDAPIGroupFilters.includeRegexes = append(c.CRDAPIGroupFilters.includeRegexes, regex)
 		}
 
 		// Pre-compile and cache exclude patterns for performance
-		c.APIGroupFilters.excludeRegexes = make([]*regexp.Regexp, 0, len(c.APIGroupFilters.Exclude))
-		for _, pattern := range c.APIGroupFilters.Exclude {
+		c.CRDAPIGroupFilters.excludeRegexes = make([]*regexp.Regexp, 0, len(c.CRDAPIGroupFilters.Exclude))
+		for _, pattern := range c.CRDAPIGroupFilters.Exclude {
 			regex, err := compilePattern(pattern)
 			if err != nil {
 				return fmt.Errorf("invalid exclude pattern %q: %w", pattern, err)
 			}
-			c.APIGroupFilters.excludeRegexes = append(c.APIGroupFilters.excludeRegexes, regex)
+			c.CRDAPIGroupFilters.excludeRegexes = append(c.CRDAPIGroupFilters.excludeRegexes, regex)
 		}
 	}
 
@@ -267,7 +267,7 @@ func (c *Config) shouldWatchAPIGroup(apiGroup string) bool {
 
 	// Check include patterns using cached compiled regexes
 	included := false
-	for _, regex := range c.APIGroupFilters.includeRegexes {
+	for _, regex := range c.CRDAPIGroupFilters.includeRegexes {
 		if regex.MatchString(apiGroup) {
 			included = true
 			break
@@ -279,7 +279,7 @@ func (c *Config) shouldWatchAPIGroup(apiGroup string) bool {
 	}
 
 	// Check exclude patterns using cached compiled regexes
-	for _, regex := range c.APIGroupFilters.excludeRegexes {
+	for _, regex := range c.CRDAPIGroupFilters.excludeRegexes {
 		if regex.MatchString(apiGroup) {
 			return false
 		}
