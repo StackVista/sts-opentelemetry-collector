@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/emit"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/tracker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/watch"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 )
 
@@ -519,6 +522,85 @@ func TestResourceCollector_TwoPhaseSaveOrdering(t *testing.T) {
 			tt.assertSaves(t, all[savesBeforeMutation:])
 		})
 	}
+}
+
+// TestResourceCollector_EmitObject_SourceDrivesEventName verifies that the
+// collector picks the downstream event name from each object's ObjectSource:
+// Source=cr keeps the CR-shape event name, Source=static uses the neutral
+// object-shape event name. Covers both the snapshot path (currentObjects) and
+// the increment path (ResourceChange).
+func TestResourceCollector_EmitObject_SourceDrivesEventName(t *testing.T) {
+	crGVR := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"}
+	staticGVR := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
+
+	crObj := makeTestCR("widget-1", "default", "example.com", "v1", "Widget")
+	staticObj := makeTestCR("pod-1", "default", "", "v1", "Pod")
+
+	cfg := &Config{ClusterName: "test-cluster"}
+
+	t.Run("snapshot path", func(t *testing.T) {
+		sink := &consumertest.LogsSink{}
+		c := &resourceCollector{
+			logger:   zaptest.NewLogger(t),
+			config:   cfg,
+			consumer: sink,
+			metrics:  metrics.NoopRecorder{},
+		}
+		c.emitSnapshot(
+			context.Background(),
+			nil, // no CRDs
+			map[schema.GroupVersionResource]ObjectGroup{
+				crGVR:     {Source: ObjectSourceCR, Objects: []*unstructured.Unstructured{crObj}},
+				staticGVR: {Source: ObjectSourceStatic, Objects: []*unstructured.Unstructured{staticObj}},
+			},
+			nil, // no deletes
+		)
+		assertEventNamesByObjectName(t, sink, map[string]string{
+			"widget-1": emit.EventNameCR,
+			"pod-1":    emit.EventNameObject,
+		})
+	})
+
+	t.Run("increment path", func(t *testing.T) {
+		sink := &consumertest.LogsSink{}
+		c := &resourceCollector{
+			logger:   zaptest.NewLogger(t),
+			config:   cfg,
+			consumer: sink,
+			metrics:  metrics.NoopRecorder{},
+		}
+		c.emitChanges(context.Background(), []ResourceChange{
+			{Obj: crObj, EventType: watch.Modified, GVR: crGVR, Source: ObjectSourceCR},
+			{Obj: staticObj, EventType: watch.Added, GVR: staticGVR, Source: ObjectSourceStatic},
+		})
+		assertEventNamesByObjectName(t, sink, map[string]string{
+			"widget-1": emit.EventNameCR,
+			"pod-1":    emit.EventNameObject,
+		})
+	})
+}
+
+// assertEventNamesByObjectName walks every emitted log record and matches
+// k8s.object.name → expected event name. Fails if any expected entry is missing
+// or any record carries the wrong event name.
+func assertEventNamesByObjectName(t *testing.T, sink *consumertest.LogsSink, want map[string]string) {
+	t.Helper()
+	got := map[string]string{}
+	for _, ld := range sink.AllLogs() {
+		for i := 0; i < ld.ResourceLogs().Len(); i++ {
+			rl := ld.ResourceLogs().At(i)
+			for j := 0; j < rl.ScopeLogs().Len(); j++ {
+				sl := rl.ScopeLogs().At(j)
+				for k := 0; k < sl.LogRecords().Len(); k++ {
+					lr := sl.LogRecords().At(k)
+					name, ok := lr.Attributes().Get(emit.AttrK8sObjectName)
+					require.True(t, ok, "log record missing k8s.object.name")
+					got[name.Str()] = lr.EventName()
+				}
+			}
+		}
+	}
+	assert.Equal(t, want, got)
 }
 
 func TestConfig_Simplified(t *testing.T) {
