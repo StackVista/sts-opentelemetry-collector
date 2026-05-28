@@ -35,8 +35,8 @@ func testCacheWithData(t *testing.T) *resourceCache {
 	gvr := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: testWidgetsResource}
 	cr := makeTestCR("my-widget", "default", testExampleGroup, "v1", "Widget")
 	cr.SetResourceVersion("7")
-	key := crResourceKey(gvr, "default", "my-widget")
-	cache.CRs[key] = &cachedCR{Obj: cr, GVR: gvr}
+	key := objectResourceKey(gvr, "default", "my-widget")
+	cache.Objects[key] = &cachedObject{Obj: cr, GVR: gvr, Source: ObjectSourceCR}
 
 	return cache
 }
@@ -49,8 +49,8 @@ func testDeltaFromCache(t *testing.T, c *resourceCache) *PeerSyncDelta {
 	for _, crd := range c.CRDs {
 		delta.Changes = append(delta.Changes, ResourceChange{Obj: crd, EventType: watch.Added, IsCRD: true})
 	}
-	for _, cr := range c.CRs {
-		delta.Changes = append(delta.Changes, ResourceChange{Obj: cr.Obj, EventType: watch.Added, GVR: cr.GVR})
+	for _, obj := range c.Objects {
+		delta.Changes = append(delta.Changes, ResourceChange{Obj: obj.Obj, EventType: watch.Added, GVR: obj.GVR, Source: obj.Source})
 	}
 	return delta
 }
@@ -91,8 +91,8 @@ func TestPeerSyncCacheStore_ApplyDelta_PopulatesCache(t *testing.T) {
 	for _, crd := range testCacheWithData(t).CRDs {
 		delta.Changes = append(delta.Changes, ResourceChange{Obj: crd, EventType: watch.Added, IsCRD: true})
 	}
-	for _, cr := range testCacheWithData(t).CRs {
-		delta.Changes = append(delta.Changes, ResourceChange{Obj: cr.Obj, EventType: watch.Added, GVR: cr.GVR})
+	for _, obj := range testCacheWithData(t).Objects {
+		delta.Changes = append(delta.Changes, ResourceChange{Obj: obj.Obj, EventType: watch.Added, GVR: obj.GVR, Source: obj.Source})
 	}
 
 	require.NoError(t, store.ApplyDelta(context.Background(), delta))
@@ -237,6 +237,7 @@ func TestEncodeDecodeDeltaStream_RoundTrip(t *testing.T) {
 		assert.Equal(t, want.EventType, got.EventType)
 		assert.Equal(t, want.IsCRD, got.IsCRD)
 		assert.Equal(t, want.GVR, got.GVR)
+		assert.Equal(t, want.Source, got.Source)
 	}
 }
 
@@ -672,11 +673,11 @@ func TestPeerSyncCacheStore_PushToPeer_DataIntegrity(t *testing.T) {
 	defer receiver.cacheMu.RUnlock()
 	require.Len(t, receiver.cache.CRDs, 1)
 	assert.Equal(t, "widgets.example.com", receiver.cache.CRDs["widgets.example.com"].GetName())
-	require.Len(t, receiver.cache.CRs, 1)
+	require.Len(t, receiver.cache.Objects, 1)
 
 	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"}
-	key := crResourceKey(gvr, "default", "my-widget")
-	assert.Equal(t, "my-widget", receiver.cache.CRs[key].Obj.GetName())
+	key := objectResourceKey(gvr, "default", "my-widget")
+	assert.Equal(t, "my-widget", receiver.cache.Objects[key].Obj.GetName())
 }
 
 // --- Context cancellation ---

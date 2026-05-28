@@ -2,14 +2,18 @@
 package k8sresourcereceiver
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
 )
 
 // stubDiscovery is a minimal discovery.DiscoveryInterface for tests. Only the
@@ -164,6 +168,79 @@ func TestResolveObjectGVRs(t *testing.T) {
 			require.Len(t, resolved, len(tt.wantGVRs))
 			for i, want := range tt.wantGVRs {
 				assert.Equal(t, want, resolved[i].GVR, "watch %d", i)
+			}
+		})
+	}
+}
+
+func TestClassifyStaticObjectsCRDOverlap(t *testing.T) {
+	widgetGVR := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"}
+	podsGVR := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
+
+	makeClient := func(crds ...*unstructured.Unstructured) *dynamicfake.FakeDynamicClient {
+		scheme := testScheme()
+		objs := make([]runtime.Object, len(crds))
+		for i, c := range crds {
+			objs[i] = c
+		}
+		return dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme,
+			map[schema.GroupVersionResource]string{crdGVR: testCRDListKind},
+			objs...,
+		)
+	}
+
+	tests := []struct {
+		name          string
+		crds          []*unstructured.Unstructured
+		resolved      []resolvedObjectWatch
+		filters       *APIGroupFilters
+		wantErr       string
+		wantCRDBacked []bool // one entry per resolved index
+	}{
+		{
+			name:     "no static objects → no-op",
+			crds:     []*unstructured.Unstructured{makeTestCRDUnstructured("widgets.example.com", "example.com", "Widget", "widgets")},
+			resolved: nil,
+		},
+		{
+			name:          "static GVR with no matching CRD passes",
+			crds:          []*unstructured.Unstructured{makeTestCRDUnstructured("widgets.example.com", "example.com", "Widget", "widgets")},
+			resolved:      []resolvedObjectWatch{{GVR: podsGVR}},
+			wantCRDBacked: []bool{false},
+		},
+		{
+			name:     "static GVR matches a CRD in a discovered group → reject",
+			crds:     []*unstructured.Unstructured{makeTestCRDUnstructured("widgets.example.com", "example.com", "Widget", "widgets")},
+			resolved: []resolvedObjectWatch{{GVR: widgetGVR}},
+			wantErr:  "widgets",
+		},
+		{
+			name:          "static GVR matches a CRD whose group is excluded → allowed and marked CRDBacked",
+			crds:          []*unstructured.Unstructured{makeTestCRDUnstructured("widgets.example.com", "example.com", "Widget", "widgets")},
+			resolved:      []resolvedObjectWatch{{GVR: widgetGVR}},
+			filters:       &APIGroupFilters{Include: []string{"*"}, Exclude: []string{"example.com"}},
+			wantCRDBacked: []bool{true},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{DiscoveryMode: DiscoveryModeAPIGroups, APIGroupFilters: tt.filters}
+			if cfg.APIGroupFilters == nil {
+				cfg.APIGroupFilters = &APIGroupFilters{Include: []string{"*"}}
+			}
+			require.NoError(t, cfg.Validate())
+
+			client := makeClient(tt.crds...)
+			err := classifyStaticObjectsCRDOverlap(context.Background(), client, cfg, tt.resolved)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			for i, want := range tt.wantCRDBacked {
+				assert.Equal(t, want, tt.resolved[i].CRDBacked, "resolved[%d].CRDBacked", i)
 			}
 		})
 	}

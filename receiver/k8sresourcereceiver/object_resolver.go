@@ -1,14 +1,17 @@
 package k8sresourcereceiver
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
 
 	"go.uber.org/zap"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/dynamic"
 )
 
 // resolvedObjectWatch pairs a user-supplied ObjectWatch with its discovery-
@@ -18,6 +21,11 @@ type resolvedObjectWatch struct {
 	ObjectWatch
 	GVR        schema.GroupVersionResource
 	Namespaced bool
+	// CRDBacked is true when the GVR is defined by a CustomResourceDefinition
+	// on the cluster. Populated by classifyStaticObjectsCRDOverlap. Used by the
+	// static informer to stamp Source=cr on emitted objects so downstream
+	// emission keeps the CR-shape log schema.
+	CRDBacked bool
 }
 
 // resolveObjectGVRs maps each ObjectWatch to a resolvedObjectWatch using the
@@ -213,4 +221,66 @@ func formatGVR(gvr schema.GroupVersionResource) string {
 		return fmt.Sprintf("/%s/%s", gvr.Version, gvr.Resource)
 	}
 	return fmt.Sprintf("%s/%s/%s", gvr.Group, gvr.Version, gvr.Resource)
+}
+
+// classifyStaticObjectsCRDOverlap walks the CRD list once and:
+//   - rejects any static object whose GVR is also CRD-discovered (i.e. the
+//     CRD's group passes api_group_filters), since both informers would emit
+//     the same resource;
+//   - marks CRDBacked=true on any static object whose GVR is defined by a
+//     CRD but whose group is filter-excluded — the static informer is the
+//     only path, and downstream emission should still use the CR log shape.
+//
+// resolved is mutated in place. Returns an error listing every rejected entry.
+func classifyStaticObjectsCRDOverlap(
+	ctx context.Context,
+	dynClient dynamic.Interface,
+	cfg *Config,
+	resolved []resolvedObjectWatch,
+) error {
+	if len(resolved) == 0 {
+		return nil
+	}
+
+	list, err := dynClient.Resource(crdGVR).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		// Without list permission on CRDs we can't classify. The receiver also
+		// won't be able to do CR discovery, so overlap is moot — let startup proceed.
+		if isPermissionDenied(err) {
+			return nil
+		}
+		return fmt.Errorf("list CRDs to classify static objects: %w", err)
+	}
+
+	type crdInfo struct{ discovered bool }
+	type crdKey struct{ group, plural string }
+	crds := make(map[crdKey]crdInfo, len(list.Items))
+	for i := range list.Items {
+		var crd apiextensionsv1.CustomResourceDefinition
+		if err := convertUnstructuredToCRD(&list.Items[i], &crd); err != nil {
+			continue
+		}
+		crds[crdKey{group: crd.Spec.Group, plural: crd.Spec.Names.Plural}] = crdInfo{
+			discovered: cfg.shouldWatchAPIGroup(crd.Spec.Group),
+		}
+	}
+
+	var overlaps []string
+	for i := range resolved {
+		info, isCRD := crds[crdKey{group: resolved[i].GVR.Group, plural: resolved[i].GVR.Resource}]
+		if !isCRD {
+			continue
+		}
+		if info.discovered {
+			overlaps = append(overlaps,
+				fmt.Sprintf("objects[%d] (%s) is defined by a CRD already covered by api_group_filters; remove the entry or exclude its group",
+					i, formatGVR(resolved[i].GVR)))
+			continue
+		}
+		resolved[i].CRDBacked = true
+	}
+	if len(overlaps) > 0 {
+		return fmt.Errorf("static objects overlap with CRD-discovered CRs:\n  %s", strings.Join(overlaps, "\n  "))
+	}
+	return nil
 }

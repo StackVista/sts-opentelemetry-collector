@@ -109,8 +109,9 @@ func TestResourceInformers_ReadObjects_CRD(t *testing.T) {
 	gvr := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: testTestResources}
 	objs := ri.ReadObjects()
 	require.Contains(t, objs, gvr)
-	require.Len(t, objs[gvr], 1)
-	assert.Equal(t, "my-resource", objs[gvr][0].GetName())
+	require.Len(t, objs[gvr].Objects, 1)
+	assert.Equal(t, "my-resource", objs[gvr].Objects[0].GetName())
+	assert.Equal(t, ObjectSourceCR, objs[gvr].Source)
 }
 
 func TestResourceInformers_CRDAddStartsCRInformer(t *testing.T) {
@@ -502,8 +503,9 @@ func TestResourceInformers_StaticInformer_StartsAndReads(t *testing.T) {
 
 	objs := ri.ReadObjects()
 	require.Contains(t, objs, podsGVR)
-	require.Len(t, objs[podsGVR], 1)
-	assert.Equal(t, "nginx", objs[podsGVR][0].GetName())
+	require.Len(t, objs[podsGVR].Objects, 1)
+	assert.Equal(t, "nginx", objs[podsGVR].Objects[0].GetName())
+	assert.Equal(t, ObjectSourceStatic, objs[podsGVR].Source)
 }
 
 func TestResourceInformers_StaticInformer_NamespaceExpansion(t *testing.T) {
@@ -534,8 +536,8 @@ func TestResourceInformers_StaticInformer_NamespaceExpansion(t *testing.T) {
 
 	objs := ri.ReadObjects()
 	require.Contains(t, objs, podsGVR)
-	names := make([]string, 0, len(objs[podsGVR]))
-	for _, p := range objs[podsGVR] {
+	names := make([]string, 0, len(objs[podsGVR].Objects))
+	for _, p := range objs[podsGVR].Objects {
 		names = append(names, p.GetName())
 	}
 	assert.ElementsMatch(t, []string{"a", "b"}, names, "ns-c pod must not appear")
@@ -582,7 +584,7 @@ func TestResourceInformers_StaticInformer_ClusterScoped(t *testing.T) {
 
 	objs := ri.ReadObjects()
 	require.Contains(t, objs, nsGVR)
-	require.Len(t, objs[nsGVR], 1)
+	require.Len(t, objs[nsGVR].Objects, 1)
 }
 
 func TestResourceInformers_StaticInformer_ReadObjectsMergesWithCRs(t *testing.T) {
@@ -634,8 +636,10 @@ func TestResourceInformers_StaticInformer_ReadObjectsMergesWithCRs(t *testing.T)
 	objs := ri.ReadObjects()
 	require.Contains(t, objs, crGVR, "CR-discovered GVR must appear")
 	require.Contains(t, objs, podsGVR, "static-watch GVR must appear")
-	assert.Equal(t, "my-resource", objs[crGVR][0].GetName())
-	assert.Equal(t, "nginx", objs[podsGVR][0].GetName())
+	assert.Equal(t, "my-resource", objs[crGVR].Objects[0].GetName())
+	assert.Equal(t, ObjectSourceCR, objs[crGVR].Source)
+	assert.Equal(t, "nginx", objs[podsGVR].Objects[0].GetName())
+	assert.Equal(t, ObjectSourceStatic, objs[podsGVR].Source)
 }
 
 func TestResourceInformers_StaticInformer_Shutdown(t *testing.T) {
@@ -766,8 +770,8 @@ func TestResourceInformers_StaticInformer_PerEntryForbidden(t *testing.T) {
 
 	objs := ri.ReadObjects()
 	require.Contains(t, objs, podsGVR, "ns-b pods must surface despite ns-a being forbidden")
-	require.Len(t, objs[podsGVR], 1)
-	assert.Equal(t, "b", objs[podsGVR][0].GetName())
+	require.Len(t, objs[podsGVR].Objects, 1)
+	assert.Equal(t, "b", objs[podsGVR].Objects[0].GetName())
 }
 
 func TestFormatStaticInformerKey_Distinct(t *testing.T) {

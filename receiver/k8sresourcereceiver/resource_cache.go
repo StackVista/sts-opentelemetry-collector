@@ -9,42 +9,58 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 )
 
+// ObjectSource identifies which informer flavour an object came from.
+type ObjectSource string
+
+const (
+	ObjectSourceCR     ObjectSource = "cr"
+	ObjectSourceStatic ObjectSource = "static"
+)
+
+// ObjectGroup pairs a list of objects with the source they came from. Returned
+// per-GVR by Informers.ReadObjects.
+type ObjectGroup struct {
+	Source  ObjectSource
+	Objects []*unstructured.Unstructured
+}
+
 // ResourceChange represents a detected change between the resource cache and
-// current informer state.
+// current informer state. Source is empty for CRD changes (IsCRD=true).
 type ResourceChange struct {
 	Obj       *unstructured.Unstructured
 	EventType watch.EventType
 	IsCRD     bool
-	GVR       schema.GroupVersionResource // set for CR changes
+	GVR       schema.GroupVersionResource // set for object changes
+	Source    ObjectSource                // set for object changes
 }
 
-// cachedCR stores a CR alongside its GVR for delta computation.
-type cachedCR struct {
-	Obj *unstructured.Unstructured
-	GVR schema.GroupVersionResource
+type cachedObject struct {
+	Obj    *unstructured.Unstructured
+	GVR    schema.GroupVersionResource
+	Source ObjectSource
 }
 
 // resourceCache tracks the last state emitted downstream.
 type resourceCache struct {
-	CRDs map[string]*unstructured.Unstructured // key: CRD name
-	CRs  map[string]*cachedCR                  // key: crResourceKey(gvr, namespace, name)
+	CRDs    map[string]*unstructured.Unstructured // key: CRD name
+	Objects map[string]*cachedObject              // key: objectResourceKey(gvr, namespace, name)
 }
 
 func newResourceCache() *resourceCache {
 	return &resourceCache{
-		CRDs: make(map[string]*unstructured.Unstructured),
-		CRs:  make(map[string]*cachedCR),
+		CRDs:    make(map[string]*unstructured.Unstructured),
+		Objects: make(map[string]*cachedObject),
 	}
 }
 
 func (rc *resourceCache) isEmpty() bool {
-	return len(rc.CRDs) == 0 && len(rc.CRs) == 0
+	return len(rc.CRDs) == 0 && len(rc.Objects) == 0
 }
 
 // computeChanges compares the current informer state against the resource cache and returns the delta.
 func (rc *resourceCache) computeChanges(
 	currentCRDs []*unstructured.Unstructured,
-	currentCRs map[schema.GroupVersionResource][]*unstructured.Unstructured,
+	currentObjects map[schema.GroupVersionResource]ObjectGroup,
 ) []ResourceChange {
 	var changes []ResourceChange
 
@@ -81,37 +97,40 @@ func (rc *resourceCache) computeChanges(
 		}
 	}
 
-	// --- CR changes ---
-	currentCRMap := make(map[string]*unstructured.Unstructured)
-	for gvr, crs := range currentCRs {
-		for _, cr := range crs {
-			key := crResourceKey(gvr, cr.GetNamespace(), cr.GetName())
-			currentCRMap[key] = cr
+	// --- Object changes ---
+	currentObjectMap := make(map[string]*unstructured.Unstructured)
+	for gvr, group := range currentObjects {
+		for _, obj := range group.Objects {
+			key := objectResourceKey(gvr, obj.GetNamespace(), obj.GetName())
+			currentObjectMap[key] = obj
 
-			prev, exists := rc.CRs[key]
+			prev, exists := rc.Objects[key]
 			if !exists {
 				changes = append(changes, ResourceChange{
-					Obj:       cr,
+					Obj:       obj,
 					EventType: watch.Added,
 					GVR:       gvr,
+					Source:    group.Source,
 				})
-			} else if prev.Obj.GetResourceVersion() != cr.GetResourceVersion() {
+			} else if prev.Obj.GetResourceVersion() != obj.GetResourceVersion() {
 				changes = append(changes, ResourceChange{
-					Obj:       cr,
+					Obj:       obj,
 					EventType: watch.Modified,
 					GVR:       gvr,
+					Source:    group.Source,
 				})
 			}
 		}
 	}
 
-	// Detect deleted CRs
-	for key, prev := range rc.CRs {
-		if _, exists := currentCRMap[key]; !exists {
+	// Detect deleted objects
+	for key, prev := range rc.Objects {
+		if _, exists := currentObjectMap[key]; !exists {
 			changes = append(changes, ResourceChange{
 				Obj:       prev.Obj,
 				EventType: watch.Deleted,
 				GVR:       prev.GVR,
+				Source:    prev.Source,
 			})
 		}
 	}
@@ -131,8 +150,8 @@ func (rc *resourceCache) applyAdditions(changes []ResourceChange) {
 		if ch.IsCRD {
 			rc.CRDs[ch.Obj.GetName()] = ch.Obj
 		} else {
-			key := crResourceKey(ch.GVR, ch.Obj.GetNamespace(), ch.Obj.GetName())
-			rc.CRs[key] = &cachedCR{Obj: ch.Obj, GVR: ch.GVR}
+			key := objectResourceKey(ch.GVR, ch.Obj.GetNamespace(), ch.Obj.GetName())
+			rc.Objects[key] = &cachedObject{Obj: ch.Obj, GVR: ch.GVR, Source: ch.Source}
 		}
 	}
 }
@@ -146,8 +165,8 @@ func (rc *resourceCache) applyDeletions(changes []ResourceChange) {
 		if ch.IsCRD {
 			delete(rc.CRDs, ch.Obj.GetName())
 		} else {
-			key := crResourceKey(ch.GVR, ch.Obj.GetNamespace(), ch.Obj.GetName())
-			delete(rc.CRs, key)
+			key := objectResourceKey(ch.GVR, ch.Obj.GetNamespace(), ch.Obj.GetName())
+			delete(rc.Objects, key)
 		}
 	}
 }
@@ -158,7 +177,7 @@ func (rc *resourceCache) applyDelta(changes []ResourceChange) {
 	rc.applyDeletions(changes)
 }
 
-// crResourceKey returns a unique key for a CR within the resource cache.
-func crResourceKey(gvr schema.GroupVersionResource, namespace, name string) string {
+// objectResourceKey returns a unique key for an object within the resource cache.
+func objectResourceKey(gvr schema.GroupVersionResource, namespace, name string) string {
 	return fmt.Sprintf("%s/%s/%s", emit.FormatGVRKey(gvr), namespace, name)
 }

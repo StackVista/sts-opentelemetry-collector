@@ -189,11 +189,11 @@ func (r *recordingPeerStore) SetLeader(_ bool)                  {}
 
 func (r *recordingPeerStore) ComputeChanges(
 	currentCRDs []*unstructured.Unstructured,
-	currentCRs map[schema.GroupVersionResource][]*unstructured.Unstructured,
+	currentObjects map[schema.GroupVersionResource]ObjectGroup,
 ) []ResourceChange {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.cache.computeChanges(currentCRDs, currentCRs)
+	return r.cache.computeChanges(currentCRDs, currentObjects)
 }
 
 func (r *recordingPeerStore) ApplyDelta(_ context.Context, delta *PeerSyncDelta) error {
@@ -205,13 +205,13 @@ func (r *recordingPeerStore) ApplyDelta(_ context.Context, delta *PeerSyncDelta)
 
 	snap := recordedSave{
 		crds:             make(map[string]string, len(r.cache.CRDs)),
-		crs:              make(map[string]string, len(r.cache.CRs)),
+		crs:              make(map[string]string, len(r.cache.Objects)),
 		lastSnapshotTime: r.lastSnapshotTime,
 	}
 	for name, crd := range r.cache.CRDs {
 		snap.crds[name] = crd.GetResourceVersion()
 	}
-	for k, cr := range r.cache.CRs {
+	for k, cr := range r.cache.Objects {
 		snap.crs[k] = cr.Obj.GetResourceVersion()
 	}
 	r.saves = append(r.saves, snap)
@@ -425,7 +425,7 @@ func TestResourceCollector_TwoPhaseSaveOrdering(t *testing.T) {
 			expectedSavesAfterMutation: 1,
 			assertSaves: func(t *testing.T, saves []recordedSave) {
 				require.Len(t, saves, 1, "phase-1 should produce exactly one save")
-				assert.Contains(t, saves[0].crs, crResourceKey(crGVR, "default", "new"), "added CR should appear in save")
+				assert.Contains(t, saves[0].crs, objectResourceKey(crGVR, "default", "new"), "added CR should appear in save")
 			},
 		},
 		{
@@ -437,8 +437,8 @@ func TestResourceCollector_TwoPhaseSaveOrdering(t *testing.T) {
 			expectedSavesAfterMutation: 1,
 			assertSaves: func(t *testing.T, saves []recordedSave) {
 				require.Len(t, saves, 1, "phase-2 should produce exactly one save")
-				assert.NotContains(t, saves[0].crs, crResourceKey(crGVR, "default", "drop"), "deleted CR must be absent in save")
-				assert.Contains(t, saves[0].crs, crResourceKey(crGVR, "default", "keep"), "kept CR should still be present")
+				assert.NotContains(t, saves[0].crs, objectResourceKey(crGVR, "default", "drop"), "deleted CR must be absent in save")
+				assert.Contains(t, saves[0].crs, objectResourceKey(crGVR, "default", "keep"), "kept CR should still be present")
 			},
 		},
 		{
@@ -453,8 +453,8 @@ func TestResourceCollector_TwoPhaseSaveOrdering(t *testing.T) {
 			expectedSavesAfterMutation: 2,
 			assertSaves: func(t *testing.T, saves []recordedSave) {
 				require.Len(t, saves, 2, "mixed cycle should produce exactly two saves")
-				dropKey := crResourceKey(crGVR, "default", "drop")
-				newKey := crResourceKey(crGVR, "default", "new")
+				dropKey := objectResourceKey(crGVR, "default", "drop")
+				newKey := objectResourceKey(crGVR, "default", "new")
 
 				// Phase 1 (adds first): added CR present; soon-to-be-deleted CR still present.
 				assert.Contains(t, saves[0].crs, newKey, "phase-1 save should contain the added CR")

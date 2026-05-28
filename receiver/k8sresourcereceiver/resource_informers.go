@@ -35,9 +35,11 @@ type Informers interface {
 	ReadCRDs() []*unstructured.Unstructured
 
 	// ReadObjects returns all objects from active, synced informer caches,
-	// keyed by GVR. The map merges objects from both the CRD-discovered CR
-	// informers and the static informers configured via Config.Objects.
-	ReadObjects() map[schema.GroupVersionResource][]*unstructured.Unstructured
+	// keyed by GVR. Each entry carries an ObjectSource identifying which
+	// informer flavour the bucket came from. Overlap between CR-discovered
+	// and static GVRs is rejected at receiver startup, so each GVR appears
+	// in exactly one bucket.
+	ReadObjects() map[schema.GroupVersionResource]ObjectGroup
 
 	Start(ctx context.Context) error
 	Shutdown(ctx context.Context) error
@@ -72,6 +74,12 @@ type resourceInformerEntry struct {
 	fieldSelector string
 	informer      cache.SharedIndexInformer
 	stopCh        chan struct{}
+	// source is the ObjectSource stamped on emitted objects. CR entries leave
+	// this zero (ReadObjects fills in ObjectSourceCR). Static entries set it
+	// at start time, normally ObjectSourceStatic, but ObjectSourceCR when the
+	// GVR is backed by a CRD whose group is excluded from CR discovery — so
+	// downstream emission keeps the CR-shape log schema.
+	source ObjectSource
 }
 
 // ResourceInformers manages Kubernetes dynamic informers for CRDs, their custom
@@ -613,7 +621,7 @@ func (ri *ResourceInformers) ReadCRDs() []*unstructured.Unstructured {
 // GVR-wide ForbiddenTracker; static informers do not — their forbidden state
 // is per-entry and enforced at start time only, since rechecking by GVR here
 // would let a 403 on (pods, ns-a) suppress (pods, ns-b).
-func (ri *ResourceInformers) ReadObjects() map[schema.GroupVersionResource][]*unstructured.Unstructured {
+func (ri *ResourceInformers) ReadObjects() map[schema.GroupVersionResource]ObjectGroup {
 	ri.informersMu.RLock()
 	crEntries := make([]*resourceInformerEntry, 0, len(ri.crInformers))
 	for _, entry := range ri.crInformers {
@@ -625,7 +633,7 @@ func (ri *ResourceInformers) ReadObjects() map[schema.GroupVersionResource][]*un
 	}
 	ri.informersMu.RUnlock()
 
-	result := make(map[schema.GroupVersionResource][]*unstructured.Unstructured)
+	result := make(map[schema.GroupVersionResource]ObjectGroup)
 
 	for _, entry := range crEntries {
 		// waitForCRInformersSync only covers informers that existed at startup;
@@ -637,32 +645,38 @@ func (ri *ResourceInformers) ReadObjects() map[schema.GroupVersionResource][]*un
 		if shouldRetry, _ := ri.forbiddenTracker.ShouldRetry(entry.gvr); !shouldRetry {
 			continue
 		}
-		appendStoreObjects(result, entry)
+		appendStoreObjects(result, entry, ObjectSourceCR)
 	}
 
 	for _, entry := range staticEntries {
 		if !entry.informer.HasSynced() {
 			continue
 		}
-		appendStoreObjects(result, entry)
+		appendStoreObjects(result, entry, entry.source)
 	}
 
 	return result
 }
 
 // appendStoreObjects copies entry.informer.GetStore() into result under
-// entry.gvr, skipping any item that isn't *unstructured.Unstructured.
+// entry.gvr, tagged with source, skipping any item that isn't
+// *unstructured.Unstructured. CR/static overlap is rejected at startup, so
+// each GVR is owned by exactly one informer here.
 func appendStoreObjects(
-	result map[schema.GroupVersionResource][]*unstructured.Unstructured,
+	result map[schema.GroupVersionResource]ObjectGroup,
 	entry *resourceInformerEntry,
+	source ObjectSource,
 ) {
+	group := result[entry.gvr]
+	group.Source = source
 	for _, obj := range entry.informer.GetStore().List() {
 		u, ok := toUnstructured(obj)
 		if !ok {
 			continue
 		}
-		result[entry.gvr] = append(result[entry.gvr], u)
+		group.Objects = append(group.Objects, u)
 	}
+	result[entry.gvr] = group
 }
 
 // --- Static informer lifecycle ---
@@ -764,6 +778,10 @@ func (ri *ResourceInformers) startStaticInformer(
 
 	informer := ri.buildInformer(lw)
 	stopCh := make(chan struct{})
+	source := ObjectSourceStatic
+	if ow.CRDBacked {
+		source = ObjectSourceCR
+	}
 	entry := &resourceInformerEntry{
 		gvr:           ow.GVR,
 		namespace:     namespace,
@@ -771,6 +789,7 @@ func (ri *ResourceInformers) startStaticInformer(
 		fieldSelector: ow.FieldSelector,
 		informer:      informer,
 		stopCh:        stopCh,
+		source:        source,
 	}
 
 	ri.informersMu.Lock()

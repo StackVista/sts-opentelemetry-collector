@@ -114,11 +114,11 @@ func (c *resourceCollector) runIncrementLoop(ctx context.Context) {
 func (c *resourceCollector) runIncrement(ctx context.Context) {
 	start := time.Now()
 	currentCRDs := c.informers.ReadCRDs()
-	currentCRs := c.informers.ReadObjects()
-	changes := c.peerStore.ComputeChanges(currentCRDs, currentCRs)
+	currentObjects := c.informers.ReadObjects()
+	changes := c.peerStore.ComputeChanges(currentCRDs, currentObjects)
 
 	if c.peerStore.IsEmpty() || time.Since(c.peerStore.LastSnapshotTime()) >= c.config.SnapshotInterval {
-		c.emitSnapshot(ctx, currentCRDs, currentCRs, changes)
+		c.emitSnapshot(ctx, currentCRDs, currentObjects, changes)
 		c.recordSnapshotApplied(ctx, changes)
 		c.metrics.RecordCycle(ctx, metrics.ModeSnapshot, time.Since(start))
 	} else {
@@ -152,10 +152,10 @@ func (c *resourceCollector) recordSnapshotApplied(ctx context.Context, changes [
 func (c *resourceCollector) emitSnapshot(
 	ctx context.Context,
 	currentCRDs []*unstructured.Unstructured,
-	currentCRs map[schema.GroupVersionResource][]*unstructured.Unstructured,
+	currentObjects map[schema.GroupVersionResource]ObjectGroup,
 	changes []ResourceChange,
 ) {
-	var crdAdded, crAdded, crdDeleted, crDeleted int64
+	var crdAdded, objAdded, crdDeleted, objDeleted int64
 
 	for _, crd := range currentCRDs {
 		if err := emit.Log(
@@ -170,19 +170,19 @@ func (c *resourceCollector) emitSnapshot(
 		crdAdded++
 	}
 
-	for gvr, crs := range currentCRs {
-		for _, cr := range crs {
+	for gvr, group := range currentObjects {
+		for _, obj := range group.Objects {
 			if err := emit.Log(
-				ctx, c.consumer, cr, watch.Added, c.config.ClusterName, emit.BuildCRLogRecord,
+				ctx, c.consumer, obj, watch.Added, c.config.ClusterName, emit.BuildCRLogRecord,
 			); err != nil {
-				c.logger.Debug("Failed to emit CR snapshot log",
+				c.logger.Debug("Failed to emit object snapshot log",
 					zap.String("gvr", emit.FormatGVRKey(gvr)),
-					zap.String("name", cr.GetName()),
+					zap.String("name", obj.GetName()),
 					zap.Error(err),
 				)
 				continue
 			}
-			crAdded++
+			objAdded++
 		}
 	}
 
@@ -206,17 +206,17 @@ func (c *resourceCollector) emitSnapshot(
 		if ch.IsCRD {
 			crdDeleted++
 		} else {
-			crDeleted++
+			objDeleted++
 		}
 	}
 
-	c.metrics.RecordEmitted(ctx, metrics.ChangeAdded, crdAdded+crAdded)
-	c.metrics.RecordEmitted(ctx, metrics.ChangeDeleted, crdDeleted+crDeleted)
+	c.metrics.RecordEmitted(ctx, metrics.ChangeAdded, crdAdded+objAdded)
+	c.metrics.RecordEmitted(ctx, metrics.ChangeDeleted, crdDeleted+objDeleted)
 
 	c.logger.Debug("Snapshot complete",
 		zap.Int64("crds", crdAdded),
-		zap.Int64("crs", crAdded),
-		zap.Int64("deleted", crdDeleted+crDeleted),
+		zap.Int64("objects", objAdded),
+		zap.Int64("deleted", crdDeleted+objDeleted),
 	)
 }
 

@@ -75,6 +75,9 @@ func (r *k8sresourceReceiver) Start(ctx context.Context, host component.Host) er
 		if err != nil {
 			return fmt.Errorf("failed to resolve object GVRs: %w", err)
 		}
+		if err := classifyStaticObjectsCRDOverlap(ctx, r.dynamicClient, r.config, resolved); err != nil {
+			return err
+		}
 		r.resolvedObjects = resolved
 	}
 

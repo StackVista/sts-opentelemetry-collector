@@ -271,7 +271,7 @@ func (p *peerSyncCacheStore) completeBootstrap(snapshot *PeerSyncSnapshot) {
 		p.lastSnapshotTime = snapshot.LastSnapshotTime
 		p.logger.Info("Applied bootstrap snapshot",
 			zap.Int("crds", len(snapshot.Cache.CRDs)),
-			zap.Int("crs", len(snapshot.Cache.CRs)),
+			zap.Int("objects", len(snapshot.Cache.Objects)),
 			zap.Time("last_snapshot_time", snapshot.LastSnapshotTime),
 			zap.String("source", string(snapshot.Source)),
 		)
@@ -311,11 +311,11 @@ func (p *peerSyncCacheStore) completeBootstrap(snapshot *PeerSyncSnapshot) {
 // ComputeChanges returns the delta between the cache and current informer state.
 func (p *peerSyncCacheStore) ComputeChanges(
 	currentCRDs []*unstructured.Unstructured,
-	currentCRs map[schema.GroupVersionResource][]*unstructured.Unstructured,
+	currentObjects map[schema.GroupVersionResource]ObjectGroup,
 ) []ResourceChange {
 	p.cacheMu.RLock()
 	defer p.cacheMu.RUnlock()
-	return p.cache.computeChanges(currentCRDs, currentCRs)
+	return p.cache.computeChanges(currentCRDs, currentObjects)
 }
 
 // ApplyDelta applies the delta to the cache and broadcasts to peers.
@@ -336,16 +336,16 @@ func (p *peerSyncCacheStore) ApplyDelta(ctx context.Context, delta *PeerSyncDelt
 	}
 	p.lastAppliedAt = time.Now()
 	delta.LastSnapshotTime = p.lastSnapshotTime
-	crds, crs := len(p.cache.CRDs), len(p.cache.CRs)
+	crds, objs := len(p.cache.CRDs), len(p.cache.Objects)
 	p.cacheMu.Unlock()
 
 	p.metrics.RecordCacheSize(ctx, metrics.KindCRD, int64(crds))
-	p.metrics.RecordCacheSize(ctx, metrics.KindCR, int64(crs))
+	p.metrics.RecordCacheSize(ctx, metrics.KindCR, int64(objs))
 
 	p.logger.Debug("Applied delta",
 		zap.Int("changes", len(delta.Changes)),
 		zap.Int("crds", crds),
-		zap.Int("crs", crs),
+		zap.Int("objects", objs),
 	)
 
 	if len(delta.Changes) == 0 {
@@ -364,11 +364,11 @@ func (p *peerSyncCacheStore) IsEmpty() bool {
 	return p.cache.isEmpty()
 }
 
-// cacheSize returns the count of CRDs and CRs currently cached.
+// cacheSize returns the count of CRDs and objects currently cached.
 func (p *peerSyncCacheStore) cacheSize() (int, int) {
 	p.cacheMu.RLock()
 	defer p.cacheMu.RUnlock()
-	return len(p.cache.CRDs), len(p.cache.CRs)
+	return len(p.cache.CRDs), len(p.cache.Objects)
 }
 
 // LastSnapshotTime returns the leader's clock at the most recently applied snapshot.
@@ -418,17 +418,17 @@ func (p *peerSyncCacheStore) handleIncrement(w http.ResponseWriter, r *http.Requ
 		p.lastSnapshotTime = delta.LastSnapshotTime
 	}
 	p.lastAppliedAt = time.Now()
-	crds, crs := len(p.cache.CRDs), len(p.cache.CRs)
+	crds, objs := len(p.cache.CRDs), len(p.cache.Objects)
 	p.cacheMu.Unlock()
 	p.bufferMu.Unlock()
 
 	p.metrics.RecordCacheSize(r.Context(), metrics.KindCRD, int64(crds))
-	p.metrics.RecordCacheSize(r.Context(), metrics.KindCR, int64(crs))
+	p.metrics.RecordCacheSize(r.Context(), metrics.KindCR, int64(objs))
 
 	p.logger.Debug("Applied delta from leader",
 		zap.Int("changes", len(delta.Changes)),
 		zap.Int("crds", crds),
-		zap.Int("crs", crs),
+		zap.Int("objects", objs),
 	)
 	w.WriteHeader(http.StatusOK)
 }
@@ -450,7 +450,7 @@ func (p *peerSyncCacheStore) handleSnapshot(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	crdsCopy, crsCopy, lastSnapshotTime, lastAppliedAt, isEmpty := p.snapshotCopyForServe()
+	crdsCopy, objsCopy, lastSnapshotTime, lastAppliedAt, isEmpty := p.snapshotCopyForServe()
 
 	source := streamFrameSourceSecondary
 	if p.isLeader.Load() {
@@ -500,16 +500,17 @@ func (p *peerSyncCacheStore) handleSnapshot(w http.ResponseWriter, r *http.Reque
 			return
 		}
 	}
-	for key, cr := range crsCopy {
-		gvr := cr.GVR
+	for key, obj := range objsCopy {
+		gvr := obj.GVR
 		if err := enc.Encode(peerSyncStreamFrame{
-			Type: streamFrameCR,
-			Key:  key,
-			Obj:  cr.Obj,
-			GVR:  &gvr,
+			Type:         streamFrameCR,
+			Key:          key,
+			Obj:          obj.Obj,
+			GVR:          &gvr,
+			ObjectSource: obj.Source,
 		}); err != nil {
 			p.metrics.RecordSnapshotStreamFailure(r.Context())
-			p.logger.Error("Failed to encode snapshot CR frame; partial stream",
+			p.logger.Error("Failed to encode snapshot object frame; partial stream",
 				zap.String("key", key), zap.Error(err))
 			return
 		}
@@ -522,7 +523,7 @@ func (p *peerSyncCacheStore) handleSnapshot(w http.ResponseWriter, r *http.Reque
 // Also returns lastSnapshotTime and lastAppliedAt for the meta frame.
 func (p *peerSyncCacheStore) snapshotCopyForServe() (
 	map[string]*unstructured.Unstructured,
-	map[string]*cachedCR,
+	map[string]*cachedObject,
 	time.Time, // lastSnapshotTime
 	time.Time, // lastAppliedAt
 	bool, // isEmpty
@@ -536,11 +537,11 @@ func (p *peerSyncCacheStore) snapshotCopyForServe() (
 	for k, v := range p.cache.CRDs {
 		crds[k] = v
 	}
-	crs := make(map[string]*cachedCR, len(p.cache.CRs))
-	for k, v := range p.cache.CRs {
-		crs[k] = v
+	objs := make(map[string]*cachedObject, len(p.cache.Objects))
+	for k, v := range p.cache.Objects {
+		objs[k] = v
 	}
-	return crds, crs, p.lastSnapshotTime, p.lastAppliedAt, false
+	return crds, objs, p.lastSnapshotTime, p.lastAppliedAt, false
 }
 
 // --- Push broadcast ---
@@ -819,15 +820,15 @@ func (p *peerSyncCacheStore) pullSnapshotFromPeers(
 			continue
 		}
 
-		crds, crs := 0, 0
+		crds, objs := 0, 0
 		if fetched.Cache != nil {
-			crds, crs = len(fetched.Cache.CRDs), len(fetched.Cache.CRs)
+			crds, objs = len(fetched.Cache.CRDs), len(fetched.Cache.Objects)
 		}
-		empty := crds == 0 && crs == 0
+		empty := crds == 0 && objs == 0
 		p.logger.Debug("Pulled snapshot from peer",
 			zap.String("peer", ip),
 			zap.Int("crds", crds),
-			zap.Int("crs", crs),
+			zap.Int("objects", objs),
 			zap.String("source", string(fetched.Source)),
 			zap.Time("last_applied_at", fetched.LastAppliedAt),
 		)
@@ -929,9 +930,13 @@ func (p *peerSyncCacheStore) fetchPeerSnapshot(
 			snap.Cache.CRDs[frame.Key] = frame.Obj
 		case streamFrameCR:
 			if frame.GVR == nil {
-				return nil, resp.StatusCode, fmt.Errorf("CR frame for %q missing gvr", frame.Key)
+				return nil, resp.StatusCode, fmt.Errorf("object frame for %q missing gvr", frame.Key)
 			}
-			snap.Cache.CRs[frame.Key] = &cachedCR{Obj: frame.Obj, GVR: *frame.GVR}
+			snap.Cache.Objects[frame.Key] = &cachedObject{
+				Obj:    frame.Obj,
+				GVR:    *frame.GVR,
+				Source: frame.ObjectSource,
+			}
 		default:
 			p.logger.Debug("Unknown snapshot frame type, skipping",
 				zap.String("type", string(frame.Type)),

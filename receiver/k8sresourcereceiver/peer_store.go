@@ -74,11 +74,13 @@ type peerSyncStreamFrame struct {
 
 	// Resource frame fields. Key indexes the cache (snapshot path); Obj/GVR carry
 	// the resource itself. EventType is delta-only — empty on snapshot frames where
-	// every entry is implicitly Added.
-	Key       string                       `json:"key,omitempty"`
-	Obj       *unstructured.Unstructured   `json:"obj,omitempty"`
-	GVR       *schema.GroupVersionResource `json:"gvr,omitempty"`
-	EventType watch.EventType              `json:"event_type,omitempty"`
+	// every entry is implicitly Added. ObjectSource is set on object frames so peers
+	// preserve CR-vs-static origin across bootstrap and delta application.
+	Key          string                       `json:"key,omitempty"`
+	Obj          *unstructured.Unstructured   `json:"obj,omitempty"`
+	GVR          *schema.GroupVersionResource `json:"gvr,omitempty"`
+	EventType    watch.EventType              `json:"event_type,omitempty"`
+	ObjectSource ObjectSource                 `json:"object_source,omitempty"`
 }
 
 // PeerSyncDelta is the wire format for a leader→peer push of per-cycle changes.
@@ -119,8 +121,8 @@ func encodeDeltaStream(w io.Writer, delta *PeerSyncDelta) error {
 			frame.Type = streamFrameCRD
 		} else {
 			frame.Type = streamFrameCR
-			gvr := ch.GVR
-			frame.GVR = &gvr
+			frame.GVR = new(ch.GVR)
+			frame.ObjectSource = ch.Source
 		}
 		if err := enc.Encode(frame); err != nil {
 			_ = gz.Close()
@@ -168,15 +170,16 @@ func decodeDeltaStream(r io.Reader) (*PeerSyncDelta, error) {
 			})
 		case streamFrameCR:
 			if frame.Obj == nil {
-				return nil, fmt.Errorf("CR frame missing obj")
+				return nil, fmt.Errorf("object frame missing obj")
 			}
 			if frame.GVR == nil {
-				return nil, fmt.Errorf("CR frame missing gvr")
+				return nil, fmt.Errorf("object frame missing gvr")
 			}
 			delta.Changes = append(delta.Changes, ResourceChange{
 				Obj:       frame.Obj,
 				EventType: frame.EventType,
 				GVR:       *frame.GVR,
+				Source:    frame.ObjectSource,
 			})
 		}
 	}
@@ -204,7 +207,7 @@ type PeerStore interface {
 	// informer state. Acquires a read lock internally.
 	ComputeChanges(
 		currentCRDs []*unstructured.Unstructured,
-		currentCRs map[schema.GroupVersionResource][]*unstructured.Unstructured,
+		currentObjects map[schema.GroupVersionResource]ObjectGroup,
 	) []ResourceChange
 
 	// ApplyDelta atomically applies the changes to the cache (under write lock)
@@ -213,7 +216,7 @@ type PeerStore interface {
 	// uses it internally for received pushes.
 	ApplyDelta(ctx context.Context, delta *PeerSyncDelta) error
 
-	// IsEmpty returns true if the cache contains no CRDs or CRs.
+	// IsEmpty returns true if the cache contains no CRDs or objects.
 	IsEmpty() bool
 
 	// LastSnapshotTime returns the leader's wall-clock at the most recently applied
@@ -247,11 +250,11 @@ func (n *noopPeerStore) cacheRef() *resourceCache {
 
 func (n *noopPeerStore) ComputeChanges(
 	currentCRDs []*unstructured.Unstructured,
-	currentCRs map[schema.GroupVersionResource][]*unstructured.Unstructured,
+	currentObjects map[schema.GroupVersionResource]ObjectGroup,
 ) []ResourceChange {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
-	return n.cacheRef().computeChanges(currentCRDs, currentCRs)
+	return n.cacheRef().computeChanges(currentCRDs, currentObjects)
 }
 
 func (n *noopPeerStore) ApplyDelta(_ context.Context, delta *PeerSyncDelta) error {
