@@ -48,6 +48,8 @@ type Config struct {
 	TTL time.Duration `mapstructure:"ttl"`
 	// Create the traces table on startup
 	CreateTracesTable bool `mapstructure:"create_traces_table"`
+	// Create the logs table on startup
+	CreateLogsTable bool `mapstructure:"create_logs_table"`
 	// Create the resources table on startup
 	CreateResourcesTable bool `mapstructure:"create_resources_table"`
 

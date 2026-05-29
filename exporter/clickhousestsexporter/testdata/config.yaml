@@ -10,6 +10,7 @@ clickhousests/full:
   traces_table_name: otel_traces
   resources_table_name: otel_resources
   create_traces_table: true
+  create_logs_table: true
   create_resources_table: true
   timeout: 5s
   retry_on_failure:

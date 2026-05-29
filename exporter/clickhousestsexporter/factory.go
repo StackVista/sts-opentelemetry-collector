@@ -46,6 +46,7 @@ func CreateDefaultConfig() component.Config {
 		MetricsTableName:     "otel_metrics",
 		ResourcesTableName:   "otel_resources",
 		CreateTracesTable:    true,
+		CreateLogsTable:      true,
 		CreateResourcesTable: true,
 		TTL:                  0,
 	}

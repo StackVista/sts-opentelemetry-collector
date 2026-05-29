@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
-	conventions "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"go.uber.org/zap/zaptest"
 )
 
@@ -53,7 +52,7 @@ func TestLogsExporter_New(t *testing.T) {
 	}{
 		"no dsn": {
 			config: withDefaultConfig(),
-			want:   failWithMsg("exec create logs table sql: parse dsn address failed"),
+			want:   failWithMsg("exec create resources table sql: parse dsn address failed"),
 		},
 	}
 
@@ -78,11 +77,15 @@ func TestLogsExporter_New(t *testing.T) {
 
 func TestExporter_pushLogsData(t *testing.T) {
 	t.Run("push success", func(t *testing.T) {
-		var items int
+		var logItems int
+		var resourceItems int
 		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
-			t.Logf("%d, values:%+v", items, values)
-			if strings.HasPrefix(query, "INSERT") {
-				items++
+			t.Logf("values:%+v", values)
+			if strings.HasPrefix(query, "INSERT") && strings.Contains(query, "otel_logs") {
+				logItems++
+			}
+			if strings.HasPrefix(query, "INSERT") && strings.Contains(query, "otel_resources") {
+				resourceItems++
 			}
 			return nil
 		})
@@ -91,15 +94,26 @@ func TestExporter_pushLogsData(t *testing.T) {
 		mustPushLogsData(t, exporter, simpleLogs(1))
 		mustPushLogsData(t, exporter, simpleLogs(2))
 
-		require.Equal(t, 3, items)
+		require.Equal(t, 3, logItems)
+		require.Equal(t, 2, resourceItems)
 	})
 	t.Run("test check resource metadata", func(t *testing.T) {
 		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
-			if strings.HasPrefix(query, "INSERT") {
-				require.Equal(t, "https://opentelemetry.io/schemas/1.4.0", values[8])
+			if strings.HasPrefix(query, "INSERT") && strings.Contains(query, "otel_logs") {
+				require.Equal(t, "https://opentelemetry.io/schemas/1.4.0", values[16])
+				require.NotEmpty(t, values[17])
+				require.Equal(t, "test-service", values[23])
+				require.Equal(t, []string{"k8s.cluster.name:test-cluster", "k8s.scope:test-cluster/test-namespace"}, values[26])
+			}
+			if strings.HasPrefix(query, "INSERT") && strings.Contains(query, "otel_resources") {
 				require.Equal(t, map[string]string{
-					testServiceNameAttr: "test-service",
-				}, values[9])
+					testServiceNameAttr:   "test-service",
+					"k8s.cluster.name":    "test-cluster",
+					"k8s.namespace.name":  "test-namespace",
+					"service.namespace":   "test-service-namespace",
+					"service.instance.id": "test-instance",
+				}, values[2])
+				require.Equal(t, []string{"k8s.cluster.name:test-cluster", "k8s.scope:test-cluster/test-namespace"}, values[3])
 			}
 			return nil
 		})
@@ -108,13 +122,39 @@ func TestExporter_pushLogsData(t *testing.T) {
 	})
 	t.Run("test check scope metadata", func(t *testing.T) {
 		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
-			if strings.HasPrefix(query, "INSERT") {
-				require.Equal(t, "https://opentelemetry.io/schemas/1.7.0", values[10])
-				require.Equal(t, "io.opentelemetry.contrib.clickhouse", values[11])
-				require.Equal(t, "1.0.0", values[12])
+			if strings.HasPrefix(query, "INSERT") && strings.Contains(query, "otel_logs") {
+				require.Equal(t, "https://opentelemetry.io/schemas/1.7.0", values[18])
+				require.Equal(t, "io.opentelemetry.contrib.clickhouse", values[19])
+				require.Equal(t, "1.0.0", values[20])
 				require.Equal(t, map[string]string{
 					"lib": "clickhouse",
-				}, values[13])
+				}, values[21])
+				require.JSONEq(t, `{"lib":"clickhouse"}`, values[22].(string))
+			}
+			return nil
+		})
+		exporter := newTestLogsExporter(t, defaultEndpoint)
+		mustPushLogsData(t, exporter, simpleLogs(1))
+	})
+	t.Run("test check log metadata", func(t *testing.T) {
+		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
+			if strings.HasPrefix(query, "INSERT") && strings.Contains(query, "otel_logs") {
+				require.Equal(t, "timestamp", values[2])
+				require.NotEmpty(t, values[3])
+				require.Equal(t, "otlp-collector", values[4])
+				require.Equal(t, values[3], values[5])
+				require.Equal(t, "", values[6])
+				require.Equal(t, uint8(0), values[9])
+				require.Equal(t, "INFO", values[10])
+				require.Equal(t, uint8(9), values[11])
+				require.Equal(t, "otel log body", values[12])
+				require.Equal(t, "string", values[13])
+				require.Equal(t, "test.event", values[15])
+				require.Equal(t, map[string]string{
+					"event.name": "test.event",
+					"log.kind":   "smoke",
+				}, values[24])
+				require.JSONEq(t, `{"event.name":"test.event","log.kind":"smoke"}`, values[25].(string))
 			}
 			return nil
 		})
@@ -149,6 +189,10 @@ func simpleLogs(count int) plog.Logs {
 	rl := logs.ResourceLogs().AppendEmpty()
 	rl.SetSchemaUrl("https://opentelemetry.io/schemas/1.4.0")
 	rl.Resource().Attributes().PutStr(testServiceNameAttr, "test-service")
+	rl.Resource().Attributes().PutStr("service.namespace", "test-service-namespace")
+	rl.Resource().Attributes().PutStr("service.instance.id", "test-instance")
+	rl.Resource().Attributes().PutStr("k8s.cluster.name", "test-cluster")
+	rl.Resource().Attributes().PutStr("k8s.namespace.name", "test-namespace")
 	sl := rl.ScopeLogs().AppendEmpty()
 	sl.SetSchemaUrl("https://opentelemetry.io/schemas/1.7.0")
 	sl.Scope().SetName("io.opentelemetry.contrib.clickhouse")
@@ -157,7 +201,12 @@ func simpleLogs(count int) plog.Logs {
 	for i := 0; i < count; i++ {
 		r := sl.LogRecords().AppendEmpty()
 		r.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
-		r.Attributes().PutStr(string(conventions.ServiceNameKey), "v")
+		r.SetObservedTimestamp(pcommon.NewTimestampFromTime(time.Now()))
+		r.SetSeverityText("INFO")
+		r.SetSeverityNumber(plog.SeverityNumberInfo)
+		r.Body().SetStr("otel log body")
+		r.Attributes().PutStr("event.name", "test.event")
+		r.Attributes().PutStr("log.kind", "smoke")
 	}
 	return logs
 }

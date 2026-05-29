@@ -86,6 +86,7 @@ func TestLoadConfig(t *testing.T) {
 				}(),
 				CreateResourcesTable: true,
 				CreateTracesTable:    true,
+				CreateLogsTable:      true,
 			},
 		},
 	}
