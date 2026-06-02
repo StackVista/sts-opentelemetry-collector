@@ -35,6 +35,7 @@ const (
 	someAttribute        = "some-attribute"
 	nonExistingAttribute = "non-existing-attribute"
 	mockExporterName     = "mock"
+	requestTotalMetric   = "traces_service_graph_request_total"
 )
 
 func TestConnectorStart(t *testing.T) {
@@ -104,38 +105,14 @@ func TestConnectorConsume(t *testing.T) {
 }
 
 func TestServerDimensionsArePartOfMetricKey(t *testing.T) {
-	cfg := &servicegraphconnector.Config{
-		Dimensions: []string{someAttribute},
-		Store:      servicegraphconnector.StoreConfig{MaxItems: 10},
-	}
-
-	set := componenttest.NewNopTelemetrySettings()
-	set.Logger = zaptest.NewLogger(t)
-	conn := servicegraphconnector.NewConnector(set, cfg, newMockMetricsExporter())
-
-	assert.NoError(t, conn.Start(context.Background(), componenttest.NewNopHost()))
-
-	traces := ptrace.NewTraces()
-	buildSampleTraceWithSpanAttributes(t, "client-val", "server-a", time.Second, time.Second).
-		ResourceSpans().MoveAndAppendTo(traces.ResourceSpans())
-	buildSampleTraceWithSpanAttributes(t, "client-val", "server-b", time.Second, time.Second).
-		ResourceSpans().MoveAndAppendTo(traces.ResourceSpans())
-
-	assert.NoError(t, conn.ConsumeTraces(context.Background(), traces))
-
-	conn.SetExpire(time.Now())
-	md, err := conn.BuildMetrics()
-	assert.NoError(t, err)
-
-	metrics := md.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics()
-	assert.Equal(t, 2, countMetricsNamed(metrics, "traces_service_graph_request_total"))
-	assertMetricWithAttr(t, metrics, "traces_service_graph_request_total", "server_some-attribute", "server-a")
-	assertMetricWithAttr(t, metrics, "traces_service_graph_request_total", "server_some-attribute", "server-b")
-
-	assert.NoError(t, conn.Shutdown(context.Background()))
+	assertDimensionPartOfMetricKey(t, "client-val", "server-a", "client-val", "server-b", "server_some-attribute", "server-a", "server-b")
 }
 
 func TestClientDimensionsArePartOfMetricKey(t *testing.T) {
+	assertDimensionPartOfMetricKey(t, "client-a", "server-val", "client-b", "server-val", "client_some-attribute", "client-a", "client-b")
+}
+
+func assertDimensionPartOfMetricKey(t *testing.T, firstClientAttr, firstServerAttr, secondClientAttr, secondServerAttr, assertAttrName, firstValue, secondValue string) {
 	cfg := &servicegraphconnector.Config{
 		Dimensions: []string{someAttribute},
 		Store:      servicegraphconnector.StoreConfig{MaxItems: 10},
@@ -148,9 +125,9 @@ func TestClientDimensionsArePartOfMetricKey(t *testing.T) {
 	assert.NoError(t, conn.Start(context.Background(), componenttest.NewNopHost()))
 
 	traces := ptrace.NewTraces()
-	buildSampleTraceWithSpanAttributes(t, "client-a", "server-val", time.Second, time.Second).
+	buildSampleTraceWithSpanAttributes(t, firstClientAttr, firstServerAttr, time.Second).
 		ResourceSpans().MoveAndAppendTo(traces.ResourceSpans())
-	buildSampleTraceWithSpanAttributes(t, "client-b", "server-val", time.Second, time.Second).
+	buildSampleTraceWithSpanAttributes(t, secondClientAttr, secondServerAttr, time.Second).
 		ResourceSpans().MoveAndAppendTo(traces.ResourceSpans())
 
 	assert.NoError(t, conn.ConsumeTraces(context.Background(), traces))
@@ -160,9 +137,9 @@ func TestClientDimensionsArePartOfMetricKey(t *testing.T) {
 	assert.NoError(t, err)
 
 	metrics := md.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics()
-	assert.Equal(t, 2, countMetricsNamed(metrics, "traces_service_graph_request_total"))
-	assertMetricWithAttr(t, metrics, "traces_service_graph_request_total", "client_some-attribute", "client-a")
-	assertMetricWithAttr(t, metrics, "traces_service_graph_request_total", "client_some-attribute", "client-b")
+	assert.Equal(t, 2, countMetricsNamed(metrics, requestTotalMetric))
+	assertMetricWithAttr(t, metrics, assertAttrName, firstValue)
+	assertMetricWithAttr(t, metrics, assertAttrName, secondValue)
 
 	assert.NoError(t, conn.Shutdown(context.Background()))
 }
@@ -178,7 +155,7 @@ func TestClientAndServerLatencyMetricsUseCorrectDurations(t *testing.T) {
 	conn := servicegraphconnector.NewConnector(set, cfg, newMockMetricsExporter())
 
 	assert.NoError(t, conn.Start(context.Background(), componenttest.NewNopHost()))
-	assert.NoError(t, conn.ConsumeTraces(context.Background(), buildSampleTraceWithSpanAttributes(t, "client-val", "server-val", time.Second, 2*time.Second)))
+	assert.NoError(t, conn.ConsumeTraces(context.Background(), buildSampleTraceWithSpanAttributes(t, "client-val", "server-val", 2*time.Second)))
 
 	conn.SetExpire(time.Now())
 	md, err := conn.BuildMetrics()
@@ -273,12 +250,12 @@ func verifyAttr(t *testing.T, attrs pcommon.Map, k, expected string) {
 }
 
 func buildSampleTrace(t *testing.T, attrValue string) ptrace.Traces {
-	return buildSampleTraceWithSpanAttributes(t, attrValue, "", time.Second, time.Second)
+	return buildSampleTraceWithSpanAttributes(t, attrValue, "", time.Second)
 }
 
-func buildSampleTraceWithSpanAttributes(t *testing.T, clientAttrValue, serverAttrValue string, clientDuration, serverDuration time.Duration) ptrace.Traces {
+func buildSampleTraceWithSpanAttributes(t *testing.T, clientAttrValue, serverAttrValue string, serverDuration time.Duration) ptrace.Traces {
 	tStart := time.Date(2022, 1, 2, 3, 4, 5, 6, time.UTC)
-	clientEnd := tStart.Add(clientDuration)
+	clientEnd := tStart.Add(time.Second)
 	serverEnd := tStart.Add(serverDuration)
 
 	traces := ptrace.NewTraces()
@@ -332,10 +309,10 @@ func countMetricsNamed(metrics pmetric.MetricSlice, name string) int {
 	return count
 }
 
-func assertMetricWithAttr(t *testing.T, metrics pmetric.MetricSlice, metricName, attrName, attrValue string) {
+func assertMetricWithAttr(t *testing.T, metrics pmetric.MetricSlice, attrName, attrValue string) {
 	for i := 0; i < metrics.Len(); i++ {
 		metric := metrics.At(i)
-		if metric.Name() != metricName {
+		if metric.Name() != requestTotalMetric {
 			continue
 		}
 		value, ok := metric.Sum().DataPoints().At(0).Attributes().Get(attrName)
@@ -343,7 +320,7 @@ func assertMetricWithAttr(t *testing.T, metrics pmetric.MetricSlice, metricName,
 			return
 		}
 	}
-	require.Failf(t, "missing metric attribute", "expected %s metric with %s=%s", metricName, attrName, attrValue)
+	require.Failf(t, "missing metric attribute", "expected %s metric with %s=%s", requestTotalMetric, attrName, attrValue)
 }
 
 var _ exporter.Metrics = (*mockMetricsExporter)(nil)
