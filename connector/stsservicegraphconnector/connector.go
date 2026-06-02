@@ -563,7 +563,7 @@ func (s *ServiceGraphConnector) collectLatencyMetrics(ilm pmetric.ScopeMetrics) 
 }
 
 func (s *ServiceGraphConnector) collectClientLatencyMetrics(ilm pmetric.ScopeMetrics) error {
-	for key := range s.reqServerDurationSecondsCount {
+	for key := range s.reqClientDurationSecondsCount {
 		mDuration := ilm.Metrics().AppendEmpty()
 		mDuration.SetName("traces_service_graph_request_client_seconds")
 		// TODO: Support other aggregation temporalities
@@ -575,9 +575,9 @@ func (s *ServiceGraphConnector) collectClientLatencyMetrics(ilm pmetric.ScopeMet
 		dpDuration.SetStartTimestamp(pcommon.NewTimestampFromTime(s.startTime))
 		dpDuration.SetTimestamp(timestamp)
 		dpDuration.ExplicitBounds().FromRaw(s.reqDurationBounds)
-		dpDuration.BucketCounts().FromRaw(s.reqServerDurationSecondsBucketCounts[key])
-		dpDuration.SetCount(s.reqServerDurationSecondsCount[key])
-		dpDuration.SetSum(s.reqServerDurationSecondsSum[key])
+		dpDuration.BucketCounts().FromRaw(s.reqClientDurationSecondsBucketCounts[key])
+		dpDuration.SetCount(s.reqClientDurationSecondsCount[key])
+		dpDuration.SetSum(s.reqClientDurationSecondsSum[key])
 
 		// TODO: Support exemplars
 		dimensions, ok := s.dimensionsForSeries(key)
@@ -603,9 +603,9 @@ func (s *ServiceGraphConnector) collectServerLatencyMetrics(ilm pmetric.ScopeMet
 		dpDuration.SetStartTimestamp(pcommon.NewTimestampFromTime(s.startTime))
 		dpDuration.SetTimestamp(timestamp)
 		dpDuration.ExplicitBounds().FromRaw(s.reqDurationBounds)
-		dpDuration.BucketCounts().FromRaw(s.reqClientDurationSecondsBucketCounts[key])
-		dpDuration.SetCount(s.reqClientDurationSecondsCount[key])
-		dpDuration.SetSum(s.reqClientDurationSecondsSum[key])
+		dpDuration.BucketCounts().FromRaw(s.reqServerDurationSecondsBucketCounts[key])
+		dpDuration.SetCount(s.reqServerDurationSecondsCount[key])
+		dpDuration.SetSum(s.reqServerDurationSecondsSum[key])
 
 		// TODO: Support exemplars
 		dimensions, ok := s.dimensionsForSeries(key)
@@ -632,7 +632,7 @@ func (s *ServiceGraphConnector) BuildMetricKey(clientName, serverName, connectio
 	}
 	metricKey.WriteString(metricKeySeparator + "server")
 	for _, dimName := range s.config.Dimensions {
-		dim, ok := edgeDimensions[serverName+"_"+dimName]
+		dim, ok := edgeDimensions[serverKind+"_"+dimName]
 		if !ok {
 			continue
 		}

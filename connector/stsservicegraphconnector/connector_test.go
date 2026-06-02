@@ -35,6 +35,7 @@ const (
 	someAttribute        = "some-attribute"
 	nonExistingAttribute = "non-existing-attribute"
 	mockExporterName     = "mock"
+	requestTotalMetric   = "traces_service_graph_request_total"
 )
 
 func TestConnectorStart(t *testing.T) {
@@ -100,6 +101,75 @@ func TestConnectorConsume(t *testing.T) {
 	verifyHappyCaseMetrics(t, md)
 
 	// Shutdown the connector
+	assert.NoError(t, conn.Shutdown(context.Background()))
+}
+
+func TestServerDimensionsArePartOfMetricKey(t *testing.T) {
+	assertDimensionPartOfMetricKey(t, "client-val", "server-a", "client-val", "server-b", "server_some-attribute", "server-a", "server-b")
+}
+
+func TestClientDimensionsArePartOfMetricKey(t *testing.T) {
+	assertDimensionPartOfMetricKey(t, "client-a", "server-val", "client-b", "server-val", "client_some-attribute", "client-a", "client-b")
+}
+
+func assertDimensionPartOfMetricKey(t *testing.T, firstClientAttr, firstServerAttr, secondClientAttr, secondServerAttr, assertAttrName, firstValue, secondValue string) {
+	cfg := &servicegraphconnector.Config{
+		Dimensions: []string{someAttribute},
+		Store:      servicegraphconnector.StoreConfig{MaxItems: 10},
+	}
+
+	set := componenttest.NewNopTelemetrySettings()
+	set.Logger = zaptest.NewLogger(t)
+	conn := servicegraphconnector.NewConnector(set, cfg, newMockMetricsExporter())
+
+	assert.NoError(t, conn.Start(context.Background(), componenttest.NewNopHost()))
+
+	traces := ptrace.NewTraces()
+	buildSampleTraceWithSpanAttributes(t, firstClientAttr, firstServerAttr, time.Second).
+		ResourceSpans().MoveAndAppendTo(traces.ResourceSpans())
+	buildSampleTraceWithSpanAttributes(t, secondClientAttr, secondServerAttr, time.Second).
+		ResourceSpans().MoveAndAppendTo(traces.ResourceSpans())
+
+	assert.NoError(t, conn.ConsumeTraces(context.Background(), traces))
+
+	conn.SetExpire(time.Now())
+	md, err := conn.BuildMetrics()
+	assert.NoError(t, err)
+
+	metrics := md.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics()
+	assert.Equal(t, 2, countMetricsNamed(metrics, requestTotalMetric))
+	assertMetricWithAttr(t, metrics, assertAttrName, firstValue)
+	assertMetricWithAttr(t, metrics, assertAttrName, secondValue)
+
+	assert.NoError(t, conn.Shutdown(context.Background()))
+}
+
+func TestClientAndServerLatencyMetricsUseCorrectDurations(t *testing.T) {
+	cfg := &servicegraphconnector.Config{
+		Dimensions: []string{someAttribute},
+		Store:      servicegraphconnector.StoreConfig{MaxItems: 10},
+	}
+
+	set := componenttest.NewNopTelemetrySettings()
+	set.Logger = zaptest.NewLogger(t)
+	conn := servicegraphconnector.NewConnector(set, cfg, newMockMetricsExporter())
+
+	assert.NoError(t, conn.Start(context.Background(), componenttest.NewNopHost()))
+	assert.NoError(t, conn.ConsumeTraces(context.Background(), buildSampleTraceWithSpanAttributes(t, "client-val", "server-val", 2*time.Second)))
+
+	conn.SetExpire(time.Now())
+	md, err := conn.BuildMetrics()
+	assert.NoError(t, err)
+
+	metrics := md.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics()
+	mServerDuration := metrics.At(1)
+	assert.Equal(t, "traces_service_graph_request_server_seconds", mServerDuration.Name())
+	assert.Equal(t, float64(2), mServerDuration.Histogram().DataPoints().At(0).Sum())
+
+	mClientDuration := metrics.At(2)
+	assert.Equal(t, "traces_service_graph_request_client_seconds", mClientDuration.Name())
+	assert.Equal(t, float64(1), mClientDuration.Histogram().DataPoints().At(0).Sum())
+
 	assert.NoError(t, conn.Shutdown(context.Background()))
 }
 
@@ -180,8 +250,13 @@ func verifyAttr(t *testing.T, attrs pcommon.Map, k, expected string) {
 }
 
 func buildSampleTrace(t *testing.T, attrValue string) ptrace.Traces {
+	return buildSampleTraceWithSpanAttributes(t, attrValue, "", time.Second)
+}
+
+func buildSampleTraceWithSpanAttributes(t *testing.T, clientAttrValue, serverAttrValue string, serverDuration time.Duration) ptrace.Traces {
 	tStart := time.Date(2022, 1, 2, 3, 4, 5, 6, time.UTC)
-	tEnd := time.Date(2022, 1, 2, 3, 4, 6, 6, time.UTC)
+	clientEnd := tStart.Add(time.Second)
+	serverEnd := tStart.Add(serverDuration)
 
 	traces := ptrace.NewTraces()
 
@@ -206,8 +281,8 @@ func buildSampleTrace(t *testing.T, attrValue string) ptrace.Traces {
 	clientSpan.SetTraceID(traceID)
 	clientSpan.SetKind(ptrace.SpanKindClient)
 	clientSpan.SetStartTimestamp(pcommon.NewTimestampFromTime(tStart))
-	clientSpan.SetEndTimestamp(pcommon.NewTimestampFromTime(tEnd))
-	clientSpan.Attributes().PutStr(someAttribute, attrValue) // Attribute selected as dimension for metrics
+	clientSpan.SetEndTimestamp(pcommon.NewTimestampFromTime(clientEnd))
+	clientSpan.Attributes().PutStr(someAttribute, clientAttrValue) // Attribute selected as dimension for metrics
 
 	serverSpan := scopeSpans.Spans().AppendEmpty()
 	serverSpan.SetName("server span")
@@ -216,9 +291,36 @@ func buildSampleTrace(t *testing.T, attrValue string) ptrace.Traces {
 	serverSpan.SetParentSpanID(clientSpanID)
 	serverSpan.SetKind(ptrace.SpanKindServer)
 	serverSpan.SetStartTimestamp(pcommon.NewTimestampFromTime(tStart))
-	serverSpan.SetEndTimestamp(pcommon.NewTimestampFromTime(tEnd))
+	serverSpan.SetEndTimestamp(pcommon.NewTimestampFromTime(serverEnd))
+	if serverAttrValue != "" {
+		serverSpan.Attributes().PutStr(someAttribute, serverAttrValue)
+	}
 
 	return traces
+}
+
+func countMetricsNamed(metrics pmetric.MetricSlice, name string) int {
+	count := 0
+	for i := 0; i < metrics.Len(); i++ {
+		if metrics.At(i).Name() == name {
+			count++
+		}
+	}
+	return count
+}
+
+func assertMetricWithAttr(t *testing.T, metrics pmetric.MetricSlice, attrName, attrValue string) {
+	for i := 0; i < metrics.Len(); i++ {
+		metric := metrics.At(i)
+		if metric.Name() != requestTotalMetric {
+			continue
+		}
+		value, ok := metric.Sum().DataPoints().At(0).Attributes().Get(attrName)
+		if ok && value.AsString() == attrValue {
+			return
+		}
+	}
+	require.Failf(t, "missing metric attribute", "expected %s metric with %s=%s", requestTotalMetric, attrName, attrValue)
 }
 
 var _ exporter.Metrics = (*mockMetricsExporter)(nil)
