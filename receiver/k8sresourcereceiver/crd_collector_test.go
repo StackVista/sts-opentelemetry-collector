@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/emit"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/tracker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/watch"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 )
 
@@ -64,7 +67,7 @@ func testConfig(includes []string, excludes []string) *Config {
 		IncrementInterval: 1 * time.Second,
 		SnapshotInterval:  1 * time.Hour, // Long to prevent snapshots during tests
 		DiscoveryMode:     DiscoveryModeAPIGroups,
-		APIGroupFilters: &APIGroupFilters{
+		CRDAPIGroupFilters: &CRDAPIGroupFilters{
 			Include: includes,
 			Exclude: excludes,
 		},
@@ -158,7 +161,7 @@ func newTestCollectorWithPeerStore(
 ) *resourceCollector {
 	t.Helper()
 	settings := testSettings(t)
-	informerSet := newResourceInformers(settings, config, client, ft, nil)
+	informerSet := newResourceInformers(settings, config, client, nil, ft, nil)
 	return newResourceCollector(settings.Logger, config, sink, informerSet, peerStore, nil)
 }
 
@@ -189,11 +192,11 @@ func (r *recordingPeerStore) SetLeader(_ bool)                  {}
 
 func (r *recordingPeerStore) ComputeChanges(
 	currentCRDs []*unstructured.Unstructured,
-	currentCRs map[schema.GroupVersionResource][]*unstructured.Unstructured,
+	currentObjects map[schema.GroupVersionResource]ObjectGroup,
 ) []ResourceChange {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.cache.computeChanges(currentCRDs, currentCRs)
+	return r.cache.computeChanges(currentCRDs, currentObjects)
 }
 
 func (r *recordingPeerStore) ApplyDelta(_ context.Context, delta *PeerSyncDelta) error {
@@ -205,13 +208,13 @@ func (r *recordingPeerStore) ApplyDelta(_ context.Context, delta *PeerSyncDelta)
 
 	snap := recordedSave{
 		crds:             make(map[string]string, len(r.cache.CRDs)),
-		crs:              make(map[string]string, len(r.cache.CRs)),
+		crs:              make(map[string]string, len(r.cache.Objects)),
 		lastSnapshotTime: r.lastSnapshotTime,
 	}
 	for name, crd := range r.cache.CRDs {
 		snap.crds[name] = crd.GetResourceVersion()
 	}
-	for k, cr := range r.cache.CRs {
+	for k, cr := range r.cache.Objects {
 		snap.crs[k] = cr.Obj.GetResourceVersion()
 	}
 	r.saves = append(r.saves, snap)
@@ -425,7 +428,7 @@ func TestResourceCollector_TwoPhaseSaveOrdering(t *testing.T) {
 			expectedSavesAfterMutation: 1,
 			assertSaves: func(t *testing.T, saves []recordedSave) {
 				require.Len(t, saves, 1, "phase-1 should produce exactly one save")
-				assert.Contains(t, saves[0].crs, crResourceKey(crGVR, "default", "new"), "added CR should appear in save")
+				assert.Contains(t, saves[0].crs, objectResourceKey(crGVR, "default", "new"), "added CR should appear in save")
 			},
 		},
 		{
@@ -437,8 +440,8 @@ func TestResourceCollector_TwoPhaseSaveOrdering(t *testing.T) {
 			expectedSavesAfterMutation: 1,
 			assertSaves: func(t *testing.T, saves []recordedSave) {
 				require.Len(t, saves, 1, "phase-2 should produce exactly one save")
-				assert.NotContains(t, saves[0].crs, crResourceKey(crGVR, "default", "drop"), "deleted CR must be absent in save")
-				assert.Contains(t, saves[0].crs, crResourceKey(crGVR, "default", "keep"), "kept CR should still be present")
+				assert.NotContains(t, saves[0].crs, objectResourceKey(crGVR, "default", "drop"), "deleted CR must be absent in save")
+				assert.Contains(t, saves[0].crs, objectResourceKey(crGVR, "default", "keep"), "kept CR should still be present")
 			},
 		},
 		{
@@ -453,8 +456,8 @@ func TestResourceCollector_TwoPhaseSaveOrdering(t *testing.T) {
 			expectedSavesAfterMutation: 2,
 			assertSaves: func(t *testing.T, saves []recordedSave) {
 				require.Len(t, saves, 2, "mixed cycle should produce exactly two saves")
-				dropKey := crResourceKey(crGVR, "default", "drop")
-				newKey := crResourceKey(crGVR, "default", "new")
+				dropKey := objectResourceKey(crGVR, "default", "drop")
+				newKey := objectResourceKey(crGVR, "default", "new")
 
 				// Phase 1 (adds first): added CR present; soon-to-be-deleted CR still present.
 				assert.Contains(t, saves[0].crs, newKey, "phase-1 save should contain the added CR")
@@ -521,13 +524,92 @@ func TestResourceCollector_TwoPhaseSaveOrdering(t *testing.T) {
 	}
 }
 
+// TestResourceCollector_EmitObject_SourceDrivesEventName verifies that the
+// collector picks the downstream event name from each object's ObjectSource:
+// Source=cr keeps the CR-shape event name, Source=static uses the neutral
+// object-shape event name. Covers both the snapshot path (currentObjects) and
+// the increment path (ResourceChange).
+func TestResourceCollector_EmitObject_SourceDrivesEventName(t *testing.T) {
+	crGVR := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"}
+	staticGVR := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
+
+	crObj := makeTestCR("widget-1", "default", "example.com", "v1", "Widget")
+	staticObj := makeTestCR("pod-1", "default", "", "v1", "Pod")
+
+	cfg := &Config{ClusterName: "test-cluster"}
+
+	t.Run("snapshot path", func(t *testing.T) {
+		sink := &consumertest.LogsSink{}
+		c := &resourceCollector{
+			logger:   zaptest.NewLogger(t),
+			config:   cfg,
+			consumer: sink,
+			metrics:  metrics.NoopRecorder{},
+		}
+		c.emitSnapshot(
+			context.Background(),
+			nil, // no CRDs
+			map[schema.GroupVersionResource]ObjectGroup{
+				crGVR:     {Source: ObjectSourceCR, Objects: []*unstructured.Unstructured{crObj}},
+				staticGVR: {Source: ObjectSourceStatic, Objects: []*unstructured.Unstructured{staticObj}},
+			},
+			nil, // no deletes
+		)
+		assertEventNamesByObjectName(t, sink, map[string]string{
+			"widget-1": emit.EventNameCR,
+			"pod-1":    emit.EventNameObject,
+		})
+	})
+
+	t.Run("increment path", func(t *testing.T) {
+		sink := &consumertest.LogsSink{}
+		c := &resourceCollector{
+			logger:   zaptest.NewLogger(t),
+			config:   cfg,
+			consumer: sink,
+			metrics:  metrics.NoopRecorder{},
+		}
+		c.emitChanges(context.Background(), []ResourceChange{
+			{Obj: crObj, EventType: watch.Modified, GVR: crGVR, Source: ObjectSourceCR},
+			{Obj: staticObj, EventType: watch.Added, GVR: staticGVR, Source: ObjectSourceStatic},
+		})
+		assertEventNamesByObjectName(t, sink, map[string]string{
+			"widget-1": emit.EventNameCR,
+			"pod-1":    emit.EventNameObject,
+		})
+	})
+}
+
+// assertEventNamesByObjectName walks every emitted log record and matches
+// k8s.object.name → expected event name. Fails if any expected entry is missing
+// or any record carries the wrong event name.
+func assertEventNamesByObjectName(t *testing.T, sink *consumertest.LogsSink, want map[string]string) {
+	t.Helper()
+	got := map[string]string{}
+	for _, ld := range sink.AllLogs() {
+		for i := 0; i < ld.ResourceLogs().Len(); i++ {
+			rl := ld.ResourceLogs().At(i)
+			for j := 0; j < rl.ScopeLogs().Len(); j++ {
+				sl := rl.ScopeLogs().At(j)
+				for k := 0; k < sl.LogRecords().Len(); k++ {
+					lr := sl.LogRecords().At(k)
+					name, ok := lr.Attributes().Get(emit.AttrK8sObjectName)
+					require.True(t, ok, "log record missing k8s.object.name")
+					got[name.Str()] = lr.EventName()
+				}
+			}
+		}
+	}
+	assert.Equal(t, want, got)
+}
+
 func TestConfig_Simplified(t *testing.T) {
 	t.Run("valid config", func(t *testing.T) {
 		cfg := &Config{
 			IncrementInterval: 10 * time.Second,
 			SnapshotInterval:  5 * time.Minute,
 			DiscoveryMode:     DiscoveryModeAPIGroups,
-			APIGroupFilters: &APIGroupFilters{
+			CRDAPIGroupFilters: &CRDAPIGroupFilters{
 				Include: []string{testExampleGroup},
 				Exclude: []string{},
 			},
@@ -540,7 +622,7 @@ func TestConfig_Simplified(t *testing.T) {
 	t.Run("default intervals", func(t *testing.T) {
 		cfg := &Config{
 			DiscoveryMode: DiscoveryModeAPIGroups,
-			APIGroupFilters: &APIGroupFilters{
+			CRDAPIGroupFilters: &CRDAPIGroupFilters{
 				Include: []string{"*"},
 			},
 		}
@@ -593,14 +675,14 @@ func TestConfig_Simplified(t *testing.T) {
 			DiscoveryMode: DiscoveryModeAPIGroups,
 		}
 		require.NoError(t, cfg.Validate())
-		require.NotNil(t, cfg.APIGroupFilters)
-		assert.Equal(t, []string{"*"}, cfg.APIGroupFilters.Include)
+		require.NotNil(t, cfg.CRDAPIGroupFilters)
+		assert.Equal(t, []string{"*"}, cfg.CRDAPIGroupFilters.Include)
 	})
 
 	t.Run("empty include", func(t *testing.T) {
 		cfg := &Config{
 			DiscoveryMode: DiscoveryModeAPIGroups,
-			APIGroupFilters: &APIGroupFilters{
+			CRDAPIGroupFilters: &CRDAPIGroupFilters{
 				Include: []string{},
 			},
 		}
@@ -623,7 +705,7 @@ func TestConfig_Simplified(t *testing.T) {
 	t.Run("special chars in patterns are literal", func(t *testing.T) {
 		cfg := &Config{
 			DiscoveryMode: DiscoveryModeAPIGroups,
-			APIGroupFilters: &APIGroupFilters{
+			CRDAPIGroupFilters: &CRDAPIGroupFilters{
 				Include: []string{"example.com"},
 			},
 		}
@@ -637,7 +719,7 @@ func TestConfig_Simplified(t *testing.T) {
 	t.Run("shouldWatchAPIGroup with wildcard and exclude", func(t *testing.T) {
 		cfg := &Config{
 			DiscoveryMode: DiscoveryModeAPIGroups,
-			APIGroupFilters: &APIGroupFilters{
+			CRDAPIGroupFilters: &CRDAPIGroupFilters{
 				Include: []string{testSuseWildcard, "longhorn.io"},
 				Exclude: []string{"internal.suse.com"},
 			},

@@ -3,6 +3,7 @@ package k8sresourcereceiver
 import (
 	"fmt"
 
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -64,6 +65,24 @@ func MakeDynamicClient(apiConf APIConfig) (dynamic.Interface, error) {
 	client, err := dynamic.NewForConfig(restConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Kubernetes dynamic client: %w", err)
+	}
+
+	return client, nil
+}
+
+// MakeDiscoveryClient creates a Kubernetes discovery client.
+//
+// Used at startup to resolve user-specified plural resource names (e.g. "pods", "deployments") into
+// a fully-qualified GroupVersionResource.
+func MakeDiscoveryClient(apiConf APIConfig) (discovery.DiscoveryInterface, error) {
+	restConfig, err := makeRESTConfig(apiConf)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Kubernetes rest config: %w", err)
+	}
+
+	client, err := discovery.NewDiscoveryClientForConfig(restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Kubernetes discovery client: %w", err)
 	}
 
 	return client, nil

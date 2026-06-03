@@ -20,19 +20,19 @@ const (
 	testSpecKey       = "spec"
 )
 
-func TestBuildCRLogRecord(t *testing.T) {
+func TestBuildObjectLogRecord(t *testing.T) {
 	timestamp := time.Date(2026, 4, 8, 12, 0, 0, 0, time.UTC)
 	clusterName := "test-cluster"
 
 	tests := []struct {
 		name      string
-		cr        *unstructured.Unstructured
+		obj       *unstructured.Unstructured
 		eventType watch.EventType
-		wantErr   bool
+		eventName string
 	}{
 		{
-			name: "valid CR with namespace",
-			cr: &unstructured.Unstructured{
+			name: "CR-shape: namespaced CR with EventNameCR",
+			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					testAPIVersionKey: "policies.kubewarden.io/v1",
 					testKindKey:       "PolicyServer",
@@ -47,11 +47,11 @@ func TestBuildCRLogRecord(t *testing.T) {
 				},
 			},
 			eventType: watch.Added,
-			wantErr:   false,
+			eventName: emit.EventNameCR,
 		},
 		{
-			name: "cluster-scoped CR without namespace",
-			cr: &unstructured.Unstructured{
+			name: "CR-shape: cluster-scoped CR without namespace",
+			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					testAPIVersionKey: "policies.kubewarden.io/v1",
 					testKindKey:       "ClusterAdmissionPolicy",
@@ -62,100 +62,87 @@ func TestBuildCRLogRecord(t *testing.T) {
 				},
 			},
 			eventType: watch.Modified,
-			wantErr:   false,
+			eventName: emit.EventNameCR,
 		},
 		{
-			name: "deleted event",
-			cr: &unstructured.Unstructured{
+			name: "Object-shape: static pod with EventNameObject",
+			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
-					"apiVersion": "example.com/v1",
-					"kind":       "MyResource",
-					"metadata": map[string]interface{}{
-						"name": "test-resource",
+					testAPIVersionKey: "v1",
+					testKindKey:       "Pod",
+					testMetadataKey: map[string]interface{}{
+						testNameKey: "nginx",
+						"namespace": "default",
 					},
 				},
 			},
 			eventType: watch.Deleted,
-			wantErr:   false,
+			eventName: emit.EventNameObject,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			logs, err := emit.BuildCRLogRecord(tt.cr, tt.eventType, timestamp, clusterName)
-			if tt.wantErr {
-				require.Error(t, err)
-				return
-			}
-
+			logs, err := emit.BuildObjectLogRecord(tt.obj, tt.eventType, timestamp, clusterName, tt.eventName)
 			require.NoError(t, err)
 
-			// Verify log structure
 			assert.Equal(t, 1, logs.ResourceLogs().Len())
 			resourceLogs := logs.ResourceLogs().At(0)
 
-			// Verify resource attributes
 			resourceAttrs := resourceLogs.Resource().Attributes()
 			cluster, ok := resourceAttrs.Get(emit.AttrK8sClusterName)
 			require.True(t, ok, "resource should have cluster name attribute")
 			assert.Equal(t, clusterName, cluster.Str())
 
-			if tt.cr.GetNamespace() != "" {
+			if tt.obj.GetNamespace() != "" {
 				ns, ok := resourceAttrs.Get(emit.AttrK8sNamespaceName)
 				require.True(t, ok, "resource should have namespace attribute for namespaced resources")
-				assert.Equal(t, tt.cr.GetNamespace(), ns.Str())
+				assert.Equal(t, tt.obj.GetNamespace(), ns.Str())
 			}
 
 			assert.Equal(t, 1, resourceLogs.ScopeLogs().Len())
-
 			scopeLogs := resourceLogs.ScopeLogs().At(0)
 			assert.Equal(t, emit.ScopeName, scopeLogs.Scope().Name())
 			assert.Equal(t, 1, scopeLogs.LogRecords().Len())
 
 			logRecord := scopeLogs.LogRecords().At(0)
-
-			// Verify timestamp
 			assert.NotZero(t, logRecord.ObservedTimestamp())
 
-			// Verify body structure
 			bodyMap := logRecord.Body().Map()
 			assert.True(t, bodyMap.Len() >= 2, "body should have at least 'object' and 'type'")
 
-			// Verify event type
 			eventTypeVal, ok := bodyMap.Get("type")
 			require.True(t, ok, "body should have 'type' field")
 			assert.Equal(t, string(tt.eventType), eventTypeVal.Str())
 
-			// Verify object exists
 			objectVal, ok := bodyMap.Get("object")
 			require.True(t, ok, "body should have 'object' field")
 			objectMap := objectVal.Map()
 			assert.True(t, objectMap.Len() > 0, "object should not be empty")
 
-			// Verify attributes
 			attrs := logRecord.Attributes()
-			kind, ok := attrs.Get(emit.AttrK8sResourceName)
+			kind, ok := attrs.Get(emit.AttrK8sResourceKind)
 			require.True(t, ok)
-			assert.Equal(t, tt.cr.GetKind(), kind.Str())
+			assert.Equal(t, tt.obj.GetKind(), kind.Str())
 
 			group, ok := attrs.Get(emit.AttrK8sResourceGroup)
 			require.True(t, ok)
-			assert.Equal(t, tt.cr.GroupVersionKind().Group, group.Str())
+			assert.Equal(t, tt.obj.GroupVersionKind().Group, group.Str())
 
 			domain, ok := attrs.Get(emit.AttrEventDomain)
 			require.True(t, ok)
 			assert.Equal(t, emit.EventDomainK8s, domain.Str())
 
-			assert.Equal(t, emit.EventNameCR, logRecord.EventName())
+			assert.Equal(t, tt.eventName, logRecord.EventName())
 
 			objectName, ok := attrs.Get(emit.AttrK8sObjectName)
 			require.True(t, ok)
-			assert.Equal(t, tt.cr.GetName(), objectName.Str())
+			assert.Equal(t, tt.obj.GetName(), objectName.Str())
 
-			if tt.cr.GetNamespace() != "" {
+			if tt.obj.GetNamespace() != "" {
 				ns, ok := attrs.Get(emit.AttrK8sNamespaceName)
 				require.True(t, ok, "log record should have namespace attribute")
-				assert.Equal(t, tt.cr.GetNamespace(), ns.Str())
+				assert.Equal(t, tt.obj.GetNamespace(), ns.Str())
 			} else {
 				_, ok := attrs.Get(emit.AttrK8sNamespaceName)
 				assert.False(t, ok, "namespace attribute should not exist for cluster-scoped resources")
@@ -274,7 +261,7 @@ func TestBuildCRDLogRecord(t *testing.T) {
 			crdKind, _, _ := unstructured.NestedString(tt.crd.Object, "spec", "names", "kind")
 			crdGroup, _, _ := unstructured.NestedString(tt.crd.Object, "spec", "group")
 
-			kind, ok := attrs.Get(emit.AttrK8sResourceName)
+			kind, ok := attrs.Get(emit.AttrK8sResourceKind)
 			require.True(t, ok)
 			assert.Equal(t, crdKind, kind.Str())
 

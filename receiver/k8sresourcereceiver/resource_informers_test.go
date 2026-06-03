@@ -3,6 +3,7 @@ package k8sresourcereceiver
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -11,30 +12,42 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/tracker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
+	clienttesting "k8s.io/client-go/testing"
 )
 
-// recordingReconcileRecorder embeds NoopRecorder and captures CR informer
-// reconcile outcomes so tests can assert on them.
+// reconcileRecord captures one informer-reconcile metric emission.
+type reconcileRecord struct {
+	kind    metrics.InformerKind
+	outcome metrics.InformerOutcome
+}
+
+// recordingReconcileRecorder embeds NoopRecorder and captures informer reconcile
+// emissions so tests can assert on outcome (and, when relevant, kind).
 type recordingReconcileRecorder struct {
 	metrics.NoopRecorder
 
-	mu       sync.Mutex
-	outcomes []metrics.CRInformerOutcome
+	mu      sync.Mutex
+	records []reconcileRecord
 }
 
-func (r *recordingReconcileRecorder) RecordCRInformerReconcile(_ context.Context, outcome metrics.CRInformerOutcome) {
+func (r *recordingReconcileRecorder) RecordInformerReconcile(
+	_ context.Context, kind metrics.InformerKind, outcome metrics.InformerOutcome,
+) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.outcomes = append(r.outcomes, outcome)
+	r.records = append(r.records, reconcileRecord{kind: kind, outcome: outcome})
 }
 
-func (r *recordingReconcileRecorder) snapshot() []metrics.CRInformerOutcome {
+func (r *recordingReconcileRecorder) snapshot() []reconcileRecord {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return append([]metrics.CRInformerOutcome(nil), r.outcomes...)
+	return append([]reconcileRecord(nil), r.records...)
 }
 
 func TestResourceInformers_ReadCRDs(t *testing.T) {
@@ -53,7 +66,7 @@ func TestResourceInformers_ReadCRDs(t *testing.T) {
 
 	config := testConfig([]string{testExampleGroup}, nil)
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
-	ri := newResourceInformers(testSettings(t), config, client, ft, nil)
+	ri := newResourceInformers(testSettings(t), config, client, nil, ft, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -67,7 +80,7 @@ func TestResourceInformers_ReadCRDs(t *testing.T) {
 	assert.Equal(t, "testresources.example.com", crds[0].GetName())
 }
 
-func TestResourceInformers_ReadCRs(t *testing.T) {
+func TestResourceInformers_ReadObjects_CRD(t *testing.T) {
 	scheme := testScheme()
 	registerCRGVR(scheme, testExampleGroup, "v1", "TestResource")
 
@@ -84,7 +97,7 @@ func TestResourceInformers_ReadCRs(t *testing.T) {
 
 	config := testConfig([]string{testExampleGroup}, nil)
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
-	ri := newResourceInformers(testSettings(t), config, client, ft, nil)
+	ri := newResourceInformers(testSettings(t), config, client, nil, ft, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -94,10 +107,11 @@ func TestResourceInformers_ReadCRs(t *testing.T) {
 	defer func() { require.NoError(t, ri.Shutdown(ctx)) }()
 
 	gvr := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: testTestResources}
-	crs := ri.ReadCRs()
-	require.Contains(t, crs, gvr)
-	require.Len(t, crs[gvr], 1)
-	assert.Equal(t, "my-resource", crs[gvr][0].GetName())
+	objs := ri.ReadObjects()
+	require.Contains(t, objs, gvr)
+	require.Len(t, objs[gvr].Objects, 1)
+	assert.Equal(t, "my-resource", objs[gvr].Objects[0].GetName())
+	assert.Equal(t, ObjectSourceCR, objs[gvr].Source)
 }
 
 func TestResourceInformers_CRDAddStartsCRInformer(t *testing.T) {
@@ -116,7 +130,7 @@ func TestResourceInformers_CRDAddStartsCRInformer(t *testing.T) {
 
 	config := testConfig([]string{testExampleGroup}, nil)
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
-	ri := newResourceInformers(testSettings(t), config, client, ft, nil)
+	ri := newResourceInformers(testSettings(t), config, client, nil, ft, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -125,9 +139,9 @@ func TestResourceInformers_CRDAddStartsCRInformer(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { require.NoError(t, ri.Shutdown(ctx)) }()
 
-	ri.mu.RLock()
+	ri.informersMu.RLock()
 	_, exists := ri.crInformers["example.com/v1/testresources"]
-	ri.mu.RUnlock()
+	ri.informersMu.RUnlock()
 
 	assert.True(t, exists, "CR informer should be started for matching CRD")
 }
@@ -148,7 +162,7 @@ func TestResourceInformers_CRDDeleteStopsCRInformer(t *testing.T) {
 
 	config := testConfig([]string{"example.com"}, nil)
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
-	ri := newResourceInformers(testSettings(t), config, client, ft, nil)
+	ri := newResourceInformers(testSettings(t), config, client, nil, ft, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -158,9 +172,9 @@ func TestResourceInformers_CRDDeleteStopsCRInformer(t *testing.T) {
 	defer func() { require.NoError(t, ri.Shutdown(ctx)) }()
 
 	// Verify CR informer is running
-	ri.mu.RLock()
+	ri.informersMu.RLock()
 	_, exists := ri.crInformers["example.com/v1/testresources"]
-	ri.mu.RUnlock()
+	ri.informersMu.RUnlock()
 	require.True(t, exists, "CR informer should be started")
 
 	// Delete the CRD
@@ -169,8 +183,8 @@ func TestResourceInformers_CRDDeleteStopsCRInformer(t *testing.T) {
 
 	// CR informer should be stopped
 	assert.Eventually(t, func() bool {
-		ri.mu.RLock()
-		defer ri.mu.RUnlock()
+		ri.informersMu.RLock()
+		defer ri.informersMu.RUnlock()
 		_, exists := ri.crInformers["example.com/v1/testresources"]
 		return !exists
 	}, 10*time.Second, 100*time.Millisecond, "CR informer should be stopped after CRD deletion")
@@ -195,7 +209,7 @@ func TestResourceInformers_FiltersAPIGroups(t *testing.T) {
 
 	config := testConfig([]string{"allowed.com"}, nil)
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
-	ri := newResourceInformers(testSettings(t), config, client, ft, nil)
+	ri := newResourceInformers(testSettings(t), config, client, nil, ft, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -204,10 +218,10 @@ func TestResourceInformers_FiltersAPIGroups(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { require.NoError(t, ri.Shutdown(ctx)) }()
 
-	ri.mu.RLock()
+	ri.informersMu.RLock()
 	_, allowedExists := ri.crInformers["allowed.com/v1/alloweds"]
 	_, blockedExists := ri.crInformers["blocked.com/v1/blockeds"]
-	ri.mu.RUnlock()
+	ri.informersMu.RUnlock()
 
 	assert.True(t, allowedExists, "allowed group should have CR informer")
 	assert.False(t, blockedExists, "blocked group should not have CR informer")
@@ -237,7 +251,7 @@ func TestResourceInformers_ExcludeFilter(t *testing.T) {
 
 	config := testConfig([]string{"*"}, []string{"excluded.com"})
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
-	ri := newResourceInformers(testSettings(t), config, client, ft, nil)
+	ri := newResourceInformers(testSettings(t), config, client, nil, ft, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -246,10 +260,10 @@ func TestResourceInformers_ExcludeFilter(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { require.NoError(t, ri.Shutdown(ctx)) }()
 
-	ri.mu.RLock()
+	ri.informersMu.RLock()
 	_, includedExists := ri.crInformers["included.com/v1/includes"]
 	_, excludedExists := ri.crInformers["excluded.com/v1/excludes"]
-	ri.mu.RUnlock()
+	ri.informersMu.RUnlock()
 
 	assert.True(t, includedExists, "included group should have CR informer")
 	assert.False(t, excludedExists, "excluded group should not have CR informer")
@@ -274,7 +288,7 @@ func TestResourceInformers_ForbiddenTrackerSkipsResource(t *testing.T) {
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 	ft.MarkForbidden(crGVR)
 
-	ri := newResourceInformers(testSettings(t), config, client, ft, nil)
+	ri := newResourceInformers(testSettings(t), config, client, nil, ft, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -283,9 +297,9 @@ func TestResourceInformers_ForbiddenTrackerSkipsResource(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { require.NoError(t, ri.Shutdown(ctx)) }()
 
-	ri.mu.RLock()
+	ri.informersMu.RLock()
 	_, exists := ri.crInformers["example.com/v1/testresources"]
-	ri.mu.RUnlock()
+	ri.informersMu.RUnlock()
 
 	assert.False(t, exists, "CR informer should not start for forbidden resource")
 }
@@ -306,7 +320,7 @@ func TestResourceInformers_Shutdown(t *testing.T) {
 
 	config := testConfig([]string{"example.com"}, nil)
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
-	ri := newResourceInformers(testSettings(t), config, client, ft, nil)
+	ri := newResourceInformers(testSettings(t), config, client, nil, ft, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -314,9 +328,9 @@ func TestResourceInformers_Shutdown(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify informer is running
-	ri.mu.RLock()
+	ri.informersMu.RLock()
 	require.NotEmpty(t, ri.crInformers)
-	ri.mu.RUnlock()
+	ri.informersMu.RUnlock()
 
 	cancel()
 	// Use a fresh context for Shutdown — the caller's ctx is already cancelled,
@@ -325,9 +339,9 @@ func TestResourceInformers_Shutdown(t *testing.T) {
 	require.NoError(t, err)
 
 	// All CR informers should be cleaned up
-	ri.mu.RLock()
+	ri.informersMu.RLock()
 	assert.Empty(t, ri.crInformers)
-	ri.mu.RUnlock()
+	ri.informersMu.RUnlock()
 }
 
 func TestResourceInformers_ReconcileStartsMissingInformer(t *testing.T) {
@@ -349,7 +363,7 @@ func TestResourceInformers_ReconcileStartsMissingInformer(t *testing.T) {
 	config := testConfig([]string{"example.com"}, nil)
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 	rec := &recordingReconcileRecorder{}
-	ri := newResourceInformers(testSettings(t), config, client, ft, rec)
+	ri := newResourceInformers(testSettings(t), config, client, nil, ft, rec)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -359,23 +373,23 @@ func TestResourceInformers_ReconcileStartsMissingInformer(t *testing.T) {
 
 	// Simulate a CR informer that failed during initial startup: drop it from the
 	// map without going through stopCRInformer (which would also stop the goroutine).
-	ri.mu.Lock()
+	ri.informersMu.Lock()
 	entry := ri.crInformers[key]
 	delete(ri.crInformers, key)
-	ri.mu.Unlock()
+	ri.informersMu.Unlock()
 	require.NotNil(t, entry, "expected initial CR informer for example.com to be running")
 	close(entry.stopCh)
 
 	ri.reconcileCRInformers(ctx)
 
-	ri.mu.RLock()
+	ri.informersMu.RLock()
 	_, exists := ri.crInformers[key]
-	ri.mu.RUnlock()
+	ri.informersMu.RUnlock()
 	assert.True(t, exists, "reconciler should have started the missing CR informer")
 
-	outcomes := rec.snapshot()
-	require.Len(t, outcomes, 1)
-	assert.Equal(t, metrics.CRInformerStarted, outcomes[0])
+	records := rec.snapshot()
+	require.Len(t, records, 1)
+	assert.Equal(t, reconcileRecord{kind: metrics.InformerKindCR, outcome: metrics.InformerStarted}, records[0])
 }
 
 func TestResourceInformers_ReconcileNoOpForRunningInformer(t *testing.T) {
@@ -396,7 +410,7 @@ func TestResourceInformers_ReconcileNoOpForRunningInformer(t *testing.T) {
 	config := testConfig([]string{"example.com"}, nil)
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 	rec := &recordingReconcileRecorder{}
-	ri := newResourceInformers(testSettings(t), config, client, ft, rec)
+	ri := newResourceInformers(testSettings(t), config, client, nil, ft, rec)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -406,9 +420,372 @@ func TestResourceInformers_ReconcileNoOpForRunningInformer(t *testing.T) {
 
 	ri.reconcileCRInformers(ctx)
 
-	outcomes := rec.snapshot()
-	require.Len(t, outcomes, 1)
-	assert.Equal(t, metrics.CRInformerExists, outcomes[0])
+	records := rec.snapshot()
+	require.Len(t, records, 1)
+	assert.Equal(t, reconcileRecord{kind: metrics.InformerKindCR, outcome: metrics.InformerExists}, records[0])
+}
+
+// --- Static informer tests ---
+
+// podsGVR is the GVR used by static informer tests below.
+//
+//nolint:gochecknoglobals
+var podsGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
+
+//nolint:unparam
+func makeTestPod(name, namespace string, labels map[string]interface{}) *unstructured.Unstructured {
+	meta := map[string]interface{}{
+		testNameKey: name,
+	}
+	if namespace != "" {
+		meta["namespace"] = namespace
+	}
+	if labels != nil {
+		meta["labels"] = labels
+	}
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			testAPIVersionKey: "v1",
+			testKindKey:       "Pod",
+			testMetadataKey:   meta,
+			testSpecKey:       map[string]interface{}{},
+		},
+	}
+}
+
+// staticPodClient returns a fake dynamic client preloaded with the given pods
+// and the CRD GVR (required so the CRD informer can start without errors).
+func staticPodClient(pods ...*unstructured.Unstructured) *dynamicfake.FakeDynamicClient {
+	s := testScheme()
+	s.AddKnownTypeWithName(
+		schema.GroupVersionKind{Group: "", Version: "v1", Kind: "PodList"},
+		&unstructured.UnstructuredList{},
+	)
+	s.AddKnownTypeWithName(
+		schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"},
+		&unstructured.Unstructured{},
+	)
+	objs := make([]runtime.Object, 0, len(pods))
+	for _, p := range pods {
+		objs = append(objs, p)
+	}
+	return dynamicfake.NewSimpleDynamicClientWithCustomListKinds(s,
+		map[schema.GroupVersionResource]string{
+			crdGVR:  testCRDListKind,
+			podsGVR: "PodList",
+		},
+		objs...,
+	)
+}
+
+func TestResourceInformers_StaticInformer_StartsAndReads(t *testing.T) {
+	pod := makeTestPod("nginx", "default", nil)
+	client := staticPodClient(pod)
+
+	resolved := []resolvedObjectWatch{{
+		ObjectWatch: ObjectWatch{Name: "pods"},
+		GVR:         podsGVR,
+		Namespaced:  true,
+	}}
+
+	config := testConfig([]string{testExampleGroup}, nil)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
+	ri := newResourceInformers(testSettings(t), config, client, resolved, ft, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	require.NoError(t, ri.Start(ctx))
+	defer func() { require.NoError(t, ri.Shutdown(ctx)) }()
+
+	ri.informersMu.RLock()
+	require.Len(t, ri.staticInformers, 1, "one static informer per resolvedObject when Namespaces is empty")
+	ri.informersMu.RUnlock()
+
+	objs := ri.ReadObjects()
+	require.Contains(t, objs, podsGVR)
+	require.Len(t, objs[podsGVR].Objects, 1)
+	assert.Equal(t, "nginx", objs[podsGVR].Objects[0].GetName())
+	assert.Equal(t, ObjectSourceStatic, objs[podsGVR].Source)
+}
+
+func TestResourceInformers_StaticInformer_NamespaceExpansion(t *testing.T) {
+	podA := makeTestPod("a", "ns-a", nil)
+	podB := makeTestPod("b", "ns-b", nil)
+	podC := makeTestPod("c", "ns-c", nil)
+	client := staticPodClient(podA, podB, podC)
+
+	resolved := []resolvedObjectWatch{{
+		ObjectWatch: ObjectWatch{Name: "pods", Namespaces: []string{"ns-a", "ns-b"}},
+		GVR:         podsGVR,
+		Namespaced:  true,
+	}}
+
+	config := testConfig([]string{testExampleGroup}, nil)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
+	ri := newResourceInformers(testSettings(t), config, client, resolved, ft, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	require.NoError(t, ri.Start(ctx))
+	defer func() { require.NoError(t, ri.Shutdown(ctx)) }()
+
+	ri.informersMu.RLock()
+	require.Len(t, ri.staticInformers, 2, "one static informer per requested namespace")
+	ri.informersMu.RUnlock()
+
+	objs := ri.ReadObjects()
+	require.Contains(t, objs, podsGVR)
+	names := make([]string, 0, len(objs[podsGVR].Objects))
+	for _, p := range objs[podsGVR].Objects {
+		names = append(names, p.GetName())
+	}
+	assert.ElementsMatch(t, []string{"a", "b"}, names, "ns-c pod must not appear")
+}
+
+func TestResourceInformers_StaticInformer_ClusterScoped(t *testing.T) {
+	nsObj := makeTestPod("kube-system", "", nil)
+	// Reuse staticPodClient and just register namespaces as a side resource.
+	s := testScheme()
+	nsGVR := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "namespaces"}
+	s.AddKnownTypeWithName(schema.GroupVersionKind{Group: "", Version: "v1", Kind: "NamespaceList"}, &unstructured.UnstructuredList{})
+	s.AddKnownTypeWithName(schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Namespace"}, &unstructured.Unstructured{})
+	nsObj.Object[testKindKey] = "Namespace"
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(s,
+		map[schema.GroupVersionResource]string{
+			crdGVR: testCRDListKind,
+			nsGVR:  "NamespaceList",
+		},
+		nsObj,
+	)
+
+	resolved := []resolvedObjectWatch{{
+		ObjectWatch: ObjectWatch{Name: "namespaces"},
+		GVR:         nsGVR,
+		Namespaced:  false,
+	}}
+
+	config := testConfig([]string{testExampleGroup}, nil)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
+	ri := newResourceInformers(testSettings(t), config, client, resolved, ft, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	require.NoError(t, ri.Start(ctx))
+	defer func() { require.NoError(t, ri.Shutdown(ctx)) }()
+
+	ri.informersMu.RLock()
+	require.Len(t, ri.staticInformers, 1)
+	for _, entry := range ri.staticInformers {
+		assert.Equal(t, "", entry.namespace, "cluster-scoped informer must have empty namespace")
+	}
+	ri.informersMu.RUnlock()
+
+	objs := ri.ReadObjects()
+	require.Contains(t, objs, nsGVR)
+	require.Len(t, objs[nsGVR].Objects, 1)
+}
+
+func TestResourceInformers_StaticInformer_ReadObjectsMergesWithCRs(t *testing.T) {
+	registerCRGVR := func(s *runtime.Scheme) {
+		s.AddKnownTypeWithName(
+			schema.GroupVersionKind{Group: testExampleGroup, Version: "v1", Kind: "TestResourceList"},
+			&unstructured.UnstructuredList{},
+		)
+		s.AddKnownTypeWithName(
+			schema.GroupVersionKind{Group: testExampleGroup, Version: "v1", Kind: "TestResource"},
+			&unstructured.Unstructured{},
+		)
+	}
+	s := testScheme()
+	registerCRGVR(s)
+	s.AddKnownTypeWithName(schema.GroupVersionKind{Group: "", Version: "v1", Kind: "PodList"}, &unstructured.UnstructuredList{})
+	s.AddKnownTypeWithName(schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}, &unstructured.Unstructured{})
+
+	crd := makeTestCRDUnstructured("testresources.example.com", testExampleGroup, "TestResource", testTestResources)
+	cr := makeTestCR("my-resource", "default", testExampleGroup, "v1", "TestResource")
+	pod := makeTestPod("nginx", "default", nil)
+
+	crGVR := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: testTestResources}
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(s,
+		map[schema.GroupVersionResource]string{
+			crdGVR:  testCRDListKind,
+			crGVR:   testResourceListKind,
+			podsGVR: "PodList",
+		},
+		crd, cr, pod,
+	)
+
+	resolved := []resolvedObjectWatch{{
+		ObjectWatch: ObjectWatch{Name: "pods"},
+		GVR:         podsGVR,
+		Namespaced:  true,
+	}}
+
+	config := testConfig([]string{testExampleGroup}, nil)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
+	ri := newResourceInformers(testSettings(t), config, client, resolved, ft, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	require.NoError(t, ri.Start(ctx))
+	defer func() { require.NoError(t, ri.Shutdown(ctx)) }()
+
+	objs := ri.ReadObjects()
+	require.Contains(t, objs, crGVR, "CR-discovered GVR must appear")
+	require.Contains(t, objs, podsGVR, "static-watch GVR must appear")
+	assert.Equal(t, "my-resource", objs[crGVR].Objects[0].GetName())
+	assert.Equal(t, ObjectSourceCR, objs[crGVR].Source)
+	assert.Equal(t, "nginx", objs[podsGVR].Objects[0].GetName())
+	assert.Equal(t, ObjectSourceStatic, objs[podsGVR].Source)
+}
+
+func TestResourceInformers_StaticInformer_Shutdown(t *testing.T) {
+	pod := makeTestPod("nginx", "default", nil)
+	client := staticPodClient(pod)
+
+	resolved := []resolvedObjectWatch{{
+		ObjectWatch: ObjectWatch{Name: "pods"},
+		GVR:         podsGVR,
+		Namespaced:  true,
+	}}
+
+	config := testConfig([]string{testExampleGroup}, nil)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
+	ri := newResourceInformers(testSettings(t), config, client, resolved, ft, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	require.NoError(t, ri.Start(ctx))
+
+	ri.informersMu.RLock()
+	require.NotEmpty(t, ri.staticInformers)
+	ri.informersMu.RUnlock()
+
+	cancel()
+	require.NoError(t, ri.Shutdown(context.Background()))
+
+	ri.informersMu.RLock()
+	assert.Empty(t, ri.staticInformers, "Shutdown must clear staticInformers map")
+	ri.informersMu.RUnlock()
+}
+
+func TestResourceInformers_StaticInformer_ReconcileStartsMissingInformer(t *testing.T) {
+	pod := makeTestPod("nginx", "default", nil)
+	client := staticPodClient(pod)
+
+	resolved := []resolvedObjectWatch{{
+		ObjectWatch: ObjectWatch{Name: "pods"},
+		GVR:         podsGVR,
+		Namespaced:  true,
+	}}
+
+	config := testConfig([]string{testExampleGroup}, nil)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
+	rec := &recordingReconcileRecorder{}
+	ri := newResourceInformers(testSettings(t), config, client, resolved, ft, rec)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	require.NoError(t, ri.Start(ctx))
+	defer func() { require.NoError(t, ri.Shutdown(ctx)) }()
+
+	// Drop the entry to simulate a missed startup (same trick as the CR informer test).
+	key := formatStaticInformerKey(podsGVR, "", "", "")
+	ri.informersMu.Lock()
+	entry := ri.staticInformers[key]
+	delete(ri.staticInformers, key)
+	ri.informersMu.Unlock()
+	require.NotNil(t, entry)
+	close(entry.stopCh)
+
+	ri.reconcileStaticInformers(ctx)
+
+	ri.informersMu.RLock()
+	_, exists := ri.staticInformers[key]
+	ri.informersMu.RUnlock()
+	assert.True(t, exists, "reconciler should have re-started the missing static informer")
+}
+
+// TestResourceInformers_StaticInformer_PerEntryForbidden is the regression
+// guard for the pre-fix bug where a 403 on (pods, ns-a) called
+// ForbiddenTracker.MarkForbidden(podsGVR) and thereby suppressed pods/ns-b too.
+// The fix uses per-entry forbidden state; this test asserts both halves of
+// that contract: ns-a is forbidden, ns-b still emits data, and the GVR-wide
+// tracker is untouched.
+func TestResourceInformers_StaticInformer_PerEntryForbidden(t *testing.T) {
+	podA := makeTestPod("a", "ns-a", nil)
+	podB := makeTestPod("b", "ns-b", nil)
+	client := staticPodClient(podA, podB)
+
+	client.PrependReactor("list", "pods", func(action clienttesting.Action) (bool, runtime.Object, error) {
+		if action.GetNamespace() == "ns-a" {
+			return true, nil, apierrors.NewForbidden(
+				schema.GroupResource{Group: "", Resource: "pods"},
+				"",
+				errors.New("not allowed in ns-a"),
+			)
+		}
+		return false, nil, nil
+	})
+
+	resolved := []resolvedObjectWatch{{
+		ObjectWatch: ObjectWatch{Name: "pods", Namespaces: []string{"ns-a", "ns-b"}},
+		GVR:         podsGVR,
+		Namespaced:  true,
+	}}
+
+	config := testConfig([]string{testExampleGroup}, nil)
+	ft := tracker.NewForbiddenTracker(1 * time.Hour)
+	ri := newResourceInformers(testSettings(t), config, client, resolved, ft, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	require.NoError(t, ri.Start(ctx))
+	defer func() { require.NoError(t, ri.Shutdown(ctx)) }()
+
+	nsAKey := formatStaticInformerKey(podsGVR, "ns-a", "", "")
+	nsBKey := formatStaticInformerKey(podsGVR, "ns-b", "", "")
+
+	ri.informersMu.RLock()
+	_, hasA := ri.staticInformers[nsAKey]
+	_, hasB := ri.staticInformers[nsBKey]
+	ri.informersMu.RUnlock()
+	assert.False(t, hasA, "ns-a entry must be skipped after 403")
+	assert.True(t, hasB, "ns-b entry must still start")
+
+	ri.staticForbiddenMu.RLock()
+	_, aForbidden := ri.staticForbidden[nsAKey]
+	_, bForbidden := ri.staticForbidden[nsBKey]
+	ri.staticForbiddenMu.RUnlock()
+	assert.True(t, aForbidden, "ns-a key must be recorded forbidden")
+	assert.False(t, bForbidden, "ns-b key must not be recorded forbidden")
+
+	shouldRetry, _ := ft.ShouldRetry(podsGVR)
+	assert.True(t, shouldRetry, "GVR-wide ForbiddenTracker must NOT be marked from a static-informer 403")
+
+	objs := ri.ReadObjects()
+	require.Contains(t, objs, podsGVR, "ns-b pods must surface despite ns-a being forbidden")
+	require.Len(t, objs[podsGVR].Objects, 1)
+	assert.Equal(t, "b", objs[podsGVR].Objects[0].GetName())
+}
+
+func TestFormatStaticInformerKey_Distinct(t *testing.T) {
+	gvr := podsGVR
+	keys := map[string]struct{}{
+		formatStaticInformerKey(gvr, "", "", ""):                 {},
+		formatStaticInformerKey(gvr, "ns-a", "", ""):             {},
+		formatStaticInformerKey(gvr, "ns-b", "", ""):             {},
+		formatStaticInformerKey(gvr, "", "app=foo", ""):          {},
+		formatStaticInformerKey(gvr, "", "", "status.phase=Run"): {},
+		formatStaticInformerKey(gvr, "ns-a", "app=foo", ""):      {},
+	}
+	assert.Len(t, keys, 6, "each combination must produce a distinct key")
 }
 
 func TestResourceInformers_ReconcileSkipsForbidden(t *testing.T) {
@@ -431,7 +808,7 @@ func TestResourceInformers_ReconcileSkipsForbidden(t *testing.T) {
 	ft.MarkForbidden(gvr)
 
 	rec := &recordingReconcileRecorder{}
-	ri := newResourceInformers(testSettings(t), config, client, ft, rec)
+	ri := newResourceInformers(testSettings(t), config, client, nil, ft, rec)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -441,7 +818,7 @@ func TestResourceInformers_ReconcileSkipsForbidden(t *testing.T) {
 
 	ri.reconcileCRInformers(ctx)
 
-	outcomes := rec.snapshot()
-	require.Len(t, outcomes, 1)
-	assert.Equal(t, metrics.CRInformerForbidden, outcomes[0])
+	records := rec.snapshot()
+	require.Len(t, records, 1)
+	assert.Equal(t, reconcileRecord{kind: metrics.InformerKindCR, outcome: metrics.InformerForbidden}, records[0])
 }

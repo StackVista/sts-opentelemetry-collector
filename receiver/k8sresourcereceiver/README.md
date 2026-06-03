@@ -48,7 +48,7 @@ so callers can rank candidates.
 ### Leader cycle (`resourceCollector.runIncrement`, every `IncrementInterval`)
 
 1. Read current informer state.
-2. `peerStore.ComputeChanges(currentCRDs, currentCRs)` diffs cache vs informer:
+2. `peerStore.ComputeChanges(currentCRDs, currentObjects)` diffs cache vs informer:
    - in informer, not in cache → `ADDED`
    - both, different `ResourceVersion` → `MODIFIED`
    - in cache, not in informer → `DELETED`
@@ -115,11 +115,39 @@ Watch these metrics for protocol health:
 - `peer_push_attempts_total{outcome=...}` — per-peer push attempts (under broadcasts).
 - `peer_push_duration_seconds`, `peer_push_bytes` — push latency and payload size.
 - `bootstrap_total{outcome=applied|leader_empty|timed_out, source=...}` — replica startup.
-- `cached_resources{kind=crd|cr}` — cache occupancy on every replica.
+- `cached_resources{kind=crd|object}` — cache occupancy on every replica.
 
 The store also tracks consecutive broadcast failures internally and escalates
 the log line from Debug to Warn at threshold 5 so operators notice peer sync
 breaking even without metric scraping.
+
+## Object sources
+
+The receiver emits two flavours of object log:
+
+- **CR-shape** (`event.name = KubernetesCustomResourceEvent`) — for objects
+  whose type was discovered from a CRD on the cluster, or for `Config.Objects`
+  entries that overlap a CRD-defined type (marked `CRDBacked`). Downstream
+  log-based mappings keep the existing CR shape for these.
+- **Object-shape** (`event.name = KubernetesObjectEvent`) — for plain
+  `Config.Objects` entries that have no backing CRD (e.g. core `pods`,
+  `deployments`). Neutral event name for resources without a CRD definition.
+
+Each cached object carries an `ObjectSource` (`cr` / `static`) recorded at
+discovery time; `eventNameForSource` maps that to the emitted event name on
+both the snapshot and increment paths.
+
+`Config.Objects` entries are classified at startup against the cluster's CRDs:
+
+- Entry whose GVR is **also covered by `api_group_filters`** → reject (both
+  informers would emit the same resource); operator must remove the entry or
+  exclude the CRD's group.
+- Entry whose GVR is **defined by a CRD but filter-excluded** → marked
+  `CRDBacked`; the static informer is the only path but downstream still gets
+  the CR log shape.
+- Entry with no backing CRD → plain static, emits the Object shape.
+
+See `classifyStaticObjectsCRDOverlap` for the resolution rules.
 
 ## Tunables (Config)
 

@@ -44,18 +44,19 @@ func TestSnapshotRoundtrip_PreservesCRWithGVR(t *testing.T) {
 	cr := makeTestCR("my-widget", "default", testExampleGroup, "v1", "Widget")
 	cr.SetResourceVersion("7")
 
-	key := crResourceKey(gvr, "default", "my-widget")
-	original.CRs[key] = &cachedCR{Obj: cr, GVR: gvr}
+	key := objectResourceKey(gvr, "default", "my-widget")
+	original.Objects[key] = &cachedObject{Obj: cr, GVR: gvr, Source: ObjectSourceStatic}
 
 	restored := roundtripCache(t, original)
 
-	require.Len(t, restored.CRs, 1)
-	restoredCR := restored.CRs[key]
-	require.NotNil(t, restoredCR)
-	assert.Equal(t, "my-widget", restoredCR.Obj.GetName())
-	assert.Equal(t, "default", restoredCR.Obj.GetNamespace())
-	assert.Equal(t, "7", restoredCR.Obj.GetResourceVersion())
-	assert.Equal(t, gvr, restoredCR.GVR)
+	require.Len(t, restored.Objects, 1)
+	restoredObj := restored.Objects[key]
+	require.NotNil(t, restoredObj)
+	assert.Equal(t, "my-widget", restoredObj.Obj.GetName())
+	assert.Equal(t, "default", restoredObj.Obj.GetNamespace())
+	assert.Equal(t, "7", restoredObj.Obj.GetResourceVersion())
+	assert.Equal(t, gvr, restoredObj.GVR)
+	assert.Equal(t, ObjectSourceStatic, restoredObj.Source, "object source must survive snapshot roundtrip")
 }
 
 func TestSnapshotRoundtrip_PreservesNestedSpecAndStatus(t *testing.T) {
@@ -88,16 +89,16 @@ func TestSnapshotRoundtrip_PreservesNestedSpecAndStatus(t *testing.T) {
 	}
 
 	gvr := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: testWidgetsResource}
-	key := crResourceKey(gvr, "prod", "complex-widget")
-	original.CRs[key] = &cachedCR{Obj: cr, GVR: gvr}
+	key := objectResourceKey(gvr, "prod", "complex-widget")
+	original.Objects[key] = &cachedObject{Obj: cr, GVR: gvr, Source: ObjectSourceCR}
 
 	restored := roundtripCache(t, original)
 
-	restoredCR := restored.CRs[key]
-	require.NotNil(t, restoredCR)
+	restoredObj := restored.Objects[key]
+	require.NotNil(t, restoredObj)
 
 	// Verify nested spec fields are preserved (important for CEL topology mappings).
-	spec, found, err := unstructured.NestedMap(restoredCR.Obj.Object, "spec")
+	spec, found, err := unstructured.NestedMap(restoredObj.Obj.Object, "spec")
 	require.NoError(t, err)
 	require.True(t, found)
 
@@ -107,7 +108,7 @@ func TestSnapshotRoundtrip_PreservesNestedSpecAndStatus(t *testing.T) {
 	assert.Equal(t, int64(3), replicas)
 
 	// Verify status fields are preserved.
-	ready, found, err := unstructured.NestedBool(restoredCR.Obj.Object, "status", "ready")
+	ready, found, err := unstructured.NestedBool(restoredObj.Obj.Object, "status", "ready")
 	require.NoError(t, err)
 	require.True(t, found)
 	assert.True(t, ready)

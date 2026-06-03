@@ -12,16 +12,22 @@ import (
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/receiver"
 	"go.uber.org/zap"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 )
 
 // k8sresourceReceiver uses informers to watch CRDs and their custom resources.
 type k8sresourceReceiver struct {
-	settings      receiver.Settings
-	config        *Config
-	consumer      consumer.Logs
-	metrics       metrics.Recorder
-	dynamicClient dynamic.Interface // injectable for testing
+	settings        receiver.Settings
+	config          *Config
+	consumer        consumer.Logs
+	metrics         metrics.Recorder
+	dynamicClient   dynamic.Interface            // injectable for testing
+	discoveryClient discovery.DiscoveryInterface // injectable for testing; only used when Config.Objects is non-empty
+
+	// resolvedObjects is populated in Start() from Config.Objects via
+	// discovery. Consumed by the informer layer to build dynamic informers.
+	resolvedObjects []resolvedObjectWatch
 
 	// Peer store — runs regardless of leadership for push/pull sync.
 	peerStore *peerSyncCacheStore
@@ -55,6 +61,24 @@ func (r *k8sresourceReceiver) Start(ctx context.Context, host component.Host) er
 			return fmt.Errorf("failed to create dynamic client: %w", err)
 		}
 		r.dynamicClient = client
+	}
+
+	if len(r.config.Objects) > 0 {
+		if r.discoveryClient == nil {
+			client, err := r.config.getDiscoveryClient()
+			if err != nil {
+				return fmt.Errorf("failed to create discovery client: %w", err)
+			}
+			r.discoveryClient = client
+		}
+		resolved, err := resolveObjectGVRs(r.discoveryClient, r.config.Objects, r.settings.Logger)
+		if err != nil {
+			return fmt.Errorf("failed to resolve object GVRs: %w", err)
+		}
+		if err := classifyStaticObjectsCRDOverlap(ctx, r.dynamicClient, r.config, resolved); err != nil {
+			return err
+		}
+		r.resolvedObjects = resolved
 	}
 
 	r.peerStore = newPeerSyncCacheStore(
@@ -99,7 +123,7 @@ func (r *k8sresourceReceiver) startCollector(ctx context.Context) error {
 	r.mu.Unlock()
 
 	ft := tracker.NewDefault()
-	informers := newResourceInformers(r.settings, r.config, r.dynamicClient, ft, r.metrics)
+	informers := newResourceInformers(r.settings, r.config, r.dynamicClient, r.resolvedObjects, ft, r.metrics)
 	collector := newResourceCollector(r.settings.Logger, r.config, r.consumer, informers, r.peerStore, r.metrics)
 
 	if err := collector.Start(ctx); err != nil {

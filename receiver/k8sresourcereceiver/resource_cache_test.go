@@ -114,52 +114,62 @@ func TestResourceCache_ComputeChanges_CRAdded(t *testing.T) {
 	rc := newResourceCache()
 
 	gvr := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: testFoosResource}
-	currentCRs := map[schema.GroupVersionResource][]*unstructured.Unstructured{
+	currentObjects := map[schema.GroupVersionResource]ObjectGroup{
 		gvr: {
-			makeCachedCR("my-foo", "default", testExampleGroup, "v1", "Foo", "1"),
+			Source: ObjectSourceCR,
+			Objects: []*unstructured.Unstructured{
+				makeCachedCR("my-foo", "default", testExampleGroup, "v1", "Foo", "1"),
+			},
 		},
 	}
 
-	changes := rc.computeChanges(nil, currentCRs)
+	changes := rc.computeChanges(nil, currentObjects)
 
 	require.Len(t, changes, 1)
 	assert.Equal(t, watch.Added, changes[0].EventType)
 	assert.False(t, changes[0].IsCRD)
 	assert.Equal(t, gvr, changes[0].GVR)
+	assert.Equal(t, ObjectSourceCR, changes[0].Source)
 	assert.Equal(t, "my-foo", changes[0].Obj.GetName())
 }
 
 func TestResourceCache_ComputeChanges_CRModified(t *testing.T) {
 	gvr := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: testFoosResource}
-	key := crResourceKey(gvr, "default", "my-foo")
+	key := objectResourceKey(gvr, "default", "my-foo")
 
 	rc := newResourceCache()
-	rc.CRs[key] = &cachedCR{
-		Obj: makeCachedCR("my-foo", "default", testExampleGroup, "v1", "Foo", "1"),
-		GVR: gvr,
+	rc.Objects[key] = &cachedObject{
+		Obj:    makeCachedCR("my-foo", "default", testExampleGroup, "v1", "Foo", "1"),
+		GVR:    gvr,
+		Source: ObjectSourceCR,
 	}
 
-	currentCRs := map[schema.GroupVersionResource][]*unstructured.Unstructured{
+	currentObjects := map[schema.GroupVersionResource]ObjectGroup{
 		gvr: {
-			makeCachedCR("my-foo", "default", testExampleGroup, "v1", "Foo", "2"),
+			Source: ObjectSourceCR,
+			Objects: []*unstructured.Unstructured{
+				makeCachedCR("my-foo", "default", testExampleGroup, "v1", "Foo", "2"),
+			},
 		},
 	}
 
-	changes := rc.computeChanges(nil, currentCRs)
+	changes := rc.computeChanges(nil, currentObjects)
 
 	require.Len(t, changes, 1)
 	assert.Equal(t, watch.Modified, changes[0].EventType)
 	assert.Equal(t, gvr, changes[0].GVR)
+	assert.Equal(t, ObjectSourceCR, changes[0].Source)
 }
 
 func TestResourceCache_ComputeChanges_CRDeleted(t *testing.T) {
 	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "foos"}
-	key := crResourceKey(gvr, "default", "my-foo")
+	key := objectResourceKey(gvr, "default", "my-foo")
 
 	rc := newResourceCache()
-	rc.CRs[key] = &cachedCR{
-		Obj: makeCachedCR("my-foo", "default", "example.com", "v1", "Foo", "1"),
-		GVR: gvr,
+	rc.Objects[key] = &cachedObject{
+		Obj:    makeCachedCR("my-foo", "default", "example.com", "v1", "Foo", "1"),
+		GVR:    gvr,
+		Source: ObjectSourceStatic,
 	}
 
 	// Current state: no CRs
@@ -168,6 +178,7 @@ func TestResourceCache_ComputeChanges_CRDeleted(t *testing.T) {
 	require.Len(t, changes, 1)
 	assert.Equal(t, watch.Deleted, changes[0].EventType)
 	assert.Equal(t, gvr, changes[0].GVR)
+	assert.Equal(t, ObjectSourceStatic, changes[0].Source)
 	assert.Equal(t, "my-foo", changes[0].Obj.GetName())
 }
 
@@ -176,11 +187,11 @@ func TestResourceCache_ComputeChanges_MixedChanges(t *testing.T) {
 
 	rc := newResourceCache()
 	rc.CRDs["foos.example.com"] = makeCachedCRD("foos.example.com", "1")
-	rc.CRs[crResourceKey(gvr, "default", "existing-foo")] = &cachedCR{
+	rc.Objects[objectResourceKey(gvr, "default", "existing-foo")] = &cachedObject{
 		Obj: makeCachedCR("existing-foo", "default", "example.com", "v1", "Foo", "1"),
 		GVR: gvr,
 	}
-	rc.CRs[crResourceKey(gvr, "default", "deleted-foo")] = &cachedCR{
+	rc.Objects[objectResourceKey(gvr, "default", "deleted-foo")] = &cachedObject{
 		Obj: makeCachedCR("deleted-foo", "default", "example.com", "v1", "Foo", "1"),
 		GVR: gvr,
 	}
@@ -188,15 +199,18 @@ func TestResourceCache_ComputeChanges_MixedChanges(t *testing.T) {
 	currentCRDs := []*unstructured.Unstructured{
 		makeCachedCRD("foos.example.com", "2"), // modified
 	}
-	currentCRs := map[schema.GroupVersionResource][]*unstructured.Unstructured{
+	currentObjects := map[schema.GroupVersionResource]ObjectGroup{
 		gvr: {
-			makeCachedCR("existing-foo", "default", "example.com", "v1", "Foo", "1"), // unchanged
-			makeCachedCR("new-foo", "default", "example.com", "v1", "Foo", "1"),      // added
-			// deleted-foo is absent → deleted
+			Source: ObjectSourceCR,
+			Objects: []*unstructured.Unstructured{
+				makeCachedCR("existing-foo", "default", "example.com", "v1", "Foo", "1"), // unchanged
+				makeCachedCR("new-foo", "default", "example.com", "v1", "Foo", "1"),      // added
+				// deleted-foo is absent → deleted
+			},
 		},
 	}
 
-	changes := rc.computeChanges(currentCRDs, currentCRs)
+	changes := rc.computeChanges(currentCRDs, currentObjects)
 
 	// Expect: CRD modified + CR added (new-foo) + CR deleted (deleted-foo) = 3
 	require.Len(t, changes, 3)
@@ -212,12 +226,12 @@ func TestResourceCache_ComputeChanges_MixedChanges(t *testing.T) {
 
 func TestResourceCache_ApplyAdditions(t *testing.T) {
 	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "foos"}
-	key := crResourceKey(gvr, "default", "my-foo")
+	key := objectResourceKey(gvr, "default", "my-foo")
 
 	rc := newResourceCache()
 	// Pre-existing entries that ApplyAdditions should update or leave alone.
 	rc.CRDs["foos.example.com"] = makeCachedCRD("foos.example.com", "1")
-	rc.CRs[key] = &cachedCR{Obj: makeCachedCR("my-foo", "default", "example.com", "v1", "Foo", "1"), GVR: gvr}
+	rc.Objects[key] = &cachedObject{Obj: makeCachedCR("my-foo", "default", "example.com", "v1", "Foo", "1"), GVR: gvr}
 
 	newCRD := makeCachedCRD("foos.example.com", "2") // modify
 	newCR := makeCachedCR("my-foo", "default", "example.com", "v1", "Foo", "2")
@@ -233,21 +247,21 @@ func TestResourceCache_ApplyAdditions(t *testing.T) {
 
 	assert.Equal(t, "2", rc.CRDs["foos.example.com"].GetResourceVersion(), "CRD should be modified")
 	assert.NotContains(t, rc.CRDs, "ignored.example.com", "deleted change must not be applied")
-	assert.Equal(t, "2", rc.CRs[key].Obj.GetResourceVersion(), "CR should be modified")
-	assert.Contains(t, rc.CRs, crResourceKey(gvr, "default", "other-foo"), "added CR should be present")
+	assert.Equal(t, "2", rc.Objects[key].Obj.GetResourceVersion(), "CR should be modified")
+	assert.Contains(t, rc.Objects, objectResourceKey(gvr, "default", "other-foo"), "added CR should be present")
 
 }
 
 func TestResourceCache_ApplyDeletions(t *testing.T) {
 	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "foos"}
-	keepKey := crResourceKey(gvr, "default", "keep-foo")
-	dropKey := crResourceKey(gvr, "default", "drop-foo")
+	keepKey := objectResourceKey(gvr, "default", "keep-foo")
+	dropKey := objectResourceKey(gvr, "default", "drop-foo")
 
 	rc := newResourceCache()
 	rc.CRDs["keep.example.com"] = makeCachedCRD("keep.example.com", "1")
 	rc.CRDs["drop.example.com"] = makeCachedCRD("drop.example.com", "1")
-	rc.CRs[keepKey] = &cachedCR{Obj: makeCachedCR("keep-foo", "default", "example.com", "v1", "Foo", "1"), GVR: gvr}
-	rc.CRs[dropKey] = &cachedCR{Obj: makeCachedCR("drop-foo", "default", "example.com", "v1", "Foo", "1"), GVR: gvr}
+	rc.Objects[keepKey] = &cachedObject{Obj: makeCachedCR("keep-foo", "default", "example.com", "v1", "Foo", "1"), GVR: gvr}
+	rc.Objects[dropKey] = &cachedObject{Obj: makeCachedCR("drop-foo", "default", "example.com", "v1", "Foo", "1"), GVR: gvr}
 
 	rc.applyDeletions([]ResourceChange{
 		{Obj: makeCachedCRD("drop.example.com", "1"), EventType: watch.Deleted, IsCRD: true},
@@ -257,10 +271,53 @@ func TestResourceCache_ApplyDeletions(t *testing.T) {
 	})
 
 	assert.NotContains(t, rc.CRDs, "drop.example.com", "deleted CRD should be removed")
-	assert.NotContains(t, rc.CRs, dropKey, "deleted CR should be removed")
+	assert.NotContains(t, rc.Objects, dropKey, "deleted CR should be removed")
 	assert.Contains(t, rc.CRDs, "keep.example.com", "non-delete change must not affect cache")
 	assert.Equal(t, "1", rc.CRDs["keep.example.com"].GetResourceVersion(), "modify ignored, original retained")
-	assert.Contains(t, rc.CRs, keepKey)
+	assert.Contains(t, rc.Objects, keepKey)
+}
+
+func TestResourceCache_ComputeChanges_SourceOnlyChangeIsNotModified(t *testing.T) {
+	// Source flipping CR→static (or vice versa) without an RV change must not emit a Modified event.
+	gvr := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: testFoosResource}
+	key := objectResourceKey(gvr, "default", "my-foo")
+
+	rc := newResourceCache()
+	rc.Objects[key] = &cachedObject{
+		Obj:    makeCachedCR("my-foo", "default", testExampleGroup, "v1", "Foo", "1"),
+		GVR:    gvr,
+		Source: ObjectSourceCR,
+	}
+
+	currentObjects := map[schema.GroupVersionResource]ObjectGroup{
+		gvr: {
+			Source: ObjectSourceStatic, // source flipped
+			Objects: []*unstructured.Unstructured{
+				makeCachedCR("my-foo", "default", testExampleGroup, "v1", "Foo", "1"), // same RV
+			},
+		},
+	}
+
+	changes := rc.computeChanges(nil, currentObjects)
+	assert.Empty(t, changes, "source-only change must not generate a Modified event")
+}
+
+func TestResourceCache_ApplyAdditions_PersistsSource(t *testing.T) {
+	gvr := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: testFoosResource}
+	rc := newResourceCache()
+
+	rc.applyAdditions([]ResourceChange{
+		{
+			Obj:       makeCachedCR("my-foo", "default", testExampleGroup, "v1", "Foo", "1"),
+			EventType: watch.Added,
+			GVR:       gvr,
+			Source:    ObjectSourceStatic,
+		},
+	})
+
+	key := objectResourceKey(gvr, "default", "my-foo")
+	require.Contains(t, rc.Objects, key)
+	assert.Equal(t, ObjectSourceStatic, rc.Objects[key].Source)
 }
 
 func TestCRResourceKey(t *testing.T) {
@@ -270,10 +327,10 @@ func TestCRResourceKey(t *testing.T) {
 		Resource: "policyservers",
 	}
 
-	key := crResourceKey(gvr, "kubewarden", "default")
+	key := objectResourceKey(gvr, "kubewarden", "default")
 	assert.Equal(t, "policies.kubewarden.io/v1/policyservers/kubewarden/default", key)
 
 	// Cluster-scoped (empty namespace)
-	key = crResourceKey(gvr, "", "default")
+	key = objectResourceKey(gvr, "", "default")
 	assert.Equal(t, "policies.kubewarden.io/v1/policyservers//default", key)
 }

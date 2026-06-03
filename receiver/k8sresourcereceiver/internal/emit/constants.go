@@ -5,7 +5,7 @@ const (
 	ScopeName = "github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver"
 
 	// Attribute keys for log records
-	AttrK8sResourceName    = "k8s.resource.name"
+	AttrK8sResourceKind    = "k8s.resource.kind"
 	AttrK8sResourceGroup   = "k8s.resource.group"
 	AttrK8sResourceVersion = "k8s.resource.version"
 	AttrK8sObjectName      = "k8s.object.name"
@@ -16,7 +16,11 @@ const (
 	// EventDomainK8s is the value for the event.domain attribute.
 	EventDomainK8s = "k8s"
 
-	// Static event names for log-based OTel mappings
-	EventNameCR  = "KubernetesCustomResourceEvent"
-	EventNameCRD = "KubernetesCustomResourceDefinitionEvent"
+	// EventNameCR EventNameObject and EventNameCRD are Static event names for log-based OTel mappings.
+	// Object emission picks between CR and Object based on the watch's source: CRD-discovered (or
+	// CRD-backed static) watches use EventNameCR so downstream keeps the CR
+	// log shape; plain static watches use EventNameObject.
+	EventNameCR     = "KubernetesCustomResourceEvent"
+	EventNameObject = "KubernetesObjectEvent"
+	EventNameCRD    = "KubernetesCustomResourceDefinitionEvent"
 )
