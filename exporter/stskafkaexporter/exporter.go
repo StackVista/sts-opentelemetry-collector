@@ -19,6 +19,13 @@ import (
 
 const KafkaMessageKey = "stskafka.key"
 
+// KafkaMessageTopic allows a log record to override the default Kafka topic.
+// When present as a string attribute on a log record, the exporter publishes
+// that record to the specified topic instead of the configured default.
+// This is used by the topology connector to route metadata messages to a
+// separate compacted topic while reusing the same exporter pipeline.
+const KafkaMessageTopic = "stskafka.topic"
+
 // InternalExporterComponent is the interface that both production and stub exporters implement.
 type InternalExporterComponent interface {
 	ExportData(ctx context.Context, ld plog.Logs) error
@@ -171,8 +178,13 @@ func (e *KafkaExporter) buildKafkaRecords(ld plog.Logs) ([]*kgo.Record, error) {
 			return err
 		}
 
+		topic := e.cfg.Topic
+		if topicAttr, ok := lr.Attributes().Get(KafkaMessageTopic); ok {
+			topic = topicAttr.Str()
+		}
+
 		records = append(records, &kgo.Record{
-			Topic: e.cfg.Topic,
+			Topic: topic,
 			Key:   key,
 			Value: value,
 		})
@@ -240,12 +252,18 @@ func extractMessageKey(attrs pcommon.Map) ([]byte, error) {
 }
 
 // extractMessageValue retrieves the message body from the plog.LogRecord.
+// An empty byte body produces a nil value, which Kafka interprets as a
+// tombstone — used by the metadata publisher to delete compacted records.
 func (e *KafkaExporter) extractMessageValue(lr plog.LogRecord) ([]byte, error) {
 	body := lr.Body()
 
 	//nolint:exhaustive,gocritic
 	if body.Type() == pcommon.ValueTypeBytes {
-		return append([]byte(nil), body.Bytes().AsRaw()...), nil
+		raw := body.Bytes().AsRaw()
+		if len(raw) == 0 {
+			return nil, nil
+		}
+		return append([]byte(nil), raw...), nil
 	}
 	return nil, errors.New("unsupported log record body type (expected bytes)")
 }

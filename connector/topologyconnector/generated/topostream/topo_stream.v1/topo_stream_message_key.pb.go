@@ -28,6 +28,7 @@ const (
 	TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL        TopologyStreamOwner = 1
 	TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_EXTERNAL    TopologyStreamOwner = 2 // Anyone that sends to the receiver data
 	TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_AGENT       TopologyStreamOwner = 3
+	TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_EXTTOPO     TopologyStreamOwner = 4 // Legacy topology syncs (ExtTopoSyncTask)
 )
 
 // Enum value maps for TopologyStreamOwner.
@@ -37,12 +38,14 @@ var (
 		1: "TOPOLOGY_STREAM_OWNER_OTEL",
 		2: "TOPOLOGY_STREAM_OWNER_EXTERNAL",
 		3: "TOPOLOGY_STREAM_OWNER_AGENT",
+		4: "TOPOLOGY_STREAM_OWNER_EXTTOPO",
 	}
 	TopologyStreamOwner_value = map[string]int32{
 		"TOPOLOGY_STREAM_OWNER_UNSPECIFIED": 0,
 		"TOPOLOGY_STREAM_OWNER_OTEL":        1,
 		"TOPOLOGY_STREAM_OWNER_EXTERNAL":    2,
 		"TOPOLOGY_STREAM_OWNER_AGENT":       3,
+		"TOPOLOGY_STREAM_OWNER_EXTTOPO":     4,
 	}
 )
 
@@ -144,12 +147,13 @@ const file_topo_stream_message_key_proto_rawDesc = "" +
 	"\x05owner\x18\x01 \x01(\x0e2#.topo_stream.v1.TopologyStreamOwnerR\x05owner\x12\x1f\n" +
 	"\vdata_source\x18\x02 \x01(\tR\n" +
 	"dataSource\x12\x19\n" +
-	"\bshard_id\x18\x03 \x01(\tR\ashardId*\xa1\x01\n" +
+	"\bshard_id\x18\x03 \x01(\tR\ashardId*\xc4\x01\n" +
 	"\x13TopologyStreamOwner\x12%\n" +
 	"!TOPOLOGY_STREAM_OWNER_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aTOPOLOGY_STREAM_OWNER_OTEL\x10\x01\x12\"\n" +
 	"\x1eTOPOLOGY_STREAM_OWNER_EXTERNAL\x10\x02\x12\x1f\n" +
-	"\x1bTOPOLOGY_STREAM_OWNER_AGENT\x10\x03B4\n" +
+	"\x1bTOPOLOGY_STREAM_OWNER_AGENT\x10\x03\x12!\n" +
+	"\x1dTOPOLOGY_STREAM_OWNER_EXTTOPO\x10\x04B4\n" +
 	"\"com.stackstate.topoStream.protocolZ\x0etopo_stream.v1b\x06proto3"
 
 var (

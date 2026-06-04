@@ -26,6 +26,7 @@ type connectorImpl struct {
 	settingsProvider     stsSettingsApi.StsSettingsProvider
 	snapshotManager      *SnapshotManager
 	expressionRefManager ExpressionRefManager
+	metadataPublisher    *MetadataPublisher
 	eval                 internal.ExpressionEvaluator
 	deduplicator         internal.Deduplicator
 	mapper               *internal.Mapper
@@ -41,6 +42,7 @@ func newConnector(
 	nextConsumer consumer.Logs,
 	snapshotManager *SnapshotManager,
 	expressionRefManager ExpressionRefManager,
+	metadataPublisher *MetadataPublisher,
 	eval internal.ExpressionEvaluator,
 	deduplicator internal.Deduplicator,
 	mapper *internal.Mapper,
@@ -56,6 +58,7 @@ func newConnector(
 		mapper:               mapper,
 		snapshotManager:      snapshotManager,
 		expressionRefManager: expressionRefManager,
+		metadataPublisher:    metadataPublisher,
 		metricsRecorder:      metrics.NewConnectorMetrics(Type.String(), telemetrySettings),
 		supportedSignal:      supportedSignal,
 	}
@@ -197,6 +200,15 @@ func (p *connectorImpl) handleMappingRemovals(
 		ctx, p.logger, removedComponentMappings, removedRelationMappings, p.metricsRecorder,
 	)
 	p.publishMessagesAsLogs(ctx, msgs)
+
+	var removed []settingsproto.SettingExtension
+	for i := range removedComponentMappings {
+		removed = append(removed, removedComponentMappings[i])
+	}
+	for i := range removedRelationMappings {
+		removed = append(removed, removedRelationMappings[i])
+	}
+	p.metadataPublisher.PublishTombstones(removed)
 }
 
 func (p *connectorImpl) publishMessagesAsLogs(ctx context.Context, messages []internal.MessageWithKey) {

@@ -103,6 +103,9 @@ func newConnectorEnv(t *testing.T, signal settingsproto.OtelInputSignal) *connec
 		},
 	)
 
+	metadataPublisher := NewMetadataPublisher(logger)
+	metadataPublisher.SetLogsConsumer(logsConsumer)
+
 	conn := newConnector(
 		ctx,
 		Config{},
@@ -111,6 +114,7 @@ func newConnectorEnv(t *testing.T, signal settingsproto.OtelInputSignal) *connec
 		logsConsumer,
 		snapshotManager,
 		expressionRefManager,
+		metadataPublisher,
 		celEvaluator,
 		internal.NewNoopDeduplicator(),
 		mapper,
@@ -198,7 +202,8 @@ func TestConnectorStart(t *testing.T) {
 		provider.RelationMappings = nil
 		provider.SettingUpdatesCh <- stsSettingsEvents.UpdateSettingsEvent{}
 
-		expectedLogRecordsCount := (len(componentMappings) + len(relationMappings)) * 4 // 4 shards
+		removedMappings := len(componentMappings) + len(relationMappings)
+		expectedLogRecordsCount := removedMappings*4 + removedMappings // 4 shards per removal + 1 metadata tombstone per removal
 
 		// Wait for async update to propagate and removal logs to be emitted
 		require.Eventually(t, func() bool {

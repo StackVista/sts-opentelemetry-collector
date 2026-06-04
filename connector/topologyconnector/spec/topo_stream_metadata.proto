@@ -1,0 +1,33 @@
+syntax = "proto3";
+import "google/protobuf/struct.proto";
+import "topo_stream_message_key.proto";
+
+package topo_stream.v1;
+option go_package = "topo_stream.v1";
+option java_package = "com.stackstate.topoStream.protocol";
+
+/**
+Metadata about a topology stream source (OTEL mapping or topology sync).
+Published on a separate topic so that the SyncService can enrich SyncDataStream
+with human-readable names and additional selector properties without coupling
+metadata delivery to the data flow.
+*/
+message TopologyStreamMetadataMessage {
+  // Human-readable name of the topology source (e.g. OTEL mapping name, topology sync name)
+  string display_name = 1;
+
+  // Additional properties exposed in the topologySourceSelector CEL context.
+  // Expected keys: mapping.identifier, mapping.name, topologySync.identifier, topologySync.name
+  google.protobuf.Struct selector_properties = 2;
+}
+
+/**
+Key for metadata messages. Identifies which topology stream this metadata applies to.
+Reuses the same owner/data_source scheme as TopologyStreamMessageKey so the metadata
+can be correlated with the data stream it describes. shard_id is omitted because
+metadata applies to the entire data_source, not a single shard.
+*/
+message TopologyStreamMetadataMessageKey {
+  TopologyStreamOwner owner = 1;
+  string data_source = 2;
+}

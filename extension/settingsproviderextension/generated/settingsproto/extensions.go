@@ -19,6 +19,7 @@ func SizeOfRawSetting(s Setting) int64 {
 type SettingExtension interface {
 	GetId() string
 	GetIdentifier() string
+	GetName() string
 	GetExpireAfterMs() int64
 	GetInputSignals() []OtelInputSignal
 	GetInput() OtelInput
@@ -31,6 +32,10 @@ func (m OtelComponentMapping) GetId() string {
 
 func (m OtelComponentMapping) GetIdentifier() string {
 	return m.Identifier
+}
+
+func (m OtelComponentMapping) GetName() string {
+	return m.Name
 }
 
 func (m OtelComponentMapping) GetExpireAfterMs() int64 {
@@ -55,6 +60,10 @@ func (m OtelRelationMapping) GetId() string {
 
 func (m OtelRelationMapping) GetIdentifier() string {
 	return m.Identifier
+}
+
+func (m OtelRelationMapping) GetName() string {
+	return m.Name
 }
 
 func (m OtelRelationMapping) GetExpireAfterMs() int64 {
