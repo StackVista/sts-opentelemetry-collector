@@ -1,6 +1,6 @@
 module github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver
 
-go 1.26.3
+go 1.26.4
 
 require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector v0.152.0

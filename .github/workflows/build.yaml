@@ -11,7 +11,7 @@ on:
 env:
   REGISTRY: quay.io
   IMAGE_NAME: stackstate/sts-opentelemetry-collector
-  GO_VERSION: 1.26.3
+  GO_VERSION: 1.26.4
   GOLANGCI_LINT_VERSION: v2.12.2
 
 # Default to read-only at the workflow level. Jobs that need more
