@@ -153,15 +153,17 @@ func TestMetadataPublisher(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 		publisher := NewMetadataPublisher(logger)
 
-		publisher.Update(
-			[]settingsproto.OtelInputSignal{settingsproto.TRACES},
-			map[settingsproto.OtelInputSignal][]settingsproto.OtelComponentMapping{
-				settingsproto.TRACES: {
-					{Id: "x", Identifier: "urn:x", Name: "X"},
+		assert.NotPanics(t, func() {
+			publisher.Update(
+				[]settingsproto.OtelInputSignal{settingsproto.TRACES},
+				map[settingsproto.OtelInputSignal][]settingsproto.OtelComponentMapping{
+					settingsproto.TRACES: {
+						{Id: "x", Identifier: "urn:x", Name: "X"},
+					},
 				},
-			},
-			nil,
-		)
+				nil,
+			)
+		})
 	})
 
 	t.Run("skips publish when no mappings", func(t *testing.T) {
