@@ -51,7 +51,8 @@ func SetupTopologyTest(t *testing.T, numCollectors int, deduplicationEnabled boo
 
 	settingsTopic := UniqueTopic("sts-internal-settings")
 	topologyTopic := UniqueTopic("sts-otel-topology")
-	require.NoError(t, CreateTopics(ctx, kafkaInstance.HostAddr, []string{settingsTopic, topologyTopic}))
+	metadataTopic := "sts_topology_stream_metadata"
+	require.NoError(t, CreateTopics(ctx, kafkaInstance.HostAddr, []string{settingsTopic, topologyTopic, metadataTopic}))
 
 	cfg := CollectorConfig{
 		NumCollectors:        numCollectors,

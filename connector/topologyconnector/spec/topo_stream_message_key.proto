@@ -18,4 +18,5 @@ enum TopologyStreamOwner {
   TOPOLOGY_STREAM_OWNER_OTEL = 1;
   TOPOLOGY_STREAM_OWNER_EXTERNAL = 2; // Anyone that sends to the receiver data
   TOPOLOGY_STREAM_OWNER_AGENT = 3;
+  TOPOLOGY_STREAM_OWNER_EXTTOPO = 4; // Legacy topology syncs (ExtTopoSyncTask)
 }

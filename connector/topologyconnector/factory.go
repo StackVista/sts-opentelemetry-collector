@@ -26,6 +26,7 @@ type connectorFactory struct {
 	deduplicator         internal.Deduplicator
 	snapshotManager      *SnapshotManager
 	expressionRefManager ExpressionRefManager
+	metadataPublisher    *MetadataPublisher
 	init                 sync.Once
 }
 
@@ -52,10 +53,12 @@ func (f *connectorFactory) initSharedState(
 		)
 
 		expressionRefManager := NewExpressionRefManager(logger, evaluator)
+		metadataPublisher := NewMetadataPublisher(logger)
 		snapshotManager := NewSnapshotManager(
 			logger,
 			[]settingsproto.OtelInputSignal{settingsproto.TRACES, settingsproto.METRICS, settingsproto.LOGS},
 			expressionRefManager,
+			metadataPublisher,
 		)
 
 		f.celEvaluator = evaluator
@@ -72,6 +75,7 @@ func (f *connectorFactory) initSharedState(
 		f.mapper = mapper
 		f.snapshotManager = snapshotManager
 		f.expressionRefManager = expressionRefManager
+		f.metadataPublisher = metadataPublisher
 	})
 	return err
 }
@@ -131,6 +135,7 @@ func (f *connectorFactory) createTracesToLogsConnector(
 		return nil, err
 	}
 
+	f.metadataPublisher.SetLogsConsumer(nextConsumer)
 	return newConnector(
 		ctx,
 		*typedCfg,
@@ -139,6 +144,7 @@ func (f *connectorFactory) createTracesToLogsConnector(
 		nextConsumer,
 		f.snapshotManager,
 		f.expressionRefManager,
+		f.metadataPublisher,
 		f.celEvaluator,
 		f.deduplicator,
 		f.mapper,
@@ -161,6 +167,7 @@ func (f *connectorFactory) createMetricsToLogsConnector(
 		return nil, err
 	}
 
+	f.metadataPublisher.SetLogsConsumer(nextConsumer)
 	return newConnector(
 		ctx,
 		*typedCfg,
@@ -169,6 +176,7 @@ func (f *connectorFactory) createMetricsToLogsConnector(
 		nextConsumer,
 		f.snapshotManager,
 		f.expressionRefManager,
+		f.metadataPublisher,
 		f.celEvaluator,
 		f.deduplicator,
 		f.mapper,
@@ -191,6 +199,7 @@ func (f *connectorFactory) createLogsToLogsConnector(
 		return nil, err
 	}
 
+	f.metadataPublisher.SetLogsConsumer(nextConsumer)
 	return newConnector(
 		ctx,
 		*typedCfg,
@@ -199,6 +208,7 @@ func (f *connectorFactory) createLogsToLogsConnector(
 		nextConsumer,
 		f.snapshotManager,
 		f.expressionRefManager,
+		f.metadataPublisher,
 		f.celEvaluator,
 		f.deduplicator,
 		f.mapper,
