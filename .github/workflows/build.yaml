@@ -44,6 +44,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
       - name: Docker meta (labels only)
         id: meta
         uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
@@ -51,6 +54,23 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{github.repository_owner}}/${{ github.repository }}
+
+      - name: Resolve image short name
+        id: image-name
+        env:
+          IMAGE: ${{ env.IMAGE_NAME }}
+        run: echo "value=${IMAGE##*/}" >> "$GITHUB_OUTPUT"
+
+      - name: Apply OCI labels
+        id: oci-labels
+        uses: StackVista/image-pipeline/.github/actions/apply-oci-labels@d406ce4560d6c9a50e0c8242beeff67e2ee59c62
+        with:
+          image-name: ${{ steps.image-name.outputs.value }}
+          tag: ${{ steps.meta.outputs.version }}
+          title: SUSE Observability OpenTelemetry Collector
+          description: Custom OpenTelemetry Collector for SUSE Observability
+          component: otel-collector
+          dockerfile: Dockerfile
 
       - name: Install protoc # TODO create a docker image with protoc installed
         run: |
@@ -68,9 +88,6 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
-
       - name: Build ${{ matrix.platform }} to local docker tarball
         # Per-arch single-platform build, output as a docker-format tarball
         # (not pushed). The tarball is uploaded as an artifact so scan, e2e,
@@ -82,7 +99,9 @@ jobs:
           platforms: ${{ matrix.platform }}
           outputs: type=docker,dest=/tmp/image.tar
           tags: sts-opentelemetry-collector:build
-          labels: ${{ steps.meta.outputs.labels }}
+          labels: |
+            ${{ steps.meta.outputs.labels }}
+            ${{ steps.oci-labels.outputs.labels }}
           provenance: false
           sbom: false
 
