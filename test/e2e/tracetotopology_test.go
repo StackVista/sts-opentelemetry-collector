@@ -377,8 +377,6 @@ func otelComponentMappingSpec(otelInputResource settingsproto.OtelInputResource,
 			Identifier: harness.StrExpr("vars.instanceId"),
 			Name:       harness.StrExpr(`vars.name`),
 			TypeName:   harness.StrExpr("'service-instance'"),
-			DomainName: harness.StrExpr(`resource.attributes["service.namespace"]`),
-			LayerName:  harness.StrExpr("'backend'"),
 			Required: &settingsproto.OtelComponentMappingFieldMapping{
 				AdditionalIdentifiers: &[]settingsproto.OtelStringExpression{
 					{Expression: `resource.attributes["k8s.pod.name"]`},

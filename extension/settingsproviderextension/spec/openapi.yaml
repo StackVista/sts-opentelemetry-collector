@@ -809,10 +809,46 @@ components:
               type: string
             topologyQuery:
               type: string
+            groupingEnabled:
+              type: boolean
+            groupedByLayers:
+              type: boolean
+            groupedByDomains:
+              type: boolean
+            groupedByRelations:
+              type: boolean
+            minimumGroupSize:
+              type: integer
+              format: int64
+            showIndirectRelations:
+              type: boolean
+            autoGrouping:
+              type: boolean
+            connectedComponents:
+              type: boolean
+            neighboringComponents:
+              type: boolean
+            flags:
+              type: array
+              uniqueItems: true
+              items:
+                $ref: "settings.yaml#/components/schemas/QueryViewFlag"
+            ownedBy:
+              type: string
           required:
             - type
             - name
             - topologyQuery
+            - groupingEnabled
+            - groupedByLayers
+            - groupedByDomains
+            - groupedByRelations
+            - minimumGroupSize
+            - showIndirectRelations
+            - autoGrouping
+            - connectedComponents
+            - neighboringComponents
+            - flags
 
     # Supporting types
     NotificationConfigurationStatus:
@@ -1204,14 +1240,6 @@ components:
           $ref: "#/components/schemas/OtelStringExpression"
         typeIdentifier:
           $ref: "#/components/schemas/OtelStringExpression"
-        layerName:
-          $ref: "#/components/schemas/OtelStringExpression"
-        layerIdentifier:
-          $ref: "#/components/schemas/OtelStringExpression"
-        domainName:
-          $ref: "#/components/schemas/OtelStringExpression"
-        domainIdentifier:
-          $ref: "#/components/schemas/OtelStringExpression"
         required:
           $ref: "#/components/schemas/OtelComponentMappingFieldMapping"
         optional:
@@ -1220,8 +1248,6 @@ components:
         - identifier
         - name
         - typeName
-        - layerName
-        - domainName
 
     OtelTagMapping:
       type: object
@@ -1390,6 +1416,8 @@ components:
               $ref: "settings.yaml#/components/schemas/ComponentPresentationQueryBinding"
             rank:
               $ref: "settings.yaml#/components/schemas/ComponentPresentationRank"
+            metrics:
+              $ref: "settings.yaml#/components/schemas/ComponentPresentationMetrics"
             definition:
               $ref: "settings.yaml#/components/schemas/PresentationDefinition"
           required:

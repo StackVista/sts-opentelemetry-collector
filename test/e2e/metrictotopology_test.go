@@ -283,8 +283,6 @@ func otelComponentMappingSpecForService() *harness.OtelComponentMappingSpec {
 			Identifier: harness.StrExpr(`"urn:service:" + resource.attributes["service.name"]`),
 			Name:       harness.StrExpr(`resource.attributes["service.name"]`),
 			TypeName:   harness.StrExpr("'service'"),
-			DomainName: harness.StrExpr(`resource.attributes["service.namespace"]`),
-			LayerName:  harness.StrExpr("'backend'"),
 		},
 	}
 }
@@ -314,8 +312,6 @@ func otelComponentMappingSpecForQueue() *harness.OtelComponentMappingSpec {
 			Identifier: harness.StrExpr(`"urn:queue:" + resource.attributes["service.name"] + ":" + datapoint.attributes["queue.name"]`),
 			Name:       harness.StrExpr(`datapoint.attributes["queue.name"]`),
 			TypeName:   harness.StrExpr("'queue'"),
-			DomainName: harness.StrExpr(`resource.attributes["service.namespace"]`),
-			LayerName:  harness.StrExpr("'backend'"),
 		},
 	}
 }

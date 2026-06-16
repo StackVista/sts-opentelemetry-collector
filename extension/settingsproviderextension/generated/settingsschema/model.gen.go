@@ -11,6 +11,13 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for ChartType.
+const (
+	Gauge ChartType = "gauge"
+	Line  ChartType = "line"
+	Stat  ChartType = "stat"
+)
+
 // Defines values for ComponentLinkDisplayType.
 const (
 	ComponentLinkDisplayTypeComponentLinkDisplay ComponentLinkDisplayType = "ComponentLinkDisplay"
@@ -113,6 +120,12 @@ const (
 	NumericProjectionTypeNumericProjection NumericProjectionType = "NumericProjection"
 )
 
+// Defines values for PresentationOverviewSortingDirection.
+const (
+	Ascending  PresentationOverviewSortingDirection = "Ascending"
+	Descending PresentationOverviewSortingDirection = "Descending"
+)
+
 // Defines values for PromqlDisplayType.
 const (
 	PromqlDisplayTypePromqlDisplay PromqlDisplayType = "PromqlDisplay"
@@ -121,6 +134,12 @@ const (
 // Defines values for PropertySourceType.
 const (
 	PropertySourceTypePropertySource PropertySourceType = "PropertySource"
+)
+
+// Defines values for QueryViewFlag.
+const (
+	HideFromViewsOverview QueryViewFlag = "HideFromViewsOverview"
+	NotUnlockable         QueryViewFlag = "NotUnlockable"
 )
 
 // Defines values for RatioDisplayType.
@@ -256,6 +275,9 @@ const (
 	ViewTypeTableColTimeTypeViewTypeTableColTime ViewTypeTableColTimeType = "ViewTypeTableColTime"
 )
 
+// ChartType defines model for ChartType.
+type ChartType string
+
 // ComponentHighlightMetrics defines model for ComponentHighlightMetrics.
 type ComponentHighlightMetrics struct {
 	Bindings        []string `json:"bindings"`
@@ -320,6 +342,20 @@ type ComponentPresentationFilter struct {
 type ComponentPresentationFilterDefinition struct {
 	union json.RawMessage
 }
+
+// ComponentPresentationMetric defines model for ComponentPresentationMetric.
+type ComponentPresentationMetric struct {
+	Alias         *string                    `json:"alias,omitempty"`
+	ChartType     *ChartType                 `json:"chartType,omitempty"`
+	Description   *string                    `json:"description,omitempty"`
+	MetricId      string                     `json:"metricId"`
+	MetricQueries *[]PresentationMetricQuery `json:"metricQueries,omitempty"`
+	Name          *string                    `json:"name,omitempty"`
+	Unit          *string                    `json:"unit,omitempty"`
+}
+
+// ComponentPresentationMetrics defines model for ComponentPresentationMetrics.
+type ComponentPresentationMetrics = []ComponentPresentationMetric
 
 // ComponentPresentationQueryBinding defines model for ComponentPresentationQueryBinding.
 type ComponentPresentationQueryBinding struct {
@@ -576,6 +612,18 @@ type NumericProjection struct {
 // NumericProjectionType defines model for NumericProjection.Type.
 type NumericProjectionType string
 
+// OrderedComponentPresentationMetric defines model for OrderedComponentPresentationMetric.
+type OrderedComponentPresentationMetric struct {
+	Alias         *string                    `json:"alias,omitempty"`
+	ChartType     *ChartType                 `json:"chartType,omitempty"`
+	Description   *string                    `json:"description,omitempty"`
+	MetricId      string                     `json:"metricId"`
+	MetricQueries *[]PresentationMetricQuery `json:"metricQueries,omitempty"`
+	Name          *string                    `json:"name,omitempty"`
+	Order         *float64                   `json:"order,omitempty"`
+	Unit          *string                    `json:"unit,omitempty"`
+}
+
 // OverviewColumnDefinition Definition of a column in the overview presentation. The `columnId` field is used to identify the column and merge columns from different presentations. If only the `columnId` is provided, the column will be rendered from the next more specific presentation definition.
 type OverviewColumnDefinition struct {
 	ColumnId string `json:"columnId"`
@@ -587,6 +635,8 @@ type OverviewColumnDefinition struct {
 
 // PresentationDefinition Component presentation definition.
 // If multiple ComponentPresentations match, `filters` are merged by filter identity with the most specific presentation winning.
+// Scalar fields like `icon` and `topology` follow most-specific-wins semantics across matching presentations.
+// Absence of `topology` means the Topology perspective is not available for this presentation.
 // Absence of the field keeps legacy behavior (for example, ViewType-based filters) unchanged.
 type PresentationDefinition struct {
 	Filters *[]ComponentPresentationFilter `json:"filters,omitempty"`
@@ -594,22 +644,31 @@ type PresentationDefinition struct {
 	// Highlight Highlight presentation definition. The `fields` define the fields to show in the highlight page.
 	// If multiple ComponentPresentations match, fields are merged by `fieldId` according to binding rank.
 	// Related resources follow the same merge semantics using `resourceId` as the identity key.
-	Highlight *PresentationHighlight `json:"highlight,omitempty"`
-	Icon      *string                `json:"icon,omitempty"`
+	Highlight         *PresentationHighlight         `json:"highlight,omitempty"`
+	Icon              *string                        `json:"icon,omitempty"`
+	MetricPerspective *PresentationMetricPerspective `json:"metricPerspective,omitempty"`
 
 	// Overview Overview presentation definition. The `columns` field defines the columns to show in the overview table. The `flags` field can be used to enable/disable functionalities.
 	// If multiple ComponentPresentations match, columns are merged by `columnId` according to binding rank. Absence of the field means no overview is shown.
 	Overview *PresentationOverview `json:"overview,omitempty"`
+	Summary  *PresentationSummary  `json:"summary,omitempty"`
+
+	// Topology Rendering settings for the topology perspective.
+	// Near-copy of QueryMetadata used for topology rendering today; differences:
+	// - `queryTime` is intentionally absent (request-time state, not a presentation setting).
+	// Most-specific-wins merge semantics across matching ComponentPresentations.
+	Topology *TopologySettings `json:"topology,omitempty"`
 }
 
 // PresentationHighlight Highlight presentation definition. The `fields` define the fields to show in the highlight page.
 // If multiple ComponentPresentations match, fields are merged by `fieldId` according to binding rank.
 // Related resources follow the same merge semantics using `resourceId` as the identity key.
 type PresentationHighlight struct {
-	Events *PresentationHighlightEvents `json:"events,omitempty"`
-	Fields []PresentationHighlightField `json:"fields"`
+	Events  *PresentationHighlightEvents           `json:"events,omitempty"`
+	Fields  []PresentationHighlightField           `json:"fields"`
+	Metrics *[]PresentationHighlightMetricsSection `json:"metrics,omitempty"`
 
-	// Provisioning Provisioning section of a component in the highlight presentation. The `externalComponentSelector` field is used to identify the external component with provisioning details for this component.
+	// Provisioning Provisioning section of a component in the highlight presentation. The `topologySourceSelector` field is used to identify the external component with provisioning details for this component.
 	Provisioning     *PresentationHighlightProvisioning `json:"provisioning,omitempty"`
 	RelatedResources *[]PresentationRelatedResource     `json:"relatedResources,omitempty"`
 	Title            string                             `json:"title"`
@@ -633,12 +692,23 @@ type PresentationHighlightField struct {
 	Title      string                        `json:"title"`
 }
 
-// PresentationHighlightProvisioning Provisioning section of a component in the highlight presentation. The `externalComponentSelector` field is used to identify the external component with provisioning details for this component.
+// PresentationHighlightMetricsSection defines model for PresentationHighlightMetricsSection.
+type PresentationHighlightMetricsSection struct {
+	DefaultExpanded *bool                                 `json:"defaultExpanded,omitempty"`
+	Description     *string                               `json:"description,omitempty"`
+	Metrics         *[]OrderedComponentPresentationMetric `json:"metrics,omitempty"`
+	Order           float64                               `json:"order"`
+	SectionId       string                                `json:"sectionId"`
+	Title           string                                `json:"title"`
+}
+
+// PresentationHighlightProvisioning Provisioning section of a component in the highlight presentation. The `topologySourceSelector` field is used to identify the external component with provisioning details for this component.
 type PresentationHighlightProvisioning struct {
-	// ExternalComponentSelector Cel expression that selects the external component with provisioning details
-	ExternalComponentSelector *string `json:"externalComponentSelector,omitempty"`
-	ShowConfiguration         *bool   `json:"showConfiguration,omitempty"`
-	ShowStatus                *bool   `json:"showStatus,omitempty"`
+	ShowConfiguration *bool `json:"showConfiguration,omitempty"`
+	ShowStatus        *bool `json:"showStatus,omitempty"`
+
+	// TopologySourceSelector Cel expression that selects the external component with provisioning details
+	TopologySourceSelector *string `json:"topologySourceSelector,omitempty"`
 }
 
 // PresentationMainMenu defines model for PresentationMainMenu.
@@ -646,6 +716,35 @@ type PresentationMainMenu struct {
 	Group string  `json:"group"`
 	Icon  *string `json:"icon,omitempty"`
 	Order float64 `json:"order"`
+}
+
+// PresentationMetricPerspective defines model for PresentationMetricPerspective.
+type PresentationMetricPerspective struct {
+	Tabs []PresentationMetricPerspectiveTab `json:"tabs"`
+}
+
+// PresentationMetricPerspectiveSection defines model for PresentationMetricPerspectiveSection.
+type PresentationMetricPerspectiveSection struct {
+	Metrics   *[]OrderedComponentPresentationMetric `json:"metrics,omitempty"`
+	Order     float64                               `json:"order"`
+	SectionId string                                `json:"sectionId"`
+	Title     string                                `json:"title"`
+}
+
+// PresentationMetricPerspectiveTab defines model for PresentationMetricPerspectiveTab.
+type PresentationMetricPerspectiveTab struct {
+	Order    float64                                 `json:"order"`
+	Sections *[]PresentationMetricPerspectiveSection `json:"sections,omitempty"`
+	TabId    string                                  `json:"tabId"`
+	Title    string                                  `json:"title"`
+}
+
+// PresentationMetricQuery defines model for PresentationMetricQuery.
+type PresentationMetricQuery struct {
+	Alias                       string  `json:"alias"`
+	ComponentIdentifierTemplate *string `json:"componentIdentifierTemplate,omitempty"`
+	Expression                  string  `json:"expression"`
+	Primary                     *bool   `json:"primary,omitempty"`
 }
 
 // PresentationName defines model for PresentationName.
@@ -658,11 +757,21 @@ type PresentationName struct {
 // PresentationOverview Overview presentation definition. The `columns` field defines the columns to show in the overview table. The `flags` field can be used to enable/disable functionalities.
 // If multiple ComponentPresentations match, columns are merged by `columnId` according to binding rank. Absence of the field means no overview is shown.
 type PresentationOverview struct {
-	Columns      []OverviewColumnDefinition `json:"columns"`
-	FixedColumns *int                       `json:"fixedColumns,omitempty"`
-	MainMenu     *PresentationMainMenu      `json:"mainMenu,omitempty"`
-	Name         PresentationName           `json:"name"`
+	Columns      []OverviewColumnDefinition     `json:"columns"`
+	FixedColumns *int                           `json:"fixedColumns,omitempty"`
+	MainMenu     *PresentationMainMenu          `json:"mainMenu,omitempty"`
+	Name         PresentationName               `json:"name"`
+	Sort         *[]PresentationOverviewSorting `json:"sort,omitempty"`
 }
+
+// PresentationOverviewSorting defines model for PresentationOverviewSorting.
+type PresentationOverviewSorting struct {
+	ColumnId  string                                `json:"columnId"`
+	Direction *PresentationOverviewSortingDirection `json:"direction,omitempty"`
+}
+
+// PresentationOverviewSortingDirection defines model for PresentationOverviewSortingDirection.
+type PresentationOverviewSortingDirection string
 
 // PresentationRelatedResource Related resource definition for the highlight page. Each entry defines a section showing components
 // related to the one being viewed, rendered using the referenced presentation's overview spec.
@@ -691,6 +800,11 @@ type PresentationRelatedResource struct {
 	TopologyQuery *string `json:"topologyQuery,omitempty"`
 }
 
+// PresentationSummary defines model for PresentationSummary.
+type PresentationSummary struct {
+	Metrics *[]OrderedComponentPresentationMetric `json:"metrics,omitempty"`
+}
+
 // PromqlDisplay defines model for PromqlDisplay.
 type PromqlDisplay struct {
 	Type PromqlDisplayType `json:"_type"`
@@ -708,6 +822,9 @@ type PropertySource struct {
 
 // PropertySourceType defines model for PropertySource.Type.
 type PropertySourceType string
+
+// QueryViewFlag defines model for QueryViewFlag.
+type QueryViewFlag string
 
 // RatioDisplay defines model for RatioDisplay.
 type RatioDisplay struct {
@@ -801,6 +918,14 @@ type TextProjection struct {
 // TextProjectionType defines model for TextProjection.Type.
 type TextProjectionType string
 
+// TopologyDomain Domain assigned to components matched by this presentation, used to bucket and order them in the topology view.
+// At presentation time, the domain of the most-specific matching presentation wins.
+// When multiple components share a domain name with different orders, the highest order wins.
+type TopologyDomain struct {
+	Name  string  `json:"name"`
+	Order float64 `json:"order"`
+}
+
 // TopologyFilterValue defines model for TopologyFilterValue.
 type TopologyFilterValue string
 
@@ -812,6 +937,40 @@ type TopologyFilters struct {
 
 // TopologyFiltersType defines model for TopologyFilters.Type.
 type TopologyFiltersType string
+
+// TopologyLayer Layer assigned to components matched by this presentation, used to bucket and order them in the topology view.
+// At presentation time, the layer of the most-specific matching presentation wins.
+// When multiple components share a layer name with different orders, the highest order wins.
+type TopologyLayer struct {
+	Name  string  `json:"name"`
+	Order float64 `json:"order"`
+}
+
+// TopologySettings Rendering settings for the topology perspective.
+// Near-copy of QueryMetadata used for topology rendering today; differences:
+// - `queryTime` is intentionally absent (request-time state, not a presentation setting).
+// Most-specific-wins merge semantics across matching ComponentPresentations.
+type TopologySettings struct {
+	AutoGrouping        *bool `json:"autoGrouping,omitempty"`
+	ConnectedComponents *bool `json:"connectedComponents,omitempty"`
+
+	// Domain Domain assigned to components matched by this presentation, used to bucket and order them in the topology view.
+	// At presentation time, the domain of the most-specific matching presentation wins.
+	// When multiple components share a domain name with different orders, the highest order wins.
+	Domain             *TopologyDomain `json:"domain,omitempty"`
+	GroupedByDomains   *bool           `json:"groupedByDomains,omitempty"`
+	GroupedByLayers    *bool           `json:"groupedByLayers,omitempty"`
+	GroupedByRelations *bool           `json:"groupedByRelations,omitempty"`
+	GroupingEnabled    *bool           `json:"groupingEnabled,omitempty"`
+
+	// Layer Layer assigned to components matched by this presentation, used to bucket and order them in the topology view.
+	// At presentation time, the layer of the most-specific matching presentation wins.
+	// When multiple components share a layer name with different orders, the highest order wins.
+	Layer                 *TopologyLayer `json:"layer,omitempty"`
+	MinimumGroupSize      *int64         `json:"minimumGroupSize,omitempty"`
+	NeighboringComponents *bool          `json:"neighboringComponents,omitempty"`
+	ShowIndirectRelations *bool          `json:"showIndirectRelations,omitempty"`
+}
 
 // ViewTimeLink defines model for ViewTimeLink.
 type ViewTimeLink struct {

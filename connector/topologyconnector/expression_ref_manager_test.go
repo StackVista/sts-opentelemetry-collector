@@ -59,10 +59,6 @@ var ExpectedComponentMappingFields = struct {
 		"Name",
 		"TypeName",
 		"TypeIdentifier",
-		"LayerName",
-		"LayerIdentifier",
-		"DomainName",
-		"DomainIdentifier",
 		"Optional",
 		"Required",
 	},
@@ -125,7 +121,6 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentAndRelation(t *testing.T
 			Identifier: sExpr("\"id-\" + resource.attributes['service.name'] + \"-\" + vars.ns"),
 			Name:       sExpr("\"name-\" + vars.ns"),
 			TypeName:   sExpr("'type'"),
-			LayerName:  sExpr("\"layer-\" + datapoint.attributes['kind']"),
 
 			Required: &settingsproto.OtelComponentMappingFieldMapping{
 				Tags: &[]settingsproto.OtelTagMapping{
@@ -152,7 +147,6 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentAndRelation(t *testing.T
 			Identifier: sExpr("resource.attributes['service.name']"),
 			Name:       sExpr("name"),
 			TypeName:   sExpr("type"),
-			LayerName:  sExpr("layer"),
 			Required: &settingsproto.OtelComponentMappingFieldMapping{
 				Configuration: &settingsproto.OtelAnyExpression{
 					Expression: "pick(log.body, ['metadata', 'spec'])",
@@ -197,7 +191,7 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentAndRelation(t *testing.T
 	// Metrics signal -> component expressionRefSummaries
 	compRefs := refManager.Current(settingsproto.METRICS, "comp-1")
 	require.NotNil(t, compRefs)
-	require.ElementsMatch(t, []string{"kind"}, compRefs.Datapoint.AttributeKeys)
+	require.Empty(t, compRefs.Datapoint.AttributeKeys)
 	require.True(t, compRefs.Span.AllAttributes)
 	require.ElementsMatch(t, []string{"name"}, compRefs.Span.FieldKeys)
 	require.ElementsMatch(t, []string{"name"}, compRefs.Scope.FieldKeys)
@@ -233,7 +227,6 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentWithResourceOnlyExpressi
 			Identifier: sExpr("\"id-\" + resource.attributes['service.name']"),
 			Name:       sExpr("'name'"),
 			TypeName:   sExpr("'type'"),
-			LayerName:  sExpr("'layer'"),
 		},
 	}
 

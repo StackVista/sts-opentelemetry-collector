@@ -106,12 +106,9 @@ func newOtelComponentMapping(id string) stsSettingsModel.OtelComponentMapping {
 			},
 		},
 		Output: stsSettingsModel.OtelComponentMappingOutput{
-			DomainIdentifier: newOtelStringExpression("host"),
-			DomainName:       *newOtelStringExpression("domain"),
-			Identifier:       *newOtelStringExpression("${input.attributes['host.name']}"),
-			LayerName:        *newOtelStringExpression("Infrastructure"),
-			Name:             *newOtelStringExpression("${input.attributes['service.name']}"),
-			TypeName:         *newOtelStringExpression("host-component-type"),
+			Identifier: *newOtelStringExpression("${input.attributes['host.name']}"),
+			Name:       *newOtelStringExpression("${input.attributes['service.name']}"),
+			TypeName:   *newOtelStringExpression("host-component-type"),
 		},
 	}
 }

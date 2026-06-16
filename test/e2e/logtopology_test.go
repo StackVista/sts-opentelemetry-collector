@@ -356,8 +356,6 @@ func assertLogComponents(t *testing.T, components map[string]*topostreamv1.Topol
 		require.Equal(t, "default", c.Name)
 		require.Equal(t, "urn:kubewarden:cluster/production:policyserver/default", c.ExternalId)
 		require.Equal(t, "policy server", c.TypeName)
-		require.Equal(t, "Control Plane", c.LayerName)
-		require.Equal(t, "Kubernetes", c.DomainName)
 
 		// Verify configuration is populated with omit and does not contain status
 		require.NotNil(t, c.ResourceDefinition, "configuration should be populated via omit(log.body, ['status'])")
@@ -447,8 +445,6 @@ func otelLogComponentMappingSpecPolicyServer() *harness.OtelComponentMappingSpec
 			Identifier: harness.StrExpr(`"urn:kubewarden:cluster/" + vars.clusterName + ":policyserver/" + vars.serverName`),
 			Name:       harness.StrExpr(`vars.serverName`),
 			TypeName:   harness.StrExpr("'policy server'"),
-			LayerName:  harness.StrExpr("'Control Plane'"),
-			DomainName: harness.StrExpr("'Kubernetes'"),
 			Required: &settingsproto.OtelComponentMappingFieldMapping{
 				Configuration: harness.Ptr(harness.AnyExpr(`omit(log.body, ['status'])`)),
 				Status:        harness.Ptr(harness.AnyExpr(`pick(log.body, ['status'])`)),
@@ -492,8 +488,6 @@ func otelLogComponentMappingSpecPolicyServerDelete() *harness.OtelComponentMappi
 			Identifier: harness.StrExpr(`"urn:kubewarden:cluster/" + vars.clusterName + ":policyserver/" + vars.serverName`),
 			Name:       harness.StrExpr(`vars.serverName`),
 			TypeName:   harness.StrExpr("'policy server'"),
-			LayerName:  harness.StrExpr("'Control Plane'"),
-			DomainName: harness.StrExpr("'Kubernetes'"),
 		},
 	}
 }

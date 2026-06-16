@@ -353,8 +353,6 @@ func TestConnectorConsumeTraces(t *testing.T) {
 		assert.Equal(t, "627cc493", component.ExternalId)
 		assert.Equal(t, "checkout-service", component.Name)
 		assert.Equal(t, "service-instance", component.TypeName)
-		assert.Equal(t, "shop", component.DomainName)
-		assert.Equal(t, "backend", component.LayerName)
 		assert.Equal(t, "status_code:200", compData.Components[0].Tags[0])
 
 		// Assert Relation Message
@@ -477,8 +475,6 @@ func TestConnectorConsumeMetrics(t *testing.T) {
 		assert.Equal(t, "627cc493", component.ExternalId)
 		assert.Equal(t, "checkout-service", component.Name)
 		assert.Equal(t, "service-instance", component.TypeName)
-		assert.Equal(t, "shop", component.DomainName)
-		assert.Equal(t, "backend", component.LayerName)
 
 		assert.Equal(t, "status_code:200", compData.Components[0].Tags[0])
 
@@ -703,8 +699,6 @@ func createSimpleTraceComponentMapping(id string) settingsproto.OtelComponentMap
 			Identifier: strExpr("resource.attributes[\"service.instance.id\"]"),
 			Name:       strExpr(`resource.attributes["service.name"]`),
 			TypeName:   strExpr("'service-instance'"),
-			DomainName: strExpr(`resource.attributes["service.namespace"]`),
-			LayerName:  strExpr("'backend'"),
 			Required: &settingsproto.OtelComponentMappingFieldMapping{
 				Tags: &[]settingsproto.OtelTagMapping{
 					{
@@ -767,8 +761,6 @@ func createSimpleMetricComponentMapping(id string) settingsproto.OtelComponentMa
 			Identifier: strExpr("resource.attributes[\"service.instance.id\"]"),
 			Name:       strExpr(`resource.attributes["service.name"]`),
 			TypeName:   strExpr("'service-instance'"),
-			DomainName: strExpr(`resource.attributes["service.namespace"]`),
-			LayerName:  strExpr("'backend'"),
 			Required: &settingsproto.OtelComponentMappingFieldMapping{
 				Tags: &[]settingsproto.OtelTagMapping{
 					{
@@ -863,8 +855,6 @@ func createSimpleLogComponentMapping() settingsproto.OtelComponentMapping {
 			Identifier: strExpr(`urn:kubewarden:cluster/test:policyserver/${log.attributes["k8s.resource.name"]}`),
 			Name:       strExpr(`${log.attributes["k8s.resource.name"]}`),
 			TypeName:   strExpr("policy server"),
-			LayerName:  strExpr("Control Plane"),
-			DomainName: strExpr("Kubernetes"),
 		},
 	}
 }
