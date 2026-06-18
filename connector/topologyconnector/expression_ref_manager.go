@@ -132,10 +132,6 @@ func (p *DefaultExpressionRefManager) collectRefsForComponent(
 	agg.walkString(p.evaluator, m.Output.Name)
 	agg.walkString(p.evaluator, m.Output.TypeName)
 	agg.walkOptionalString(p.evaluator, m.Output.TypeIdentifier)
-	agg.walkString(p.evaluator, m.Output.LayerName)
-	agg.walkOptionalString(p.evaluator, m.Output.LayerIdentifier)
-	agg.walkString(p.evaluator, m.Output.DomainName)
-	agg.walkOptionalString(p.evaluator, m.Output.DomainIdentifier)
 	p.collectRefsForComponentFieldMapping(agg, m.Output.Optional)
 	p.collectRefsForComponentFieldMapping(agg, m.Output.Required)
 

@@ -29,12 +29,8 @@ type TopologyStreamComponent struct {
 	Identifiers []string `protobuf:"bytes,2,rep,name=identifiers,proto3" json:"identifiers,omitempty"`
 	Name        string   `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	// Component type. Is what help us match it with config and come with the rendering for overview, highlight pages
-	TypeName         string  `protobuf:"bytes,4,opt,name=type_name,json=typeName,proto3" json:"type_name,omitempty"`
-	TypeIdentifier   *string `protobuf:"bytes,5,opt,name=type_identifier,json=typeIdentifier,proto3,oneof" json:"type_identifier,omitempty"`
-	LayerName        string  `protobuf:"bytes,6,opt,name=layer_name,json=layerName,proto3" json:"layer_name,omitempty"`
-	LayerIdentifier  *string `protobuf:"bytes,7,opt,name=layer_identifier,json=layerIdentifier,proto3,oneof" json:"layer_identifier,omitempty"`
-	DomainName       string  `protobuf:"bytes,8,opt,name=domain_name,json=domainName,proto3" json:"domain_name,omitempty"`
-	DomainIdentifier *string `protobuf:"bytes,9,opt,name=domain_identifier,json=domainIdentifier,proto3,oneof" json:"domain_identifier,omitempty"`
+	TypeName       string  `protobuf:"bytes,4,opt,name=type_name,json=typeName,proto3" json:"type_name,omitempty"`
+	TypeIdentifier *string `protobuf:"bytes,5,opt,name=type_identifier,json=typeIdentifier,proto3,oneof" json:"type_identifier,omitempty"`
 	// Resource Definition. Configuration or Specification that yielded the component instance.
 	// We have a `Show Configuration` button on the "Highlight pages" that gives you access to this info.
 	ResourceDefinition *structpb.Struct `protobuf:"bytes,10,opt,name=resource_definition,json=resourceDefinition,proto3" json:"resource_definition,omitempty"`
@@ -108,34 +104,6 @@ func (x *TopologyStreamComponent) GetTypeName() string {
 func (x *TopologyStreamComponent) GetTypeIdentifier() string {
 	if x != nil && x.TypeIdentifier != nil {
 		return *x.TypeIdentifier
-	}
-	return ""
-}
-
-func (x *TopologyStreamComponent) GetLayerName() string {
-	if x != nil {
-		return x.LayerName
-	}
-	return ""
-}
-
-func (x *TopologyStreamComponent) GetLayerIdentifier() string {
-	if x != nil && x.LayerIdentifier != nil {
-		return *x.LayerIdentifier
-	}
-	return ""
-}
-
-func (x *TopologyStreamComponent) GetDomainName() string {
-	if x != nil {
-		return x.DomainName
-	}
-	return ""
-}
-
-func (x *TopologyStreamComponent) GetDomainIdentifier() string {
-	if x != nil && x.DomainIdentifier != nil {
-		return *x.DomainIdentifier
 	}
 	return ""
 }
@@ -688,28 +656,22 @@ var File_topo_stream_proto protoreflect.FileDescriptor
 
 const file_topo_stream_proto_rawDesc = "" +
 	"\n" +
-	"\x11topo_stream.proto\x12\x0etopo_stream.v1\x1a\x1cgoogle/protobuf/struct.proto\"\xb4\x04\n" +
+	"\x11topo_stream.proto\x12\x0etopo_stream.v1\x1a\x1cgoogle/protobuf/struct.proto\"\xbd\x03\n" +
 	"\x17TopologyStreamComponent\x12\x1f\n" +
 	"\vexternal_id\x18\x01 \x01(\tR\n" +
 	"externalId\x12 \n" +
 	"\videntifiers\x18\x02 \x03(\tR\videntifiers\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x1b\n" +
 	"\ttype_name\x18\x04 \x01(\tR\btypeName\x12,\n" +
-	"\x0ftype_identifier\x18\x05 \x01(\tH\x00R\x0etypeIdentifier\x88\x01\x01\x12\x1d\n" +
-	"\n" +
-	"layer_name\x18\x06 \x01(\tR\tlayerName\x12.\n" +
-	"\x10layer_identifier\x18\a \x01(\tH\x01R\x0flayerIdentifier\x88\x01\x01\x12\x1f\n" +
-	"\vdomain_name\x18\b \x01(\tR\n" +
-	"domainName\x120\n" +
-	"\x11domain_identifier\x18\t \x01(\tH\x02R\x10domainIdentifier\x88\x01\x01\x12H\n" +
+	"\x0ftype_identifier\x18\x05 \x01(\tH\x00R\x0etypeIdentifier\x88\x01\x01\x12H\n" +
 	"\x13resource_definition\x18\n" +
 	" \x01(\v2\x17.google.protobuf.StructR\x12resourceDefinition\x128\n" +
 	"\vstatus_data\x18\v \x01(\v2\x17.google.protobuf.StructR\n" +
 	"statusData\x12\x12\n" +
 	"\x04tags\x18\f \x03(\tR\x04tagsB\x12\n" +
-	"\x10_type_identifierB\x13\n" +
-	"\x11_layer_identifierB\x14\n" +
-	"\x12_domain_identifier\"\x9a\x02\n" +
+	"\x10_type_identifierJ\x04\b\x06\x10\aJ\x04\b\a\x10\bJ\x04\b\b\x10\tJ\x04\b\t\x10\n" +
+	"R\n" +
+	"layer_nameR\x10layer_identifierR\vdomain_nameR\x11domain_identifier\"\x9a\x02\n" +
 	"\x16TopologyStreamRelation\x12\x1f\n" +
 	"\vexternal_id\x18\x01 \x01(\tR\n" +
 	"externalId\x12+\n" +

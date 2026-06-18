@@ -25,6 +25,43 @@ components:
       required:
         - specificity
 
+    ComponentPresentationMetrics:
+      type: array
+      items:
+        $ref: "#/components/schemas/ComponentPresentationMetric"
+
+    TopologyLayer:
+      type: object
+      description: |
+        Layer assigned to components matched by this presentation, used to bucket and order them in the topology view.
+        At presentation time, the layer of the most-specific matching presentation wins.
+        When multiple components share a layer name with different orders, the highest order wins.
+      properties:
+        name:
+          type: string
+        order:
+          type: number
+          format: double
+      required:
+        - name
+        - order
+
+    TopologyDomain:
+      type: object
+      description: |
+        Domain assigned to components matched by this presentation, used to bucket and order them in the topology view.
+        At presentation time, the domain of the most-specific matching presentation wins.
+        When multiple components share a domain name with different orders, the highest order wins.
+      properties:
+        name:
+          type: string
+        order:
+          type: number
+          format: double
+      required:
+        - name
+        - order
+
     PresentationDefinition:
       type: object
       properties:
@@ -34,13 +71,21 @@ components:
           $ref: "#/components/schemas/PresentationOverview"
         highlight:
           $ref: "#/components/schemas/PresentationHighlight"
+        summary:
+          $ref: "#/components/schemas/PresentationSummary"
         filters:
           type: array
           items:
             $ref: "#/components/schemas/ComponentPresentationFilter"
+        metricPerspective:
+          $ref: "#/components/schemas/PresentationMetricPerspective"
+        topology:
+          $ref: "#/components/schemas/TopologySettings"
       description: |
         Component presentation definition.
         If multiple ComponentPresentations match, `filters` are merged by filter identity with the most specific presentation winning.
+        Scalar fields like `icon` and `topology` follow most-specific-wins semantics across matching presentations.
+        Absence of `topology` means the Topology perspective is not available for this presentation.
         Absence of the field keeps legacy behavior (for example, ViewType-based filters) unchanged.
 
     PresentationName:
@@ -68,6 +113,20 @@ components:
         - singular
         - plural
 
+    PresentationOverviewSorting:
+      type: object
+      properties:
+        columnId:
+          type: string
+        direction:
+          $ref: '#/components/schemas/PresentationOverviewSortingDirection'
+      required:
+        - columnId
+    PresentationOverviewSortingDirection:
+      type: string
+      enum:
+        - Ascending
+        - Descending
     PresentationOverview:
       type: object
       properties:
@@ -81,6 +140,10 @@ components:
             $ref: '#/components/schemas/OverviewColumnDefinition'
         fixedColumns:
           type: integer
+        sort:
+          type: array
+          items:
+            $ref: '#/components/schemas/PresentationOverviewSorting'
       description: |
         Overview presentation definition. The `columns` field defines the columns to show in the overview table. The `flags` field can be used to enable/disable functionalities.
         If multiple ComponentPresentations match, columns are merged by `columnId` according to binding rank. Absence of the field means no overview is shown.
@@ -132,6 +195,10 @@ components:
             $ref: '#/components/schemas/PresentationRelatedResource'
         events:
           $ref: '#/components/schemas/PresentationHighlightEvents'
+        metrics:
+          type: array
+          items:
+            $ref: '#/components/schemas/PresentationHighlightMetricsSection'
       description: |
         Highlight presentation definition. The `fields` define the fields to show in the highlight page.
         If multiple ComponentPresentations match, fields are merged by `fieldId` according to binding rank.
@@ -704,6 +771,12 @@ components:
         - bindings
         - defaultExpanded
 
+    QueryViewFlag:
+      type: string
+      enum:
+        - NotUnlockable
+        - HideFromViewsOverview
+
     DependencyType:
       enum:
         - UNCLASSIFIED
@@ -998,6 +1071,14 @@ components:
         - NoTopologyFilters
         - CardsLayout
 
+    PresentationSummary:
+      type: object
+      properties:
+        metrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderedComponentPresentationMetric"
+
     ComponentPresentationFilter:
       type: object
       properties:
@@ -1096,14 +1177,14 @@ components:
     PresentationHighlightProvisioning:
       type: object
       properties:
-        externalComponentSelector:
+        topologySourceSelector:
           type: string
           description: 'Cel expression that selects the external component with provisioning details'
         showConfiguration:
           type: boolean
         showStatus:
           type: boolean
-      description: 'Provisioning section of a component in the highlight presentation. The `externalComponentSelector` field is used to identify the external component with provisioning details for this component.'
+      description: 'Provisioning section of a component in the highlight presentation. The `topologySourceSelector` field is used to identify the external component with provisioning details for this component.'
 
     PresentationHighlightEvents:
       type: object
@@ -1116,3 +1197,158 @@ components:
           type: string
       required:
         - showEvents
+
+    PresentationHighlightMetricsSection:
+      type: object
+      properties:
+        sectionId:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        defaultExpanded:
+          type: boolean
+        order:
+          type: number
+          format: double
+        metrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderedComponentPresentationMetric"
+      required:
+        - sectionId
+        - title
+        - order
+
+    OrderedComponentPresentationMetric:
+      allOf:
+        - $ref: "#/components/schemas/ComponentPresentationMetric"
+        - type: object
+          properties:
+            order:
+              type: number
+              format: double
+
+    ComponentPresentationMetric:
+      type: object
+      properties:
+        metricId:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        metricQueries:
+          type: array
+          items:
+            $ref: "#/components/schemas/PresentationMetricQuery"
+        unit:
+          type: string
+        chartType:
+          $ref: "#/components/schemas/ChartType"
+        alias:
+          type: string
+      required:
+        - metricId
+
+    PresentationMetricQuery:
+      properties:
+        expression:
+          type: string
+        alias:
+          type: string
+        componentIdentifierTemplate:
+          type: string
+        primary:
+          type: boolean
+      required:
+        - expression
+        - alias
+
+    ChartType:
+      type: string
+      enum:
+        - line
+        - gauge
+        - stat
+
+    PresentationMetricPerspective:
+      type: object
+      properties:
+        tabs:
+          type: array
+          items:
+            $ref: "#/components/schemas/PresentationMetricPerspectiveTab"
+      required:
+        - tabs
+
+    PresentationMetricPerspectiveTab:
+      type: object
+      properties:
+        tabId:
+          type: string
+        title:
+          type: string
+        order:
+          type: number
+          format: double
+        sections:
+          type: array
+          items:
+            $ref: "#/components/schemas/PresentationMetricPerspectiveSection"
+      required:
+        - tabId
+        - title
+        - order
+
+    PresentationMetricPerspectiveSection:
+      type: object
+      properties:
+        sectionId:
+          type: string
+        title:
+          type: string
+        order:
+          type: number
+          format: double
+        metrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderedComponentPresentationMetric"
+      required:
+        - sectionId
+        - title
+        - order
+
+    TopologySettings:
+      type: object
+      description: |
+        Rendering settings for the topology perspective.
+        Near-copy of QueryMetadata used for topology rendering today; differences:
+        - `queryTime` is intentionally absent (request-time state, not a presentation setting).
+        Most-specific-wins merge semantics across matching ComponentPresentations.
+      properties:
+        groupingEnabled:
+          type: boolean
+        showIndirectRelations:
+          type: boolean
+        minimumGroupSize:
+          type: integer
+          format: int64
+        groupedByLayers:
+          type: boolean
+        groupedByDomains:
+          type: boolean
+        groupedByRelations:
+          type: boolean
+        autoGrouping:
+          type: boolean
+        connectedComponents:
+          type: boolean
+        neighboringComponents:
+          type: boolean
+        layer:
+          $ref: "#/components/schemas/TopologyLayer"
+        domain:
+          $ref: "#/components/schemas/TopologyDomain"

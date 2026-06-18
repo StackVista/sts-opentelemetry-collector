@@ -457,16 +457,19 @@ type ComponentPresentation struct {
 
 	// Definition Component presentation definition.
 	// If multiple ComponentPresentations match, `filters` are merged by filter identity with the most specific presentation winning.
+	// Scalar fields like `icon` and `topology` follow most-specific-wins semantics across matching presentations.
+	// Absence of `topology` means the Topology perspective is not available for this presentation.
 	// Absence of the field keeps legacy behavior (for example, ViewType-based filters) unchanged.
 	Definition  externalRef0.PresentationDefinition `json:"definition"`
 	Description *string                             `json:"description,omitempty"`
 
 	// Id A Setting is uniquely identified by the combination of type+id
-	Id         SettingId                               `json:"id"`
-	Identifier string                                  `json:"identifier"`
-	Name       string                                  `json:"name"`
-	Rank       *externalRef0.ComponentPresentationRank `json:"rank,omitempty"`
-	Shard      Shard                                   `json:"shard"`
+	Id         SettingId                                  `json:"id"`
+	Identifier string                                     `json:"identifier"`
+	Metrics    *externalRef0.ComponentPresentationMetrics `json:"metrics,omitempty"`
+	Name       string                                     `json:"name"`
+	Rank       *externalRef0.ComponentPresentationRank    `json:"rank,omitempty"`
+	Shard      Shard                                      `json:"shard"`
 
 	// Type A definition for representing a component
 	Type ComponentPresentationType `json:"type"`
@@ -895,30 +898,10 @@ type OtelComponentMappingFieldMapping struct {
 
 // OtelComponentMappingOutput defines model for OtelComponentMappingOutput.
 type OtelComponentMappingOutput struct {
-	// DomainIdentifier An expression that must produce a string. It must be one of these formats:
-	//   - A plain string, for example `"this is a plain string"`
-	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
-	DomainIdentifier *OtelStringExpression `json:"domainIdentifier,omitempty"`
-
-	// DomainName An expression that must produce a string. It must be one of these formats:
-	//   - A plain string, for example `"this is a plain string"`
-	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
-	DomainName OtelStringExpression `json:"domainName"`
-
 	// Identifier An expression that must produce a string. It must be one of these formats:
 	//   - A plain string, for example `"this is a plain string"`
 	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
 	Identifier OtelStringExpression `json:"identifier"`
-
-	// LayerIdentifier An expression that must produce a string. It must be one of these formats:
-	//   - A plain string, for example `"this is a plain string"`
-	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
-	LayerIdentifier *OtelStringExpression `json:"layerIdentifier,omitempty"`
-
-	// LayerName An expression that must produce a string. It must be one of these formats:
-	//   - A plain string, for example `"this is a plain string"`
-	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
-	LayerName OtelStringExpression `json:"layerName"`
 
 	// Name An expression that must produce a string. It must be one of these formats:
 	//   - A plain string, for example `"this is a plain string"`
@@ -1169,17 +1152,29 @@ type OtelVariableMapping struct {
 
 // QueryView defines model for QueryView.
 type QueryView struct {
+	AutoGrouping        bool `json:"autoGrouping"`
+	ConnectedComponents bool `json:"connectedComponents"`
+
 	// CreatedTimeStamp The timestamp of when the setting was created.
-	CreatedTimeStamp int64 `json:"createdTimeStamp"`
+	CreatedTimeStamp   int64                        `json:"createdTimeStamp"`
+	Flags              []externalRef0.QueryViewFlag `json:"flags"`
+	GroupedByDomains   bool                         `json:"groupedByDomains"`
+	GroupedByLayers    bool                         `json:"groupedByLayers"`
+	GroupedByRelations bool                         `json:"groupedByRelations"`
+	GroupingEnabled    bool                         `json:"groupingEnabled"`
 
 	// Id A Setting is uniquely identified by the combination of type+id
-	Id         SettingId `json:"id"`
-	Identifier *string   `json:"identifier,omitempty"`
+	Id               SettingId `json:"id"`
+	Identifier       *string   `json:"identifier,omitempty"`
+	MinimumGroupSize int64     `json:"minimumGroupSize"`
 
 	// Name The name of the setting.
-	Name          string `json:"name"`
-	Shard         Shard  `json:"shard"`
-	TopologyQuery string `json:"topologyQuery"`
+	Name                  string  `json:"name"`
+	NeighboringComponents bool    `json:"neighboringComponents"`
+	OwnedBy               *string `json:"ownedBy,omitempty"`
+	Shard                 Shard   `json:"shard"`
+	ShowIndirectRelations bool    `json:"showIndirectRelations"`
+	TopologyQuery         string  `json:"topologyQuery"`
 
 	// Type The combination of type+id is a unique identification for a setting
 	Type     QueryViewType `json:"type"`

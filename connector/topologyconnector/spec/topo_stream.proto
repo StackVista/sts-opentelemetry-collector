@@ -21,12 +21,8 @@ message TopologyStreamComponent {
   string  type_name = 4;
   optional string type_identifier = 5;
 
-  string layer_name = 6;
-  optional string layer_identifier = 7;
-
-  string domain_name = 8;
-  optional string domain_identifier = 9;
-
+  reserved 6, 7, 8, 9;
+  reserved "layer_name", "layer_identifier", "domain_name", "domain_identifier";
 
   // currently the properties on the component dto. Helpful to access data when we are building overview, highlight pages
   // We agree to start without displayProperties.
