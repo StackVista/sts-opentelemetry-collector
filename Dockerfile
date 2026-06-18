@@ -2,13 +2,16 @@ ARG BASE_IMAGE=registry.suse.com/bci/bci-micro:15.7-56.21
 
 FROM --platform=$BUILDPLATFORM golang:1.26.4-alpine AS builder
 
+ARG TARGETOS=linux
+ARG TARGETARCH
+
 RUN apk add --no-cache git
 
 WORKDIR /go/src/github.com/stackvista/sts-opentelemetry-collector
 COPY . .
 
 RUN go install go.opentelemetry.io/collector/cmd/builder@v0.153.0
-RUN builder --config ./sts-otel-builder.yaml
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH:-$(go env GOARCH)} builder --config ./sts-otel-builder.yaml
 
 FROM ${BASE_IMAGE}
 USER 10001
