@@ -45,6 +45,7 @@ var ExpectedComponentMappingFields = struct {
 	TopLevelSkipped: []string{
 		"CreatedTimeStamp",
 		"ExpireAfterMs",
+		"Specificity",
 		"Id",
 		"Identifier",
 		"Input",
@@ -58,7 +59,6 @@ var ExpectedComponentMappingFields = struct {
 		"Identifier",
 		"Name",
 		"TypeName",
-		"TypeIdentifier",
 		"Optional",
 		"Required",
 	},

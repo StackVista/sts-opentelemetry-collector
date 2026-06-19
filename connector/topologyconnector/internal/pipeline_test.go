@@ -124,7 +124,6 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 						Identifier:     strExpr("vars.instanceId"),
 						Name:           strExpr(`resource.attributes["service.name"]`),
 						TypeName:       strExpr(`'service-instance'`),
-						TypeIdentifier: ptr(strExpr(`'service_instance_id'`)),
 						Required: &settingsproto.OtelComponentMappingFieldMapping{
 							AdditionalIdentifiers: &[]settingsproto.OtelStringExpression{
 								{Expression: `resource.attributes["k8s.pod.name"]`},
@@ -205,11 +204,11 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 								ExpiryIntervalMs: 60000,
 								Components: []*topostreamv1.TopologyStreamComponent{
 									{
-										ExternalId:     "627cc493",
-										Identifiers:    []string{"627cc493", "urn:process:12345", "checkout-service-8675309"},
-										Name:           "checkout-service",
-										TypeName:       "service-instance",
-										TypeIdentifier: ptr("service_instance_id"),
+										ExternalId:  "627cc493",
+										Identifiers: []string{"627cc493", "urn:process:12345", "checkout-service-8675309"},
+										Name:        "checkout-service",
+										TypeName:    "service-instance",
+										// STAC-24991: OTel-mapped components no longer emit type_identifier on the wire.
 										Tags: []string{
 											"instrumentation-lib:io.opentelemetry.instrumentation.http",
 											"instrumentation-Version:1.17.0",
@@ -267,7 +266,6 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 						Identifier:     strExpr("vars.instanceId"),
 						Name:           strExpr(`resource.attributes["service.name"]`),
 						TypeName:       strExpr(`'service-instance'`),
-						TypeIdentifier: ptr(strExpr(`'service_instance_id'`)),
 						Required: &settingsproto.OtelComponentMappingFieldMapping{
 							AdditionalIdentifiers: &[]settingsproto.OtelStringExpression{
 								{Expression: `resource.attributes["k8s.pod.name"]`},
@@ -350,7 +348,6 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 						Identifier:     strExpr("vars.instanceId"),
 						Name:           strExpr(`resource.attributes["not-existing-attr"]`),
 						TypeName:       strExpr(`'service-instance'`),
-						TypeIdentifier: ptr(strExpr(`'service_instance_id'`)),
 						Required: &settingsproto.OtelComponentMappingFieldMapping{
 							AdditionalIdentifiers: &[]settingsproto.OtelStringExpression{
 								{Expression: `resource.attributes["k8s.pod.name"]`},
@@ -476,7 +473,6 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 						Identifier:     strExpr("vars.instanceId"),
 						Name:           strExpr(`resource.attributes["service.name"]`),
 						TypeName:       strExpr(`'service-instance'`),
-						TypeIdentifier: ptr(strExpr(`'service_instance_id'`)),
 						Required: &settingsproto.OtelComponentMappingFieldMapping{
 							AdditionalIdentifiers: &[]settingsproto.OtelStringExpression{
 								{Expression: `resource.attributes["k8s.pod.name"]`},
@@ -524,11 +520,11 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 								ExpiryIntervalMs: 60000,
 								Components: []*topostreamv1.TopologyStreamComponent{
 									{
-										ExternalId:     "627cc493",
-										Identifiers:    []string{"627cc493", "checkout-service-8675309"},
-										Name:           "checkout-service",
-										TypeName:       "service-instance",
-										TypeIdentifier: ptr("service_instance_id"),
+										ExternalId:  "627cc493",
+										Identifiers: []string{"627cc493", "checkout-service-8675309"},
+										Name:        "checkout-service",
+										TypeName:    "service-instance",
+										// STAC-24991: OTel-mapped components no longer emit type_identifier on the wire.
 										Tags: []string{
 											"host:ip-10-1-2-3.ec2.internal",
 											"main_command:ls",
@@ -1045,7 +1041,6 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 				Identifier:     strExpr(`resource.attributes["service.instance.id"]`),
 				Name:           strExpr(`resource.attributes["service.name"]`),
 				TypeName:       strExpr(`'service-instance'`),
-				TypeIdentifier: ptr(strExpr(`'service_instance_id'`)),
 				Required: &settingsproto.OtelComponentMappingFieldMapping{
 					AdditionalIdentifiers: &[]settingsproto.OtelStringExpression{
 						{Expression: `resource.attributes["k8s.pod.name"]`},
@@ -1096,12 +1091,12 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 						ExpiryIntervalMs: 60000,
 						Components: []*topostreamv1.TopologyStreamComponent{
 							{
-								ExternalId:     "627cc493",
-								Identifiers:    []string{"627cc493", "checkout-service-8675309"},
-								Name:           "checkout-service",
-								TypeName:       "service-instance",
-								TypeIdentifier: ptr("service_instance_id"),
-								Tags:           nil,
+								ExternalId:  "627cc493",
+								Identifiers: []string{"627cc493", "checkout-service-8675309"},
+								Name:        "checkout-service",
+								TypeName:    "service-instance",
+								// STAC-24991: OTel-mapped components no longer emit type_identifier on the wire.
+								Tags: nil,
 							},
 						},
 					},

@@ -867,6 +867,9 @@ type OtelComponentMapping struct {
 	Output OtelComponentMappingOutput `json:"output"`
 	Shard  Shard                      `json:"shard"`
 
+	// Specificity Determines how much of a "specialization" this mapping is. Higher number means more specific. Used during component merge to pick the winning typeName / name when multiple mappings contribute to the same component identifier.
+	Specificity float64 `json:"specificity"`
+
 	// Type The combination of type+id is a unique identification for a setting
 	Type OtelComponentMappingType `json:"type"`
 	Vars *[]OtelVariableMapping   `json:"vars,omitempty"`
@@ -909,11 +912,6 @@ type OtelComponentMappingOutput struct {
 	Name     OtelStringExpression              `json:"name"`
 	Optional *OtelComponentMappingFieldMapping `json:"optional,omitempty"`
 	Required *OtelComponentMappingFieldMapping `json:"required,omitempty"`
-
-	// TypeIdentifier An expression that must produce a string. It must be one of these formats:
-	//   - A plain string, for example `"this is a plain string"`
-	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
-	TypeIdentifier *OtelStringExpression `json:"typeIdentifier,omitempty"`
 
 	// TypeName An expression that must produce a string. It must be one of these formats:
 	//   - A plain string, for example `"this is a plain string"`

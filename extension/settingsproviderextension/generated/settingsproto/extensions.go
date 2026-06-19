@@ -21,6 +21,7 @@ type SettingExtension interface {
 	GetIdentifier() string
 	GetName() string
 	GetExpireAfterMs() int64
+	GetSpecificity() *float64
 	GetInputSignals() []OtelInputSignal
 	GetInput() OtelInput
 	GetVars() *[]OtelVariableMapping
@@ -40,6 +41,14 @@ func (m OtelComponentMapping) GetName() string {
 
 func (m OtelComponentMapping) GetExpireAfterMs() int64 {
 	return m.ExpireAfterMs
+}
+
+func (m OtelComponentMapping) GetSpecificity() *float64 {
+	if m.Specificity == 0 {
+		return nil
+	}
+	s := m.Specificity
+	return &s
 }
 
 func (m OtelComponentMapping) GetInputSignals() []OtelInputSignal {
@@ -68,6 +77,10 @@ func (m OtelRelationMapping) GetName() string {
 
 func (m OtelRelationMapping) GetExpireAfterMs() int64 {
 	return m.ExpireAfterMs
+}
+
+func (m OtelRelationMapping) GetSpecificity() *float64 {
+	return nil
 }
 
 func (m OtelRelationMapping) GetInputSignals() []OtelInputSignal {
