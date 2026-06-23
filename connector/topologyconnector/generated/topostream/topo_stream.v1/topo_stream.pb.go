@@ -396,7 +396,7 @@ type TopologyStreamSnapshotData struct {
 	// Mapping-level specificity for components emitted in this batch.
 	// Used by the sync service to pick the winning typeName / name during merge.
 	// Higher = more specific. Missing/0.0 for legacy emissions and ext-topo sources.
-	Specificity   *float64 `protobuf:"fixed64,8,opt,name=specificity,proto3,oneof" json:"specificity,omitempty"`
+	Specificity   float64 `protobuf:"fixed64,8,opt,name=specificity,proto3" json:"specificity,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -481,8 +481,8 @@ func (x *TopologyStreamSnapshotData) GetErrors() []*TopoStreamError {
 }
 
 func (x *TopologyStreamSnapshotData) GetSpecificity() float64 {
-	if x != nil && x.Specificity != nil {
-		return *x.Specificity
+	if x != nil {
+		return x.Specificity
 	}
 	return 0
 }
@@ -503,7 +503,7 @@ type TopologyStreamRepeatElementsData struct {
 	// External IDs of relations to delete for low-latency removal without waiting for expiry
 	DeleteRelationExternalIds []string `protobuf:"bytes,6,rep,name=delete_relation_external_ids,json=deleteRelationExternalIds,proto3" json:"delete_relation_external_ids,omitempty"`
 	// See doc on TopologyStreamSnapshotData.specificity.
-	Specificity   *float64 `protobuf:"fixed64,7,opt,name=specificity,proto3,oneof" json:"specificity,omitempty"`
+	Specificity   float64 `protobuf:"fixed64,7,opt,name=specificity,proto3" json:"specificity,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -581,8 +581,8 @@ func (x *TopologyStreamRepeatElementsData) GetDeleteRelationExternalIds() []stri
 }
 
 func (x *TopologyStreamRepeatElementsData) GetSpecificity() float64 {
-	if x != nil && x.Specificity != nil {
-		return *x.Specificity
+	if x != nil {
+		return x.Specificity
 	}
 	return 0
 }
@@ -745,7 +745,7 @@ const file_topo_stream_proto_rawDesc = "" +
 	"\x0fTopoStreamError\x12\x1a\n" +
 	"\bcategory\x18\x01 \x01(\tR\bcategory\x12\x19\n" +
 	"\bissue_id\x18\x02 \x01(\tR\aissueId\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\tR\amessage\"\x8e\x04\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\"\xf9\x03\n" +
 	"\x1aTopologyStreamSnapshotData\x12,\n" +
 	"\x12repeat_interval_ms\x18\x01 \x01(\x05R\x10repeatIntervalMs\x121\n" +
 	"\x12expiry_interval_ms\x18\x02 \x01(\x03H\x00R\x10expiryIntervalMs\x88\x01\x01\x12*\n" +
@@ -755,12 +755,11 @@ const file_topo_stream_proto_rawDesc = "" +
 	"components\x18\x05 \x03(\v2'.topo_stream.v1.TopologyStreamComponentR\n" +
 	"components\x12D\n" +
 	"\trelations\x18\x06 \x03(\v2&.topo_stream.v1.TopologyStreamRelationR\trelations\x127\n" +
-	"\x06errors\x18\a \x03(\v2\x1f.topo_stream.v1.TopoStreamErrorR\x06errors\x12%\n" +
-	"\vspecificity\x18\b \x01(\x01H\x03R\vspecificity\x88\x01\x01B\x15\n" +
+	"\x06errors\x18\a \x03(\v2\x1f.topo_stream.v1.TopoStreamErrorR\x06errors\x12 \n" +
+	"\vspecificity\x18\b \x01(\x01R\vspecificityB\x15\n" +
 	"\x13_expiry_interval_msB\x11\n" +
 	"\x0f_snapshot_startB\x10\n" +
-	"\x0e_snapshot_stopB\x0e\n" +
-	"\f_specificity\"\xd3\x03\n" +
+	"\x0e_snapshot_stop\"\xbe\x03\n" +
 	" TopologyStreamRepeatElementsData\x12,\n" +
 	"\x12expiry_interval_ms\x18\x01 \x01(\x03R\x10expiryIntervalMs\x12G\n" +
 	"\n" +
@@ -769,9 +768,8 @@ const file_topo_stream_proto_rawDesc = "" +
 	"\trelations\x18\x03 \x03(\v2&.topo_stream.v1.TopologyStreamRelationR\trelations\x127\n" +
 	"\x06errors\x18\x04 \x03(\v2\x1f.topo_stream.v1.TopoStreamErrorR\x06errors\x12A\n" +
 	"\x1ddelete_component_external_ids\x18\x05 \x03(\tR\x1adeleteComponentExternalIds\x12?\n" +
-	"\x1cdelete_relation_external_ids\x18\x06 \x03(\tR\x19deleteRelationExternalIds\x12%\n" +
-	"\vspecificity\x18\a \x01(\x01H\x00R\vspecificity\x88\x01\x01B\x0e\n" +
-	"\f_specificity\"\xda\x03\n" +
+	"\x1cdelete_relation_external_ids\x18\x06 \x03(\tR\x19deleteRelationExternalIds\x12 \n" +
+	"\vspecificity\x18\a \x01(\x01R\vspecificity\"\xda\x03\n" +
 	"\x15TopologyStreamMessage\x121\n" +
 	"\x14collection_timestamp\x18\x01 \x01(\x03R\x13collectionTimestamp\x12/\n" +
 	"\x13submitted_timestamp\x18\x02 \x01(\x03R\x12submittedTimestamp\x12o\n" +
@@ -837,7 +835,6 @@ func file_topo_stream_proto_init() {
 	}
 	file_topo_stream_proto_msgTypes[0].OneofWrappers = []any{}
 	file_topo_stream_proto_msgTypes[4].OneofWrappers = []any{}
-	file_topo_stream_proto_msgTypes[5].OneofWrappers = []any{}
 	file_topo_stream_proto_msgTypes[6].OneofWrappers = []any{
 		(*TopologyStreamMessage_TopologyStreamSnapshotData)(nil),
 		(*TopologyStreamMessage_TopologyStreamRepeatElementsData)(nil),

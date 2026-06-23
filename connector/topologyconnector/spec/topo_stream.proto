@@ -118,7 +118,7 @@ message TopologyStreamSnapshotData {
   // Mapping-level specificity for components emitted in this batch.
   // Used by the sync service to pick the winning typeName / name during merge.
   // Higher = more specific. Missing/0.0 for legacy emissions and ext-topo sources.
-  optional double specificity = 8;
+  double specificity = 8;
 }
 
 
@@ -143,7 +143,7 @@ message TopologyStreamRepeatElementsData {
   repeated string delete_relation_external_ids = 6;
 
   // See doc on TopologyStreamSnapshotData.specificity.
-  optional double specificity = 7;
+  double specificity = 7;
 }
 
 

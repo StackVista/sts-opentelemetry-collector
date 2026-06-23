@@ -326,15 +326,17 @@ components:
         _type:
           type: string
           enum: [MetricProjection]
-        showChart:
-          type: boolean
-        decimalPlaces:
-          type: integer
-        unit:
-          type: string
         query:
           type: string
           description: "Individual metric query that returns a timeseries for a specific cell."
+        unit:
+          type: string
+        decimalPlaces:
+          type: integer
+        sparkline:
+          type: boolean
+        metricId:
+          type: string
       required:
         - _type
         - query
@@ -1077,7 +1079,7 @@ components:
         metrics:
           type: array
           items:
-            $ref: "#/components/schemas/OrderedComponentPresentationMetric"
+            $ref: "#/components/schemas/PresentationSummaryMetric"
 
     ComponentPresentationFilter:
       type: object
@@ -1243,14 +1245,31 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PresentationMetricQuery"
-        unit:
-          type: string
-        chartType:
-          $ref: "#/components/schemas/ChartType"
-        alias:
-          type: string
+        chart:
+          $ref: "#/components/schemas/Chart"
       required:
         - metricId
+
+    PresentationSummaryMetric:
+      type: object
+      properties:
+        summaryMetricId:
+          type: string
+        name:
+          type: string
+        order:
+          type: number
+          format: double
+        query:
+          type: string
+        unit:
+          type: string
+        decimalPlaces:
+          type: integer
+        metricId:
+          type: string
+      required:
+        - summaryMetricId
 
     PresentationMetricQuery:
       properties:
@@ -1260,18 +1279,140 @@ components:
           type: string
         componentIdentifierTemplate:
           type: string
-        primary:
-          type: boolean
       required:
         - expression
         - alias
 
-    ChartType:
+    Chart:
+      oneOf:
+        - $ref: "#/components/schemas/TimeSeriesChart"
+        - $ref: "#/components/schemas/GaugeChart"
+        - $ref: "#/components/schemas/BarChart"
+        - $ref: "#/components/schemas/StatChart"
+      discriminator:
+        propertyName: _type
+
+    TimeSeriesChart:
+      properties:
+        _type:
+          type: string
+          enum: ["TimeSeriesChart"]
+        unit:
+          type: string
+        decimals:
+          type: integer
+        min:
+          type: number
+          format: double
+        max:
+          type: number
+          format: double
+        connectNulls:
+          type: boolean
+        thresholds:
+          $ref: "#/components/schemas/ChartThresholds"
+      required:
+        - _type
+    BarChart:
+      properties:
+        _type:
+          type: string
+          enum: ["BarChart"]
+        unit:
+          type: string
+        decimals:
+          type: integer
+        min:
+          type: number
+          format: double
+        max:
+          type: number
+          format: double
+        thresholds:
+          $ref: "#/components/schemas/ChartThresholds"
+      required:
+        - _type
+    GaugeChart:
+      properties:
+        _type:
+          type: string
+          enum: ["GaugeChart"]
+        unit:
+          type: string
+        decimals:
+          type: integer
+        max:
+          type: number
+          format: double
+        calculation:
+          $ref: "#/components/schemas/ChartCalculation"
+        thresholds:
+          $ref: "#/components/schemas/ChartThresholds"
+      required:
+        - _type
+    StatChart:
+      properties:
+        _type:
+          type: string
+          enum: ["StatChart"]
+        unit:
+          type: string
+        decimals:
+          type: integer
+        sparkline:
+          type: boolean
+        calculation:
+          $ref: "#/components/schemas/ChartCalculation"
+        thresholds:
+          $ref: "#/components/schemas/ChartStatThresholds"
+      required:
+        - _type
+
+    ChartCalculation:
       type: string
       enum:
-        - line
-        - gauge
-        - stat
+        - "mean"
+        - "sum"
+        - "min"
+        - "max"
+        - "first"
+        - "first-number"
+        - "last"
+        - "last-number"
+
+    ChartThresholds:
+      properties:
+        mode:
+          type: string
+          enum: ["absolute", "percent"]
+        defaultColor:
+          type: string
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChartThresholdStep"
+      required:
+        - steps
+
+    ChartStatThresholds:
+      properties:
+        defaultColor:
+          type: string
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChartThresholdStep"
+      required:
+        - steps
+
+    ChartThresholdStep:
+      properties:
+        value:
+          type: number
+        color:
+          type: string
+      required:
+        - value
 
     PresentationMetricPerspective:
       type: object
