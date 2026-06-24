@@ -540,6 +540,18 @@ func TestMapping_MapRelation(t *testing.T) {
 		}),
 	}
 
+	// Same as spanEvalContext but with a span attribute carrying the dependency type, used to
+	// exercise resolving dependencyType from an expression.
+	relationEvalContext := &ExpressionEvalContext{
+		Span: NewSpan("name", "client", "ok", "", map[string]any{
+			"dependency.type": "CONNECTION",
+		}),
+		Scope: spanEvalContext.Scope,
+		Resource: NewResource(map[string]any{
+			"service.name": "billing",
+		}),
+	}
+
 	//nolint:govet
 	tests := []struct {
 		name        string
@@ -550,13 +562,12 @@ func TestMapping_MapRelation(t *testing.T) {
 		expectErr   []error
 	}{
 		{
-			name: "valid relation mapping",
+			name: "valid relation mapping with hierarchical dependency type",
 			mapping: &settingsproto.OtelRelationMapping{
 				Output: settingsproto.OtelRelationMappingOutput{
 					SourceId:       strExpr(`resource.attributes["service.name"]`),
 					TargetId:       strExpr(`'database'`),
-					TypeName:       strExpr("'query'"),
-					TypeIdentifier: ptr(strExpr("span.attributes.kind")),
+					DependencyType: strExpr("'HIERARCHICAL'"),
 				},
 			},
 			evalContext: spanEvalContext,
@@ -566,20 +577,39 @@ func TestMapping_MapRelation(t *testing.T) {
 				SourceIdentifier: "billing",
 				TargetIdentifier: "database",
 				Name:             "",
-				TypeName:         "query",
-				TypeIdentifier:   ptr("licence"),
+				DependencyType:   topostreamv1.TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_HIERARCHICAL,
 				Tags:             nil,
 			},
 			expectErr: nil,
 		},
 		{
-			name: "missing optional attribute is ok",
+			name: "dependency type resolved from an expression",
 			mapping: &settingsproto.OtelRelationMapping{
 				Output: settingsproto.OtelRelationMappingOutput{
 					SourceId:       strExpr(`resource.attributes["service.name"]`),
 					TargetId:       strExpr(`'database'`),
-					TypeName:       strExpr("'query'"),
-					TypeIdentifier: ptr(strExpr("span.attributes.blabla")),
+					DependencyType: strExpr(`span.attributes["dependency.type"]`),
+				},
+			},
+			evalContext: relationEvalContext,
+			vars:        map[string]any{},
+			want: &topostreamv1.TopologyStreamRelation{
+				ExternalId:       "billing-database",
+				SourceIdentifier: "billing",
+				TargetIdentifier: "database",
+				Name:             "",
+				DependencyType:   topostreamv1.TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_CONNECTION,
+				Tags:             nil,
+			},
+			expectErr: nil,
+		},
+		{
+			name: "unknown dependency type falls back to unspecified",
+			mapping: &settingsproto.OtelRelationMapping{
+				Output: settingsproto.OtelRelationMappingOutput{
+					SourceId:       strExpr(`resource.attributes["service.name"]`),
+					TargetId:       strExpr(`'database'`),
+					DependencyType: strExpr("'UNCLASSIFIED'"),
 				},
 			},
 			evalContext: spanEvalContext,
@@ -589,34 +619,32 @@ func TestMapping_MapRelation(t *testing.T) {
 				SourceIdentifier: "billing",
 				TargetIdentifier: "database",
 				Name:             "",
-				TypeName:         "query",
-				TypeIdentifier:   nil,
+				DependencyType:   topostreamv1.TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_UNSPECIFIED,
 				Tags:             nil,
 			},
 			expectErr: nil,
 		},
 		{
-			name: "invalid expression for optional field fails",
+			name: "invalid expression for dependency type fails",
 			mapping: &settingsproto.OtelRelationMapping{
 				Output: settingsproto.OtelRelationMappingOutput{
 					SourceId:       strExpr(`resource.attributes["service.name"]`),
 					TargetId:       strExpr(`'database'`),
-					TypeName:       strExpr("'query'"),
-					TypeIdentifier: ptr(strExpr("not here")),
+					DependencyType: strExpr("not here"),
 				},
 			},
 			evalContext: spanEvalContext,
 			vars:        map[string]any{},
 			want:        nil,
-			expectErr:   []error{errors.New("typeIdentifier: ERROR: <input>:1:5: Syntax error: extraneous input 'here' expecting <EOF>\n | not here\n | ....^")},
+			expectErr:   []error{errors.New("dependencyType: ERROR: <input>:1:5: Syntax error: extraneous input 'here' expecting <EOF>\n | not here\n | ....^")},
 		},
 		{
 			name: "missing mandatory attributes",
 			mapping: &settingsproto.OtelRelationMapping{
 				Output: settingsproto.OtelRelationMappingOutput{
-					SourceId: strExpr(`span.attributes["non-existing"]`),
-					TargetId: strExpr("'database'"),
-					TypeName: strExpr(`'query'`),
+					SourceId:       strExpr(`span.attributes["non-existing"]`),
+					TargetId:       strExpr("'database'"),
+					DependencyType: strExpr(`'HIERARCHICAL'`),
 				},
 			},
 			evalContext: spanEvalContext,

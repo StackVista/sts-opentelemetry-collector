@@ -128,8 +128,7 @@ func newOtelRelationMappingAsSetting(id string) stsSettingsModel.Setting {
 		Output: stsSettingsModel.OtelRelationMappingOutput{
 			SourceId:       *newOtelStringExpression("${input.attributes['host.name']}"),
 			TargetId:       *newOtelStringExpression("${input.attributes['service.name']}"),
-			TypeIdentifier: newOtelStringExpression("is-hosted-on"),
-			TypeName:       *newOtelStringExpression("urn:stackpack:common:relation-type:is-hosted-on"),
+			DependencyType: *newOtelStringExpression("HIERARCHICAL"),
 		},
 	}
 

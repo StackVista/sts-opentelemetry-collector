@@ -367,7 +367,7 @@ func TestConnectorConsumeTraces(t *testing.T) {
 		assert.Equal(t, "checkout-service-web-service", relation.ExternalId)
 		assert.Equal(t, "checkout-service", relation.SourceIdentifier)
 		assert.Equal(t, "web-service", relation.TargetIdentifier)
-		assert.Equal(t, "http-request", relation.TypeName)
+		assert.Equal(t, topostreamv1.TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_CONNECTION, relation.DependencyType)
 	})
 }
 
@@ -489,7 +489,7 @@ func TestConnectorConsumeMetrics(t *testing.T) {
 		assert.Equal(t, "checkout-service-web-service", relation.ExternalId)
 		assert.Equal(t, "checkout-service", relation.SourceIdentifier)
 		assert.Equal(t, "web-service", relation.TargetIdentifier)
-		assert.Equal(t, "http-request", relation.TypeName)
+		assert.Equal(t, topostreamv1.TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_CONNECTION, relation.DependencyType)
 	})
 }
 
@@ -730,9 +730,9 @@ func createSimpleTraceRelationMapping(id string) settingsproto.OtelRelationMappi
 			},
 		},
 		Output: settingsproto.OtelRelationMappingOutput{
-			SourceId: strExpr(`resource.attributes["service.name"]`),
-			TargetId: strExpr(`span.attributes["service.name"]`),
-			TypeName: strExpr("'http-request'"),
+			SourceId:       strExpr(`resource.attributes["service.name"]`),
+			TargetId:       strExpr(`span.attributes["service.name"]`),
+			DependencyType: strExpr("'CONNECTION'"),
 		},
 	}
 }
@@ -794,9 +794,9 @@ func createSimpleMetricRelationMapping(id string) settingsproto.OtelRelationMapp
 			},
 		},
 		Output: settingsproto.OtelRelationMappingOutput{
-			SourceId: strExpr(`resource.attributes["service.name"]`),
-			TargetId: strExpr(`datapoint.attributes["service.name"]`),
-			TypeName: strExpr("'http-request'"),
+			SourceId:       strExpr(`resource.attributes["service.name"]`),
+			TargetId:       strExpr(`datapoint.attributes["service.name"]`),
+			DependencyType: strExpr("'CONNECTION'"),
 		},
 	}
 }
@@ -882,9 +882,9 @@ func createSimpleLogRelationMapping() settingsproto.OtelRelationMapping {
 			},
 		},
 		Output: settingsproto.OtelRelationMappingOutput{
-			SourceId: strExpr(`urn:kubewarden:cluster/test:namespace/kubewarden:admissionpolicy/${log.attributes["k8s.resource.name"]}`),
-			TargetId: strExpr(`urn:kubewarden:cluster/test:policyserver/${log.attributes["kubewarden.policy_server"]}`),
-			TypeName: strExpr("enforced by"),
+			SourceId:       strExpr(`urn:kubewarden:cluster/test:namespace/kubewarden:admissionpolicy/${log.attributes["k8s.resource.name"]}`),
+			TargetId:       strExpr(`urn:kubewarden:cluster/test:policyserver/${log.attributes["kubewarden.policy_server"]}`),
+			DependencyType: strExpr("'CONNECTION'"),
 		},
 	}
 }

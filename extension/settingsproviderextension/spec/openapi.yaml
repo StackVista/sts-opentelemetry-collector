@@ -1299,14 +1299,12 @@ components:
           $ref: "#/components/schemas/OtelStringExpression"
         targetId:
           $ref: "#/components/schemas/OtelStringExpression"
-        typeName:
-          $ref: "#/components/schemas/OtelStringExpression"
-        typeIdentifier:
+        dependencyType:
           $ref: "#/components/schemas/OtelStringExpression"
       required:
         - sourceId
         - targetId
-        - typeName
+        - dependencyType
 
     OtelVariableMapping:
       type: object

@@ -182,8 +182,7 @@ func (p *DefaultExpressionRefManager) collectRefsForRelation(
 	// outputs
 	agg.walkString(p.evaluator, m.Output.SourceId)
 	agg.walkString(p.evaluator, m.Output.TargetId)
-	agg.walkString(p.evaluator, m.Output.TypeName)
-	agg.walkOptionalString(p.evaluator, m.Output.TypeIdentifier)
+	agg.walkString(p.evaluator, m.Output.DependencyType)
 
 	return agg.toSummary()
 }

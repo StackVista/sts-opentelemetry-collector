@@ -46,6 +46,11 @@ message TopologyStreamComponent {
   // Do we want the `version` field?
 }
 
+enum TopologyStreamRelationDependencyType {
+  TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_UNSPECIFIED = 0;
+  TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_HIERARCHICAL = 1;
+  TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_CONNECTION = 2;
+}
 
 // No direction for the relation requires. We set it as ONE_WAY as source -> target
 message TopologyStreamRelation {
@@ -63,12 +68,12 @@ message TopologyStreamRelation {
 
   string name = 4;
 
-  // Relation type name
-  string type_name = 5;
-  optional string type_identifier = 6;
+  // Relation type name is no longer in use, instead we allow dependencyType.
+  reserved 5, 6;
 
   repeated string tags = 7;
 
+  TopologyStreamRelationDependencyType dependency_type = 8;
 }
 
 
