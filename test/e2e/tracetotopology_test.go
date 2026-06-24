@@ -367,6 +367,7 @@ func otelComponentMappingSpec(otelInputResource settingsproto.OtelInputResource,
 		MappingIdentifier: "urn:comp-mapping-1",
 		Name:              "service mapping",
 		ExpireAfterMs:     60000,
+		Specificity:       1.0,
 		Input: settingsproto.OtelInput{
 			Signal: settingsproto.OtelInputSignalList{
 				settingsproto.TRACES,

@@ -270,6 +270,7 @@ func otelComponentMappingSpecForService() *harness.OtelComponentMappingSpec {
 		MappingIdentifier: "urn:metrics-service",
 		Name:              "service",
 		ExpireAfterMs:     60000,
+		Specificity:       1.0,
 		Input: settingsproto.OtelInput{
 			Signal: settingsproto.OtelInputSignalList{
 				settingsproto.METRICS,
@@ -293,6 +294,7 @@ func otelComponentMappingSpecForQueue() *harness.OtelComponentMappingSpec {
 		MappingIdentifier: "urn:metrics-queue",
 		Name:              "queue mapping",
 		ExpireAfterMs:     60000,
+		Specificity:       1.0,
 		Input: settingsproto.OtelInput{
 			Signal: settingsproto.OtelInputSignalList{
 				settingsproto.METRICS,

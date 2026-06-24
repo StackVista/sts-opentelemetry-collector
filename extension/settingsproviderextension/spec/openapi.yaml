@@ -1075,10 +1075,8 @@ components:
             expireAfterMs:
               type: integer
               format: int64
-            specificity:
-              type: number
-              format: double
-              description: 'Determines how much of a "specialization" this mapping is. Higher number means more specific. Used during component merge to pick the winning typeName / name when multiple mappings contribute to the same component identifier.'
+            rank:
+              $ref: "#/components/schemas/OtelComponentMappingRank"
           required:
             - type
             - name
@@ -1086,7 +1084,17 @@ components:
             - input
             - output
             - expireAfterMs
-            - specificity
+            - rank
+
+    OtelComponentMappingRank:
+      type: object
+      properties:
+        specificity:
+          type: number
+          format: double
+          description: 'Determines how much of a "specialization" this mapping is. Higher number means more specific. Used during component merge to pick the winning typeName / name when multiple mappings contribute to the same component identifier. Recommended ranges: 1–99 environment & infrastructure; 100–199 platform & orchestration (k8s, otel base); 200–299 application / service; 300–399 runtime / SDK / language; 400+ user overrides.'
+      required:
+        - specificity
 
     OtelRelationMapping:
       allOf:

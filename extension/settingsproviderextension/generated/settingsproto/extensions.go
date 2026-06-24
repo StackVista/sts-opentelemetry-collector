@@ -44,7 +44,7 @@ func (m OtelComponentMapping) GetExpireAfterMs() int64 {
 }
 
 func (m OtelComponentMapping) GetSpecificity() float64 {
-	return m.Specificity
+	return m.Rank.Specificity
 }
 
 func (m OtelComponentMapping) GetInputSignals() []OtelInputSignal {
