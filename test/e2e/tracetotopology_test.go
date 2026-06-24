@@ -96,8 +96,8 @@ func TestTraceToOtelTopology_UpdateComponentAndRelationMappings(t *testing.T) {
 		Target: "version",
 	})
 
-	// Relation: update name
-	relation.Output.TypeName = harness.StrExpr("'http-request-updated'")
+	// Relation: update dependency type
+	relation.Output.DependencyType = harness.StrExpr("'HIERARCHICAL'")
 
 	env.PublishSettingSnapshots(
 		t,
@@ -122,7 +122,7 @@ func TestTraceToOtelTopology_UpdateComponentAndRelationMappings(t *testing.T) {
 
 	assertRelations(t, relations)
 	for _, r := range relations {
-		require.Equal(t, "http-request-updated", r.TypeName, "expected updated relation mapping not found")
+		require.Equal(t, topostreamv1.TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_HIERARCHICAL, r.DependencyType, "expected updated relation mapping not found")
 	}
 }
 
@@ -419,9 +419,9 @@ func otelRelationMappingSpec() *harness.OtelRelationMappingSpec {
 			},
 		},
 		Output: settingsproto.OtelRelationMappingOutput{
-			SourceId: harness.StrExpr(`span.attributes["client.address"]`),
-			TargetId: harness.StrExpr(`span.attributes["server.address"]`),
-			TypeName: harness.StrExpr("'http-request'"),
+			SourceId:       harness.StrExpr(`span.attributes["client.address"]`),
+			TargetId:       harness.StrExpr(`span.attributes["server.address"]`),
+			DependencyType: harness.StrExpr("'CONNECTION'"),
 		},
 	}
 }

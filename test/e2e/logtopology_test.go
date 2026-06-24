@@ -85,8 +85,8 @@ func TestLogToOtelTopology_UpdateComponentAndRelationMappings(t *testing.T) {
 	// Component: update name
 	policyServerComponent.Output.Name = harness.StrExpr("'policy-server-updated'")
 
-	// Relation: update type name
-	policyRelation.Output.TypeName = harness.StrExpr("'enforced-by-updated'")
+	// Relation: update dependency type
+	policyRelation.Output.DependencyType = harness.StrExpr("'HIERARCHICAL'")
 
 	env.PublishSettingSnapshots(
 		t,
@@ -111,7 +111,7 @@ func TestLogToOtelTopology_UpdateComponentAndRelationMappings(t *testing.T) {
 
 	require.Len(t, relations, 2)
 	for _, r := range relations {
-		require.Equal(t, "enforced-by-updated", r.TypeName, "expected updated relation mapping not found")
+		require.Equal(t, topostreamv1.TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_HIERARCHICAL, r.DependencyType, "expected updated relation mapping not found")
 	}
 }
 
@@ -402,7 +402,7 @@ func assertLogRelations(t *testing.T, relations map[string]*topostreamv1.Topolog
 		for _, expected := range expectedRelations {
 			if r.SourceIdentifier == expected.Source && r.TargetIdentifier == expected.Target {
 				found = true
-				require.Equal(t, "enforced by", r.TypeName)
+				require.Equal(t, topostreamv1.TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_CONNECTION, r.DependencyType)
 				break
 			}
 		}
@@ -541,8 +541,8 @@ func otelLogRelationMappingSpecPolicyEnforcedByServer() *harness.OtelRelationMap
 			SourceId: harness.StrExpr(
 				`vars.policyKind == "ClusterAdmissionPolicy" ? "urn:kubewarden:cluster/" + vars.clusterName + ":clusteradmissionpolicy/" + vars.policyName : "urn:kubewarden:cluster/" + vars.clusterName + ":namespace/" + vars.namespace + ":admissionpolicy/" + vars.policyName`,
 			),
-			TargetId: harness.StrExpr(`'urn:kubewarden:cluster/' + vars.clusterName + ':policyserver/' + vars.serverName`),
-			TypeName: harness.StrExpr("'enforced by'"),
+			TargetId:       harness.StrExpr(`'urn:kubewarden:cluster/' + vars.clusterName + ':policyserver/' + vars.serverName`),
+			DependencyType: harness.StrExpr("'CONNECTION'"),
 		},
 	}
 }

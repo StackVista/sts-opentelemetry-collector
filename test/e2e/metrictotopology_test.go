@@ -105,8 +105,8 @@ func TestMetricToOtelTopology_UpdateComponentAndRelationMappings(t *testing.T) {
 		Target: "version",
 	})
 
-	// Relation: update type name
-	relation.Output.TypeName = harness.StrExpr("'calls-updated'")
+	// Relation: update dependency type
+	relation.Output.DependencyType = harness.StrExpr("'HIERARCHICAL'")
 
 	env.PublishSettingSnapshots(
 		t,
@@ -131,7 +131,7 @@ func TestMetricToOtelTopology_UpdateComponentAndRelationMappings(t *testing.T) {
 
 	require.Len(t, relations, 1)
 	for _, r := range relations {
-		require.Equal(t, "calls-updated", r.TypeName, "expected updated relation mapping not found")
+		require.Equal(t, topostreamv1.TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_HIERARCHICAL, r.DependencyType, "expected updated relation mapping not found")
 	}
 }
 
@@ -238,7 +238,7 @@ func assertMetricRelations(t *testing.T, relations map[string]*topostreamv1.Topo
 	require.True(t, ok)
 	require.Equal(t, "urn:service:billing-service", relation.SourceIdentifier)
 	require.Equal(t, "urn:service:payment-service", relation.TargetIdentifier)
-	require.Equal(t, "calls", relation.TypeName)
+	require.Equal(t, topostreamv1.TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_CONNECTION, relation.DependencyType)
 }
 
 func metricSpecWithRelation() *harness.MetricSpec {
@@ -337,9 +337,9 @@ func otelRelationMappingSpecForMetrics() *harness.OtelRelationMappingSpec {
 			},
 		},
 		Output: settingsproto.OtelRelationMappingOutput{
-			SourceId: harness.StrExpr(`"urn:service:" + datapoint.attributes["client.service"]`),
-			TargetId: harness.StrExpr(`"urn:service:" + datapoint.attributes["server.service"]`),
-			TypeName: harness.StrExpr("'calls'"),
+			SourceId:       harness.StrExpr(`"urn:service:" + datapoint.attributes["client.service"]`),
+			TargetId:       harness.StrExpr(`"urn:service:" + datapoint.attributes["server.service"]`),
+			DependencyType: harness.StrExpr("'CONNECTION'"),
 		},
 	}
 }

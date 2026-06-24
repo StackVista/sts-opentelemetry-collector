@@ -22,6 +22,55 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type TopologyStreamRelationDependencyType int32
+
+const (
+	TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_UNSPECIFIED  TopologyStreamRelationDependencyType = 0
+	TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_HIERARCHICAL TopologyStreamRelationDependencyType = 1
+	TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_CONNECTION   TopologyStreamRelationDependencyType = 2
+)
+
+// Enum value maps for TopologyStreamRelationDependencyType.
+var (
+	TopologyStreamRelationDependencyType_name = map[int32]string{
+		0: "TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_UNSPECIFIED",
+		1: "TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_HIERARCHICAL",
+		2: "TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_CONNECTION",
+	}
+	TopologyStreamRelationDependencyType_value = map[string]int32{
+		"TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_UNSPECIFIED":  0,
+		"TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_HIERARCHICAL": 1,
+		"TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_CONNECTION":   2,
+	}
+)
+
+func (x TopologyStreamRelationDependencyType) Enum() *TopologyStreamRelationDependencyType {
+	p := new(TopologyStreamRelationDependencyType)
+	*p = x
+	return p
+}
+
+func (x TopologyStreamRelationDependencyType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TopologyStreamRelationDependencyType) Descriptor() protoreflect.EnumDescriptor {
+	return file_topo_stream_proto_enumTypes[0].Descriptor()
+}
+
+func (TopologyStreamRelationDependencyType) Type() protoreflect.EnumType {
+	return &file_topo_stream_proto_enumTypes[0]
+}
+
+func (x TopologyStreamRelationDependencyType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TopologyStreamRelationDependencyType.Descriptor instead.
+func (TopologyStreamRelationDependencyType) EnumDescriptor() ([]byte, []int) {
+	return file_topo_stream_proto_rawDescGZIP(), []int{0}
+}
+
 type TopologyStreamComponent struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	ExternalId string                 `protobuf:"bytes,1,opt,name=external_id,json=externalId,proto3" json:"external_id,omitempty"`
@@ -140,14 +189,12 @@ type TopologyStreamRelation struct {
 	// Global unique identifier of a source component.
 	SourceIdentifier string `protobuf:"bytes,2,opt,name=source_identifier,json=sourceIdentifier,proto3" json:"source_identifier,omitempty"` // E.g. datasource:externalId ...
 	// Global unique identifier of a target component.
-	TargetIdentifier string `protobuf:"bytes,3,opt,name=target_identifier,json=targetIdentifier,proto3" json:"target_identifier,omitempty"` // E.g. datasource:externalId ...
-	Name             string `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
-	// Relation type name
-	TypeName       string   `protobuf:"bytes,5,opt,name=type_name,json=typeName,proto3" json:"type_name,omitempty"`
-	TypeIdentifier *string  `protobuf:"bytes,6,opt,name=type_identifier,json=typeIdentifier,proto3,oneof" json:"type_identifier,omitempty"`
-	Tags           []string `protobuf:"bytes,7,rep,name=tags,proto3" json:"tags,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	TargetIdentifier string                               `protobuf:"bytes,3,opt,name=target_identifier,json=targetIdentifier,proto3" json:"target_identifier,omitempty"` // E.g. datasource:externalId ...
+	Name             string                               `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
+	Tags             []string                             `protobuf:"bytes,7,rep,name=tags,proto3" json:"tags,omitempty"`
+	DependencyType   TopologyStreamRelationDependencyType `protobuf:"varint,8,opt,name=dependency_type,json=dependencyType,proto3,enum=topo_stream.v1.TopologyStreamRelationDependencyType" json:"dependency_type,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *TopologyStreamRelation) Reset() {
@@ -208,25 +255,18 @@ func (x *TopologyStreamRelation) GetName() string {
 	return ""
 }
 
-func (x *TopologyStreamRelation) GetTypeName() string {
-	if x != nil {
-		return x.TypeName
-	}
-	return ""
-}
-
-func (x *TopologyStreamRelation) GetTypeIdentifier() string {
-	if x != nil && x.TypeIdentifier != nil {
-		return *x.TypeIdentifier
-	}
-	return ""
-}
-
 func (x *TopologyStreamRelation) GetTags() []string {
 	if x != nil {
 		return x.Tags
 	}
 	return nil
+}
+
+func (x *TopologyStreamRelation) GetDependencyType() TopologyStreamRelationDependencyType {
+	if x != nil {
+		return x.DependencyType
+	}
+	return TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_UNSPECIFIED
 }
 
 // *
@@ -671,17 +711,15 @@ const file_topo_stream_proto_rawDesc = "" +
 	"\x04tags\x18\f \x03(\tR\x04tagsB\x12\n" +
 	"\x10_type_identifierJ\x04\b\x06\x10\aJ\x04\b\a\x10\bJ\x04\b\b\x10\tJ\x04\b\t\x10\n" +
 	"R\n" +
-	"layer_nameR\x10layer_identifierR\vdomain_nameR\x11domain_identifier\"\x9a\x02\n" +
+	"layer_nameR\x10layer_identifierR\vdomain_nameR\x11domain_identifier\"\xa6\x02\n" +
 	"\x16TopologyStreamRelation\x12\x1f\n" +
 	"\vexternal_id\x18\x01 \x01(\tR\n" +
 	"externalId\x12+\n" +
 	"\x11source_identifier\x18\x02 \x01(\tR\x10sourceIdentifier\x12+\n" +
 	"\x11target_identifier\x18\x03 \x01(\tR\x10targetIdentifier\x12\x12\n" +
-	"\x04name\x18\x04 \x01(\tR\x04name\x12\x1b\n" +
-	"\ttype_name\x18\x05 \x01(\tR\btypeName\x12,\n" +
-	"\x0ftype_identifier\x18\x06 \x01(\tH\x00R\x0etypeIdentifier\x88\x01\x01\x12\x12\n" +
-	"\x04tags\x18\a \x03(\tR\x04tagsB\x12\n" +
-	"\x10_type_identifier\";\n" +
+	"\x04name\x18\x04 \x01(\tR\x04name\x12\x12\n" +
+	"\x04tags\x18\a \x03(\tR\x04tags\x12]\n" +
+	"\x0fdependency_type\x18\b \x01(\x0e24.topo_stream.v1.TopologyStreamRelationDependencyTypeR\x0edependencyTypeJ\x04\b\x05\x10\x06J\x04\b\x06\x10\a\";\n" +
 	"\x14TopologyStreamRemove\x12#\n" +
 	"\rremoval_cause\x18\x01 \x01(\tR\fremovalCause\"b\n" +
 	"\x0fTopoStreamError\x12\x1a\n" +
@@ -716,7 +754,11 @@ const file_topo_stream_proto_rawDesc = "" +
 	"\x1dtopology_stream_snapshot_data\x18\x03 \x01(\v2*.topo_stream.v1.TopologyStreamSnapshotDataH\x00R\x1atopologyStreamSnapshotData\x12\x82\x01\n" +
 	"$topology_stream_repeat_elements_data\x18\x04 \x01(\v20.topo_stream.v1.TopologyStreamRepeatElementsDataH\x00R topologyStreamRepeatElementsData\x12\\\n" +
 	"\x16topology_stream_remove\x18\x05 \x01(\v2$.topo_stream.v1.TopologyStreamRemoveH\x00R\x14topologyStreamRemoveB\t\n" +
-	"\apayloadB4\n" +
+	"\apayload*\xd4\x01\n" +
+	"$TopologyStreamRelationDependencyType\x128\n" +
+	"4TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_UNSPECIFIED\x10\x00\x129\n" +
+	"5TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_HIERARCHICAL\x10\x01\x127\n" +
+	"3TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_CONNECTION\x10\x02B4\n" +
 	"\"com.stackstate.topoStream.protocolZ\x0etopo_stream.v1b\x06proto3"
 
 var (
@@ -731,34 +773,37 @@ func file_topo_stream_proto_rawDescGZIP() []byte {
 	return file_topo_stream_proto_rawDescData
 }
 
+var file_topo_stream_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_topo_stream_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_topo_stream_proto_goTypes = []any{
-	(*TopologyStreamComponent)(nil),          // 0: topo_stream.v1.TopologyStreamComponent
-	(*TopologyStreamRelation)(nil),           // 1: topo_stream.v1.TopologyStreamRelation
-	(*TopologyStreamRemove)(nil),             // 2: topo_stream.v1.TopologyStreamRemove
-	(*TopoStreamError)(nil),                  // 3: topo_stream.v1.TopoStreamError
-	(*TopologyStreamSnapshotData)(nil),       // 4: topo_stream.v1.TopologyStreamSnapshotData
-	(*TopologyStreamRepeatElementsData)(nil), // 5: topo_stream.v1.TopologyStreamRepeatElementsData
-	(*TopologyStreamMessage)(nil),            // 6: topo_stream.v1.TopologyStreamMessage
-	(*structpb.Struct)(nil),                  // 7: google.protobuf.Struct
+	(TopologyStreamRelationDependencyType)(0), // 0: topo_stream.v1.TopologyStreamRelationDependencyType
+	(*TopologyStreamComponent)(nil),           // 1: topo_stream.v1.TopologyStreamComponent
+	(*TopologyStreamRelation)(nil),            // 2: topo_stream.v1.TopologyStreamRelation
+	(*TopologyStreamRemove)(nil),              // 3: topo_stream.v1.TopologyStreamRemove
+	(*TopoStreamError)(nil),                   // 4: topo_stream.v1.TopoStreamError
+	(*TopologyStreamSnapshotData)(nil),        // 5: topo_stream.v1.TopologyStreamSnapshotData
+	(*TopologyStreamRepeatElementsData)(nil),  // 6: topo_stream.v1.TopologyStreamRepeatElementsData
+	(*TopologyStreamMessage)(nil),             // 7: topo_stream.v1.TopologyStreamMessage
+	(*structpb.Struct)(nil),                   // 8: google.protobuf.Struct
 }
 var file_topo_stream_proto_depIdxs = []int32{
-	7,  // 0: topo_stream.v1.TopologyStreamComponent.resource_definition:type_name -> google.protobuf.Struct
-	7,  // 1: topo_stream.v1.TopologyStreamComponent.status_data:type_name -> google.protobuf.Struct
-	0,  // 2: topo_stream.v1.TopologyStreamSnapshotData.components:type_name -> topo_stream.v1.TopologyStreamComponent
-	1,  // 3: topo_stream.v1.TopologyStreamSnapshotData.relations:type_name -> topo_stream.v1.TopologyStreamRelation
-	3,  // 4: topo_stream.v1.TopologyStreamSnapshotData.errors:type_name -> topo_stream.v1.TopoStreamError
-	0,  // 5: topo_stream.v1.TopologyStreamRepeatElementsData.components:type_name -> topo_stream.v1.TopologyStreamComponent
-	1,  // 6: topo_stream.v1.TopologyStreamRepeatElementsData.relations:type_name -> topo_stream.v1.TopologyStreamRelation
-	3,  // 7: topo_stream.v1.TopologyStreamRepeatElementsData.errors:type_name -> topo_stream.v1.TopoStreamError
-	4,  // 8: topo_stream.v1.TopologyStreamMessage.topology_stream_snapshot_data:type_name -> topo_stream.v1.TopologyStreamSnapshotData
-	5,  // 9: topo_stream.v1.TopologyStreamMessage.topology_stream_repeat_elements_data:type_name -> topo_stream.v1.TopologyStreamRepeatElementsData
-	2,  // 10: topo_stream.v1.TopologyStreamMessage.topology_stream_remove:type_name -> topo_stream.v1.TopologyStreamRemove
-	11, // [11:11] is the sub-list for method output_type
-	11, // [11:11] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	8,  // 0: topo_stream.v1.TopologyStreamComponent.resource_definition:type_name -> google.protobuf.Struct
+	8,  // 1: topo_stream.v1.TopologyStreamComponent.status_data:type_name -> google.protobuf.Struct
+	0,  // 2: topo_stream.v1.TopologyStreamRelation.dependency_type:type_name -> topo_stream.v1.TopologyStreamRelationDependencyType
+	1,  // 3: topo_stream.v1.TopologyStreamSnapshotData.components:type_name -> topo_stream.v1.TopologyStreamComponent
+	2,  // 4: topo_stream.v1.TopologyStreamSnapshotData.relations:type_name -> topo_stream.v1.TopologyStreamRelation
+	4,  // 5: topo_stream.v1.TopologyStreamSnapshotData.errors:type_name -> topo_stream.v1.TopoStreamError
+	1,  // 6: topo_stream.v1.TopologyStreamRepeatElementsData.components:type_name -> topo_stream.v1.TopologyStreamComponent
+	2,  // 7: topo_stream.v1.TopologyStreamRepeatElementsData.relations:type_name -> topo_stream.v1.TopologyStreamRelation
+	4,  // 8: topo_stream.v1.TopologyStreamRepeatElementsData.errors:type_name -> topo_stream.v1.TopoStreamError
+	5,  // 9: topo_stream.v1.TopologyStreamMessage.topology_stream_snapshot_data:type_name -> topo_stream.v1.TopologyStreamSnapshotData
+	6,  // 10: topo_stream.v1.TopologyStreamMessage.topology_stream_repeat_elements_data:type_name -> topo_stream.v1.TopologyStreamRepeatElementsData
+	3,  // 11: topo_stream.v1.TopologyStreamMessage.topology_stream_remove:type_name -> topo_stream.v1.TopologyStreamRemove
+	12, // [12:12] is the sub-list for method output_type
+	12, // [12:12] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_topo_stream_proto_init() }
@@ -767,7 +812,6 @@ func file_topo_stream_proto_init() {
 		return
 	}
 	file_topo_stream_proto_msgTypes[0].OneofWrappers = []any{}
-	file_topo_stream_proto_msgTypes[1].OneofWrappers = []any{}
 	file_topo_stream_proto_msgTypes[4].OneofWrappers = []any{}
 	file_topo_stream_proto_msgTypes[6].OneofWrappers = []any{
 		(*TopologyStreamMessage_TopologyStreamSnapshotData)(nil),
@@ -779,13 +823,14 @@ func file_topo_stream_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_topo_stream_proto_rawDesc), len(file_topo_stream_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_topo_stream_proto_goTypes,
 		DependencyIndexes: file_topo_stream_proto_depIdxs,
+		EnumInfos:         file_topo_stream_proto_enumTypes,
 		MessageInfos:      file_topo_stream_proto_msgTypes,
 	}.Build()
 	File_topo_stream_proto = out.File

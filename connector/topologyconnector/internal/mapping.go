@@ -259,11 +259,6 @@ func (me *Mapper) MapRelation(
 		errors = joinError(errors, err, field, false)
 		return val
 	}
-	evalOptStr := func(expr *settingsproto.OtelStringExpression, field string) *string {
-		val, err := expressionEvaluator.EvalOptionalStringExpression(expr, expressionEvalCtx)
-		errors = joinError(errors, err, field, true)
-		return val
-	}
 
 	sourceID := evalStr(mapping.Output.SourceId, "sourceId")
 	targetID := evalStr(mapping.Output.TargetId, "targetId")
@@ -272,8 +267,7 @@ func (me *Mapper) MapRelation(
 		SourceIdentifier: sourceID,
 		TargetIdentifier: targetID,
 		Name:             "", // TODO the name should be nil
-		TypeName:         evalStr(mapping.Output.TypeName, "typeName"),
-		TypeIdentifier:   evalOptStr(mapping.Output.TypeIdentifier, "typeIdentifier"),
+		DependencyType:   toDependencyType(evalStr(mapping.Output.DependencyType, "dependencyType")),
 		Tags:             nil,
 	}
 
@@ -281,6 +275,20 @@ func (me *Mapper) MapRelation(
 		return nil, errors
 	}
 	return &result, nil
+}
+
+// toDependencyType maps the (CEL-produced) dependency type value from a relation mapping to the
+// topology stream enum. Mappings emit the short name (e.g. "HIERARCHICAL"); "UNCLASSIFIED", empty
+// and any unknown value collapse to UNSPECIFIED.
+func toDependencyType(v string) topostreamv1.TopologyStreamRelationDependencyType {
+	switch strings.ToUpper(strings.TrimSpace(v)) {
+	case "HIERARCHICAL":
+		return topostreamv1.TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_HIERARCHICAL
+	case "CONNECTION":
+		return topostreamv1.TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_CONNECTION
+	default:
+		return topostreamv1.TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_UNSPECIFIED
+	}
 }
 
 // toStructValue converts a value (typically map[string]interface{}) to a protobuf Struct.
