@@ -193,6 +193,11 @@ const (
 	TagFilterTypeTagFilter TagFilterType = "TagFilter"
 )
 
+// Defines values for TagProjectionType.
+const (
+	TagProjectionTypeTagProjection TagProjectionType = "TagProjection"
+)
+
 // Defines values for TagSourceType.
 const (
 	TagSourceTypeTagSource TagSourceType = "TagSource"
@@ -649,8 +654,7 @@ type LastUpdatedTimestampSourceType string
 
 // MapProjection defines model for MapProjection.
 type MapProjection struct {
-	Type   MapProjectionType `json:"_type"`
-	AsTags *bool             `json:"asTags,omitempty"`
+	Type MapProjectionType `json:"_type"`
 
 	// Value Cel expression that returns a map<string,dyn>
 	Value string `json:"value"`
@@ -982,6 +986,14 @@ type TagFilter struct {
 
 // TagFilterType defines model for TagFilter.Type.
 type TagFilterType string
+
+// TagProjection defines model for TagProjection.
+type TagProjection struct {
+	Type TagProjectionType `json:"_type"`
+}
+
+// TagProjectionType defines model for TagProjection.Type.
+type TagProjectionType string
 
 // TagSource defines model for TagSource.
 type TagSource struct {
@@ -1663,6 +1675,34 @@ func (t *ComponentHighlightProjection) MergeMapProjection(v MapProjection) error
 	return err
 }
 
+// AsTagProjection returns the union data inside the ComponentHighlightProjection as a TagProjection
+func (t ComponentHighlightProjection) AsTagProjection() (TagProjection, error) {
+	var body TagProjection
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTagProjection overwrites any union data inside the ComponentHighlightProjection as the provided TagProjection
+func (t *ComponentHighlightProjection) FromTagProjection(v TagProjection) error {
+	v.Type = "TagProjection"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTagProjection performs a merge with any union data inside the ComponentHighlightProjection, using the provided TagProjection
+func (t *ComponentHighlightProjection) MergeTagProjection(v TagProjection) error {
+	v.Type = "TagProjection"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t ComponentHighlightProjection) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"_type"`
@@ -1693,6 +1733,8 @@ func (t ComponentHighlightProjection) ValueByDiscriminator() (interface{}, error
 		return t.AsNumericProjection()
 	case "RatioProjection":
 		return t.AsRatioProjection()
+	case "TagProjection":
+		return t.AsTagProjection()
 	case "TextProjection":
 		return t.AsTextProjection()
 	default:

@@ -277,6 +277,7 @@ components:
         - $ref: '#/components/schemas/RatioProjection'
         - $ref: '#/components/schemas/ContainerImageProjection'
         - $ref: '#/components/schemas/MapProjection'
+        - $ref: '#/components/schemas/TagProjection'
       description: 'Display type and value for the field.'
 
     ComponentOverviewProjection:
@@ -314,12 +315,17 @@ components:
         value:
           type: string
           description: 'Cel expression that returns a map<string,dyn>'
-        asTags:
-          type: boolean
-          default: true
       required:
         - _type
         - value
+    TagProjection:
+      type: object
+      properties:
+        _type:
+          type: string
+          enum: [TagProjection]
+      required:
+        - _type
     MetricProjection:
       type: object
       properties:
