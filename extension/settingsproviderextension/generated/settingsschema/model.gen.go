@@ -11,11 +11,27 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
-// Defines values for ChartType.
+// Defines values for BarChartType.
 const (
-	Gauge ChartType = "gauge"
-	Line  ChartType = "line"
-	Stat  ChartType = "stat"
+	BarChartTypeBarChart BarChartType = "BarChart"
+)
+
+// Defines values for ChartCalculation.
+const (
+	First       ChartCalculation = "first"
+	FirstNumber ChartCalculation = "first-number"
+	Last        ChartCalculation = "last"
+	LastNumber  ChartCalculation = "last-number"
+	Max         ChartCalculation = "max"
+	Mean        ChartCalculation = "mean"
+	Min         ChartCalculation = "min"
+	Sum         ChartCalculation = "sum"
+)
+
+// Defines values for ChartThresholdsMode.
+const (
+	Absolute ChartThresholdsMode = "absolute"
+	Percent  ChartThresholdsMode = "percent"
 )
 
 // Defines values for ComponentLinkDisplayType.
@@ -63,6 +79,11 @@ const (
 // Defines values for DurationProjectionType.
 const (
 	DurationProjectionTypeDurationProjection DurationProjectionType = "DurationProjection"
+)
+
+// Defines values for GaugeChartType.
+const (
+	GaugeChartTypeGaugeChart GaugeChartType = "GaugeChart"
 )
 
 // Defines values for HealthBadgeDisplayType.
@@ -157,6 +178,11 @@ const (
 	ReadyStatusDisplayTypeRatioDisplay ReadyStatusDisplayType = "RatioDisplay"
 )
 
+// Defines values for StatChartType.
+const (
+	StatChartTypeStatChart StatChartType = "StatChart"
+)
+
 // Defines values for TagDisplayType.
 const (
 	TagDisplayTypeTagDisplay TagDisplayType = "TagDisplay"
@@ -165,6 +191,11 @@ const (
 // Defines values for TagFilterType.
 const (
 	TagFilterTypeTagFilter TagFilterType = "TagFilter"
+)
+
+// Defines values for TagProjectionType.
+const (
+	TagProjectionTypeTagProjection TagProjectionType = "TagProjection"
 )
 
 // Defines values for TagSourceType.
@@ -185,6 +216,11 @@ const (
 // Defines values for TextProjectionType.
 const (
 	TextProjectionTypeTextProjection TextProjectionType = "TextProjection"
+)
+
+// Defines values for TimeSeriesChartType.
+const (
+	TimeSeriesChartTypeTimeSeriesChart TimeSeriesChartType = "TimeSeriesChart"
 )
 
 // Defines values for TopologyFilterValue.
@@ -275,8 +311,48 @@ const (
 	ViewTypeTableColTimeTypeViewTypeTableColTime ViewTypeTableColTimeType = "ViewTypeTableColTime"
 )
 
-// ChartType defines model for ChartType.
-type ChartType string
+// BarChart defines model for BarChart.
+type BarChart struct {
+	Type       BarChartType     `json:"_type"`
+	Decimals   *int             `json:"decimals,omitempty"`
+	Max        *float64         `json:"max,omitempty"`
+	Min        *float64         `json:"min,omitempty"`
+	Thresholds *ChartThresholds `json:"thresholds,omitempty"`
+	Unit       *string          `json:"unit,omitempty"`
+}
+
+// BarChartType defines model for BarChart.Type.
+type BarChartType string
+
+// Chart defines model for Chart.
+type Chart struct {
+	union json.RawMessage
+}
+
+// ChartCalculation defines model for ChartCalculation.
+type ChartCalculation string
+
+// ChartStatThresholds defines model for ChartStatThresholds.
+type ChartStatThresholds struct {
+	DefaultColor *string              `json:"defaultColor,omitempty"`
+	Steps        []ChartThresholdStep `json:"steps"`
+}
+
+// ChartThresholdStep defines model for ChartThresholdStep.
+type ChartThresholdStep struct {
+	Color *string `json:"color,omitempty"`
+	Value float32 `json:"value"`
+}
+
+// ChartThresholds defines model for ChartThresholds.
+type ChartThresholds struct {
+	DefaultColor *string              `json:"defaultColor,omitempty"`
+	Mode         *ChartThresholdsMode `json:"mode,omitempty"`
+	Steps        []ChartThresholdStep `json:"steps"`
+}
+
+// ChartThresholdsMode defines model for ChartThresholds.Mode.
+type ChartThresholdsMode string
 
 // ComponentHighlightMetrics defines model for ComponentHighlightMetrics.
 type ComponentHighlightMetrics struct {
@@ -345,13 +421,11 @@ type ComponentPresentationFilterDefinition struct {
 
 // ComponentPresentationMetric defines model for ComponentPresentationMetric.
 type ComponentPresentationMetric struct {
-	Alias         *string                    `json:"alias,omitempty"`
-	ChartType     *ChartType                 `json:"chartType,omitempty"`
+	Chart         *Chart                     `json:"chart,omitempty"`
 	Description   *string                    `json:"description,omitempty"`
 	MetricId      string                     `json:"metricId"`
 	MetricQueries *[]PresentationMetricQuery `json:"metricQueries,omitempty"`
 	Name          *string                    `json:"name,omitempty"`
-	Unit          *string                    `json:"unit,omitempty"`
 }
 
 // ComponentPresentationMetrics defines model for ComponentPresentationMetrics.
@@ -504,6 +578,19 @@ type FilterName struct {
 	Singular string `json:"singular"`
 }
 
+// GaugeChart defines model for GaugeChart.
+type GaugeChart struct {
+	Type        GaugeChartType    `json:"_type"`
+	Calculation *ChartCalculation `json:"calculation,omitempty"`
+	Decimals    *int              `json:"decimals,omitempty"`
+	Max         *float64          `json:"max,omitempty"`
+	Thresholds  *ChartThresholds  `json:"thresholds,omitempty"`
+	Unit        *string           `json:"unit,omitempty"`
+}
+
+// GaugeChartType defines model for GaugeChart.Type.
+type GaugeChartType string
+
 // HealthBadgeDisplay defines model for HealthBadgeDisplay.
 type HealthBadgeDisplay struct {
 	Type HealthBadgeDisplayType `json:"_type"`
@@ -567,8 +654,7 @@ type LastUpdatedTimestampSourceType string
 
 // MapProjection defines model for MapProjection.
 type MapProjection struct {
-	Type   MapProjectionType `json:"_type"`
-	AsTags *bool             `json:"asTags,omitempty"`
+	Type MapProjectionType `json:"_type"`
 
 	// Value Cel expression that returns a map<string,dyn>
 	Value string `json:"value"`
@@ -581,10 +667,11 @@ type MapProjectionType string
 type MetricProjection struct {
 	Type          MetricProjectionType `json:"_type"`
 	DecimalPlaces *int                 `json:"decimalPlaces,omitempty"`
+	MetricId      *string              `json:"metricId,omitempty"`
 
 	// Query Individual metric query that returns a timeseries for a specific cell.
 	Query     string  `json:"query"`
-	ShowChart *bool   `json:"showChart,omitempty"`
+	Sparkline *bool   `json:"sparkline,omitempty"`
 	Unit      *string `json:"unit,omitempty"`
 }
 
@@ -614,14 +701,12 @@ type NumericProjectionType string
 
 // OrderedComponentPresentationMetric defines model for OrderedComponentPresentationMetric.
 type OrderedComponentPresentationMetric struct {
-	Alias         *string                    `json:"alias,omitempty"`
-	ChartType     *ChartType                 `json:"chartType,omitempty"`
+	Chart         *Chart                     `json:"chart,omitempty"`
 	Description   *string                    `json:"description,omitempty"`
 	MetricId      string                     `json:"metricId"`
 	MetricQueries *[]PresentationMetricQuery `json:"metricQueries,omitempty"`
 	Name          *string                    `json:"name,omitempty"`
 	Order         *float64                   `json:"order,omitempty"`
-	Unit          *string                    `json:"unit,omitempty"`
 }
 
 // OverviewColumnDefinition Definition of a column in the overview presentation. The `columnId` field is used to identify the column and merge columns from different presentations. If only the `columnId` is provided, the column will be rendered from the next more specific presentation definition.
@@ -744,7 +829,6 @@ type PresentationMetricQuery struct {
 	Alias                       string  `json:"alias"`
 	ComponentIdentifierTemplate *string `json:"componentIdentifierTemplate,omitempty"`
 	Expression                  string  `json:"expression"`
-	Primary                     *bool   `json:"primary,omitempty"`
 }
 
 // PresentationName defines model for PresentationName.
@@ -802,7 +886,18 @@ type PresentationRelatedResource struct {
 
 // PresentationSummary defines model for PresentationSummary.
 type PresentationSummary struct {
-	Metrics *[]OrderedComponentPresentationMetric `json:"metrics,omitempty"`
+	Metrics *[]PresentationSummaryMetric `json:"metrics,omitempty"`
+}
+
+// PresentationSummaryMetric defines model for PresentationSummaryMetric.
+type PresentationSummaryMetric struct {
+	DecimalPlaces   *int     `json:"decimalPlaces,omitempty"`
+	MetricId        *string  `json:"metricId,omitempty"`
+	Name            *string  `json:"name,omitempty"`
+	Order           *float64 `json:"order,omitempty"`
+	Query           *string  `json:"query,omitempty"`
+	SummaryMetricId string   `json:"summaryMetricId"`
+	Unit            *string  `json:"unit,omitempty"`
 }
 
 // PromqlDisplay defines model for PromqlDisplay.
@@ -859,6 +954,19 @@ type ReadyStatusDisplay struct {
 // ReadyStatusDisplayType defines model for ReadyStatusDisplay.Type.
 type ReadyStatusDisplayType string
 
+// StatChart defines model for StatChart.
+type StatChart struct {
+	Type        StatChartType        `json:"_type"`
+	Calculation *ChartCalculation    `json:"calculation,omitempty"`
+	Decimals    *int                 `json:"decimals,omitempty"`
+	Sparkline   *bool                `json:"sparkline,omitempty"`
+	Thresholds  *ChartStatThresholds `json:"thresholds,omitempty"`
+	Unit        *string              `json:"unit,omitempty"`
+}
+
+// StatChartType defines model for StatChart.Type.
+type StatChartType string
+
 // TagDisplay defines model for TagDisplay.
 type TagDisplay struct {
 	Type     TagDisplayType `json:"_type"`
@@ -878,6 +986,14 @@ type TagFilter struct {
 
 // TagFilterType defines model for TagFilter.Type.
 type TagFilterType string
+
+// TagProjection defines model for TagProjection.
+type TagProjection struct {
+	Type TagProjectionType `json:"_type"`
+}
+
+// TagProjectionType defines model for TagProjection.Type.
+type TagProjectionType string
 
 // TagSource defines model for TagSource.
 type TagSource struct {
@@ -917,6 +1033,20 @@ type TextProjection struct {
 
 // TextProjectionType defines model for TextProjection.Type.
 type TextProjectionType string
+
+// TimeSeriesChart defines model for TimeSeriesChart.
+type TimeSeriesChart struct {
+	Type         TimeSeriesChartType `json:"_type"`
+	ConnectNulls *bool               `json:"connectNulls,omitempty"`
+	Decimals     *int                `json:"decimals,omitempty"`
+	Max          *float64            `json:"max,omitempty"`
+	Min          *float64            `json:"min,omitempty"`
+	Thresholds   *ChartThresholds    `json:"thresholds,omitempty"`
+	Unit         *string             `json:"unit,omitempty"`
+}
+
+// TimeSeriesChartType defines model for TimeSeriesChart.Type.
+type TimeSeriesChartType string
 
 // TopologyDomain Domain assigned to components matched by this presentation, used to bucket and order them in the topology view.
 // At presentation time, the domain of the most-specific matching presentation wins.
@@ -1143,6 +1273,155 @@ type ViewTypeTableColTime struct {
 
 // ViewTypeTableColTimeType defines model for ViewTypeTableColTime.Type.
 type ViewTypeTableColTimeType string
+
+// AsTimeSeriesChart returns the union data inside the Chart as a TimeSeriesChart
+func (t Chart) AsTimeSeriesChart() (TimeSeriesChart, error) {
+	var body TimeSeriesChart
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTimeSeriesChart overwrites any union data inside the Chart as the provided TimeSeriesChart
+func (t *Chart) FromTimeSeriesChart(v TimeSeriesChart) error {
+	v.Type = "TimeSeriesChart"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTimeSeriesChart performs a merge with any union data inside the Chart, using the provided TimeSeriesChart
+func (t *Chart) MergeTimeSeriesChart(v TimeSeriesChart) error {
+	v.Type = "TimeSeriesChart"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsGaugeChart returns the union data inside the Chart as a GaugeChart
+func (t Chart) AsGaugeChart() (GaugeChart, error) {
+	var body GaugeChart
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGaugeChart overwrites any union data inside the Chart as the provided GaugeChart
+func (t *Chart) FromGaugeChart(v GaugeChart) error {
+	v.Type = "GaugeChart"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeGaugeChart performs a merge with any union data inside the Chart, using the provided GaugeChart
+func (t *Chart) MergeGaugeChart(v GaugeChart) error {
+	v.Type = "GaugeChart"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsBarChart returns the union data inside the Chart as a BarChart
+func (t Chart) AsBarChart() (BarChart, error) {
+	var body BarChart
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromBarChart overwrites any union data inside the Chart as the provided BarChart
+func (t *Chart) FromBarChart(v BarChart) error {
+	v.Type = "BarChart"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeBarChart performs a merge with any union data inside the Chart, using the provided BarChart
+func (t *Chart) MergeBarChart(v BarChart) error {
+	v.Type = "BarChart"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsStatChart returns the union data inside the Chart as a StatChart
+func (t Chart) AsStatChart() (StatChart, error) {
+	var body StatChart
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromStatChart overwrites any union data inside the Chart as the provided StatChart
+func (t *Chart) FromStatChart(v StatChart) error {
+	v.Type = "StatChart"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeStatChart performs a merge with any union data inside the Chart, using the provided StatChart
+func (t *Chart) MergeStatChart(v StatChart) error {
+	v.Type = "StatChart"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t Chart) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"_type"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t Chart) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "BarChart":
+		return t.AsBarChart()
+	case "GaugeChart":
+		return t.AsGaugeChart()
+	case "StatChart":
+		return t.AsStatChart()
+	case "TimeSeriesChart":
+		return t.AsTimeSeriesChart()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t Chart) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *Chart) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
 
 // AsHealthProjection returns the union data inside the ComponentHighlightProjection as a HealthProjection
 func (t ComponentHighlightProjection) AsHealthProjection() (HealthProjection, error) {
@@ -1396,6 +1675,34 @@ func (t *ComponentHighlightProjection) MergeMapProjection(v MapProjection) error
 	return err
 }
 
+// AsTagProjection returns the union data inside the ComponentHighlightProjection as a TagProjection
+func (t ComponentHighlightProjection) AsTagProjection() (TagProjection, error) {
+	var body TagProjection
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTagProjection overwrites any union data inside the ComponentHighlightProjection as the provided TagProjection
+func (t *ComponentHighlightProjection) FromTagProjection(v TagProjection) error {
+	v.Type = "TagProjection"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTagProjection performs a merge with any union data inside the ComponentHighlightProjection, using the provided TagProjection
+func (t *ComponentHighlightProjection) MergeTagProjection(v TagProjection) error {
+	v.Type = "TagProjection"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t ComponentHighlightProjection) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"_type"`
@@ -1426,6 +1733,8 @@ func (t ComponentHighlightProjection) ValueByDiscriminator() (interface{}, error
 		return t.AsNumericProjection()
 	case "RatioProjection":
 		return t.AsRatioProjection()
+	case "TagProjection":
+		return t.AsTagProjection()
 	case "TextProjection":
 		return t.AsTextProjection()
 	default:

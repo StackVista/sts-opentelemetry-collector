@@ -1,0 +1,9 @@
+type: sts_topology
+
+status:
+  class: connector
+  stability:
+    alpha: [traces_to_logs, metrics_to_logs, logs_to_logs]
+  distributions: [sts]
+  codeowners:
+    active: []

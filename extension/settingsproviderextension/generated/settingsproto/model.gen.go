@@ -865,6 +865,7 @@ type OtelComponentMapping struct {
 	Input  OtelInput                  `json:"input"`
 	Name   string                     `json:"name"`
 	Output OtelComponentMappingOutput `json:"output"`
+	Rank   OtelComponentMappingRank   `json:"rank"`
 	Shard  Shard                      `json:"shard"`
 
 	// Type The combination of type+id is a unique identification for a setting
@@ -910,15 +911,16 @@ type OtelComponentMappingOutput struct {
 	Optional *OtelComponentMappingFieldMapping `json:"optional,omitempty"`
 	Required *OtelComponentMappingFieldMapping `json:"required,omitempty"`
 
-	// TypeIdentifier An expression that must produce a string. It must be one of these formats:
-	//   - A plain string, for example `"this is a plain string"`
-	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
-	TypeIdentifier *OtelStringExpression `json:"typeIdentifier,omitempty"`
-
 	// TypeName An expression that must produce a string. It must be one of these formats:
 	//   - A plain string, for example `"this is a plain string"`
 	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
 	TypeName OtelStringExpression `json:"typeName"`
+}
+
+// OtelComponentMappingRank defines model for OtelComponentMappingRank.
+type OtelComponentMappingRank struct {
+	// Specificity Determines how much of a "specialization" this mapping is. Higher number means more specific. Used during component merge to pick the winning typeName / name when multiple mappings contribute to the same component identifier. Recommended ranges: 1–99 environment & infrastructure; 100–199 platform & orchestration (k8s, otel base); 200–299 application / service; 300–399 runtime / SDK / language; 400+ user overrides.
+	Specificity float64 `json:"specificity"`
 }
 
 // OtelInput Combines input signals and conditional resource/scope/metric/span mappings.

@@ -46,10 +46,9 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 			name: "valid mapping with all required fields and Configuration/Status fields",
 			mapping: &settingsproto.OtelComponentMapping{
 				Output: settingsproto.OtelComponentMappingOutput{
-					Identifier:     strExpr(`resource.attributes["service.name"]`),
-					Name:           strExpr("resource.attributes['service.name']"),
-					TypeName:       strExpr("'service'"),
-					TypeIdentifier: ptr(strExpr("'service_id'")),
+					Identifier: strExpr(`resource.attributes["service.name"]`),
+					Name:       strExpr("resource.attributes['service.name']"),
+					TypeName:   strExpr("'service'"),
 					Optional: &settingsproto.OtelComponentMappingFieldMapping{
 						Tags: &[]settingsproto.OtelTagMapping{
 							{
@@ -87,12 +86,11 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 				"namespace": "payments_ns",
 			},
 			want: &topostreamv1.TopologyStreamComponent{
-				ExternalId:     "billing",
-				Identifiers:    []string{"billing"},
-				Name:           "billing",
-				TypeName:       "service",
-				TypeIdentifier: ptr("service_id"),
-				Tags:           []string{"priority:urgent", "kind:licence", "amount:1000", "scopeName:kamon", "resourceName:microservice"},
+				ExternalId:  "billing",
+				Identifiers: []string{"billing"},
+				Name:        "billing",
+				TypeName:    "service",
+				Tags:        []string{"priority:urgent", "kind:licence", "amount:1000", "scopeName:kamon", "resourceName:microservice"},
 				ResourceDefinition: &structpb.Struct{
 					Fields: map[string]*structpb.Value{
 						"kind":     structpb.NewStringValue("licence"),
@@ -133,10 +131,9 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 			name: "missing required fields",
 			mapping: &settingsproto.OtelComponentMapping{
 				Output: settingsproto.OtelComponentMappingOutput{
-					Identifier:     strExpr(`resource.attributes["service.name"]`),
-					Name:           strExpr(`span.attributes["non-existing-attr"]`),
-					TypeName:       strExpr(`'service'`),
-					TypeIdentifier: ptr(strExpr("'service_id'")),
+					Identifier: strExpr(`resource.attributes["service.name"]`),
+					Name:       strExpr(`span.attributes["non-existing-attr"]`),
+					TypeName:   strExpr(`'service'`),
 					Optional: &settingsproto.OtelComponentMappingFieldMapping{
 						Tags: &[]settingsproto.OtelTagMapping{
 							{
@@ -170,10 +167,9 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 			name: "missing optional fields are ok",
 			mapping: &settingsproto.OtelComponentMapping{
 				Output: settingsproto.OtelComponentMappingOutput{
-					Identifier:     strExpr(`resource.attributes["service.name"]`),
-					Name:           strExpr(`resource.attributes["service.name"]`),
-					TypeName:       strExpr(`'service'`),
-					TypeIdentifier: ptr(strExpr(`span.attributes["non-existing-attr1"]`)),
+					Identifier: strExpr(`resource.attributes["service.name"]`),
+					Name:       strExpr(`resource.attributes["service.name"]`),
+					TypeName:   strExpr(`'service'`),
 					Optional: &settingsproto.OtelComponentMappingFieldMapping{
 						AdditionalIdentifiers: &[]settingsproto.OtelStringExpression{
 							{Expression: `resource.attributes["missing"]`},
@@ -217,10 +213,9 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 			name: "optional fields with invalid expression still produce an error",
 			mapping: &settingsproto.OtelComponentMapping{
 				Output: settingsproto.OtelComponentMappingOutput{
-					Identifier:     strExpr(`resource.attributes["service.name"]`),
-					Name:           strExpr(`resource.attributes.name']`),
-					TypeName:       strExpr(`'service'`),
-					TypeIdentifier: ptr(strExpr(`span.attributes-existing-attr1"]`)),
+					Identifier: strExpr(`resource.attributes["service.name"]`),
+					Name:       strExpr(`resource.attributes.name']`),
+					TypeName:   strExpr(`'service'`),
 					Optional: &settingsproto.OtelComponentMappingFieldMapping{
 						AdditionalIdentifiers: &[]settingsproto.OtelStringExpression{
 							{Expression: `uhoh`},
@@ -255,7 +250,7 @@ func TestMappingSpan_MapComponent(t *testing.T) {
 			expectErr: []error{
 				errors.New("optional.additionalIdentifiers: ERROR: <input>:1:1: undeclared reference to 'uhoh' (in container '')\n | uhoh\n | ^"),
 				errors.New("name: ERROR: <input>:1:25: Syntax error: token recognition error at: '']'\n | resource.attributes.name']\n | ........................^"),
-				errors.New("typeIdentifier: ERROR: <input>:1:31: Syntax error: token recognition error at: '\"]'\n | span.attributes-existing-attr1\"]\n | ..............................^")},
+			},
 		},
 	}
 

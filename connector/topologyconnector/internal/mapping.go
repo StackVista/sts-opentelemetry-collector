@@ -146,7 +146,6 @@ func (me *Mapper) MapComponent(
 		Identifiers:        allIdentifiers,
 		Name:               evalStr(mapping.Output.Name, "name"),
 		TypeName:           evalStr(mapping.Output.TypeName, "typeName"),
-		TypeIdentifier:     evalOptStr(mapping.Output.TypeIdentifier, "typeIdentifier"),
 		ResourceDefinition: resourceDefinition,
 		StatusData:         statusData,
 		Tags:               tagsList,

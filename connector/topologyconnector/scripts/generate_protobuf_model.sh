@@ -19,7 +19,9 @@ cp "$CHECKOUT_DIR/topo_stream/v1/topo_stream.proto" "spec/topo_stream.proto"
 cp "$CHECKOUT_DIR/topo_stream/v1/topo_stream_message_key.proto" "spec/topo_stream_message_key.proto"
 cp "$CHECKOUT_DIR/topo_stream/v1/topo_stream_metadata.proto" "spec/topo_stream_metadata.proto"
 # Flatten cross-proto imports to match the flat spec/ directory layout
-sed -i 's|import "topo_stream/v1/|import "|g' spec/topo_stream_metadata.proto
+# Use a temp file instead of "sed -i" so it works on both GNU (Linux) and BSD (macOS) sed
+sed 's|import "topo_stream/v1/|import "|g' spec/topo_stream_metadata.proto > spec/topo_stream_metadata.proto.tmp
+mv spec/topo_stream_metadata.proto.tmp spec/topo_stream_metadata.proto
 rm -rf "$CHECKOUT_DIR"
 
 export PATH="$PATH:$(go env GOPATH)/bin"

@@ -132,6 +132,7 @@ type OtelComponentMappingSpec struct {
 	Output            settingsproto.OtelComponentMappingOutput
 	Vars              []settingsproto.OtelVariableMapping
 	ExpireAfterMs     int64
+	Specificity       float64
 }
 
 func (s OtelComponentMappingSnapshot) Type() settingsproto.SettingType {
@@ -146,6 +147,7 @@ func (s OtelComponentMappingSnapshot) Records(topic string) ([]*kgo.Record, erro
 			component := settingsproto.OtelComponentMapping{
 				CreatedTimeStamp: time.Now().Unix(),
 				ExpireAfterMs:    mapping.ExpireAfterMs,
+				Rank:             settingsproto.OtelComponentMappingRank{Specificity: mapping.Specificity},
 				Id:               mapping.MappingID,
 				Identifier:       mapping.MappingIdentifier,
 				Name:             mapping.Name,

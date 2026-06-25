@@ -416,6 +416,7 @@ func otelLogComponentMappingSpecPolicyServer() *harness.OtelComponentMappingSpec
 		MappingIdentifier: "urn:stackpack:kubewarden:otel-component-mapping:policy-server",
 		Name:              "Kubewarden Policy Server",
 		ExpireAfterMs:     900000,
+		Specificity:       1.0,
 		Input: settingsproto.OtelInput{
 			Signal: settingsproto.OtelInputSignalList{
 				settingsproto.LOGS,
@@ -459,6 +460,7 @@ func otelLogComponentMappingSpecPolicyServerDelete() *harness.OtelComponentMappi
 		MappingIdentifier: "urn:stackpack:kubewarden:otel-component-mapping:policy-server-delete",
 		Name:              "Kubewarden Policy Server Delete",
 		ExpireAfterMs:     900000,
+		Specificity:       1.0,
 		Input: settingsproto.OtelInput{
 			Signal: settingsproto.OtelInputSignalList{
 				settingsproto.LOGS,

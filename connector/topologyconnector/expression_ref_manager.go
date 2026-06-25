@@ -131,7 +131,6 @@ func (p *DefaultExpressionRefManager) collectRefsForComponent(
 	agg.walkString(p.evaluator, m.Output.Identifier)
 	agg.walkString(p.evaluator, m.Output.Name)
 	agg.walkString(p.evaluator, m.Output.TypeName)
-	agg.walkOptionalString(p.evaluator, m.Output.TypeIdentifier)
 	p.collectRefsForComponentFieldMapping(agg, m.Output.Optional)
 	p.collectRefsForComponentFieldMapping(agg, m.Output.Required)
 

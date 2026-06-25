@@ -39,6 +39,7 @@ func OutputToMessageWithKey(
 			Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 				TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
 					ExpiryIntervalMs: mapping.GetExpireAfterMs(),
+					Specificity:      mapping.GetSpecificity(),
 					Components:       toComponents(),
 					Relations:        toRelations(),
 				},
@@ -70,6 +71,7 @@ func ErrorsToMessageWithKey(
 			Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 				TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
 					ExpiryIntervalMs: mapping.GetExpireAfterMs(),
+					Specificity:      mapping.GetSpecificity(),
 					Errors:           streamErrors,
 				},
 			},
@@ -121,6 +123,7 @@ func ComponentDeleteToMessageWithKey(
 			Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 				TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
 					ExpiryIntervalMs:           mapping.GetExpireAfterMs(),
+					Specificity:                mapping.GetSpecificity(),
 					DeleteComponentExternalIds: []string{externalID},
 				},
 			},
@@ -145,6 +148,7 @@ func RelationDeleteToMessageWithKey(
 			Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 				TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
 					ExpiryIntervalMs:          mapping.GetExpireAfterMs(),
+					Specificity:               mapping.GetSpecificity(),
 					DeleteRelationExternalIds: []string{externalID},
 				},
 			},
