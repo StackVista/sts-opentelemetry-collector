@@ -1114,6 +1114,11 @@ type OtelRelationMappingOutput struct {
 	//   - A plain string, for example `"this is a plain string"`
 	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
 	TargetId OtelStringExpression `json:"targetId"`
+
+	// TypeName An expression that must produce a string. It must be one of these formats:
+	//   - A plain string, for example `"this is a plain string"`
+	//   - A cel expression that must return a string, for example: `resource.attributes['service.namespace']`
+	TypeName OtelStringExpression `json:"typeName"`
 }
 
 // OtelStringExpression An expression that must produce a string. It must be one of these formats:

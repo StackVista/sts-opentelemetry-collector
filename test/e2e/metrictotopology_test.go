@@ -238,6 +238,7 @@ func assertMetricRelations(t *testing.T, relations map[string]*topostreamv1.Topo
 	require.True(t, ok)
 	require.Equal(t, "urn:service:billing-service", relation.SourceIdentifier)
 	require.Equal(t, "urn:service:payment-service", relation.TargetIdentifier)
+	require.Equal(t, "calls", relation.TypeName)
 	require.Equal(t, topostreamv1.TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_CONNECTION, relation.DependencyType)
 }
 
@@ -341,6 +342,7 @@ func otelRelationMappingSpecForMetrics() *harness.OtelRelationMappingSpec {
 		Output: settingsproto.OtelRelationMappingOutput{
 			SourceId:       harness.StrExpr(`"urn:service:" + datapoint.attributes["client.service"]`),
 			TargetId:       harness.StrExpr(`"urn:service:" + datapoint.attributes["server.service"]`),
+			TypeName:       harness.StrExpr("'calls'"),
 			DependencyType: harness.StrExpr("'CONNECTION'"),
 		},
 	}

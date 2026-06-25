@@ -30,38 +30,6 @@ components:
       items:
         $ref: "#/components/schemas/ComponentPresentationMetric"
 
-    TopologyLayer:
-      type: object
-      description: |
-        Layer assigned to components matched by this presentation, used to bucket and order them in the topology view.
-        At presentation time, the layer of the most-specific matching presentation wins.
-        When multiple components share a layer name with different orders, the highest order wins.
-      properties:
-        name:
-          type: string
-        order:
-          type: number
-          format: double
-      required:
-        - name
-        - order
-
-    TopologyDomain:
-      type: object
-      description: |
-        Domain assigned to components matched by this presentation, used to bucket and order them in the topology view.
-        At presentation time, the domain of the most-specific matching presentation wins.
-        When multiple components share a domain name with different orders, the highest order wins.
-      properties:
-        name:
-          type: string
-        order:
-          type: number
-          format: double
-      required:
-        - name
-        - order
-
     PresentationDefinition:
       type: object
       properties:
@@ -1495,7 +1463,3 @@ components:
           type: boolean
         neighboringComponents:
           type: boolean
-        layer:
-          $ref: "#/components/schemas/TopologyLayer"
-        domain:
-          $ref: "#/components/schemas/TopologyDomain"

@@ -402,6 +402,7 @@ func assertLogRelations(t *testing.T, relations map[string]*topostreamv1.Topolog
 		for _, expected := range expectedRelations {
 			if r.SourceIdentifier == expected.Source && r.TargetIdentifier == expected.Target {
 				found = true
+				require.Equal(t, "enforced by", r.TypeName)
 				require.Equal(t, topostreamv1.TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_CONNECTION, r.DependencyType)
 				break
 			}
@@ -544,6 +545,7 @@ func otelLogRelationMappingSpecPolicyEnforcedByServer() *harness.OtelRelationMap
 				`vars.policyKind == "ClusterAdmissionPolicy" ? "urn:kubewarden:cluster/" + vars.clusterName + ":clusteradmissionpolicy/" + vars.policyName : "urn:kubewarden:cluster/" + vars.clusterName + ":namespace/" + vars.namespace + ":admissionpolicy/" + vars.policyName`,
 			),
 			TargetId:       harness.StrExpr(`'urn:kubewarden:cluster/' + vars.clusterName + ':policyserver/' + vars.serverName`),
+			TypeName:       harness.StrExpr("'enforced by'"),
 			DependencyType: harness.StrExpr("'CONNECTION'"),
 		},
 	}

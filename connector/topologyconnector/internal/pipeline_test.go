@@ -185,6 +185,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 					Output: settingsproto.OtelRelationMappingOutput{
 						SourceId:       strExpr(`resource.attributes["service.name"]`),
 						TargetId:       strExpr(`span.attributes["service.name"]`),
+						TypeName:       strExpr("'http-request'"),
 						DependencyType: strExpr("'CONNECTION'"),
 					},
 				},
@@ -237,6 +238,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 										SourceIdentifier: "checkout-service",
 										TargetIdentifier: "web-service",
 										Name:             "",
+										TypeName:         "http-request",
 										DependencyType:   topostreamv1.TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_CONNECTION,
 										Tags:             nil,
 									},
@@ -322,6 +324,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 					Output: settingsproto.OtelRelationMappingOutput{
 						SourceId:       strExpr(`resource.attributes["service.name"]`),
 						TargetId:       strExpr(`span.attributes["service.name"]`),
+						TypeName:       strExpr("'http-request'"),
 						DependencyType: strExpr("'CONNECTION'"),
 					},
 				},
@@ -407,6 +410,7 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 					Output: settingsproto.OtelRelationMappingOutput{
 						SourceId:       strExpr(`resource.attributes["not-existing-attr"]`),
 						TargetId:       strExpr(`span.attributes["service.name"]`),
+						TypeName:       strExpr(`'http-request'`),
 						DependencyType: strExpr(`'CONNECTION'`),
 					},
 				},
@@ -1070,6 +1074,7 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 			Output: settingsproto.OtelRelationMappingOutput{
 				SourceId:       strExpr(`resource.attributes["service.name"]`),
 				TargetId:       strExpr(`datapoint.attributes["service.name"]`),
+				TypeName:       strExpr("'http-request'"),
 				DependencyType: strExpr("'CONNECTION'"),
 			},
 		},
@@ -1118,6 +1123,7 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 								SourceIdentifier: "checkout-service",
 								TargetIdentifier: "web-service",
 								Name:             "",
+								TypeName:         "http-request",
 								DependencyType:   topostreamv1.TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_CONNECTION,
 								Tags:             nil,
 							},
@@ -1255,6 +1261,7 @@ func TestPipeline_ConvertLogToTopologyStreamMessage_DeleteRelation(t *testing.T)
 			Output: settingsproto.OtelRelationMappingOutput{
 				SourceId:       strExpr(`log.attributes["source.name"]`),
 				TargetId:       strExpr(`log.attributes["target.name"]`),
+				TypeName:       strExpr("'enforced-by'"),
 				DependencyType: strExpr("'CONNECTION'"),
 			},
 		},
@@ -1476,6 +1483,7 @@ func createSimpleRelationMapping(id string) settingsproto.OtelRelationMapping {
 		Output: settingsproto.OtelRelationMappingOutput{
 			SourceId:       strExpr(`resource.attributes["service.name"]`),
 			TargetId:       strExpr(`span.attributes["service.name"]`),
+			TypeName:       strExpr(`'http-request'`),
 			DependencyType: strExpr(`'CONNECTION'`),
 		},
 	}

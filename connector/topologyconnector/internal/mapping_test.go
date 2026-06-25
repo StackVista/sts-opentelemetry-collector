@@ -562,6 +562,7 @@ func TestMapping_MapRelation(t *testing.T) {
 				Output: settingsproto.OtelRelationMappingOutput{
 					SourceId:       strExpr(`resource.attributes["service.name"]`),
 					TargetId:       strExpr(`'database'`),
+					TypeName:       strExpr("'query'"),
 					DependencyType: strExpr("'HIERARCHICAL'"),
 				},
 			},
@@ -572,6 +573,7 @@ func TestMapping_MapRelation(t *testing.T) {
 				SourceIdentifier: "billing",
 				TargetIdentifier: "database",
 				Name:             "",
+				TypeName:         "query",
 				DependencyType:   topostreamv1.TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_HIERARCHICAL,
 				Tags:             nil,
 			},
@@ -583,6 +585,7 @@ func TestMapping_MapRelation(t *testing.T) {
 				Output: settingsproto.OtelRelationMappingOutput{
 					SourceId:       strExpr(`resource.attributes["service.name"]`),
 					TargetId:       strExpr(`'database'`),
+					TypeName:       strExpr("'query'"),
 					DependencyType: strExpr(`span.attributes["dependency.type"]`),
 				},
 			},
@@ -593,6 +596,7 @@ func TestMapping_MapRelation(t *testing.T) {
 				SourceIdentifier: "billing",
 				TargetIdentifier: "database",
 				Name:             "",
+				TypeName:         "query",
 				DependencyType:   topostreamv1.TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_CONNECTION,
 				Tags:             nil,
 			},
@@ -604,6 +608,7 @@ func TestMapping_MapRelation(t *testing.T) {
 				Output: settingsproto.OtelRelationMappingOutput{
 					SourceId:       strExpr(`resource.attributes["service.name"]`),
 					TargetId:       strExpr(`'database'`),
+					TypeName:       strExpr("'query'"),
 					DependencyType: strExpr("'UNCLASSIFIED'"),
 				},
 			},
@@ -614,6 +619,7 @@ func TestMapping_MapRelation(t *testing.T) {
 				SourceIdentifier: "billing",
 				TargetIdentifier: "database",
 				Name:             "",
+				TypeName:         "query",
 				DependencyType:   topostreamv1.TopologyStreamRelationDependencyType_TOPOLOGY_STREAM_RELATION_DEPENDENCY_TYPE_UNSPECIFIED,
 				Tags:             nil,
 			},
@@ -625,6 +631,7 @@ func TestMapping_MapRelation(t *testing.T) {
 				Output: settingsproto.OtelRelationMappingOutput{
 					SourceId:       strExpr(`resource.attributes["service.name"]`),
 					TargetId:       strExpr(`'database'`),
+					TypeName:       strExpr("'query'"),
 					DependencyType: strExpr("not here"),
 				},
 			},
@@ -639,6 +646,7 @@ func TestMapping_MapRelation(t *testing.T) {
 				Output: settingsproto.OtelRelationMappingOutput{
 					SourceId:       strExpr(`span.attributes["non-existing"]`),
 					TargetId:       strExpr("'database'"),
+					TypeName:       strExpr(`'query'`),
 					DependencyType: strExpr(`'HIERARCHICAL'`),
 				},
 			},
