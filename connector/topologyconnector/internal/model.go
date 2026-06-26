@@ -70,6 +70,11 @@ type Span struct {
 	// so they'll just use unnecessary memory
 
 	cachedMap map[string]any
+
+	// CollectionTimestampMs is the span's own collection time (end time, falling back to start time),
+	// in milliseconds. 0 means the span carried no usable timestamp. Used as the topology operation's
+	// collection_timestamp so the platform can order out-of-order operations per element.
+	CollectionTimestampMs int64
 }
 
 func NewSpan(name, kind, statusCode, statusMessage string, attrs map[string]any) *Span {
@@ -83,6 +88,12 @@ func NewSpan(name, kind, statusCode, statusMessage string, attrs map[string]any)
 			mapKeyAttributes: attrs,
 		},
 	}
+}
+
+// WithCollectionTimestamp sets the span's collection time (ms) and returns it for chaining.
+func (s *Span) WithCollectionTimestamp(collectionTimestampMs int64) *Span {
+	s.CollectionTimestampMs = collectionTimestampMs
+	return s
 }
 
 func (s *Span) ToMap() map[string]any {
@@ -109,6 +120,9 @@ func (m *Metric) ToMap() map[string]any {
 
 type Datapoint struct {
 	cachedMap map[string]any
+
+	// CollectionTimestampMs is the datapoint's own timestamp in milliseconds. 0 means none was set.
+	CollectionTimestampMs int64
 }
 
 func NewDatapoint(attrs map[string]any) *Datapoint {
@@ -120,12 +134,22 @@ func NewDatapoint(attrs map[string]any) *Datapoint {
 	}
 }
 
+// WithCollectionTimestamp sets the datapoint's collection time (ms) and returns it for chaining.
+func (d *Datapoint) WithCollectionTimestamp(collectionTimestampMs int64) *Datapoint {
+	d.CollectionTimestampMs = collectionTimestampMs
+	return d
+}
+
 func (d *Datapoint) ToMap() map[string]any {
 	return d.cachedMap
 }
 
 type Log struct {
 	cachedMap map[string]any
+
+	// CollectionTimestampMs is the log record's collection time (observed time, falling back to event time),
+	// in milliseconds. 0 means the record carried no usable timestamp.
+	CollectionTimestampMs int64
 }
 
 // NewLog constructs a Log from a log record's data. The body is stored as-is:
@@ -164,6 +188,12 @@ func NewLog(
 			mapKeyAttributes: attrs,
 		},
 	}
+}
+
+// WithCollectionTimestamp sets the log's collection time (ms) and returns it for chaining.
+func (l *Log) WithCollectionTimestamp(collectionTimestampMs int64) *Log {
+	l.CollectionTimestampMs = collectionTimestampMs
+	return l
 }
 
 func (l *Log) ToMap() map[string]any {
