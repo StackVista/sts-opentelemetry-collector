@@ -68,8 +68,11 @@ message TopologyStreamRelation {
 
   string name = 4;
 
-  // Relation type name is no longer in use, instead we allow dependencyType.
-  reserved 5, 6;
+  // Relation type name
+  string type_name = 5;
+
+  // Relation type identifier is no longer in use, instead we allow dependencyType.
+  reserved 6;
 
   repeated string tags = 7;
 

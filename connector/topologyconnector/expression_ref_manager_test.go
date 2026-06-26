@@ -101,6 +101,7 @@ var ExpectedRelationMappingFields = struct {
 	Output: []string{
 		"SourceId",
 		"TargetId",
+		"TypeName",
 		"DependencyType",
 	},
 }
@@ -169,6 +170,7 @@ func TestExpressionRefManager_UpdateAndCurrent_ComponentAndRelation(t *testing.T
 		Output: settingsproto.OtelRelationMappingOutput{
 			SourceId:       sExpr("resource.attributes['src']"),
 			TargetId:       sExpr("span.attributes['dst']"),
+			TypeName:       sExpr("'rel'"),
 			DependencyType: sExpr("'HIERARCHICAL'"),
 		},
 	}

@@ -266,6 +266,7 @@ func (me *Mapper) MapRelation(
 		SourceIdentifier: sourceID,
 		TargetIdentifier: targetID,
 		Name:             "", // TODO the name should be nil
+		TypeName:         evalStr(mapping.Output.TypeName, "typeName"),
 		DependencyType:   toDependencyType(evalStr(mapping.Output.DependencyType, "dependencyType")),
 		Tags:             nil,
 	}

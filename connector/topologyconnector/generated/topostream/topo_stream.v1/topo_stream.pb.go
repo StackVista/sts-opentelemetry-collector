@@ -189,12 +189,14 @@ type TopologyStreamRelation struct {
 	// Global unique identifier of a source component.
 	SourceIdentifier string `protobuf:"bytes,2,opt,name=source_identifier,json=sourceIdentifier,proto3" json:"source_identifier,omitempty"` // E.g. datasource:externalId ...
 	// Global unique identifier of a target component.
-	TargetIdentifier string                               `protobuf:"bytes,3,opt,name=target_identifier,json=targetIdentifier,proto3" json:"target_identifier,omitempty"` // E.g. datasource:externalId ...
-	Name             string                               `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
-	Tags             []string                             `protobuf:"bytes,7,rep,name=tags,proto3" json:"tags,omitempty"`
-	DependencyType   TopologyStreamRelationDependencyType `protobuf:"varint,8,opt,name=dependency_type,json=dependencyType,proto3,enum=topo_stream.v1.TopologyStreamRelationDependencyType" json:"dependency_type,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	TargetIdentifier string `protobuf:"bytes,3,opt,name=target_identifier,json=targetIdentifier,proto3" json:"target_identifier,omitempty"` // E.g. datasource:externalId ...
+	Name             string `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
+	// Relation type name
+	TypeName       string                               `protobuf:"bytes,5,opt,name=type_name,json=typeName,proto3" json:"type_name,omitempty"`
+	Tags           []string                             `protobuf:"bytes,7,rep,name=tags,proto3" json:"tags,omitempty"`
+	DependencyType TopologyStreamRelationDependencyType `protobuf:"varint,8,opt,name=dependency_type,json=dependencyType,proto3,enum=topo_stream.v1.TopologyStreamRelationDependencyType" json:"dependency_type,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *TopologyStreamRelation) Reset() {
@@ -251,6 +253,13 @@ func (x *TopologyStreamRelation) GetTargetIdentifier() string {
 func (x *TopologyStreamRelation) GetName() string {
 	if x != nil {
 		return x.Name
+	}
+	return ""
+}
+
+func (x *TopologyStreamRelation) GetTypeName() string {
+	if x != nil {
+		return x.TypeName
 	}
 	return ""
 }
@@ -731,15 +740,16 @@ const file_topo_stream_proto_rawDesc = "" +
 	"\x04tags\x18\f \x03(\tR\x04tagsB\x12\n" +
 	"\x10_type_identifierJ\x04\b\x06\x10\aJ\x04\b\a\x10\bJ\x04\b\b\x10\tJ\x04\b\t\x10\n" +
 	"R\n" +
-	"layer_nameR\x10layer_identifierR\vdomain_nameR\x11domain_identifier\"\xa6\x02\n" +
+	"layer_nameR\x10layer_identifierR\vdomain_nameR\x11domain_identifier\"\xbd\x02\n" +
 	"\x16TopologyStreamRelation\x12\x1f\n" +
 	"\vexternal_id\x18\x01 \x01(\tR\n" +
 	"externalId\x12+\n" +
 	"\x11source_identifier\x18\x02 \x01(\tR\x10sourceIdentifier\x12+\n" +
 	"\x11target_identifier\x18\x03 \x01(\tR\x10targetIdentifier\x12\x12\n" +
-	"\x04name\x18\x04 \x01(\tR\x04name\x12\x12\n" +
+	"\x04name\x18\x04 \x01(\tR\x04name\x12\x1b\n" +
+	"\ttype_name\x18\x05 \x01(\tR\btypeName\x12\x12\n" +
 	"\x04tags\x18\a \x03(\tR\x04tags\x12]\n" +
-	"\x0fdependency_type\x18\b \x01(\x0e24.topo_stream.v1.TopologyStreamRelationDependencyTypeR\x0edependencyTypeJ\x04\b\x05\x10\x06J\x04\b\x06\x10\a\";\n" +
+	"\x0fdependency_type\x18\b \x01(\x0e24.topo_stream.v1.TopologyStreamRelationDependencyTypeR\x0edependencyTypeJ\x04\b\x06\x10\a\";\n" +
 	"\x14TopologyStreamRemove\x12#\n" +
 	"\rremoval_cause\x18\x01 \x01(\tR\fremovalCause\"b\n" +
 	"\x0fTopoStreamError\x12\x1a\n" +

@@ -1048,14 +1048,6 @@ type TimeSeriesChart struct {
 // TimeSeriesChartType defines model for TimeSeriesChart.Type.
 type TimeSeriesChartType string
 
-// TopologyDomain Domain assigned to components matched by this presentation, used to bucket and order them in the topology view.
-// At presentation time, the domain of the most-specific matching presentation wins.
-// When multiple components share a domain name with different orders, the highest order wins.
-type TopologyDomain struct {
-	Name  string  `json:"name"`
-	Order float64 `json:"order"`
-}
-
 // TopologyFilterValue defines model for TopologyFilterValue.
 type TopologyFilterValue string
 
@@ -1068,38 +1060,20 @@ type TopologyFilters struct {
 // TopologyFiltersType defines model for TopologyFilters.Type.
 type TopologyFiltersType string
 
-// TopologyLayer Layer assigned to components matched by this presentation, used to bucket and order them in the topology view.
-// At presentation time, the layer of the most-specific matching presentation wins.
-// When multiple components share a layer name with different orders, the highest order wins.
-type TopologyLayer struct {
-	Name  string  `json:"name"`
-	Order float64 `json:"order"`
-}
-
 // TopologySettings Rendering settings for the topology perspective.
 // Near-copy of QueryMetadata used for topology rendering today; differences:
 // - `queryTime` is intentionally absent (request-time state, not a presentation setting).
 // Most-specific-wins merge semantics across matching ComponentPresentations.
 type TopologySettings struct {
-	AutoGrouping        *bool `json:"autoGrouping,omitempty"`
-	ConnectedComponents *bool `json:"connectedComponents,omitempty"`
-
-	// Domain Domain assigned to components matched by this presentation, used to bucket and order them in the topology view.
-	// At presentation time, the domain of the most-specific matching presentation wins.
-	// When multiple components share a domain name with different orders, the highest order wins.
-	Domain             *TopologyDomain `json:"domain,omitempty"`
-	GroupedByDomains   *bool           `json:"groupedByDomains,omitempty"`
-	GroupedByLayers    *bool           `json:"groupedByLayers,omitempty"`
-	GroupedByRelations *bool           `json:"groupedByRelations,omitempty"`
-	GroupingEnabled    *bool           `json:"groupingEnabled,omitempty"`
-
-	// Layer Layer assigned to components matched by this presentation, used to bucket and order them in the topology view.
-	// At presentation time, the layer of the most-specific matching presentation wins.
-	// When multiple components share a layer name with different orders, the highest order wins.
-	Layer                 *TopologyLayer `json:"layer,omitempty"`
-	MinimumGroupSize      *int64         `json:"minimumGroupSize,omitempty"`
-	NeighboringComponents *bool          `json:"neighboringComponents,omitempty"`
-	ShowIndirectRelations *bool          `json:"showIndirectRelations,omitempty"`
+	AutoGrouping          *bool  `json:"autoGrouping,omitempty"`
+	ConnectedComponents   *bool  `json:"connectedComponents,omitempty"`
+	GroupedByDomains      *bool  `json:"groupedByDomains,omitempty"`
+	GroupedByLayers       *bool  `json:"groupedByLayers,omitempty"`
+	GroupedByRelations    *bool  `json:"groupedByRelations,omitempty"`
+	GroupingEnabled       *bool  `json:"groupingEnabled,omitempty"`
+	MinimumGroupSize      *int64 `json:"minimumGroupSize,omitempty"`
+	NeighboringComponents *bool  `json:"neighboringComponents,omitempty"`
+	ShowIndirectRelations *bool  `json:"showIndirectRelations,omitempty"`
 }
 
 // ViewTimeLink defines model for ViewTimeLink.

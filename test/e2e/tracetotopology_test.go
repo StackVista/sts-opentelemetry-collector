@@ -422,6 +422,7 @@ func otelRelationMappingSpec() *harness.OtelRelationMappingSpec {
 		Output: settingsproto.OtelRelationMappingOutput{
 			SourceId:       harness.StrExpr(`span.attributes["client.address"]`),
 			TargetId:       harness.StrExpr(`span.attributes["server.address"]`),
+			TypeName:       harness.StrExpr("'http-request'"),
 			DependencyType: harness.StrExpr("'CONNECTION'"),
 		},
 	}
