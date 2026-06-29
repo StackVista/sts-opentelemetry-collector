@@ -145,7 +145,8 @@ func convertSignalDataToTopologyStreamMessage(
 
 	logResultSummary(logger, result, signal)
 
-	return result
+	// Coalesce per-element messages that share the same partition key and collection timestamp into single messages.
+	return groupMessagesByKeyAndTimestamp(result)
 }
 
 func logResultSummary(

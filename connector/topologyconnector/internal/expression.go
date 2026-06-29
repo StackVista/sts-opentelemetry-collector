@@ -59,6 +59,10 @@ type ExpressionEvalContext struct {
 	Scope     *Scope
 	Resource  *Resource
 	Vars      map[string]any
+
+	// CollectionTimestampMs is the per-element collection time (ms) derived from the leaf OTel signal
+	// (log/span/datapoint). 0 means none was available; callers fall back to the collector's processing time.
+	CollectionTimestampMs int64
 }
 
 type CelEvaluator struct {
@@ -99,54 +103,70 @@ func (e *CelEvaluationError) Error() string {
 func NewSpanEvalContext(
 	span *Span, scope *Scope, resource *Resource,
 ) *ExpressionEvalContext {
+	var collectionTimestampMs int64
+	if span != nil {
+		collectionTimestampMs = span.CollectionTimestampMs
+	}
 	return &ExpressionEvalContext{
-		Span:      span,
-		Log:       nil,
-		Datapoint: nil,
-		Metric:    nil,
-		Scope:     scope,
-		Resource:  resource,
-		Vars:      nil,
+		Span:                  span,
+		Log:                   nil,
+		Datapoint:             nil,
+		Metric:                nil,
+		Scope:                 scope,
+		Resource:              resource,
+		Vars:                  nil,
+		CollectionTimestampMs: collectionTimestampMs,
 	}
 }
 
 func NewMetricEvalContext(
 	datapoint *Datapoint, metric *Metric, scope *Scope, resource *Resource,
 ) *ExpressionEvalContext {
+	var collectionTimestampMs int64
+	if datapoint != nil {
+		collectionTimestampMs = datapoint.CollectionTimestampMs
+	}
 	return &ExpressionEvalContext{
-		Span:      nil,
-		Log:       nil,
-		Datapoint: datapoint,
-		Metric:    metric,
-		Scope:     scope,
-		Resource:  resource,
-		Vars:      nil,
+		Span:                  nil,
+		Log:                   nil,
+		Datapoint:             datapoint,
+		Metric:                metric,
+		Scope:                 scope,
+		Resource:              resource,
+		Vars:                  nil,
+		CollectionTimestampMs: collectionTimestampMs,
 	}
 }
 
 func NewLogEvalContext(
 	log *Log, scope *Scope, resource *Resource,
 ) *ExpressionEvalContext {
+	var collectionTimestampMs int64
+	if log != nil {
+		collectionTimestampMs = log.CollectionTimestampMs
+	}
 	return &ExpressionEvalContext{
-		Span:      nil,
-		Log:       log,
-		Datapoint: nil,
-		Metric:    nil,
-		Scope:     scope,
-		Resource:  resource,
-		Vars:      nil,
+		Span:                  nil,
+		Log:                   log,
+		Datapoint:             nil,
+		Metric:                nil,
+		Scope:                 scope,
+		Resource:              resource,
+		Vars:                  nil,
+		CollectionTimestampMs: collectionTimestampMs,
 	}
 }
 
 func (ec *ExpressionEvalContext) CloneWithVariables(vars map[string]any) *ExpressionEvalContext {
 	return &ExpressionEvalContext{
-		Span:      ec.Span,
-		Log:       ec.Log,
-		Metric:    ec.Metric,
-		Datapoint: ec.Datapoint,
-		Scope:     ec.Scope,
-		Resource:  ec.Resource,
-		Vars:      vars,
+		Span:                  ec.Span,
+		Log:                   ec.Log,
+		Metric:                ec.Metric,
+		Datapoint:             ec.Datapoint,
+		Scope:                 ec.Scope,
+		Resource:              ec.Resource,
+		Vars:                  vars,
+		CollectionTimestampMs: ec.CollectionTimestampMs,
 	}
 }
 

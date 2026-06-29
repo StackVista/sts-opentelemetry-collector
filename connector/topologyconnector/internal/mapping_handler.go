@@ -177,6 +177,15 @@ type MappingContext[T settingsproto.SettingExtension] struct {
 	Mapping T
 }
 
+// effectiveCollectionTimestamp returns the per-element collection time from the eval context when present,
+// falling back to the collector's processing time (BaseCtx.CollectionTimestamp).
+func (v *MappingContext[T]) effectiveCollectionTimestamp(evalCtx *ExpressionEvalContext) int64 {
+	if evalCtx != nil && evalCtx.CollectionTimestampMs != 0 {
+		return evalCtx.CollectionTimestampMs
+	}
+	return v.BaseCtx.CollectionTimestamp
+}
+
 // ExecuteMapping evaluates and executes a mapping of type T for the given action.
 func (v *MappingContext[T]) ExecuteMapping(
 	ctx context.Context,
@@ -219,6 +228,7 @@ func (v *MappingContext[T]) handleComponentDelete(
 	evalCtx *ExpressionEvalContext,
 	mapping settingsproto.OtelComponentMapping,
 ) {
+	collectionTimestamp := v.effectiveCollectionTimestamp(evalCtx)
 	// Only evaluate variables referenced by the identifier — a delete-shaped input may
 	// be missing fields used by other variables, and forcing those to evaluate would
 	// fail the entire DELETE. nil neededVars falls back to evaluating all variables.
@@ -228,7 +238,7 @@ func (v *MappingContext[T]) handleComponentDelete(
 	if errs != nil {
 		*v.BaseCtx.Results = append(
 			*v.BaseCtx.Results,
-			*ErrorsToMessageWithKey(&errs, mapping, v.BaseCtx.CollectionTimestamp),
+			*ErrorsToMessageWithKey(&errs, mapping, collectionTimestamp),
 		)
 		v.BaseCtx.MetricsRecorder.IncMappingErrors(ctx, 1, settingsproto.SettingTypeOtelComponentMapping, v.BaseCtx.Signal)
 		return
@@ -240,7 +250,7 @@ func (v *MappingContext[T]) handleComponentDelete(
 		errs := []error{err}
 		*v.BaseCtx.Results = append(
 			*v.BaseCtx.Results,
-			*ErrorsToMessageWithKey(&errs, mapping, v.BaseCtx.CollectionTimestamp),
+			*ErrorsToMessageWithKey(&errs, mapping, collectionTimestamp),
 		)
 		v.BaseCtx.MetricsRecorder.IncMappingErrors(ctx, 1, settingsproto.SettingTypeOtelComponentMapping, v.BaseCtx.Signal)
 		return
@@ -248,7 +258,7 @@ func (v *MappingContext[T]) handleComponentDelete(
 
 	*v.BaseCtx.Results = append(
 		*v.BaseCtx.Results,
-		*ComponentDeleteToMessageWithKey(externalID, mapping, v.BaseCtx.CollectionTimestamp),
+		*ComponentDeleteToMessageWithKey(externalID, mapping, collectionTimestamp),
 	)
 	v.BaseCtx.MetricsRecorder.IncTopologyProduced(ctx, 1, settingsproto.SettingTypeOtelComponentMapping, v.BaseCtx.Signal)
 }
@@ -258,6 +268,7 @@ func (v *MappingContext[T]) handleRelationDelete(
 	evalCtx *ExpressionEvalContext,
 	mapping settingsproto.OtelRelationMapping,
 ) {
+	collectionTimestamp := v.effectiveCollectionTimestamp(evalCtx)
 	// Only evaluate variables referenced by sourceId/targetId — see handleComponentDelete for rationale.
 	neededVars := CollectVarReferences(v.BaseCtx.Evaluator, mapping.Output.SourceId, mapping.Output.TargetId)
 	filteredVars := FilterVarsByName(mapping.Vars, neededVars)
@@ -265,7 +276,7 @@ func (v *MappingContext[T]) handleRelationDelete(
 	if errs != nil {
 		*v.BaseCtx.Results = append(
 			*v.BaseCtx.Results,
-			*ErrorsToMessageWithKey(&errs, mapping, v.BaseCtx.CollectionTimestamp),
+			*ErrorsToMessageWithKey(&errs, mapping, collectionTimestamp),
 		)
 		v.BaseCtx.MetricsRecorder.IncMappingErrors(ctx, 1, settingsproto.SettingTypeOtelRelationMapping, v.BaseCtx.Signal)
 		return
@@ -284,7 +295,7 @@ func (v *MappingContext[T]) handleRelationDelete(
 		}
 		*v.BaseCtx.Results = append(
 			*v.BaseCtx.Results,
-			*ErrorsToMessageWithKey(&evalErrs, mapping, v.BaseCtx.CollectionTimestamp),
+			*ErrorsToMessageWithKey(&evalErrs, mapping, collectionTimestamp),
 		)
 		v.BaseCtx.MetricsRecorder.IncMappingErrors(ctx, 1, settingsproto.SettingTypeOtelRelationMapping, v.BaseCtx.Signal)
 		return
@@ -293,7 +304,7 @@ func (v *MappingContext[T]) handleRelationDelete(
 	externalID := sourceID + "-" + targetID
 	*v.BaseCtx.Results = append(
 		*v.BaseCtx.Results,
-		*RelationDeleteToMessageWithKey(externalID, mapping, v.BaseCtx.CollectionTimestamp),
+		*RelationDeleteToMessageWithKey(externalID, mapping, collectionTimestamp),
 	)
 	v.BaseCtx.MetricsRecorder.IncTopologyProduced(ctx, 1, settingsproto.SettingTypeOtelRelationMapping, v.BaseCtx.Signal)
 }
@@ -304,13 +315,14 @@ func (v *MappingContext[T]) handleComponent(
 	mapping settingsproto.OtelComponentMapping,
 ) {
 	componentMappingStart := time.Now()
+	collectionTimestamp := v.effectiveCollectionTimestamp(evalCtx)
 
 	component, errs := convertToComponent(v.BaseCtx.Evaluator, v.BaseCtx.Mapper, evalCtx, &mapping)
 	if component != nil {
 		*v.BaseCtx.Results = append(
 			*v.BaseCtx.Results,
 			*OutputToMessageWithKey(
-				component, mapping, v.BaseCtx.CollectionTimestamp,
+				component, mapping, collectionTimestamp,
 				func() []*topostreamv1.TopologyStreamComponent {
 					return []*topostreamv1.TopologyStreamComponent{component}
 				},
@@ -324,7 +336,7 @@ func (v *MappingContext[T]) handleComponent(
 	if errs != nil {
 		*v.BaseCtx.Results = append(
 			*v.BaseCtx.Results,
-			*ErrorsToMessageWithKey(&errs, mapping, v.BaseCtx.CollectionTimestamp),
+			*ErrorsToMessageWithKey(&errs, mapping, collectionTimestamp),
 		)
 		v.BaseCtx.MetricsRecorder.IncMappingErrors(ctx, 1, settingsproto.SettingTypeOtelComponentMapping, v.BaseCtx.Signal)
 	}
@@ -344,12 +356,13 @@ func (v *MappingContext[T]) handleRelation(
 	evalCtx *ExpressionEvalContext,
 	mapping settingsproto.OtelRelationMapping,
 ) {
+	collectionTimestamp := v.effectiveCollectionTimestamp(evalCtx)
 	relation, errs := convertToRelation(v.BaseCtx.Evaluator, v.BaseCtx.Mapper, evalCtx, &mapping)
 	if relation != nil {
 		*v.BaseCtx.Results = append(
 			*v.BaseCtx.Results,
 			*OutputToMessageWithKey(
-				relation, mapping, v.BaseCtx.CollectionTimestamp,
+				relation, mapping, collectionTimestamp,
 				func() []*topostreamv1.TopologyStreamComponent { return nil },
 				func() []*topostreamv1.TopologyStreamRelation { return []*topostreamv1.TopologyStreamRelation{relation} },
 			),
@@ -359,7 +372,7 @@ func (v *MappingContext[T]) handleRelation(
 	if errs != nil {
 		*v.BaseCtx.Results = append(
 			*v.BaseCtx.Results,
-			*ErrorsToMessageWithKey(&errs, mapping, v.BaseCtx.CollectionTimestamp),
+			*ErrorsToMessageWithKey(&errs, mapping, collectionTimestamp),
 		)
 		v.BaseCtx.MetricsRecorder.IncMappingErrors(ctx, 1, settingsproto.SettingTypeOtelRelationMapping, v.BaseCtx.Signal)
 	}

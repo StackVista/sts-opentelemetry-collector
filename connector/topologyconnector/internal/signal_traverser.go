@@ -105,6 +105,17 @@ func (t *MetricsTraverser) metric(resourceIdx, scopeIdx, metricIdx int, m pmetri
 
 type attrProvider interface {
 	Attributes() pcommon.Map
+	Timestamp() pcommon.Timestamp
+}
+
+// timestampToMillis converts an OTel timestamp (nanoseconds since epoch) to milliseconds.
+// A zero (unset) timestamp returns 0, which downstream is treated as "no collection time" and
+// falls back to the collector's processing time.
+func timestampToMillis(ts pcommon.Timestamp) int64 {
+	if ts == 0 {
+		return 0
+	}
+	return ts.AsTime().UnixMilli()
 }
 
 func (t *MetricsTraverser) datapoint(
@@ -114,7 +125,7 @@ func (t *MetricsTraverser) datapoint(
 	if cached, ok := t.datapoints.Load(key); ok {
 		return cached
 	}
-	d := NewDatapoint(dp.Attributes().AsRaw())
+	d := NewDatapoint(dp.Attributes().AsRaw()).WithCollectionTimestamp(timestampToMillis(dp.Timestamp()))
 	t.datapoints.Store(key, d)
 	return d
 }
@@ -254,13 +265,18 @@ func (t *TracesTraverser) span(resourceIdx, scopeIdx, spanIdx int, spans ptrace.
 		return cached
 	}
 	span := spans.At(spanIdx)
+	// Prefer the span's end time as its collection time; fall back to the start time.
+	collectionTimestampMs := timestampToMillis(span.EndTimestamp())
+	if collectionTimestampMs == 0 {
+		collectionTimestampMs = timestampToMillis(span.StartTimestamp())
+	}
 	s := NewSpan(
 		span.Name(),
 		span.Kind().String(),
 		span.Status().Code().String(),
 		span.Status().Message(),
 		span.Attributes().AsRaw(),
-	)
+	).WithCollectionTimestamp(collectionTimestampMs)
 	t.spans.Store(key, s)
 	return s
 }
@@ -351,11 +367,17 @@ func (l *LogTraverser) log(resourceIdx, scopeIdx, logIdx int, logs plog.LogRecor
 		return cached
 	}
 	logRecord := logs.At(logIdx)
+	// Prefer the observed time (when the pipeline collected the record) as its collection time;
+	// fall back to the record's own event time.
+	collectionTimestampMs := timestampToMillis(logRecord.ObservedTimestamp())
+	if collectionTimestampMs == 0 {
+		collectionTimestampMs = timestampToMillis(logRecord.Timestamp())
+	}
 	log := NewLog(
 		logRecord.EventName(),
 		logRecord.Body().AsRaw(),
 		logRecord.Attributes().AsRaw(),
-	)
+	).WithCollectionTimestamp(collectionTimestampMs)
 	l.logs.Store(key, log)
 	return log
 }

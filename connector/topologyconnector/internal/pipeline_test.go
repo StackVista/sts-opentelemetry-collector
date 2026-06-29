@@ -227,7 +227,8 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 						ShardId:    "2",
 					},
 					Message: &topostreamv1.TopologyStreamMessage{
-						CollectionTimestamp: collectionTimestampMs,
+						// Span-level CREATE: the relation carries the span's own collection time.
+						CollectionTimestamp: submittedTime / int64(time.Millisecond),
 						SubmittedTimestamp:  time.Now().UnixMilli(),
 						Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 							TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
@@ -442,7 +443,8 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 						ShardId:    "unknown",
 					},
 					Message: &topostreamv1.TopologyStreamMessage{
-						CollectionTimestamp: collectionTimestampMs,
+						// Span-level CREATE error: carries the span's own collection time.
+						CollectionTimestamp: submittedTime / int64(time.Millisecond),
 						SubmittedTimestamp:  time.Now().UnixMilli(),
 						Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 							TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
@@ -563,7 +565,9 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			unifyMessages(t, &result)
 			//nolint:gosec
 			unifyMessages(t, &tt.expected)
-			assert.Equal(t, tt.expected, result)
+			if diff := cmp.Diff(tt.expected, result, protocmp.Transform()); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
 		})
 	}
 
@@ -680,21 +684,13 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			//nolint:govet
 			actualKeys = append(actualKeys, *message.Key)
 		}
+		// Both spans share the same shard and collection timestamp, so the two components coalesce into one
+		// message and the two relations into another — two keys, not four.
 		expectedKeys := []topostreamv1.TopologyStreamMessageKey{
 			{
 				Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 				DataSource: "urn:otel-component-mapping:cm1",
 				ShardId:    "0",
-			},
-			{
-				Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
-				DataSource: "urn:otel-component-mapping:cm1",
-				ShardId:    "0",
-			},
-			{
-				Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
-				DataSource: "urn:otel-relation-mapping:rm1",
-				ShardId:    "2",
 			},
 			{
 				Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
@@ -830,6 +826,8 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage_MultipleComponents(t *te
 		},
 	}
 	relationMappings := []settingsproto.OtelRelationMapping{}
+	// Both datapoints map to api-route components that hash to the same shard and share the same datapoint
+	// collection timestamp, so grouping coalesces them into a single message carrying both components.
 	expected := []MessageWithKey{
 		{
 			Key: &topostreamv1.TopologyStreamMessageKey{
@@ -838,7 +836,8 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage_MultipleComponents(t *te
 				ShardId:    stableShardID("api-gateway-/products"),
 			},
 			Message: &topostreamv1.TopologyStreamMessage{
-				CollectionTimestamp: collectionTimestampMs,
+				// Datapoint-level CREATE: the component carries the datapoint's own collection time.
+				CollectionTimestamp: submittedTime / int64(time.Millisecond),
 				SubmittedTimestamp:  time.Now().UnixMilli(),
 				Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 					TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
@@ -851,24 +850,6 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage_MultipleComponents(t *te
 								TypeName:    "api-route",
 								Tags:        []string{"http_method:POST"},
 							},
-						},
-					},
-				},
-			},
-		},
-		{
-			Key: &topostreamv1.TopologyStreamMessageKey{
-				Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
-				DataSource: "urn:otel-component-mapping:api-route",
-				ShardId:    stableShardID("api-gateway-/users"),
-			},
-			Message: &topostreamv1.TopologyStreamMessage{
-				CollectionTimestamp: collectionTimestampMs,
-				SubmittedTimestamp:  time.Now().UnixMilli(),
-				Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
-					TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
-						ExpiryIntervalMs: 60000,
-						Components: []*topostreamv1.TopologyStreamComponent{
 							{
 								ExternalId:  "api-gateway-/users",
 								Identifiers: []string{"api-gateway-/users"},
@@ -903,7 +884,9 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage_MultipleComponents(t *te
 	// Unify to handle unpredictable map and slice ordering
 	unifyMessages(t, &result)
 	unifyMessages(t, &expected)
-	assert.Equal(t, expected, result)
+	if diff := cmp.Diff(expected, result, protocmp.Transform()); diff != "" {
+		t.Errorf("mismatch (-want +got):\n%s", diff)
+	}
 }
 
 func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
@@ -1087,7 +1070,8 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 				ShardId:    "0",
 			},
 			Message: &topostreamv1.TopologyStreamMessage{
-				CollectionTimestamp: collectionTimestampMs,
+				// Datapoint-level CREATE: carries the datapoint's own collection time.
+				CollectionTimestamp: submittedTime / int64(time.Millisecond),
 				SubmittedTimestamp:  time.Now().UnixMilli(),
 				Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 					TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
@@ -1112,7 +1096,8 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {
 				ShardId:    "2",
 			},
 			Message: &topostreamv1.TopologyStreamMessage{
-				CollectionTimestamp: collectionTimestampMs,
+				// Datapoint-level CREATE: carries the datapoint's own collection time.
+				CollectionTimestamp: submittedTime / int64(time.Millisecond),
 				SubmittedTimestamp:  time.Now().UnixMilli(),
 				Payload: &topostreamv1.TopologyStreamMessage_TopologyStreamRepeatElementsData{
 					TopologyStreamRepeatElementsData: &topostreamv1.TopologyStreamRepeatElementsData{
@@ -1510,6 +1495,10 @@ func unifyMessages(t *testing.T, data *[]MessageWithKey) {
 					relation.Name = "" // Ensure empty is not nil for comparison
 				}
 			}
+			// Grouping can merge several elements into one message; sort within a message so element
+			// order does not make assertions brittle.
+			sort.Slice(pl.Components, func(i, j int) bool { return pl.Components[i].GetExternalId() < pl.Components[j].GetExternalId() })
+			sort.Slice(pl.Relations, func(i, j int) bool { return pl.Relations[i].GetExternalId() < pl.Relations[j].GetExternalId() })
 		}
 	}
 }
