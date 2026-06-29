@@ -565,7 +565,9 @@ func TestPipeline_ConvertSpanToTopologyStreamMessage(t *testing.T) {
 			unifyMessages(t, &result)
 			//nolint:gosec
 			unifyMessages(t, &tt.expected)
-			assert.Equal(t, tt.expected, result)
+			if diff := cmp.Diff(tt.expected, result, protocmp.Transform()); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
 		})
 	}
 
@@ -882,7 +884,9 @@ func TestPipeline_ConvertMetricsToTopologyStreamMessage_MultipleComponents(t *te
 	// Unify to handle unpredictable map and slice ordering
 	unifyMessages(t, &result)
 	unifyMessages(t, &expected)
-	assert.Equal(t, expected, result)
+	if diff := cmp.Diff(expected, result, protocmp.Transform()); diff != "" {
+		t.Errorf("mismatch (-want +got):\n%s", diff)
+	}
 }
 
 func TestPipeline_ConvertMetricsToTopologyStreamMessage(t *testing.T) {

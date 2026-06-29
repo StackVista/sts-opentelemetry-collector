@@ -2,11 +2,13 @@
 package internal
 
 import (
+	"strings"
 	"testing"
 
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 const testDataSource = "ds"
@@ -123,20 +125,34 @@ func TestGroupMessagesByKeyAndTimestamp_PassesThroughRemovesUnmerged(t *testing.
 	assert.Len(t, out, 2)
 }
 
-func TestGroupMessagesByKeyAndTimestamp_CapsGroupSize(t *testing.T) {
-	const total = maxElementsPerGroupedMessage + 50
-	in := make([]MessageWithKey, 0, total)
-	for i := 0; i < total; i++ {
-		in = append(in, repeatMsg("0", 100, withComponent(string(rune('a'))+string(rune(i)))))
+func withFatComponent(id string, payloadBytes int) func(d *topostreamv1.TopologyStreamRepeatElementsData) {
+	return func(d *topostreamv1.TopologyStreamRepeatElementsData) {
+		d.Components = append(d.Components, &topostreamv1.TopologyStreamComponent{
+			ExternalId: id,
+			Name:       strings.Repeat("x", payloadBytes),
+		})
+	}
+}
+
+func TestGroupMessagesByKeyAndTimestamp_CapsGroupSizeByBytes(t *testing.T) {
+	// Each component is ~40% of the byte budget, so three of them must not fit in one envelope.
+	fat := maxGroupedMessageBytes * 40 / 100
+	in := []MessageWithKey{
+		repeatMsg("0", 100, withFatComponent("a", fat)),
+		repeatMsg("0", 100, withFatComponent("b", fat)),
+		repeatMsg("0", 100, withFatComponent("c", fat)),
 	}
 
 	out := groupMessagesByKeyAndTimestamp(in)
 
-	// Overflow spills into a second envelope for the same key+timestamp.
+	// a+b fit in the first envelope; c overflows into a second. No envelope exceeds the byte budget.
 	require.Len(t, out, 2)
-	assert.LessOrEqual(t, repeatElementCount(repeatData(out[0])), maxElementsPerGroupedMessage)
-	assert.LessOrEqual(t, repeatElementCount(repeatData(out[1])), maxElementsPerGroupedMessage)
-	assert.Equal(t, total, repeatElementCount(repeatData(out[0]))+repeatElementCount(repeatData(out[1])))
+	for _, m := range out {
+		assert.LessOrEqual(t, proto.Size(m.Message), maxGroupedMessageBytes)
+	}
+	// No element is lost.
+	totalComponents := len(repeatData(out[0]).Components) + len(repeatData(out[1]).Components)
+	assert.Equal(t, 3, totalComponents)
 	// Both envelopes keep the same key and timestamp.
 	assert.Equal(t, "0", out[1].Key.GetShardId())
 	assert.Equal(t, int64(100), out[1].Message.GetCollectionTimestamp())

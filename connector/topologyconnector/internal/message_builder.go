@@ -7,6 +7,7 @@ import (
 
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
+	"google.golang.org/protobuf/proto"
 )
 
 // ShardCount is the number of shards to use for the topology stream.
@@ -156,14 +157,16 @@ func RelationDeleteToMessageWithKey(
 	}
 }
 
-// maxElementsPerGroupedMessage caps how many elements (components + relations + delete ids + errors) a single
-// grouped envelope may hold. Each envelope becomes one Kafka record, which is bounded by the broker's
-// message.max.bytes (typically ~1 MiB), so an unbounded group could produce a record that the producer rejects
-// (and, with acks=none, silently drops). When a group reaches this cap a fresh envelope is started for the same
-// key+timestamp. Splitting is safe: the platform gate is keyed per externalId and treats equal timestamps as
-// non-stale, so distinct elements spread across envelopes are all applied. The value is intentionally
-// conservative relative to the 1 MiB limit to leave headroom for fat resource_definition/status_data payloads.
-const maxElementsPerGroupedMessage = 500
+// maxGroupedMessageBytes caps the marshaled size of a single grouped envelope. Each envelope becomes one Kafka
+// record, which is bounded by the broker's message.max.bytes (typically ~1 MiB), so an unbounded group could
+// produce a record that the producer rejects (and, with acks=none, silently drops). We bound on bytes rather than
+// element count because element sizes vary enormously (fat resource_definition/status_data payloads), and such fat
+// elements are likely to be collected together and so land in the same group — an element count would be a poor
+// proxy for the wire size that actually matters. When adding an element would exceed this budget a fresh envelope
+// is started for the same key+timestamp. Splitting is safe: the platform gate is keyed per externalId and treats
+// equal timestamps as non-stale, so distinct elements spread across envelopes are all applied. The value is
+// intentionally conservative relative to the 1 MiB limit to leave headroom for the key and Kafka framing.
+const maxGroupedMessageBytes = 768 * 1024
 
 // repeatPayloadOf returns the RepeatElements payload of a message, or nil if the message carries a different
 // payload (e.g. a TopologyStreamRemove). Uses a checked type assertion so a non-matching payload is handled
@@ -174,11 +177,6 @@ func repeatPayloadOf(m *topostreamv1.TopologyStreamMessage) *topostreamv1.Topolo
 		return nil
 	}
 	return wrapper.TopologyStreamRepeatElementsData
-}
-
-func repeatElementCount(d *topostreamv1.TopologyStreamRepeatElementsData) int {
-	return len(d.Components) + len(d.Relations) +
-		len(d.DeleteComponentExternalIds) + len(d.DeleteRelationExternalIds) + len(d.Errors)
 }
 
 // mergeRepeatElements appends all of src's elements into dst. ExpiryIntervalMs and Specificity are per-mapping
@@ -200,8 +198,8 @@ func mergeRepeatElements(dst, src *topostreamv1.TopologyStreamRepeatElementsData
 // through untouched and never merged. Grouping is never done across shardId or across differing collection_timestamp,
 // which would violate the partition-ordering guarantee or the per-element timestamp respectively.
 //
-// A single grouped envelope is capped at maxElementsPerGroupedMessage elements; overflow for the same key+timestamp
-// spills into additional envelopes so no single Kafka record grows unbounded.
+// A single grouped envelope is capped at maxGroupedMessageBytes; overflow for the same key+timestamp spills into
+// additional envelopes so no single Kafka record grows unbounded.
 //
 // Output order is deterministic: groups appear in the order their first message was seen in the input.
 func groupMessagesByKeyAndTimestamp(messages []MessageWithKey) []MessageWithKey {
@@ -215,10 +213,15 @@ func groupMessagesByKeyAndTimestamp(messages []MessageWithKey) []MessageWithKey 
 		shardID             string
 		collectionTimestamp int64
 	}
+	// group tracks the position of the CURRENT (not-yet-full) accumulating message for a key, plus a running
+	// estimate of its marshaled size so we don't re-marshal the whole envelope on every merge.
+	type group struct {
+		pos   int
+		bytes int
+	}
 
 	result := make([]MessageWithKey, 0, len(messages))
-	// groupKey -> position in result of the CURRENT (not-yet-full) accumulating message for that key.
-	index := make(map[groupKey]int)
+	index := make(map[groupKey]group)
 
 	for _, mwk := range messages {
 		incoming := repeatPayloadOf(mwk.Message)
@@ -234,24 +237,18 @@ func groupMessagesByKeyAndTimestamp(messages []MessageWithKey) []MessageWithKey 
 			shardID:             mwk.Key.GetShardId(),
 			collectionTimestamp: mwk.Message.GetCollectionTimestamp(),
 		}
+		incomingBytes := proto.Size(mwk.Message)
 
-		pos, seen := index[key]
-		if seen {
-			existing := repeatPayloadOf(result[pos].Message)
-			// Start a new envelope for this key once the current one would overflow the cap.
-			if repeatElementCount(existing)+repeatElementCount(incoming) > maxElementsPerGroupedMessage {
-				seen = false
-			}
-		}
-
-		if !seen {
-			index[key] = len(result)
-			result = append(result, mwk)
+		if g, seen := index[key]; seen && g.bytes+incomingBytes <= maxGroupedMessageBytes {
+			// Merge this message's elements into the already-accumulating message for this group.
+			mergeRepeatElements(repeatPayloadOf(result[g.pos].Message), incoming)
+			index[key] = group{pos: g.pos, bytes: g.bytes + incomingBytes}
 			continue
 		}
 
-		// Merge this message's elements into the already-accumulating message for this group.
-		mergeRepeatElements(repeatPayloadOf(result[pos].Message), incoming)
+		// First message for this key, or the current envelope would overflow: start a fresh envelope.
+		index[key] = group{pos: len(result), bytes: incomingBytes}
+		result = append(result, mwk)
 	}
 
 	return result
