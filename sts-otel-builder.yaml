@@ -9,6 +9,7 @@ dist:
 
 connectors:
   - gomod: go.opentelemetry.io/collector/connector/forwardconnector v0.153.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/spanmetricsconnector v0.153.0
   - gomod: github.com/stackvista/sts-opentelemetry-collector/connector/stsservicegraphconnector v0.0.0
     path: ./connector/stsservicegraphconnector
   - gomod: github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector v0.0.0
