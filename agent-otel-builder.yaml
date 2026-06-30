@@ -1,0 +1,45 @@
+dist:
+  name: sts-opentelemetry-agent-collector
+  description: StackState OpenTelemetry Agent Collector (strict BOM)
+  output_path: /go/src/github.com/stackvista/sts-opentelemetry-collector/bin
+  # Keep Prometheus service discovery providers except Moby. The Docker SDK module
+  # has no patched Go tag for CVE-2026-34040, and this collector does not need
+  # Docker daemon service discovery. Kept identical to sts-otel-builder.yaml.
+  build_tags: remove_all_sd,enable_aws_sd,enable_azure_sd,enable_consul_sd,enable_digitalocean_sd,enable_dns_sd,enable_eureka_sd,enable_gce_sd,enable_hetzner_sd,enable_ionos_sd,enable_kubernetes_sd,enable_linode_sd,enable_marathon_sd,enable_nomad_sd,enable_openstack_sd,enable_ovhcloud_sd,enable_puppetdb_sd,enable_scaleway_sd,enable_stackit_sd,enable_triton_sd,enable_uyuni_sd,enable_vultr_sd,enable_xds_sd,enable_zookeeper_sd
+
+# Strict Bill of Materials for the agent-side collectors (Prometheus scraper +
+# k8s-resource collector) shipped by the suse-observability-agent Helm chart.
+# Only components actually wired by those collector configs are included. Server-side
+# components (clickhouse, kafka, topology, servicegraph, settingsprovider,
+# prometheusremotewrite, forward, servicetokenauth, stsusage) live in
+# sts-otel-builder.yaml and are intentionally absent here.
+
+connectors:
+  # spanmetrics is included per the BOM design even though no agent config wires it yet.
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/spanmetricsconnector v0.153.0
+
+exporters:
+  - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.153.0
+  - gomod: go.opentelemetry.io/collector/exporter/otlpexporter v0.153.0
+  - gomod: go.opentelemetry.io/collector/exporter/otlphttpexporter v0.153.0
+
+receivers:
+  - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.153.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.153.0
+  - gomod: github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver v0.0.0
+    path: ./receiver/k8sresourcereceiver
+
+extensions:
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.153.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/bearertokenauthextension v0.153.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/pprofextension v0.153.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector v0.153.0
+
+processors:
+  - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.153.0
+  - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.153.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor v0.153.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.153.0
+
+replaces:
+  - github.com/stackvista/sts-opentelemetry-collector/common => ../common

@@ -1,0 +1,62 @@
+# De-templated copy of the agent k8s-resource collector config from
+# helm-charts-internal/stable/suse-observability-agent/templates/k8s-resource-collector-configmap.yaml
+#
+# Kept in sync with the chart. Helm templating and ${...} references have been
+# replaced with literal values so the OTel Collector `validate` subcommand can
+# load it. Leader election is enabled here so the validate run covers the
+# k8s_leader_elector extension. The HTTP OTLP exporter (otlphttp) is used so this
+# fixture exercises the otlphttp exporter from the BOM.
+receivers:
+  k8sresource:
+    auth_type: serviceAccount
+    cluster_name: test-cluster
+    snapshot_interval: 5m
+    discovery_mode: api_groups
+    crd_api_group_filters:
+      include:
+        - "*"
+    peer_sync_port: 4319
+    peer_sync_dns: k8s-resource-collector-peers
+    k8s_leader_elector: k8s_leader_elector
+
+exporters:
+  otlphttp/suse-observability:
+    auth:
+      authenticator: bearertokenauth
+    endpoint: https://suse-observability:443
+    tls:
+      insecure_skip_verify: true
+    compression: gzip
+    timeout: 30s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  pprof:
+    endpoint: 0.0.0.0:1777
+  bearertokenauth:
+    scheme: SUSEObservability
+    token: "test-token"
+  k8s_leader_elector:
+    auth_type: serviceAccount
+    lease_name: k8sresourcereceiver
+    lease_namespace: test-namespace
+    lease_duration: 15s
+    renew_deadline: 10s
+    retry_period: 2s
+
+service:
+  telemetry:
+    logs:
+      level: info
+  extensions: [health_check, pprof, bearertokenauth, k8s_leader_elector]
+  pipelines:
+    logs/k8s-resource:
+      receivers: [k8sresource]
+      processors: []
+      exporters: [otlphttp/suse-observability]

@@ -26,18 +26,28 @@ concurrency:
 
 jobs:
   build:
-    name: Build (${{ matrix.platform }})
+    name: Build (${{ matrix.image }} ${{ matrix.platform }})
     runs-on: ubuntu-latest
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
+        image: [server, agent]
+        arch: [linux-amd64, linux-arm64]
         include:
           - arch: linux-amd64
             platform: linux/amd64
           - arch: linux-arm64
             platform: linux/arm64
+          - image: server
+            dockerfile: Dockerfile
+            title: SUSE Observability OpenTelemetry Collector
+            description: Custom OpenTelemetry Collector for SUSE Observability
+          - image: agent
+            dockerfile: Dockerfile.agent
+            title: SUSE Observability OpenTelemetry Agent Collector
+            description: Strict agent OpenTelemetry Collector for SUSE Observability
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -52,6 +62,8 @@ jobs:
         uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            suffix=${{ matrix.image == 'agent' && '-agent' || '' }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{github.repository_owner}}/${{ github.repository }}
 
@@ -67,10 +79,10 @@ jobs:
         with:
           image-name: ${{ steps.image-name.outputs.value }}
           tag: ${{ steps.meta.outputs.version }}
-          title: SUSE Observability OpenTelemetry Collector
-          description: Custom OpenTelemetry Collector for SUSE Observability
+          title: ${{ matrix.title }}
+          description: ${{ matrix.description }}
           component: otel-collector
-          dockerfile: Dockerfile
+          dockerfile: ${{ matrix.dockerfile }}
 
       - name: Install protoc # TODO create a docker image with protoc installed
         run: |
@@ -96,6 +108,7 @@ jobs:
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: .
+          file: ${{ matrix.dockerfile }}
           platforms: ${{ matrix.platform }}
           outputs: type=docker,dest=/tmp/image.tar
           tags: sts-opentelemetry-collector:build
@@ -108,12 +121,12 @@ jobs:
       - name: Upload image artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: image-${{ matrix.arch }}
+          name: image-${{ matrix.image }}-${{ matrix.arch }}
           path: /tmp/image.tar
           retention-days: 1
 
   scan:
-    name: Scan (${{ matrix.arch }})
+    name: Scan (${{ matrix.image }} ${{ matrix.arch }})
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -122,6 +135,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        image: [server, agent]
         arch: [linux-amd64, linux-arm64]
     steps:
       - name: Checkout
@@ -132,7 +146,7 @@ jobs:
       - name: Download image artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: image-${{ matrix.arch }}
+          name: image-${{ matrix.image }}-${{ matrix.arch }}
           path: /tmp
 
       - name: Load image into local docker daemon
@@ -140,14 +154,14 @@ jobs:
           set -euo pipefail
           loaded=$(docker load -i /tmp/image.tar | awk -F': ' '/Loaded image/ {print $NF}')
           echo "Loaded $loaded"
-          docker tag "$loaded" scan-target:${{ matrix.arch }}
+          docker tag "$loaded" scan-target:${{ matrix.image }}-${{ matrix.arch }}
 
       - name: Run image-pipeline scan-image
         uses: StackVista/image-pipeline/.github/actions/scan-image@dfbfa39e887dfdce25e185b6fac52e325de811af
         with:
-          image: scan-target:${{ matrix.arch }}
+          image: scan-target:${{ matrix.image }}-${{ matrix.arch }}
           mode: gate
-          sarif-category: sts-opentelemetry-collector-${{ matrix.arch }}
+          sarif-category: sts-opentelemetry-collector-${{ matrix.image }}-${{ matrix.arch }}
 
   publish:
     name: Publish release tags
@@ -181,11 +195,19 @@ jobs:
           sanitized="${GITHUB_REF_NAME//\//-}"
           echo "tag=${REGISTRY}/${IMAGE_NAME}:scan-${sanitized}" >> "$GITHUB_OUTPUT"
 
-      - name: Docker meta (release tags)
-        id: meta
+      - name: Docker meta (server release tags)
+        id: meta_server
         uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: Docker meta (agent release tags)
+        id: meta_agent
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            suffix=-agent
 
       - name: Download all image artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -193,48 +215,60 @@ jobs:
           pattern: image-*
           path: /tmp/artifacts
 
-      - name: Push per-arch and assemble multi-arch manifest
-        # Two-stage push:
+      - name: Push per-arch and assemble multi-arch manifests
+        # Two-stage push, run once per image variant (server, agent):
         #   1. Each per-arch tarball is loaded, tagged with a mutable
-        #      per-ref handle (`scan-<ref>-<arch>`), and pushed. The handle
-        #      tag exists only so `imagetools create` can address the
-        #      per-arch manifest by digest.
+        #      per-ref handle (`scan-<ref>-<variant>-<arch>`), and pushed.
+        #      The handle tag exists only so `imagetools create` can address
+        #      the per-arch manifest by digest. The variant is included so
+        #      the server and agent handle tags do not collide.
         #   2. `docker buildx imagetools create` assembles a fresh
         #      multi-arch manifest list from the per-arch digests and
-        #      attaches every release tag emitted by metadata-action in one
-        #      operation.
+        #      attaches every release tag emitted by metadata-action for that
+        #      variant in one operation.
         env:
           SCAN_BASE: ${{ steps.scan_base.outputs.tag }}
-          RELEASE_TAGS: ${{ steps.meta.outputs.tags }}
+          RELEASE_TAGS_SERVER: ${{ steps.meta_server.outputs.tags }}
+          RELEASE_TAGS_AGENT: ${{ steps.meta_agent.outputs.tags }}
         run: |
           set -euo pipefail
 
-          per_arch_refs=()
-          for arch in linux-amd64 linux-arm64; do
-            tarball="/tmp/artifacts/image-${arch}/image.tar"
-            loaded=$(docker load -i "$tarball" | awk -F': ' '/Loaded image/ {print $NF}')
-            arch_tag="${SCAN_BASE}-${arch}"
-            docker tag "$loaded" "$arch_tag"
-            docker push "$arch_tag"
-            # Resolve the manifest digest via inspect rather than parsing
-            # `docker push` stdout — the `digest:` line format has shifted
-            # between docker versions.
-            digest=$(docker buildx imagetools inspect "$arch_tag" --format '{{.Manifest.Digest}}')
-            per_arch_refs+=("${SCAN_BASE%:*}@${digest}")
-          done
+          assemble() {
+            local variant="$1"
+            local release_tags="$2"
 
-          tag_args=()
-          while IFS= read -r tag; do
-            [ -z "$tag" ] && continue
-            tag_args+=(--tag "$tag")
-          done <<< "$RELEASE_TAGS"
+            local per_arch_refs=()
+            local arch tarball loaded arch_tag digest
+            for arch in linux-amd64 linux-arm64; do
+              tarball="/tmp/artifacts/image-${variant}-${arch}/image.tar"
+              loaded=$(docker load -i "$tarball" | awk -F': ' '/Loaded image/ {print $NF}')
+              arch_tag="${SCAN_BASE}-${variant}-${arch}"
+              docker tag "$loaded" "$arch_tag"
+              docker push "$arch_tag"
+              # Resolve the manifest digest via inspect rather than parsing
+              # `docker push` stdout — the `digest:` line format has shifted
+              # between docker versions.
+              digest=$(docker buildx imagetools inspect "$arch_tag" --format '{{.Manifest.Digest}}')
+              per_arch_refs+=("${SCAN_BASE%:*}@${digest}")
+            done
 
-          if [ "${#tag_args[@]}" -eq 0 ]; then
-            echo "::notice::metadata-action produced no release tags for this ref; skipping multi-arch assembly"
-            exit 0
-          fi
+            local tag_args=()
+            local tag
+            while IFS= read -r tag; do
+              [ -z "$tag" ] && continue
+              tag_args+=(--tag "$tag")
+            done <<< "$release_tags"
 
-          docker buildx imagetools create "${tag_args[@]}" "${per_arch_refs[@]}"
+            if [ "${#tag_args[@]}" -eq 0 ]; then
+              echo "::notice::metadata-action produced no release tags for ${variant} on this ref; skipping multi-arch assembly"
+              return 0
+            fi
+
+            docker buildx imagetools create "${tag_args[@]}" "${per_arch_refs[@]}"
+          }
+
+          assemble server "$RELEASE_TAGS_SERVER"
+          assemble agent "$RELEASE_TAGS_AGENT"
 
   detect-modules:
     runs-on: ubuntu-latest
@@ -361,9 +395,8 @@ jobs:
       - name: Download amd64 image artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          pattern: image-linux-amd64
+          name: image-server-linux-amd64
           path: /tmp
-          merge-multiple: true
 
       - name: Load image into local docker daemon
         run: |
@@ -375,3 +408,38 @@ jobs:
         env:
           OTEL_COLLECTOR_IMAGE: sts-opentelemetry-collector:e2e
         run: go test -v ./test/e2e/...
+
+  validate:
+    name: Validate agent configs
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Download agent amd64 image artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: image-agent-linux-amd64
+          path: /tmp
+
+      - name: Load image into local docker daemon
+        run: |
+          set -euo pipefail
+          loaded=$(docker load -i /tmp/image.tar | awk -F': ' '/Loaded image/ {print $NF}')
+          echo "Loaded $loaded"
+          docker tag "$loaded" sts-otel-agent:validate
+
+      - name: Validate agent config fixtures
+        run: |
+          set -euo pipefail
+          for cfg in scraper.yaml k8s-resource.yaml coverage.yaml; do
+            echo "::group::validate ${cfg}"
+            docker run --rm -v "$PWD/test/validate/configs:/cfg" \
+              sts-otel-agent:validate validate --config "/cfg/${cfg}"
+            echo "::endgroup::"
+          done
