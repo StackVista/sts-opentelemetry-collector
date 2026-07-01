@@ -1,0 +1,37 @@
+# Synthetic coverage fixture. The scraper.yaml and k8s-resource.yaml fixtures are
+# faithful copies of the agent chart configs and together exercise most of the
+# strict agent BOM. This fixture wires the remaining BOM components that no agent
+# config uses today — the spanmetrics connector and the debug exporter — plus the
+# base otlp receiver, so `validate` exercises the entire Bill of Materials.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+
+connectors:
+  spanmetrics: {}
+
+exporters:
+  debug:
+    verbosity: detailed
+  otlp:
+    endpoint: suse-observability:4317
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [spanmetrics, debug]
+    metrics/spanmetrics:
+      receivers: [spanmetrics]
+      processors: [batch]
+      exporters: [otlp, debug]
