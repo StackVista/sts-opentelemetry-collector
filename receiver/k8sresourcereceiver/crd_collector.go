@@ -66,9 +66,6 @@ func newResourceCollector(
 	}
 }
 
-// Start begins informer-based collection. If Start returns an error after
-// partially initialising informers, Shutdown must still be called to drain any
-// goroutines that were already started.
 func (c *resourceCollector) Start(ctx context.Context) error {
 	loopCtx, cancel := context.WithCancel(ctx)
 	c.cancel = cancel

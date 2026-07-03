@@ -35,10 +35,10 @@ type resourceAttributeManager struct {
 	enrichments   []resolvedResourceAttributeEnrichment
 	metrics       metrics.Recorder
 
-	mu      sync.RWMutex
-	values  map[string]string
-	stopChs []chan struct{}
-	wg      sync.WaitGroup
+	mu             sync.RWMutex
+	resolvedValues map[string]string
+	stopChs        []chan struct{}
+	wg             sync.WaitGroup
 }
 
 type resolvedResourceAttributeEnrichment struct {
@@ -91,11 +91,11 @@ func newResourceAttributeManager(
 		metricsRecorder = metrics.NoopRecorder{}
 	}
 	return &resourceAttributeManager{
-		logger:        logger,
-		dynamicClient: dynamicClient,
-		enrichments:   enrichments,
-		metrics:       metricsRecorder,
-		values:        make(map[string]string, len(enrichments)),
+		logger:         logger,
+		dynamicClient:  dynamicClient,
+		enrichments:    enrichments,
+		metrics:        metricsRecorder,
+		resolvedValues: make(map[string]string, len(enrichments)),
 	}
 }
 
@@ -122,7 +122,7 @@ func (m *resourceAttributeManager) Shutdown(context.Context) error {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.values = make(map[string]string, len(m.enrichments))
+	m.resolvedValues = make(map[string]string, len(m.enrichments))
 	return nil
 }
 
@@ -135,7 +135,7 @@ func (m *resourceAttributeManager) AttributesFor(gvr schema.GroupVersionResource
 		if !enrichment.config.ApplyTo.matches(gvr) {
 			continue
 		}
-		value, exists := m.values[enrichment.config.Key]
+		value, exists := m.resolvedValues[enrichment.config.Key]
 		if !exists || value == "" {
 			continue
 		}
@@ -249,8 +249,8 @@ func (m *resourceAttributeManager) updateValue(enrichment *resolvedResourceAttri
 	}
 
 	m.mu.Lock()
-	previous, existed := m.values[enrichment.config.Key]
-	m.values[enrichment.config.Key] = value
+	previous, existed := m.resolvedValues[enrichment.config.Key]
+	m.resolvedValues[enrichment.config.Key] = value
 	m.mu.Unlock()
 	if !existed || previous != value {
 		m.logger.Info("Resource attribute enrichment value available", zap.String("key", enrichment.config.Key))
@@ -263,7 +263,7 @@ func (m *resourceAttributeManager) updateValue(enrichment *resolvedResourceAttri
 func (m *resourceAttributeManager) deleteValue(key string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	delete(m.values, key)
+	delete(m.resolvedValues, key)
 }
 
 const (

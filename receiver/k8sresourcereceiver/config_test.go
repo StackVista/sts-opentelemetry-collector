@@ -310,6 +310,218 @@ func TestConfigValidate(t *testing.T) {
 			wantErr: true,
 			errMsg:  `resource "secrets" in group "" is denied`,
 		},
+		{
+			name: "denied_objects entry without name rejected",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				DeniedObjects: []ObjectMatcher{
+					{Group: "cert-manager.io"},
+				},
+			},
+			wantErr: true,
+			errMsg:  "denied_objects[0]: name is required",
+		},
+		{
+			name: "peer_sync_port negative rejected",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				PeerSyncPort:  -1,
+			},
+			wantErr: true,
+			errMsg:  "peer_sync_port must be between 0 and 65535",
+		},
+		{
+			name: "peer_sync_port above 65535 rejected",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				PeerSyncPort:  65536,
+			},
+			wantErr: true,
+			errMsg:  "peer_sync_port must be between 0 and 65535",
+		},
+		{
+			name: "peer_sync_port zero accepted",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				PeerSyncPort:  0,
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid resource_attributes with api_groups filter",
+			config: &Config{
+				DiscoveryMode:      DiscoveryModeAll,
+				ResourceAttributes: []ResourceAttributeEnrichment{validResourceAttr()},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid resource_attributes with resources filter only",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				ResourceAttributes: []ResourceAttributeEnrichment{
+					withApplyTo(validResourceAttr(), ResourceAttributeApplyTo{Resources: []string{"virtualmachines"}}),
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid resource_attributes with both api_groups and resources",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				ResourceAttributes: []ResourceAttributeEnrichment{
+					withApplyTo(validResourceAttr(), ResourceAttributeApplyTo{
+						APIGroups: []string{"kubevirt.io"},
+						Resources: []string{"virtualmachines"},
+					}),
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "resource_attributes key required",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				ResourceAttributes: []ResourceAttributeEnrichment{
+					withKey(validResourceAttr(), ""),
+				},
+			},
+			wantErr: true,
+			errMsg:  "resource_attributes[0].key is required",
+		},
+		{
+			name: "resource_attributes reserved key k8s.cluster.name rejected",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				ResourceAttributes: []ResourceAttributeEnrichment{
+					withKey(validResourceAttr(), "k8s.cluster.name"),
+				},
+			},
+			wantErr: true,
+			errMsg:  `resource_attributes[0].key "k8s.cluster.name" is reserved`,
+		},
+		{
+			name: "resource_attributes reserved key k8s.namespace.name rejected",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				ResourceAttributes: []ResourceAttributeEnrichment{
+					withKey(validResourceAttr(), "k8s.namespace.name"),
+				},
+			},
+			wantErr: true,
+			errMsg:  `resource_attributes[0].key "k8s.namespace.name" is reserved`,
+		},
+		{
+			name: "resource_attributes duplicate key rejected",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				ResourceAttributes: []ResourceAttributeEnrichment{
+					validResourceAttr(),
+					validResourceAttr(),
+				},
+			},
+			wantErr: true,
+			errMsg:  `resource_attributes[1].key duplicates resource_attributes[0].key`,
+		},
+		{
+			name: "resource_attributes k8s_container_env required",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				ResourceAttributes: []ResourceAttributeEnrichment{
+					{Key: "my.attr", ApplyTo: ResourceAttributeApplyTo{APIGroups: []string{"kubevirt.io"}}},
+				},
+			},
+			wantErr: true,
+			errMsg:  "resource_attributes[0].value_from.k8s_container_env is required",
+		},
+		{
+			name: "resource_attributes object.name required",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				ResourceAttributes: []ResourceAttributeEnrichment{
+					withObjectName(validResourceAttr(), ""),
+				},
+			},
+			wantErr: true,
+			errMsg:  "resource_attributes[0].value_from.k8s_container_env.object.name is required",
+		},
+		{
+			name: "resource_attributes object.resource required",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				ResourceAttributes: []ResourceAttributeEnrichment{
+					withObjectResource(validResourceAttr(), ""),
+				},
+			},
+			wantErr: true,
+			errMsg:  "resource_attributes[0].value_from.k8s_container_env.object.resource is required",
+		},
+		{
+			name: "resource_attributes object.namespace required",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				ResourceAttributes: []ResourceAttributeEnrichment{
+					withObjectNamespace(validResourceAttr(), ""),
+				},
+			},
+			wantErr: true,
+			errMsg:  "resource_attributes[0].value_from.k8s_container_env.object.namespace is required",
+		},
+		{
+			name: "resource_attributes container required",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				ResourceAttributes: []ResourceAttributeEnrichment{
+					withContainer(validResourceAttr(), ""),
+				},
+			},
+			wantErr: true,
+			errMsg:  "resource_attributes[0].value_from.k8s_container_env.container is required",
+		},
+		{
+			name: "resource_attributes env required",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				ResourceAttributes: []ResourceAttributeEnrichment{
+					withEnv(validResourceAttr(), ""),
+				},
+			},
+			wantErr: true,
+			errMsg:  "resource_attributes[0].value_from.k8s_container_env.env is required",
+		},
+		{
+			name: "resource_attributes apply_to must have api_groups or resources",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				ResourceAttributes: []ResourceAttributeEnrichment{
+					withApplyTo(validResourceAttr(), ResourceAttributeApplyTo{}),
+				},
+			},
+			wantErr: true,
+			errMsg:  "resource_attributes[0].apply_to.api_groups or resource_attributes[0].apply_to.resources is required",
+		},
+		{
+			name: "resource_attributes blank api_groups entry rejected",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				ResourceAttributes: []ResourceAttributeEnrichment{
+					withApplyTo(validResourceAttr(), ResourceAttributeApplyTo{APIGroups: []string{"kubevirt.io", ""}}),
+				},
+			},
+			wantErr: true,
+			errMsg:  "resource_attributes[0].apply_to.api_groups[1] must not be empty",
+		},
+		{
+			name: "resource_attributes blank resources entry rejected",
+			config: &Config{
+				DiscoveryMode: DiscoveryModeAll,
+				ResourceAttributes: []ResourceAttributeEnrichment{
+					withApplyTo(validResourceAttr(), ResourceAttributeApplyTo{Resources: []string{"virtualmachines", ""}}),
+				},
+			},
+			wantErr: true,
+			errMsg:  "resource_attributes[0].apply_to.resources[1] must not be empty",
+		},
 	}
 
 	for _, tt := range tests {
@@ -325,6 +537,63 @@ func TestConfigValidate(t *testing.T) {
 			}
 		})
 	}
+}
+
+// validResourceAttr returns a fully-populated ResourceAttributeEnrichment that passes validation.
+// Individual test cases mutate specific fields via the with* helpers.
+func validResourceAttr() ResourceAttributeEnrichment {
+	return ResourceAttributeEnrichment{
+		Key: "my.attr",
+		ValueFrom: ResourceAttributeValueFrom{
+			K8sContainerEnv: &K8sContainerEnvSource{
+				Object: K8sObjectSource{
+					Name:      "my-deployment",
+					Resource:  "deployments",
+					Namespace: "my-namespace",
+				},
+				Container: "my-container",
+				Env:       "MY_ENV_VAR",
+			},
+		},
+		ApplyTo: ResourceAttributeApplyTo{
+			APIGroups: []string{"kubevirt.io"},
+		},
+	}
+}
+
+func withKey(r ResourceAttributeEnrichment, key string) ResourceAttributeEnrichment {
+	r.Key = key
+	return r
+}
+
+func withApplyTo(r ResourceAttributeEnrichment, applyTo ResourceAttributeApplyTo) ResourceAttributeEnrichment {
+	r.ApplyTo = applyTo
+	return r
+}
+
+func withObjectName(r ResourceAttributeEnrichment, name string) ResourceAttributeEnrichment {
+	r.ValueFrom.K8sContainerEnv.Object.Name = name
+	return r
+}
+
+func withObjectResource(r ResourceAttributeEnrichment, resource string) ResourceAttributeEnrichment {
+	r.ValueFrom.K8sContainerEnv.Object.Resource = resource
+	return r
+}
+
+func withObjectNamespace(r ResourceAttributeEnrichment, namespace string) ResourceAttributeEnrichment {
+	r.ValueFrom.K8sContainerEnv.Object.Namespace = namespace
+	return r
+}
+
+func withContainer(r ResourceAttributeEnrichment, container string) ResourceAttributeEnrichment {
+	r.ValueFrom.K8sContainerEnv.Container = container
+	return r
+}
+
+func withEnv(r ResourceAttributeEnrichment, env string) ResourceAttributeEnrichment {
+	r.ValueFrom.K8sContainerEnv.Env = env
+	return r
 }
 
 // TestCompiledPatternMatches verifies that the glob-to-regex translation done by compilePattern
