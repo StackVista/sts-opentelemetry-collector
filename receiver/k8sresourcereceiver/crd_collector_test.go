@@ -162,7 +162,7 @@ func newTestCollectorWithPeerStore(
 	t.Helper()
 	settings := testSettings(t)
 	informerSet := newResourceInformers(settings, config, client, nil, ft, nil)
-	return newResourceCollector(settings.Logger, config, sink, informerSet, peerStore, nil)
+	return newResourceCollector(settings.Logger, config, sink, informerSet, peerStore, nil, nil)
 }
 
 // recordingPeerStore captures each ApplyDelta invocation as a snapshot of the cache
@@ -179,6 +179,18 @@ type recordedSave struct {
 	crds             map[string]string // CRD name -> resourceVersion
 	crs              map[string]string // CR key  -> resourceVersion
 	lastSnapshotTime time.Time
+}
+
+type stubResourceAttributeEnricher struct {
+	gvr   schema.GroupVersionResource
+	attrs map[string]string
+}
+
+func (s stubResourceAttributeEnricher) AttributesFor(gvr schema.GroupVersionResource) map[string]string {
+	if gvr == s.gvr {
+		return s.attrs
+	}
+	return nil
 }
 
 func newRecordingPeerStore() *recordingPeerStore {
@@ -545,6 +557,7 @@ func TestResourceCollector_EmitObject_SourceDrivesEventName(t *testing.T) {
 			config:   cfg,
 			consumer: sink,
 			metrics:  metrics.NoopRecorder{},
+			enricher: noopResourceAttributeEnricher{},
 		}
 		c.emitSnapshot(
 			context.Background(),
@@ -568,6 +581,7 @@ func TestResourceCollector_EmitObject_SourceDrivesEventName(t *testing.T) {
 			config:   cfg,
 			consumer: sink,
 			metrics:  metrics.NoopRecorder{},
+			enricher: noopResourceAttributeEnricher{},
 		}
 		c.emitChanges(context.Background(), []ResourceChange{
 			{Obj: crObj, EventType: watch.Modified, GVR: crGVR, Source: ObjectSourceCR},
@@ -578,6 +592,32 @@ func TestResourceCollector_EmitObject_SourceDrivesEventName(t *testing.T) {
 			"pod-1":    emit.EventNameObject,
 		})
 	})
+}
+
+func TestResourceCollector_EmitObject_AddsEnrichedResourceAttributes(t *testing.T) {
+	crGVR := schema.GroupVersionResource{Group: "kubevirt.io", Version: "v1", Resource: "virtualmachines"}
+	crObj := makeTestCR("vm-1", "default", "kubevirt.io", "v1", "VirtualMachine")
+	sink := &consumertest.LogsSink{}
+	c := &resourceCollector{
+		logger:   zaptest.NewLogger(t),
+		config:   &Config{ClusterName: "test-cluster"},
+		consumer: sink,
+		metrics:  metrics.NoopRecorder{},
+		enricher: stubResourceAttributeEnricher{
+			gvr:   crGVR,
+			attrs: map[string]string{"rancher.manager.url": "https://rancher.example.com"},
+		},
+	}
+
+	c.emitChanges(context.Background(), []ResourceChange{
+		{Obj: crObj, EventType: watch.Added, GVR: crGVR, Source: ObjectSourceCR},
+	})
+
+	require.Equal(t, 1, sink.LogRecordCount())
+	attrs := sink.AllLogs()[0].ResourceLogs().At(0).Resource().Attributes()
+	value, exists := attrs.Get("rancher.manager.url")
+	require.True(t, exists)
+	assert.Equal(t, "https://rancher.example.com", value.Str())
 }
 
 // assertEventNamesByObjectName walks every emitted log record and matches

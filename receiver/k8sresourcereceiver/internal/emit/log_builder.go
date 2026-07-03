@@ -19,11 +19,14 @@ import (
 // for plain static objects.
 func BuildObjectLogRecord(
 	obj *unstructured.Unstructured, eventType watch.EventType, timestamp time.Time,
-	clusterName, eventName string,
+	clusterName, eventName string, resourceAttributes map[string]string,
 ) (plog.Logs, error) {
 	logs := plog.NewLogs()
 	resourceLogs := logs.ResourceLogs().AppendEmpty()
 
+	for key, value := range resourceAttributes {
+		resourceLogs.Resource().Attributes().PutStr(key, value)
+	}
 	if clusterName != "" {
 		resourceLogs.Resource().Attributes().PutStr(AttrK8sClusterName, clusterName)
 	}
@@ -117,9 +120,9 @@ func LogCRD(
 // selects the downstream log shape (CR vs Object); see BuildObjectLogRecord.
 func LogObject(
 	ctx context.Context, cons consumer.Logs, obj *unstructured.Unstructured,
-	eventType watch.EventType, clusterName, eventName string,
+	eventType watch.EventType, clusterName, eventName string, resourceAttributes map[string]string,
 ) error {
-	logs, err := BuildObjectLogRecord(obj, eventType, time.Now(), clusterName, eventName)
+	logs, err := BuildObjectLogRecord(obj, eventType, time.Now(), clusterName, eventName, resourceAttributes)
 	if err != nil {
 		return err
 	}

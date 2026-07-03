@@ -81,7 +81,7 @@ func NewMetrics(typeName, clusterName string, settings component.TelemetrySettin
 		metric.WithDescription("Resources currently held in the in-memory cache, labelled by kind."),
 	)
 	peerBroadcasts, _ := meter.Int64Counter(
-		name("peer_broadcasts_total"),
+		name("peer_brcd oadcasts_total"),
 		metric.WithDescription("Peer broadcast outcomes per ApplyDelta call, labelled by outcome."),
 	)
 	peerPushAttempts, _ := meter.Int64Counter(

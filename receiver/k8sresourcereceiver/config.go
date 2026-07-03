@@ -67,6 +67,10 @@ type Config struct {
 	// custom resources. See ObjectWatch.
 	Objects []ObjectWatch `mapstructure:"objects"`
 
+	// ResourceAttributes declares resource attributes derived from Kubernetes objects.
+	// These attributes are added to emitted logs for matching Kubernetes resources.
+	ResourceAttributes []ResourceAttributeEnrichment `mapstructure:"resource_attributes"`
+
 	// DeniedObjects extends the built-in denylist (core Secrets and ConfigMaps)
 	// with additional resources that must not appear under Objects. The built-in
 	// defaults always apply and cannot be removed. Use this to block third-party
@@ -106,6 +110,49 @@ type ObjectWatch struct {
 
 	// FieldSelector is a standard k8s field selector, e.g. "status.phase=Running".
 	FieldSelector string `mapstructure:"field_selector"`
+}
+
+// ResourceAttributeEnrichment declares one resource attribute derived from a Kubernetes object.
+type ResourceAttributeEnrichment struct {
+	Key string `mapstructure:"key"`
+
+	ValueFrom ResourceAttributeValueFrom `mapstructure:"value_from"`
+
+	ApplyTo ResourceAttributeApplyTo `mapstructure:"apply_to"`
+}
+
+// ResourceAttributeValueFrom declares the source of an enriched resource attribute.
+type ResourceAttributeValueFrom struct {
+	K8sContainerEnv *K8sContainerEnvSource `mapstructure:"k8s_container_env"`
+}
+
+// K8sContainerEnvSource extracts a static env[].value from a container in a Kubernetes object.
+type K8sContainerEnvSource struct {
+	Object K8sObjectSource `mapstructure:"object"`
+
+	Container string `mapstructure:"container"`
+
+	Env string `mapstructure:"env"`
+}
+
+// K8sObjectSource identifies one Kubernetes object used as an enrichment source.
+type K8sObjectSource struct {
+	Name string `mapstructure:"name"`
+
+	Group string `mapstructure:"group"`
+
+	Version string `mapstructure:"version"`
+
+	Resource string `mapstructure:"resource"`
+
+	Namespace string `mapstructure:"namespace"`
+}
+
+// ResourceAttributeApplyTo defines which emitted Kubernetes resources receive an attribute.
+type ResourceAttributeApplyTo struct {
+	APIGroups []string `mapstructure:"api_groups"`
+
+	Resources []string `mapstructure:"resources"`
 }
 
 // CRDAPIGroupFilters defines inclusion and exclusion patterns for API groups
@@ -151,6 +198,10 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid discovery_mode %q: must be 'api_groups' or 'all'", c.DiscoveryMode)
 	}
 
+	if c.PeerSyncPort < 0 || c.PeerSyncPort > 65535 {
+		return fmt.Errorf("peer_sync_port must be between 0 and 65535, got %d", c.PeerSyncPort)
+	}
+
 	if c.DiscoveryMode == DiscoveryModeAPIGroups {
 		if c.CRDAPIGroupFilters == nil {
 			c.CRDAPIGroupFilters = &CRDAPIGroupFilters{
@@ -187,6 +238,9 @@ func (c *Config) Validate() error {
 	if err := c.validateObjects(); err != nil {
 		return err
 	}
+	if err := c.validateResourceAttributes(); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -200,11 +254,86 @@ var defaultDeniedObjects = []ObjectMatcher{
 	{Name: resourceConfigMap, Group: ""},
 }
 
+// reservedResourceAttributeKeys are resource-level attribute keys written by the
+// receiver itself. A user-configured enrichment key that matches one of these
+// would be silently overwritten, so we reject them at validation time.
+//
+// nolint:gochecknoglobals
+var reservedResourceAttributeKeys = map[string]struct{}{
+	"k8s.cluster.name":   {},
+	"k8s.namespace.name": {},
+}
+
+func (c *Config) validateResourceAttributes() error {
+	seen := make(map[string]int, len(c.ResourceAttributes))
+	for i := range c.ResourceAttributes {
+		enrichment := &c.ResourceAttributes[i]
+		if strings.TrimSpace(enrichment.Key) == "" {
+			return fmt.Errorf("resource_attributes[%d].key is required", i)
+		}
+		if _, reserved := reservedResourceAttributeKeys[enrichment.Key]; reserved {
+			return fmt.Errorf(
+				"resource_attributes[%d].key %q is reserved and cannot be used as an enrichment key",
+				i, enrichment.Key,
+			)
+		}
+		if previous, exists := seen[enrichment.Key]; exists {
+			return fmt.Errorf(
+				"resource_attributes[%d].key duplicates resource_attributes[%d].key %q",
+				i, previous, enrichment.Key,
+			)
+		}
+		seen[enrichment.Key] = i
+
+		if enrichment.ValueFrom.K8sContainerEnv == nil {
+			return fmt.Errorf("resource_attributes[%d].value_from.k8s_container_env is required", i)
+		}
+		source := enrichment.ValueFrom.K8sContainerEnv
+		if strings.TrimSpace(source.Object.Name) == "" {
+			return fmt.Errorf("resource_attributes[%d].value_from.k8s_container_env.object.name is required", i)
+		}
+		if strings.TrimSpace(source.Object.Resource) == "" {
+			return fmt.Errorf("resource_attributes[%d].value_from.k8s_container_env.object.resource is required", i)
+		}
+		if strings.TrimSpace(source.Object.Namespace) == "" {
+			return fmt.Errorf("resource_attributes[%d].value_from.k8s_container_env.object.namespace is required", i)
+		}
+		if strings.TrimSpace(source.Container) == "" {
+			return fmt.Errorf("resource_attributes[%d].value_from.k8s_container_env.container is required", i)
+		}
+		if strings.TrimSpace(source.Env) == "" {
+			return fmt.Errorf("resource_attributes[%d].value_from.k8s_container_env.env is required", i)
+		}
+		if len(enrichment.ApplyTo.APIGroups) == 0 && len(enrichment.ApplyTo.Resources) == 0 {
+			return fmt.Errorf(
+				"resource_attributes[%d].apply_to.api_groups or "+
+					"resource_attributes[%d].apply_to.resources is required", i, i)
+		}
+		for j, g := range enrichment.ApplyTo.APIGroups {
+			if strings.TrimSpace(g) == "" {
+				return fmt.Errorf("resource_attributes[%d].apply_to.api_groups[%d] must not be empty", i, j)
+			}
+		}
+		for j, res := range enrichment.ApplyTo.Resources {
+			if strings.TrimSpace(res) == "" {
+				return fmt.Errorf("resource_attributes[%d].apply_to.resources[%d] must not be empty", i, j)
+			}
+		}
+	}
+	return nil
+}
+
 // validateObjects enforces static rules on c.Objects: required name, not
 // denied, parseable selectors, and uniqueness across namespace expansion.
 // GVR resolution (ambiguity, missing-from-server, version-mismatch) is
 // deferred to receiver startup, where the discovery client is available.
 func (c *Config) validateObjects() error {
+	for i, m := range c.DeniedObjects {
+		if strings.TrimSpace(m.Name) == "" {
+			return fmt.Errorf("denied_objects[%d]: name is required", i)
+		}
+	}
+
 	if len(c.Objects) == 0 {
 		return nil
 	}

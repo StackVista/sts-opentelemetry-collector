@@ -23,8 +23,14 @@ type resourceCollector struct {
 	consumer  consumer.Logs
 	informers Informers
 	metrics   metrics.Recorder
+	enricher  resourceAttributeEnricher
 
 	peerStore PeerStore
+
+	// lastSnapshotTime tracks when the most recent snapshot was emitted locally.
+	// Used instead of peerStore.IsEmpty() to guard the snapshot cadence so that
+	// a repeated ApplyDelta failure does not cause a continuous snapshot storm.
+	lastSnapshotTime time.Time
 
 	// Lifecycle
 	wg     sync.WaitGroup
@@ -38,12 +44,16 @@ func newResourceCollector(
 	informers Informers,
 	peerStore PeerStore,
 	metricsRecorder metrics.Recorder,
+	enricher resourceAttributeEnricher,
 ) *resourceCollector {
 	if peerStore == nil {
 		peerStore = &noopPeerStore{}
 	}
 	if metricsRecorder == nil {
 		metricsRecorder = metrics.NoopRecorder{}
+	}
+	if enricher == nil {
+		enricher = noopResourceAttributeEnricher{}
 	}
 	return &resourceCollector{
 		logger:    logger,
@@ -52,9 +62,13 @@ func newResourceCollector(
 		informers: informers,
 		peerStore: peerStore,
 		metrics:   metricsRecorder,
+		enricher:  enricher,
 	}
 }
 
+// Start begins informer-based collection. If Start returns an error after
+// partially initialising informers, Shutdown must still be called to drain any
+// goroutines that were already started.
 func (c *resourceCollector) Start(ctx context.Context) error {
 	loopCtx, cancel := context.WithCancel(ctx)
 	c.cancel = cancel
@@ -117,9 +131,10 @@ func (c *resourceCollector) runIncrement(ctx context.Context) {
 	currentObjects := c.informers.ReadObjects()
 	changes := c.peerStore.ComputeChanges(currentCRDs, currentObjects)
 
-	if c.peerStore.IsEmpty() || time.Since(c.peerStore.LastSnapshotTime()) >= c.config.SnapshotInterval {
+	if c.lastSnapshotTime.IsZero() || time.Since(c.lastSnapshotTime) >= c.config.SnapshotInterval {
 		c.emitSnapshot(ctx, currentCRDs, currentObjects, changes)
 		c.recordSnapshotApplied(ctx, changes)
+		c.lastSnapshotTime = time.Now()
 		c.metrics.RecordCycle(ctx, metrics.ModeSnapshot, time.Since(start))
 	} else {
 		c.emitIncrement(ctx, changes)
@@ -141,7 +156,7 @@ func (c *resourceCollector) recordSnapshotApplied(ctx context.Context, changes [
 		LastSnapshotTime: now,
 		Changes:          changes,
 	}); err != nil {
-		c.logger.Debug("Failed to record snapshot applied", zap.Error(err))
+		c.logger.Warn("Failed to record snapshot applied", zap.Error(err))
 	}
 }
 
@@ -172,9 +187,10 @@ func (c *resourceCollector) emitSnapshot(
 
 	for gvr, group := range currentObjects {
 		eventName := eventNameForSource(group.Source)
+		resourceAttributes := c.resourceAttributesFor(gvr)
 		for _, obj := range group.Objects {
 			if err := emit.LogObject(
-				ctx, c.consumer, obj, watch.Added, c.config.ClusterName, eventName,
+				ctx, c.consumer, obj, watch.Added, c.config.ClusterName, eventName, resourceAttributes,
 			); err != nil {
 				c.logger.Debug("Failed to emit object snapshot log",
 					zap.String("gvr", emit.FormatGVRKey(gvr)),
@@ -195,7 +211,10 @@ func (c *resourceCollector) emitSnapshot(
 		if ch.IsCRD {
 			err = emit.LogCRD(ctx, c.consumer, ch.Obj, watch.Deleted, c.config.ClusterName)
 		} else {
-			err = emit.LogObject(ctx, c.consumer, ch.Obj, watch.Deleted, c.config.ClusterName, eventNameForSource(ch.Source))
+			err = emit.LogObject(
+				ctx, c.consumer, ch.Obj, watch.Deleted, c.config.ClusterName,
+				eventNameForSource(ch.Source), c.resourceAttributesFor(ch.GVR),
+			)
 		}
 		if err != nil {
 			c.logger.Debug("Failed to emit deletion in snapshot",
@@ -251,7 +270,7 @@ func (c *resourceCollector) emitIncrement(ctx context.Context, changes []Resourc
 			AppliedAt: time.Now(),
 			Changes:   adds,
 		}); err != nil {
-			c.logger.Debug("Failed to apply delta before emitting adds/mods", zap.Error(err))
+			c.logger.Warn("Failed to apply delta before emitting adds/mods", zap.Error(err))
 		}
 		c.emitChanges(ctx, adds)
 	}
@@ -263,7 +282,7 @@ func (c *resourceCollector) emitIncrement(ctx context.Context, changes []Resourc
 			AppliedAt: time.Now(),
 			Changes:   deletes,
 		}); err != nil {
-			c.logger.Debug("Failed to apply delta after emitting deletes", zap.Error(err))
+			c.logger.Warn("Failed to apply delta after emitting deletes", zap.Error(err))
 		}
 	}
 
@@ -279,7 +298,8 @@ func (c *resourceCollector) emitChanges(ctx context.Context, changes []ResourceC
 			err = emit.LogCRD(ctx, c.consumer, change.Obj, change.EventType, c.config.ClusterName)
 		} else {
 			err = emit.LogObject(
-				ctx, c.consumer, change.Obj, change.EventType, c.config.ClusterName, eventNameForSource(change.Source),
+				ctx, c.consumer, change.Obj, change.EventType, c.config.ClusterName,
+				eventNameForSource(change.Source), c.resourceAttributesFor(change.GVR),
 			)
 		}
 		if err != nil {
@@ -309,4 +329,8 @@ func (c *resourceCollector) watchEventToChangeType(e watch.EventType) metrics.Ch
 		c.logger.Warn("Unexpected watch event type", zap.String("event", string(e)))
 		return metrics.ChangeUnknown
 	}
+}
+
+func (c *resourceCollector) resourceAttributesFor(gvr schema.GroupVersionResource) map[string]string {
+	return c.enricher.AttributesFor(gvr)
 }
