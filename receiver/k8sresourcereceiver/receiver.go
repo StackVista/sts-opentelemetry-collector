@@ -99,7 +99,7 @@ func (r *k8sresourceReceiver) Start(ctx context.Context, host component.Host) er
 			return fmt.Errorf("failed to resolve resource attribute enrichments: %w", err)
 		}
 		r.resolvedResourceAttributes = resolved
-		r.resourceAttributeManager = newResourceAttributeManager(r.settings.Logger, r.dynamicClient, resolved)
+		r.resourceAttributeManager = newResourceAttributeManager(r.settings.Logger, r.dynamicClient, resolved, r.metrics)
 		if err := r.resourceAttributeManager.Start(ctx); err != nil {
 			return fmt.Errorf("failed to start resource attribute enrichment: %w", err)
 		}

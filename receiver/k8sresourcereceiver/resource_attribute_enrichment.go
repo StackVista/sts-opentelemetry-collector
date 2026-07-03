@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/emit"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/metrics"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -32,6 +33,7 @@ type resourceAttributeManager struct {
 	logger        *zap.Logger
 	dynamicClient dynamic.Interface
 	enrichments   []resolvedResourceAttributeEnrichment
+	metrics       metrics.Recorder
 
 	mu      sync.RWMutex
 	values  map[string]string
@@ -83,11 +85,16 @@ func newResourceAttributeManager(
 	logger *zap.Logger,
 	dynamicClient dynamic.Interface,
 	enrichments []resolvedResourceAttributeEnrichment,
+	metricsRecorder metrics.Recorder,
 ) *resourceAttributeManager {
+	if metricsRecorder == nil {
+		metricsRecorder = metrics.NoopRecorder{}
+	}
 	return &resourceAttributeManager{
 		logger:        logger,
 		dynamicClient: dynamicClient,
 		enrichments:   enrichments,
+		metrics:       metricsRecorder,
 		values:        make(map[string]string, len(enrichments)),
 	}
 }
@@ -162,7 +169,12 @@ func (m *resourceAttributeManager) startInformer(
 	if _, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    func(obj interface{}) { m.updateValue(enrichment, obj) },
 		UpdateFunc: func(_, newObj interface{}) { m.updateValue(enrichment, newObj) },
-		DeleteFunc: func(interface{}) { m.deleteValue(enrichment.config.Key) },
+		DeleteFunc: func(interface{}) {
+			m.metrics.RecordEnrichmentValueChange(
+				context.Background(), enrichment.config.Key, metrics.EnrichmentValueCleared,
+			)
+			m.deleteValue(enrichment.config.Key)
+		},
 	}); err != nil {
 		return fmt.Errorf("failed to add event handler for resource attribute enrichment %q: %w", enrichment.config.Key, err)
 	}
@@ -189,12 +201,15 @@ func (m *resourceAttributeManager) startInformer(
 		case <-syncCtx.Done():
 		}
 	}()
+	syncOutcome := metrics.EnrichmentSyncSynced
 	if !cache.WaitForCacheSync(syncCtx.Done(), informer.HasSynced) {
+		syncOutcome = metrics.EnrichmentSyncTimedOut
 		m.logger.Warn("Resource attribute enrichment source did not sync",
 			zap.String("key", enrichment.config.Key),
 			zap.String("gvr", emit.FormatGVRKey(enrichment.gvr)),
 		)
 	}
+	m.metrics.RecordEnrichmentSync(ctx, enrichment.config.Key, syncOutcome)
 	return nil
 }
 
@@ -214,6 +229,9 @@ func (m *resourceAttributeManager) updateValue(enrichment *resolvedResourceAttri
 			zap.String("container", enrichment.config.ValueFrom.K8sContainerEnv.Container),
 			zap.String("env", enrichment.config.ValueFrom.K8sContainerEnv.Env),
 		)
+		m.metrics.RecordEnrichmentValueChange(
+			context.Background(), enrichment.config.Key, metrics.EnrichmentValueUnsupported,
+		)
 		m.deleteValue(enrichment.config.Key)
 		return
 	}
@@ -222,6 +240,9 @@ func (m *resourceAttributeManager) updateValue(enrichment *resolvedResourceAttri
 			zap.String("key", enrichment.config.Key),
 			zap.String("container", enrichment.config.ValueFrom.K8sContainerEnv.Container),
 			zap.String("env", enrichment.config.ValueFrom.K8sContainerEnv.Env),
+		)
+		m.metrics.RecordEnrichmentValueChange(
+			context.Background(), enrichment.config.Key, metrics.EnrichmentValueCleared,
 		)
 		m.deleteValue(enrichment.config.Key)
 		return
@@ -233,6 +254,9 @@ func (m *resourceAttributeManager) updateValue(enrichment *resolvedResourceAttri
 	m.mu.Unlock()
 	if !existed || previous != value {
 		m.logger.Info("Resource attribute enrichment value available", zap.String("key", enrichment.config.Key))
+		m.metrics.RecordEnrichmentValueChange(
+			context.Background(), enrichment.config.Key, metrics.EnrichmentValueSet,
+		)
 	}
 }
 
