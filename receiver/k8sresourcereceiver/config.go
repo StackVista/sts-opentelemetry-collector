@@ -76,6 +76,9 @@ type Config struct {
 	// defaults always apply and cannot be removed. Use this to block third-party
 	// resources with sensitive contents (e.g. cert-manager Certificates).
 	DeniedObjects []ObjectMatcher `mapstructure:"denied_objects"`
+
+	// RancherEnrichment controls Rancher Manager URL enrichment. See rancher.go.
+	RancherEnrichment rancherEnrichmentConfig `mapstructure:"rancher_enrichment"`
 }
 
 // ObjectMatcher identifies a Kubernetes resource by plural name and API group.
@@ -237,6 +240,9 @@ func (c *Config) Validate() error {
 
 	if err := c.validateObjects(); err != nil {
 		return err
+	}
+	if c.RancherEnrichment.Enabled {
+		c.ResourceAttributes = append(c.ResourceAttributes, rancherResourceAttributeEnrichment())
 	}
 	if err := c.validateResourceAttributes(); err != nil {
 		return err

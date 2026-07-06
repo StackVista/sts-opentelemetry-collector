@@ -539,6 +539,51 @@ func TestConfigValidate(t *testing.T) {
 	}
 }
 
+func TestRancherEnrichmentInjectedWhenEnabled(t *testing.T) {
+	cfg := &Config{
+		DiscoveryMode:     DiscoveryModeAll,
+		RancherEnrichment: rancherEnrichmentConfig{Enabled: true},
+	}
+	require.NoError(t, cfg.Validate())
+
+	require.Len(t, cfg.ResourceAttributes, 1)
+	ra := cfg.ResourceAttributes[0]
+	assert.Equal(t, rancherAttributeKey, ra.Key)
+	require.NotNil(t, ra.ValueFrom.K8sContainerEnv)
+	src := ra.ValueFrom.K8sContainerEnv
+	assert.Equal(t, rancherDeploymentName, src.Object.Name)
+	assert.Equal(t, rancherAPIGroup, src.Object.Group)
+	assert.Equal(t, rancherResource, src.Object.Resource)
+	assert.Equal(t, rancherNamespace, src.Object.Namespace)
+	assert.Equal(t, rancherContainerName, src.Container)
+	assert.Equal(t, rancherEnvVar, src.Env)
+	assert.Equal(t, []string{"*"}, ra.ApplyTo.APIGroups)
+}
+
+func TestRancherEnrichmentNotInjectedWhenDisabled(t *testing.T) {
+	cfg := &Config{
+		DiscoveryMode:     DiscoveryModeAll,
+		RancherEnrichment: rancherEnrichmentConfig{Enabled: false},
+	}
+	require.NoError(t, cfg.Validate())
+	assert.Empty(t, cfg.ResourceAttributes)
+}
+
+func TestRancherEnrichmentCoexistsWithUserResourceAttributes(t *testing.T) {
+	cfg := &Config{
+		DiscoveryMode:     DiscoveryModeAll,
+		RancherEnrichment: rancherEnrichmentConfig{Enabled: true},
+		ResourceAttributes: []ResourceAttributeEnrichment{
+			validResourceAttr(),
+		},
+	}
+	require.NoError(t, cfg.Validate())
+	// User entry preserved; rancher entry appended.
+	require.Len(t, cfg.ResourceAttributes, 2)
+	assert.Equal(t, "my.attr", cfg.ResourceAttributes[0].Key)
+	assert.Equal(t, rancherAttributeKey, cfg.ResourceAttributes[1].Key)
+}
+
 // validResourceAttr returns a fully-populated ResourceAttributeEnrichment that passes validation.
 // Individual test cases mutate specific fields via the with* helpers.
 func validResourceAttr() ResourceAttributeEnrichment {
