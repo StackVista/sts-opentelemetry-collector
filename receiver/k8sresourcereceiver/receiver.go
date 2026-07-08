@@ -32,6 +32,10 @@ type k8sresourceReceiver struct {
 	// Peer store — runs regardless of leadership for push/pull sync.
 	peerStore *peerSyncCacheStore
 
+	// Resource attribute enrichment runs on every replica so a newly elected leader has warm values.
+	resourceAttributeManager   *resourceAttributeManager
+	resolvedResourceAttributes []resolvedResourceAttributeEnrichment
+
 	// Collector lifecycle — guarded by leader election when enabled.
 	mu        sync.Mutex
 	collector *resourceCollector
@@ -55,6 +59,13 @@ func newReceiver(
 }
 
 func (r *k8sresourceReceiver) Start(ctx context.Context, host component.Host) error {
+	if r.config.DiscoveryMode == DiscoveryModeAll && r.config.CRDAPIGroupFilters != nil {
+		r.settings.Logger.Warn(
+			"crd_api_group_filters is configured but has no effect when discovery_mode is 'all'; " +
+				"remove the filters or switch to discovery_mode: api_groups",
+		)
+	}
+
 	if r.dynamicClient == nil {
 		client, err := r.config.getDynamicClient()
 		if err != nil {
@@ -63,14 +74,13 @@ func (r *k8sresourceReceiver) Start(ctx context.Context, host component.Host) er
 		r.dynamicClient = client
 	}
 
-	if len(r.config.Objects) > 0 {
-		if r.discoveryClient == nil {
-			client, err := r.config.getDiscoveryClient()
-			if err != nil {
-				return fmt.Errorf("failed to create discovery client: %w", err)
-			}
-			r.discoveryClient = client
+	if len(r.config.Objects) > 0 || len(r.config.ResourceAttributes) > 0 {
+		if err := r.ensureDiscoveryClient(); err != nil {
+			return err
 		}
+	}
+
+	if len(r.config.Objects) > 0 {
 		resolved, err := resolveObjectGVRs(r.discoveryClient, r.config.Objects, r.settings.Logger)
 		if err != nil {
 			return fmt.Errorf("failed to resolve object GVRs: %w", err)
@@ -79,6 +89,20 @@ func (r *k8sresourceReceiver) Start(ctx context.Context, host component.Host) er
 			return err
 		}
 		r.resolvedObjects = resolved
+	}
+
+	if len(r.config.ResourceAttributes) > 0 {
+		resolved, err := resolveResourceAttributeEnrichments(
+			r.discoveryClient, r.config.ResourceAttributes, r.settings.Logger,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to resolve resource attribute enrichments: %w", err)
+		}
+		r.resolvedResourceAttributes = resolved
+		r.resourceAttributeManager = newResourceAttributeManager(r.settings.Logger, r.dynamicClient, resolved, r.metrics)
+		if err := r.resourceAttributeManager.Start(ctx); err != nil {
+			return fmt.Errorf("failed to start resource attribute enrichment: %w", err)
+		}
 	}
 
 	r.peerStore = newPeerSyncCacheStore(
@@ -110,6 +134,18 @@ func (r *k8sresourceReceiver) Start(ctx context.Context, host component.Host) er
 	return r.startCollector(ctx)
 }
 
+func (r *k8sresourceReceiver) ensureDiscoveryClient() error {
+	if r.discoveryClient != nil {
+		return nil
+	}
+	client, err := r.config.getDiscoveryClient()
+	if err != nil {
+		return fmt.Errorf("failed to create discovery client: %w", err)
+	}
+	r.discoveryClient = client
+	return nil
+}
+
 // startCollector creates and starts the collector (called directly or from leader election callback).
 // Idempotent: a duplicate onStartLeading callback (e.g., k8s lease re-acquisition firing twice)
 // is a no-op rather than spawning a second collector that would leak goroutines and informers.
@@ -124,7 +160,9 @@ func (r *k8sresourceReceiver) startCollector(ctx context.Context) error {
 
 	ft := tracker.NewDefault()
 	informers := newResourceInformers(r.settings, r.config, r.dynamicClient, r.resolvedObjects, ft, r.metrics)
-	collector := newResourceCollector(r.settings.Logger, r.config, r.consumer, informers, r.peerStore, r.metrics)
+	collector := newResourceCollector(
+		r.settings.Logger, r.config, r.consumer, informers, r.peerStore, r.metrics, r.resourceAttributeManager,
+	)
 
 	if err := collector.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start resource collector: %w", err)
@@ -209,6 +247,9 @@ func (r *k8sresourceReceiver) Shutdown(ctx context.Context) error {
 	r.stopCollector(ctx)
 	if r.peerStore != nil {
 		r.peerStore.Stop()
+	}
+	if r.resourceAttributeManager != nil {
+		return r.resourceAttributeManager.Shutdown(ctx)
 	}
 	return nil
 }

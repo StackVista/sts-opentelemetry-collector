@@ -25,6 +25,8 @@ type Recorder interface {
 	RecordBootstrap(ctx context.Context, outcome BootstrapOutcome, source BootstrapSource)
 	RecordSnapshotStreamFailure(ctx context.Context)
 	RecordInformerReconcile(ctx context.Context, kind InformerKind, outcome InformerOutcome)
+	RecordEnrichmentSync(ctx context.Context, key string, outcome EnrichmentSyncOutcome)
+	RecordEnrichmentValueChange(ctx context.Context, key string, event EnrichmentValueEvent)
 }
 
 // NoopRecorder is a Recorder that drops every measurement. Useful in tests.
@@ -44,6 +46,9 @@ func (NoopRecorder) RecordBootstrap(_ context.Context, _ BootstrapOutcome, _ Boo
 func (NoopRecorder) RecordSnapshotStreamFailure(_ context.Context) {}
 func (NoopRecorder) RecordInformerReconcile(_ context.Context, _ InformerKind, _ InformerOutcome) {
 }
+func (NoopRecorder) RecordEnrichmentSync(_ context.Context, _ string, _ EnrichmentSyncOutcome) {}
+func (NoopRecorder) RecordEnrichmentValueChange(_ context.Context, _ string, _ EnrichmentValueEvent) {
+}
 
 // Metrics is the live Recorder backed by a real Meter.
 type Metrics struct {
@@ -59,6 +64,8 @@ type Metrics struct {
 	bootstrapTotal         metric.Int64Counter
 	snapshotStreamFailures metric.Int64Counter
 	informerReconciles     metric.Int64Counter
+	enrichmentSyncs        metric.Int64Counter
+	enrichmentValueChanges metric.Int64Counter
 }
 
 // NewMetrics registers all instruments. Errors from the meter are dropped to match the
@@ -113,6 +120,20 @@ func NewMetrics(typeName, clusterName string, settings component.TelemetrySettin
 		name("informer_reconciles_total"),
 		metric.WithDescription("Reconciler attempts to start informers, labelled by kind (cr|static) and outcome."),
 	)
+	enrichmentSyncs, _ := meter.Int64Counter(
+		name("enrichment_syncs_total"),
+		metric.WithDescription(
+			"Resource attribute enrichment informer cache-sync results, "+
+				"labelled by enrichment.key and outcome (synced|timed_out).",
+		),
+	)
+	enrichmentValueChanges, _ := meter.Int64Counter(
+		name("enrichment_value_changes_total"),
+		metric.WithDescription(
+			"Resource attribute enrichment value lifecycle events, "+
+				"labelled by enrichment.key and event (set|cleared|unsupported).",
+		),
+	)
 
 	return &Metrics{
 		common:                 []attribute.KeyValue{attribute.String("k8s.cluster.name", clusterName)},
@@ -126,6 +147,8 @@ func NewMetrics(typeName, clusterName string, settings component.TelemetrySettin
 		bootstrapTotal:         bootstrapTotal,
 		snapshotStreamFailures: snapshotStreamFailures,
 		informerReconciles:     informerReconciles,
+		enrichmentSyncs:        enrichmentSyncs,
+		enrichmentValueChanges: enrichmentValueChanges,
 	}
 }
 
@@ -206,6 +229,24 @@ func (m *Metrics) RecordInformerReconcile(
 		m.attrs(
 			attribute.String("kind", string(kind)),
 			attribute.String("outcome", string(outcome)),
+		),
+	))
+}
+
+func (m *Metrics) RecordEnrichmentSync(ctx context.Context, key string, outcome EnrichmentSyncOutcome) {
+	m.enrichmentSyncs.Add(ctx, 1, metric.WithAttributeSet(
+		m.attrs(
+			attribute.String("enrichment.key", key),
+			attribute.String("outcome", string(outcome)),
+		),
+	))
+}
+
+func (m *Metrics) RecordEnrichmentValueChange(ctx context.Context, key string, event EnrichmentValueEvent) {
+	m.enrichmentValueChanges.Add(ctx, 1, metric.WithAttributeSet(
+		m.attrs(
+			attribute.String("enrichment.key", key),
+			attribute.String("event", string(event)),
 		),
 	))
 }

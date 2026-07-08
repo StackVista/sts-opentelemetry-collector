@@ -110,3 +110,26 @@ const (
 	InformerForbidden InformerOutcome = "forbidden"
 	InformerFailed    InformerOutcome = "failed"
 )
+
+// EnrichmentSyncOutcome is the result of waiting for a resource attribute
+// enrichment informer's cache to populate after startup.
+type EnrichmentSyncOutcome string
+
+const (
+	EnrichmentSyncSynced   EnrichmentSyncOutcome = "synced"
+	EnrichmentSyncTimedOut EnrichmentSyncOutcome = "timed_out"
+)
+
+// EnrichmentValueEvent describes a lifecycle transition for one enrichment key's value.
+type EnrichmentValueEvent string
+
+const (
+	// EnrichmentValueSet is recorded when a new or changed value is resolved.
+	EnrichmentValueSet EnrichmentValueEvent = "set"
+	// EnrichmentValueCleared is recorded when the value is removed — the source
+	// object was deleted, or the named env var is absent from the container spec.
+	EnrichmentValueCleared EnrichmentValueEvent = "cleared"
+	// EnrichmentValueUnsupported is recorded when the env entry uses valueFrom
+	// (a dynamic reference) rather than a static literal — we cannot read it.
+	EnrichmentValueUnsupported EnrichmentValueEvent = "unsupported"
+)

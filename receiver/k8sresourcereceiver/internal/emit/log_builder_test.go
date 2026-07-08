@@ -83,7 +83,7 @@ func TestBuildObjectLogRecord(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			logs, err := emit.BuildObjectLogRecord(tt.obj, tt.eventType, timestamp, clusterName, tt.eventName)
+			logs, err := emit.BuildObjectLogRecord(tt.obj, tt.eventType, timestamp, clusterName, tt.eventName, nil)
 			require.NoError(t, err)
 
 			assert.Equal(t, 1, logs.ResourceLogs().Len())
@@ -149,6 +149,62 @@ func TestBuildObjectLogRecord(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBuildObjectLogRecordAddsResourceAttributes(t *testing.T) {
+	obj := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "v1",
+		"kind":       "Pod",
+		"metadata": map[string]interface{}{
+			"name":      "nginx",
+			"namespace": "default",
+		},
+	}}
+	logs, err := emit.BuildObjectLogRecord(
+		obj,
+		watch.Added,
+		time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC),
+		"test-cluster",
+		emit.EventNameObject,
+		map[string]string{"rancher.manager.url": "https://rancher.example.com"},
+	)
+
+	require.NoError(t, err)
+	attrs := logs.ResourceLogs().At(0).Resource().Attributes()
+	value, exists := attrs.Get("rancher.manager.url")
+	require.True(t, exists)
+	assert.Equal(t, "https://rancher.example.com", value.Str())
+}
+
+func TestBuildObjectLogRecordKeepsBuiltInResourceAttributes(t *testing.T) {
+	obj := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "v1",
+		"kind":       "Pod",
+		"metadata": map[string]interface{}{
+			"name":      "nginx",
+			"namespace": "default",
+		},
+	}}
+	logs, err := emit.BuildObjectLogRecord(
+		obj,
+		watch.Added,
+		time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC),
+		"test-cluster",
+		emit.EventNameObject,
+		map[string]string{
+			emit.AttrK8sClusterName:   "wrong-cluster",
+			emit.AttrK8sNamespaceName: "wrong-namespace",
+		},
+	)
+
+	require.NoError(t, err)
+	attrs := logs.ResourceLogs().At(0).Resource().Attributes()
+	cluster, exists := attrs.Get(emit.AttrK8sClusterName)
+	require.True(t, exists)
+	assert.Equal(t, "test-cluster", cluster.Str())
+	namespace, exists := attrs.Get(emit.AttrK8sNamespaceName)
+	require.True(t, exists)
+	assert.Equal(t, "default", namespace.Str())
 }
 
 func TestBuildCRDLogRecord(t *testing.T) {
