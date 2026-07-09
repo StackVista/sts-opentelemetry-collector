@@ -1,6 +1,6 @@
 module github.com/stackvista/sts-opentelemetry-collector/exporter/ststopologyexporter
 
-go 1.26.4
+go 1.26.5
 
 require (
 	go.opentelemetry.io/collector/component v1.59.0

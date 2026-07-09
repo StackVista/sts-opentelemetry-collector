@@ -1,6 +1,6 @@
 module github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter
 
-go 1.26.4
+go 1.26.5
 
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.46.0
