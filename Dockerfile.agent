@@ -1,11 +1,14 @@
 ARG BASE_IMAGE=registry.suse.com/bci/bci-micro:15.7-56.21
 
-FROM --platform=$BUILDPLATFORM golang:1.26.5-alpine AS builder
+FROM --platform=$BUILDPLATFORM registry.suse.com/bci/golang:1.26 AS builder
 
 ARG TARGETOS=linux
 ARG TARGETARCH
 
-RUN apk add --no-cache git
+RUN zypper --non-interactive refresh \
+    && zypper --non-interactive install --no-recommends git-core \
+    && zypper clean --all \
+    && rm -rf /var/log/zypp /var/log/zypper.log
 
 WORKDIR /go/src/github.com/stackvista/sts-opentelemetry-collector
 COPY . .
