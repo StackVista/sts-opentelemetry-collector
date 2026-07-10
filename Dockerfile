@@ -1,6 +1,6 @@
 ARG BASE_IMAGE=registry.suse.com/bci/bci-micro:15.7-56.21
 
-FROM --platform=$BUILDPLATFORM golang:1.26.4-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.5-alpine AS builder
 
 ARG TARGETOS=linux
 ARG TARGETARCH
