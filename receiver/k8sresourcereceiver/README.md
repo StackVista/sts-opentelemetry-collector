@@ -157,4 +157,4 @@ See `classifyStaticObjectsCRDOverlap` for the resolution rules.
 | `SnapshotInterval`   | 5m      | Forces periodic full re-emit for platform TTL.     |
 | `PeerSyncPort`       | 4319    | HTTP server port on each replica.                  |
 | `PeerSyncDNS`        | —       | Headless service FQDN. Empty ⇒ single-replica.    |
-| `MaxCRDataSize`      | 10KiB   | Drops oversized CR object log records before emit. |
+| `MaxCRDataSize`      | 32KiB   | Drops oversized CR object log records before emit. |

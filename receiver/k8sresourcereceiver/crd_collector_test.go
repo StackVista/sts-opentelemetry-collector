@@ -184,12 +184,15 @@ type oversizedPayloadRecorder struct {
 type oversizedPayloadRecord struct {
 	apiGroup string
 	kind     string
+	size     int64
 }
 
-func (r *oversizedPayloadRecorder) RecordOversizedCRPayload(_ context.Context, apiGroup, kind string) {
+func (r *oversizedPayloadRecorder) RecordOversizedCRPayload(
+	_ context.Context, apiGroup, kind string, sizeBytes int64,
+) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.records = append(r.records, oversizedPayloadRecord{apiGroup: apiGroup, kind: kind})
+	r.records = append(r.records, oversizedPayloadRecord{apiGroup: apiGroup, kind: kind, size: sizeBytes})
 }
 
 func (r *oversizedPayloadRecorder) Records() []oversizedPayloadRecord {
@@ -702,7 +705,11 @@ func TestResourceCollector_DropsOversizedCRObject(t *testing.T) {
 	})
 
 	assert.Equal(t, 0, sink.LogRecordCount())
-	assert.Equal(t, []oversizedPayloadRecord{{apiGroup: "kubevirt.io", kind: "VirtualMachine"}}, recorder.Records())
+	records := recorder.Records()
+	require.Len(t, records, 1)
+	assert.Equal(t, "kubevirt.io", records[0].apiGroup)
+	assert.Equal(t, "VirtualMachine", records[0].kind)
+	assert.Greater(t, records[0].size, int64(20))
 }
 
 func TestResourceCollector_CRDWatchedMarkerHonorsWildcard(t *testing.T) {

@@ -24,7 +24,7 @@ type Recorder interface {
 	RecordPeerPushDuration(ctx context.Context, d time.Duration)
 	RecordBootstrap(ctx context.Context, outcome BootstrapOutcome, source BootstrapSource)
 	RecordSnapshotStreamFailure(ctx context.Context)
-	RecordOversizedCRPayload(ctx context.Context, apiGroup, kind string)
+	RecordOversizedCRPayload(ctx context.Context, apiGroup, kind string, sizeBytes int64)
 	RecordInformerReconcile(ctx context.Context, kind InformerKind, outcome InformerOutcome)
 	RecordEnrichmentSync(ctx context.Context, key string, outcome EnrichmentSyncOutcome)
 	RecordEnrichmentValueChange(ctx context.Context, key string, event EnrichmentValueEvent)
@@ -45,7 +45,7 @@ func (NoopRecorder) RecordPeerPushDuration(_ context.Context, _ time.Duration) {
 func (NoopRecorder) RecordBootstrap(_ context.Context, _ BootstrapOutcome, _ BootstrapSource) {
 }
 func (NoopRecorder) RecordSnapshotStreamFailure(_ context.Context) {}
-func (NoopRecorder) RecordOversizedCRPayload(_ context.Context, _, _ string) {
+func (NoopRecorder) RecordOversizedCRPayload(_ context.Context, _, _ string, _ int64) {
 }
 func (NoopRecorder) RecordInformerReconcile(_ context.Context, _ InformerKind, _ InformerOutcome) {
 }
@@ -67,6 +67,7 @@ type Metrics struct {
 	bootstrapTotal         metric.Int64Counter
 	snapshotStreamFailures metric.Int64Counter
 	oversizedCRPayloads    metric.Int64Counter
+	oversizedCRPayloadSize metric.Int64Histogram
 	informerReconciles     metric.Int64Counter
 	enrichmentSyncs        metric.Int64Counter
 	enrichmentValueChanges metric.Int64Counter
@@ -126,6 +127,11 @@ func NewMetrics(typeName, clusterName string, settings component.TelemetrySettin
 			"Custom resource log records dropped because the serialized object exceeded max_cr_data_size.",
 		),
 	)
+	oversizedCRPayloadSize, _ := meter.Int64Histogram(
+		name("oversized_cr_payload_size_bytes"),
+		metric.WithDescription("Serialized size of oversized custom resource log records that were dropped."),
+		metric.WithUnit("By"),
+	)
 	informerReconciles, _ := meter.Int64Counter(
 		name("informer_reconciles_total"),
 		metric.WithDescription("Reconciler attempts to start informers, labelled by kind (cr|static) and outcome."),
@@ -157,6 +163,7 @@ func NewMetrics(typeName, clusterName string, settings component.TelemetrySettin
 		bootstrapTotal:         bootstrapTotal,
 		snapshotStreamFailures: snapshotStreamFailures,
 		oversizedCRPayloads:    oversizedCRPayloads,
+		oversizedCRPayloadSize: oversizedCRPayloadSize,
 		informerReconciles:     informerReconciles,
 		enrichmentSyncs:        enrichmentSyncs,
 		enrichmentValueChanges: enrichmentValueChanges,
@@ -233,13 +240,13 @@ func (m *Metrics) RecordSnapshotStreamFailure(ctx context.Context) {
 	m.snapshotStreamFailures.Add(ctx, 1, metric.WithAttributeSet(m.attrs()))
 }
 
-func (m *Metrics) RecordOversizedCRPayload(ctx context.Context, apiGroup, kind string) {
-	m.oversizedCRPayloads.Add(ctx, 1, metric.WithAttributeSet(
-		m.attrs(
-			attribute.String("api_group", apiGroup),
-			attribute.String("kind", kind),
-		),
+func (m *Metrics) RecordOversizedCRPayload(ctx context.Context, apiGroup, kind string, sizeBytes int64) {
+	attrs := metric.WithAttributeSet(m.attrs(
+		attribute.String("api_group", apiGroup),
+		attribute.String("kind", kind),
 	))
+	m.oversizedCRPayloads.Add(ctx, 1, attrs)
+	m.oversizedCRPayloadSize.Record(ctx, sizeBytes, attrs)
 }
 
 func (m *Metrics) RecordInformerReconcile(

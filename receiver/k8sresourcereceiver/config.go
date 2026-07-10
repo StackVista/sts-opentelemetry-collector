@@ -20,7 +20,7 @@ type DiscoveryMode string
 const (
 	DiscoveryModeAPIGroups DiscoveryMode = "api_groups"
 	DiscoveryModeAll       DiscoveryMode = "all"
-	defaultMaxCRDataSize                 = 10 * 1024
+	defaultMaxCRDataSize                 = 32 * 1024
 
 	resourceSecrets   = "secrets"
 	resourceConfigMap = "configmaps"
@@ -54,7 +54,7 @@ type Config struct {
 	CustomResourceAPIGroups *APIGroups `mapstructure:"cr_api_groups"`
 
 	// MaxCRDataSize limits the serialized custom resource object payload forwarded per CR.
-	// Default: 10KiB. Oversized CR log records are dropped. Increase cautiously:
+	// Default: 32KiB. Oversized CR log records are dropped. Increase cautiously:
 	// larger values can increase ingest volume and expose larger CR payloads downstream.
 	MaxCRDataSize int `mapstructure:"max_cr_data_size"`
 

@@ -361,7 +361,7 @@ func (c *resourceCollector) dropOversizedCRObject(
 		return false
 	}
 
-	c.metrics.RecordOversizedCRPayload(ctx, obj.GroupVersionKind().Group, obj.GetKind())
+	c.metrics.RecordOversizedCRPayload(ctx, obj.GroupVersionKind().Group, obj.GetKind(), int64(size))
 	c.logger.Warn("Dropped oversized custom resource object before emitting",
 		zap.String("name", obj.GetName()),
 		zap.String("namespace", obj.GetNamespace()),
