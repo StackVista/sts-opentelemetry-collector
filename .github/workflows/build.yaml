@@ -75,7 +75,7 @@ jobs:
 
       - name: Apply OCI labels
         id: oci-labels
-        uses: StackVista/image-pipeline/.github/actions/apply-oci-labels@d406ce4560d6c9a50e0c8242beeff67e2ee59c62
+        uses: StackVista/image-pipeline/.github/actions/apply-oci-labels@6284a6fc006a7cc46a7f00d02c50d5f21b117b63
         with:
           image-name: ${{ steps.image-name.outputs.value }}
           tag: ${{ steps.meta.outputs.version }}
@@ -157,7 +157,7 @@ jobs:
           docker tag "$loaded" scan-target:${{ matrix.image }}-${{ matrix.arch }}
 
       - name: Run image-pipeline scan-image
-        uses: StackVista/image-pipeline/.github/actions/scan-image@dfbfa39e887dfdce25e185b6fac52e325de811af
+        uses: StackVista/image-pipeline/.github/actions/scan-image@6284a6fc006a7cc46a7f00d02c50d5f21b117b63
         with:
           image: scan-target:${{ matrix.image }}-${{ matrix.arch }}
           mode: gate
