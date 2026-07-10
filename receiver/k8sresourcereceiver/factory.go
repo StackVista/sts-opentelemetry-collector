@@ -33,11 +33,12 @@ func createDefaultConfig() component.Config {
 		IncrementInterval: 10 * time.Second,
 		SnapshotInterval:  5 * time.Minute,
 		DiscoveryMode:     DiscoveryModeAPIGroups,
-		CRDAPIGroupFilters: &CRDAPIGroupFilters{
+		CustomResourceAPIGroups: &APIGroups{
 			Include: []string{"*"},
 			Exclude: []string{},
 		},
-		PeerSyncPort: defaultPeerPort,
+		PeerSyncPort:  defaultPeerPort,
+		MaxCRDataSize: defaultMaxCRDataSize,
 	}
 }
 

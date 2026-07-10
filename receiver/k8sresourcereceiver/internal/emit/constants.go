@@ -8,6 +8,7 @@ const (
 	AttrK8sResourceKind    = "k8s.resource.kind"
 	AttrK8sResourceGroup   = "k8s.resource.group"
 	AttrK8sResourceVersion = "k8s.resource.version"
+	AttrK8sCRDCRsWatched   = "k8s.crd.custom_resources_watched"
 	AttrK8sObjectName      = "k8s.object.name"
 	AttrEventDomain        = "event.domain"
 	AttrK8sNamespaceName   = "k8s.namespace.name"

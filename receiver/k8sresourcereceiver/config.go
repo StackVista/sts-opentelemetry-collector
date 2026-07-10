@@ -1,6 +1,7 @@
 package k8sresourcereceiver
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -19,6 +20,7 @@ type DiscoveryMode string
 const (
 	DiscoveryModeAPIGroups DiscoveryMode = "api_groups"
 	DiscoveryModeAll       DiscoveryMode = "all"
+	defaultMaxCRDataSize                 = 10 * 1024
 
 	resourceSecrets   = "secrets"
 	resourceConfigMap = "configmaps"
@@ -43,12 +45,18 @@ type Config struct {
 	// ClusterName identifies the observed cluster. Added to log records as k8s.cluster.name.
 	ClusterName string `mapstructure:"cluster_name"`
 
-	// DiscoveryMode controls how CRDs are discovered: "api_groups" (filtered) or "all".
+	// DiscoveryMode controls which CRs are watched: "api_groups" (filtered) or "all".
+	// CRDs are always watched and emitted.
 	DiscoveryMode DiscoveryMode `mapstructure:"discovery_mode"`
 
-	// CRDAPIGroupFilters defines inclusion/exclusion patterns for CRD-discovered API groups.
+	// CustomResourceAPIGroups defines inclusion/exclusion patterns for CR-discovered API groups.
 	// Only used when DiscoveryMode is "api_groups".
-	CRDAPIGroupFilters *CRDAPIGroupFilters `mapstructure:"crd_api_group_filters"`
+	CustomResourceAPIGroups *APIGroups `mapstructure:"cr_api_groups"`
+
+	// MaxCRDataSize limits the serialized custom resource object payload forwarded per CR.
+	// Default: 10KiB. Oversized CR log records are dropped. Increase cautiously:
+	// larger values can increase ingest volume and expose larger CR payloads downstream.
+	MaxCRDataSize int `mapstructure:"max_cr_data_size"`
 
 	// PeerSyncPort is the port on which the HTTP server listens for peer sync requests.
 	// Each replica serves its serialized cache on this port. Default: 4319.
@@ -158,8 +166,8 @@ type ResourceAttributeApplyTo struct {
 	Resources []string `mapstructure:"resources"`
 }
 
-// CRDAPIGroupFilters defines inclusion and exclusion patterns for API groups
-type CRDAPIGroupFilters struct {
+// APIGroups defines inclusion and exclusion patterns for API groups.
+type APIGroups struct {
 	// Include defines patterns to include (glob). Default: ["*"] (all groups)
 	Include []string `mapstructure:"include"`
 
@@ -204,37 +212,43 @@ func (c *Config) Validate() error {
 	if c.PeerSyncPort < 0 || c.PeerSyncPort > 65535 {
 		return fmt.Errorf("peer_sync_port must be between 0 and 65535, got %d", c.PeerSyncPort)
 	}
+	if c.MaxCRDataSize == 0 {
+		c.MaxCRDataSize = defaultMaxCRDataSize
+	}
+	if c.MaxCRDataSize < 0 {
+		return fmt.Errorf("max_cr_data_size must be non-negative, got %d", c.MaxCRDataSize)
+	}
 
 	if c.DiscoveryMode == DiscoveryModeAPIGroups {
-		if c.CRDAPIGroupFilters == nil {
-			c.CRDAPIGroupFilters = &CRDAPIGroupFilters{
+		if c.CustomResourceAPIGroups == nil {
+			c.CustomResourceAPIGroups = &APIGroups{
 				Include: []string{"*"},
 				Exclude: []string{},
 			}
 		}
 
-		if len(c.CRDAPIGroupFilters.Include) == 0 {
-			return errors.New("crd_api_group_filters.include cannot be empty when discovery_mode is 'api_groups'")
+		if len(c.CustomResourceAPIGroups.Include) == 0 {
+			return errors.New("cr_api_groups.include cannot be empty when discovery_mode is 'api_groups'")
 		}
 
 		// Pre-compile and cache include patterns for performance
-		c.CRDAPIGroupFilters.includeRegexes = make([]*regexp.Regexp, 0, len(c.CRDAPIGroupFilters.Include))
-		for _, pattern := range c.CRDAPIGroupFilters.Include {
+		c.CustomResourceAPIGroups.includeRegexes = make([]*regexp.Regexp, 0, len(c.CustomResourceAPIGroups.Include))
+		for _, pattern := range c.CustomResourceAPIGroups.Include {
 			regex, err := compilePattern(pattern)
 			if err != nil {
 				return fmt.Errorf("invalid include pattern %q: %w", pattern, err)
 			}
-			c.CRDAPIGroupFilters.includeRegexes = append(c.CRDAPIGroupFilters.includeRegexes, regex)
+			c.CustomResourceAPIGroups.includeRegexes = append(c.CustomResourceAPIGroups.includeRegexes, regex)
 		}
 
 		// Pre-compile and cache exclude patterns for performance
-		c.CRDAPIGroupFilters.excludeRegexes = make([]*regexp.Regexp, 0, len(c.CRDAPIGroupFilters.Exclude))
-		for _, pattern := range c.CRDAPIGroupFilters.Exclude {
+		c.CustomResourceAPIGroups.excludeRegexes = make([]*regexp.Regexp, 0, len(c.CustomResourceAPIGroups.Exclude))
+		for _, pattern := range c.CustomResourceAPIGroups.Exclude {
 			regex, err := compilePattern(pattern)
 			if err != nil {
 				return fmt.Errorf("invalid exclude pattern %q: %w", pattern, err)
 			}
-			c.CRDAPIGroupFilters.excludeRegexes = append(c.CRDAPIGroupFilters.excludeRegexes, regex)
+			c.CustomResourceAPIGroups.excludeRegexes = append(c.CustomResourceAPIGroups.excludeRegexes, regex)
 		}
 	}
 
@@ -402,7 +416,7 @@ func (c *Config) shouldWatchAPIGroup(apiGroup string) bool {
 
 	// Check include patterns using cached compiled regexes
 	included := false
-	for _, regex := range c.CRDAPIGroupFilters.includeRegexes {
+	for _, regex := range c.CustomResourceAPIGroups.includeRegexes {
 		if regex.MatchString(apiGroup) {
 			included = true
 			break
@@ -414,13 +428,25 @@ func (c *Config) shouldWatchAPIGroup(apiGroup string) bool {
 	}
 
 	// Check exclude patterns using cached compiled regexes
-	for _, regex := range c.CRDAPIGroupFilters.excludeRegexes {
+	for _, regex := range c.CustomResourceAPIGroups.excludeRegexes {
 		if regex.MatchString(apiGroup) {
 			return false
 		}
 	}
 
 	return true
+}
+
+func (c *Config) crObjectExceedsLimit(obj map[string]interface{}) (int, bool) {
+	if c.MaxCRDataSize <= 0 {
+		return 0, false
+	}
+	data, err := json.Marshal(obj)
+	if err != nil || len(data) <= c.MaxCRDataSize {
+		return len(data), false
+	}
+
+	return len(data), true
 }
 
 // compilePattern converts a glob-style pattern to a regex

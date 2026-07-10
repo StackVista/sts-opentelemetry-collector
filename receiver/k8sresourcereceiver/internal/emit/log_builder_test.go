@@ -272,7 +272,7 @@ func TestBuildCRDLogRecord(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			logs, err := emit.BuildCRDLogRecord(tt.crd, tt.eventType, timestamp, clusterName)
+			logs, err := emit.BuildCRDLogRecord(tt.crd, tt.eventType, timestamp, clusterName, true)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -328,6 +328,10 @@ func TestBuildCRDLogRecord(t *testing.T) {
 			version, ok := attrs.Get(emit.AttrK8sResourceVersion)
 			require.True(t, ok)
 			assert.Equal(t, "v1", version.Str())
+
+			crsWatched, ok := attrs.Get(emit.AttrK8sCRDCRsWatched)
+			require.True(t, ok)
+			assert.True(t, crsWatched.Bool())
 
 			domain, ok := attrs.Get(emit.AttrEventDomain)
 			require.True(t, ok)

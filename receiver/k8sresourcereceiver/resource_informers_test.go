@@ -226,10 +226,10 @@ func TestResourceInformers_FiltersAPIGroups(t *testing.T) {
 	assert.True(t, allowedExists, "allowed group should have CR informer")
 	assert.False(t, blockedExists, "blocked group should not have CR informer")
 
-	// ReadCRDs should only return the allowed CRD
+	// ReadCRDs returns all CRDs; CR filtering only controls CR informers.
 	crds := ri.ReadCRDs()
-	require.Len(t, crds, 1)
-	assert.Equal(t, "alloweds.allowed.com", crds[0].GetName())
+	require.Len(t, crds, 2)
+	assert.ElementsMatch(t, []string{"alloweds.allowed.com", "blockeds.blocked.com"}, []string{crds[0].GetName(), crds[1].GetName()})
 }
 
 func TestResourceInformers_ExcludeFilter(t *testing.T) {

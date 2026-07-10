@@ -59,9 +59,9 @@ func newReceiver(
 }
 
 func (r *k8sresourceReceiver) Start(ctx context.Context, host component.Host) error {
-	if r.config.DiscoveryMode == DiscoveryModeAll && r.config.CRDAPIGroupFilters != nil {
+	if r.config.DiscoveryMode == DiscoveryModeAll && r.config.CustomResourceAPIGroups != nil {
 		r.settings.Logger.Warn(
-			"crd_api_group_filters is configured but has no effect when discovery_mode is 'all'; " +
+			"cr_api_groups is configured but has no effect when discovery_mode is 'all'; " +
 				"remove the filters or switch to discovery_mode: api_groups",
 		)
 	}
@@ -160,8 +160,12 @@ func (r *k8sresourceReceiver) startCollector(ctx context.Context) error {
 
 	ft := tracker.NewDefault()
 	informers := newResourceInformers(r.settings, r.config, r.dynamicClient, r.resolvedObjects, ft, r.metrics)
+	var enricher resourceAttributeEnricher
+	if r.resourceAttributeManager != nil {
+		enricher = r.resourceAttributeManager
+	}
 	collector := newResourceCollector(
-		r.settings.Logger, r.config, r.consumer, informers, r.peerStore, r.metrics, r.resourceAttributeManager,
+		r.settings.Logger, r.config, r.consumer, informers, r.peerStore, r.metrics, enricher,
 	)
 
 	if err := collector.Start(ctx); err != nil {
@@ -186,6 +190,7 @@ func (r *k8sresourceReceiver) startCollector(ctx context.Context) error {
 		zap.Duration("increment_interval", r.config.IncrementInterval),
 		zap.Duration("snapshot_interval", r.config.SnapshotInterval),
 		zap.String("discovery_mode", string(r.config.DiscoveryMode)),
+		zap.Int("max_cr_data_size", r.config.MaxCRDataSize),
 	)
 
 	return nil

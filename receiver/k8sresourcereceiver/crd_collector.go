@@ -171,7 +171,7 @@ func (c *resourceCollector) emitSnapshot(
 
 	for _, crd := range currentCRDs {
 		if err := emit.LogCRD(
-			ctx, c.consumer, crd, watch.Added, c.config.ClusterName,
+			ctx, c.consumer, crd, watch.Added, c.config.ClusterName, c.crdCustomResourcesWatched(crd),
 		); err != nil {
 			c.logger.Debug("Failed to emit CRD snapshot log",
 				zap.String("name", crd.GetName()),
@@ -186,6 +186,9 @@ func (c *resourceCollector) emitSnapshot(
 		eventName := eventNameForSource(group.Source)
 		resourceAttributes := c.resourceAttributesFor(gvr)
 		for _, obj := range group.Objects {
+			if c.dropOversizedCRObject(ctx, obj, group.Source) {
+				continue
+			}
 			if err := emit.LogObject(
 				ctx, c.consumer, obj, watch.Added, c.config.ClusterName, eventName, resourceAttributes,
 			); err != nil {
@@ -206,8 +209,11 @@ func (c *resourceCollector) emitSnapshot(
 		}
 		var err error
 		if ch.IsCRD {
-			err = emit.LogCRD(ctx, c.consumer, ch.Obj, watch.Deleted, c.config.ClusterName)
+			err = emit.LogCRD(ctx, c.consumer, ch.Obj, watch.Deleted, c.config.ClusterName, c.crdCustomResourcesWatched(ch.Obj))
 		} else {
+			if c.dropOversizedCRObject(ctx, ch.Obj, ch.Source) {
+				continue
+			}
 			err = emit.LogObject(
 				ctx, c.consumer, ch.Obj, watch.Deleted, c.config.ClusterName,
 				eventNameForSource(ch.Source), c.resourceAttributesFor(ch.GVR),
@@ -292,8 +298,14 @@ func (c *resourceCollector) emitChanges(ctx context.Context, changes []ResourceC
 	for _, change := range changes {
 		var err error
 		if change.IsCRD {
-			err = emit.LogCRD(ctx, c.consumer, change.Obj, change.EventType, c.config.ClusterName)
+			err = emit.LogCRD(
+				ctx, c.consumer, change.Obj, change.EventType,
+				c.config.ClusterName, c.crdCustomResourcesWatched(change.Obj),
+			)
 		} else {
+			if c.dropOversizedCRObject(ctx, change.Obj, change.Source) {
+				continue
+			}
 			err = emit.LogObject(
 				ctx, c.consumer, change.Obj, change.EventType, c.config.ClusterName,
 				eventNameForSource(change.Source), c.resourceAttributesFor(change.GVR),
@@ -330,4 +342,33 @@ func (c *resourceCollector) watchEventToChangeType(e watch.EventType) metrics.Ch
 
 func (c *resourceCollector) resourceAttributesFor(gvr schema.GroupVersionResource) map[string]string {
 	return c.enricher.AttributesFor(gvr)
+}
+
+func (c *resourceCollector) crdCustomResourcesWatched(crd *unstructured.Unstructured) bool {
+	apiGroup, _, _ := unstructured.NestedString(crd.Object, "spec", "group")
+	return c.config.shouldWatchAPIGroup(apiGroup)
+}
+
+func (c *resourceCollector) dropOversizedCRObject(
+	ctx context.Context,
+	obj *unstructured.Unstructured, source ObjectSource,
+) bool {
+	if source != ObjectSourceCR {
+		return false
+	}
+	size, oversized := c.config.crObjectExceedsLimit(obj.Object)
+	if !oversized {
+		return false
+	}
+
+	c.metrics.RecordOversizedCRPayload(ctx, obj.GroupVersionKind().Group, obj.GetKind())
+	c.logger.Warn("Dropped oversized custom resource object before emitting",
+		zap.String("name", obj.GetName()),
+		zap.String("namespace", obj.GetNamespace()),
+		zap.String("api_version", obj.GetAPIVersion()),
+		zap.String("kind", obj.GetKind()),
+		zap.Int("payload_size", size),
+		zap.Int("max_cr_data_size", c.config.MaxCRDataSize),
+	)
+	return true
 }
