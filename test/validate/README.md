@@ -18,8 +18,8 @@ A missing or misnamed component in the BOM makes `validate` fail, breaking the b
   `helm-charts-internal/stable/suse-observability-agent/templates/otel/scraper/configmap.yaml`
   (mTLS branch enabled to cover the superset of components).
 - `configs/k8s-resource.yaml` — de-templated copy of the k8s-resource collector config from
-  `helm-charts-internal/stable/suse-observability-agent/templates/k8s-resource-collector-configmap.yaml`
-  (leader election enabled; uses the `otlphttp` exporter).
+  `helm-charts-internal/stable/suse-observability-agent/templates/otel/k8sresourcecollector/configmap.yaml`
+  (leader election and self-metrics enabled; uses the `otlphttp` exporter).
 - `configs/telemetry-gateway.yaml` — de-templated copy of the telemetry-gateway collector config
   from `helm-charts-internal/stable/suse-observability-agent/templates/otel/telemetrygateway/configmap.yaml`.
   This is the fixture that exercises the `span_metrics` connector and the `debug` exporter.
