@@ -24,7 +24,11 @@ type Recorder interface {
 	RecordPeerPushDuration(ctx context.Context, d time.Duration)
 	RecordBootstrap(ctx context.Context, outcome BootstrapOutcome, source BootstrapSource)
 	RecordSnapshotStreamFailure(ctx context.Context)
-	RecordOversizedCRPayload(ctx context.Context, apiGroup, kind string, sizeBytes int64)
+	RecordPayloadDropped(ctx context.Context, source PayloadSource, apiGroup, kind string)
+	RecordPayloadSize(
+		ctx context.Context, source PayloadSource, outcome PayloadOutcome, apiGroup, kind string, sizeBytes int64,
+	)
+	RecordPayloadBudget(ctx context.Context, source PayloadSource, budgetBytes, usedBytes int64)
 	RecordInformerReconcile(ctx context.Context, kind InformerKind, outcome InformerOutcome)
 	RecordEnrichmentSync(ctx context.Context, key string, outcome EnrichmentSyncOutcome)
 	RecordEnrichmentValueChange(ctx context.Context, key string, event EnrichmentValueEvent)
@@ -45,7 +49,11 @@ func (NoopRecorder) RecordPeerPushDuration(_ context.Context, _ time.Duration) {
 func (NoopRecorder) RecordBootstrap(_ context.Context, _ BootstrapOutcome, _ BootstrapSource) {
 }
 func (NoopRecorder) RecordSnapshotStreamFailure(_ context.Context) {}
-func (NoopRecorder) RecordOversizedCRPayload(_ context.Context, _, _ string, _ int64) {
+func (NoopRecorder) RecordPayloadDropped(_ context.Context, _ PayloadSource, _, _ string) {
+}
+func (NoopRecorder) RecordPayloadSize(_ context.Context, _ PayloadSource, _ PayloadOutcome, _, _ string, _ int64) {
+}
+func (NoopRecorder) RecordPayloadBudget(_ context.Context, _ PayloadSource, _, _ int64) {
 }
 func (NoopRecorder) RecordInformerReconcile(_ context.Context, _ InformerKind, _ InformerOutcome) {
 }
@@ -66,8 +74,10 @@ type Metrics struct {
 	peerPushDuration       metric.Float64Histogram
 	bootstrapTotal         metric.Int64Counter
 	snapshotStreamFailures metric.Int64Counter
-	oversizedCRPayloads    metric.Int64Counter
-	oversizedCRPayloadSize metric.Int64Histogram
+	payloadsDropped        metric.Int64Counter
+	payloadSize            metric.Int64Histogram
+	payloadBudget          metric.Int64Gauge
+	payloadBudgetUsed      metric.Int64Gauge
 	informerReconciles     metric.Int64Counter
 	enrichmentSyncs        metric.Int64Counter
 	enrichmentValueChanges metric.Int64Counter
@@ -121,15 +131,23 @@ func NewMetrics(typeName, clusterName string, settings component.TelemetrySettin
 		name("snapshot_stream_failures_total"),
 		metric.WithDescription("Snapshot serve failures during NDJSON encoding (client gets a partial stream)."),
 	)
-	oversizedCRPayloads, _ := meter.Int64Counter(
-		name("oversized_cr_payloads_total"),
-		metric.WithDescription(
-			"Custom resource log records dropped because the serialized object exceeded max_cr_data_size.",
-		),
+	payloadsDropped, _ := meter.Int64Counter(
+		name("payloads_dropped_total"),
+		metric.WithDescription("Kubernetes object payloads dropped because they did not fit the configured budget."),
 	)
-	oversizedCRPayloadSize, _ := meter.Int64Histogram(
-		name("oversized_cr_payload_size_bytes"),
-		metric.WithDescription("Serialized size of oversized custom resource log records that were dropped."),
+	payloadSize, _ := meter.Int64Histogram(
+		name("payload_size_bytes"),
+		metric.WithDescription("Serialized Kubernetes object payload size after budget classification."),
+		metric.WithUnit("By"),
+	)
+	payloadBudget, _ := meter.Int64Gauge(
+		name("payload_budget_bytes"),
+		metric.WithDescription("Configured serialized payload budget in bytes, labelled by source."),
+		metric.WithUnit("By"),
+	)
+	payloadBudgetUsed, _ := meter.Int64Gauge(
+		name("payload_budget_used_bytes"),
+		metric.WithDescription("Serialized payload budget used by forwarded objects in bytes, labelled by source."),
 		metric.WithUnit("By"),
 	)
 	informerReconciles, _ := meter.Int64Counter(
@@ -162,8 +180,10 @@ func NewMetrics(typeName, clusterName string, settings component.TelemetrySettin
 		peerPushDuration:       peerPushDuration,
 		bootstrapTotal:         bootstrapTotal,
 		snapshotStreamFailures: snapshotStreamFailures,
-		oversizedCRPayloads:    oversizedCRPayloads,
-		oversizedCRPayloadSize: oversizedCRPayloadSize,
+		payloadsDropped:        payloadsDropped,
+		payloadSize:            payloadSize,
+		payloadBudget:          payloadBudget,
+		payloadBudgetUsed:      payloadBudgetUsed,
 		informerReconciles:     informerReconciles,
 		enrichmentSyncs:        enrichmentSyncs,
 		enrichmentValueChanges: enrichmentValueChanges,
@@ -240,13 +260,31 @@ func (m *Metrics) RecordSnapshotStreamFailure(ctx context.Context) {
 	m.snapshotStreamFailures.Add(ctx, 1, metric.WithAttributeSet(m.attrs()))
 }
 
-func (m *Metrics) RecordOversizedCRPayload(ctx context.Context, apiGroup, kind string, sizeBytes int64) {
+func (m *Metrics) RecordPayloadDropped(ctx context.Context, source PayloadSource, apiGroup, kind string) {
 	attrs := metric.WithAttributeSet(m.attrs(
+		attribute.String("source", string(source)),
 		attribute.String("api_group", apiGroup),
 		attribute.String("kind", kind),
+		attribute.String("reason", "total_size_limit"),
 	))
-	m.oversizedCRPayloads.Add(ctx, 1, attrs)
-	m.oversizedCRPayloadSize.Record(ctx, sizeBytes, attrs)
+	m.payloadsDropped.Add(ctx, 1, attrs)
+}
+
+func (m *Metrics) RecordPayloadSize(
+	ctx context.Context, source PayloadSource, outcome PayloadOutcome, apiGroup, kind string, sizeBytes int64,
+) {
+	m.payloadSize.Record(ctx, sizeBytes, metric.WithAttributeSet(m.attrs(
+		attribute.String("source", string(source)),
+		attribute.String("outcome", string(outcome)),
+		attribute.String("api_group", apiGroup),
+		attribute.String("kind", kind),
+	)))
+}
+
+func (m *Metrics) RecordPayloadBudget(ctx context.Context, source PayloadSource, budgetBytes, usedBytes int64) {
+	attrs := metric.WithAttributeSet(m.attrs(attribute.String("source", string(source))))
+	m.payloadBudget.Record(ctx, budgetBytes, attrs)
+	m.payloadBudgetUsed.Record(ctx, usedBytes, attrs)
 }
 
 func (m *Metrics) RecordInformerReconcile(

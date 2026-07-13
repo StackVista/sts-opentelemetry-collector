@@ -22,7 +22,8 @@ receivers:
     cluster_name: test-cluster
     snapshot_interval: 5m
     discovery_mode: api_groups
-    max_cr_data_size: 16384
+    max_cr_total_data_size_bytes: 1048576
+    max_object_total_data_size_bytes: 1048576
     cr_api_groups:
       include:
         - kubevirt.io
@@ -43,8 +44,8 @@ processors:
     metric_statements:
       - context: resource
         statements:
-          - delete_key(attributes, "k8s.namespace.name")
-  k8sattributes:
+          - delete_key(resource.attributes, "k8s.namespace.name")
+  k8s_attributes:
     auth_type: serviceAccount
     extract:
       labels:
@@ -69,10 +70,10 @@ processors:
     metric_statements:
       - context: resource
         statements:
-          - set(attributes["k8s.cluster.name"], "test-cluster")
-          - set(attributes["service.name"], "suse-observability-agent-k8s-resource-collector")
-          - set(attributes["service.instance.id"], attributes["k8s.pod.uid"]) where attributes["service.instance.id"] == nil and attributes["k8s.pod.uid"] != nil
-          - set(attributes["service.namespace"], attributes["k8s.namespace.name"]) where attributes["service.namespace"] == nil and attributes["k8s.namespace.name"] != nil
+          - set(resource.attributes["k8s.cluster.name"], "test-cluster")
+          - set(resource.attributes["service.name"], "suse-observability-agent-k8s-resource-collector")
+          - set(resource.attributes["service.instance.id"], resource.attributes["k8s.pod.uid"]) where resource.attributes["service.instance.id"] == nil and resource.attributes["k8s.pod.uid"] != nil
+          - set(resource.attributes["service.namespace"], resource.attributes["k8s.namespace.name"]) where resource.attributes["service.namespace"] == nil and resource.attributes["k8s.namespace.name"] != nil
   batch: {}
 
 exporters:
@@ -125,5 +126,5 @@ service:
       exporters: [otlphttp/suse-observability]
     metrics/self:
       receivers: [prometheus/self]
-      processors: [transform/pre-k8sattributes, k8sattributes, transform/self-metrics, batch]
+      processors: [transform/pre-k8sattributes, k8s_attributes, transform/self-metrics, batch]
       exporters: [otlphttp/suse-observability]

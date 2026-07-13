@@ -18,9 +18,10 @@ import (
 type DiscoveryMode string
 
 const (
-	DiscoveryModeAPIGroups DiscoveryMode = "api_groups"
-	DiscoveryModeAll       DiscoveryMode = "all"
-	defaultMaxCRDataSize                 = 16 * 1024
+	DiscoveryModeAPIGroups             DiscoveryMode = "api_groups"
+	DiscoveryModeAll                   DiscoveryMode = "all"
+	defaultMaxCRTotalDataSizeBytes                   = 1024 * 1024
+	defaultMaxObjectTotalDataSizeBytes               = 1024 * 1024
 
 	resourceSecrets   = "secrets"
 	resourceConfigMap = "configmaps"
@@ -53,10 +54,13 @@ type Config struct {
 	// Only used when DiscoveryMode is "api_groups".
 	CustomResourceAPIGroups *APIGroups `mapstructure:"cr_api_groups"`
 
-	// MaxCRDataSize limits the serialized custom resource object payload forwarded per CR.
-	// Default: 16KiB. Oversized CR log records are dropped. Increase cautiously:
-	// larger values can increase ingest volume and expose larger CR payloads downstream.
-	MaxCRDataSize int `mapstructure:"max_cr_data_size"`
+	// MaxCRTotalDataSizeBytes is the total serialized payload budget for CR-discovered
+	// objects per collection cycle. Default: 1MiB. CRs that do not fit are dropped.
+	MaxCRTotalDataSizeBytes int `mapstructure:"max_cr_total_data_size_bytes"`
+
+	// MaxObjectTotalDataSizeBytes is the total serialized payload budget for statically
+	// configured Kubernetes object watches per collection cycle. Default: 1MiB.
+	MaxObjectTotalDataSizeBytes int `mapstructure:"max_object_total_data_size_bytes"`
 
 	// PeerSyncPort is the port on which the HTTP server listens for peer sync requests.
 	// Each replica serves its serialized cache on this port. Default: 4319.
@@ -212,11 +216,17 @@ func (c *Config) Validate() error {
 	if c.PeerSyncPort < 0 || c.PeerSyncPort > 65535 {
 		return fmt.Errorf("peer_sync_port must be between 0 and 65535, got %d", c.PeerSyncPort)
 	}
-	if c.MaxCRDataSize == 0 {
-		c.MaxCRDataSize = defaultMaxCRDataSize
+	if c.MaxCRTotalDataSizeBytes == 0 {
+		c.MaxCRTotalDataSizeBytes = defaultMaxCRTotalDataSizeBytes
 	}
-	if c.MaxCRDataSize < 0 {
-		return fmt.Errorf("max_cr_data_size must be non-negative, got %d", c.MaxCRDataSize)
+	if c.MaxCRTotalDataSizeBytes < 0 {
+		return fmt.Errorf("max_cr_total_data_size_bytes must be non-negative, got %d", c.MaxCRTotalDataSizeBytes)
+	}
+	if c.MaxObjectTotalDataSizeBytes == 0 {
+		c.MaxObjectTotalDataSizeBytes = defaultMaxObjectTotalDataSizeBytes
+	}
+	if c.MaxObjectTotalDataSizeBytes < 0 {
+		return fmt.Errorf("max_object_total_data_size_bytes must be non-negative, got %d", c.MaxObjectTotalDataSizeBytes)
 	}
 
 	if c.DiscoveryMode == DiscoveryModeAPIGroups {
@@ -437,15 +447,11 @@ func (c *Config) shouldWatchAPIGroup(apiGroup string) bool {
 	return true
 }
 
-func (c *Config) crObjectExceedsLimit(obj map[string]interface{}) (int, bool) {
-	if c.MaxCRDataSize <= 0 {
+func serializedObjectSize(obj map[string]interface{}) (int, bool) {
+	data, err := json.Marshal(obj)
+	if err != nil {
 		return 0, false
 	}
-	data, err := json.Marshal(obj)
-	if err != nil || len(data) <= c.MaxCRDataSize {
-		return len(data), false
-	}
-
 	return len(data), true
 }
 

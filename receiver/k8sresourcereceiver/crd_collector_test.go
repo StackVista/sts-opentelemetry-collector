@@ -175,30 +175,70 @@ type recordingPeerStore struct {
 	saves            []recordedSave
 }
 
-type oversizedPayloadRecorder struct {
+type payloadRecorder struct {
 	metrics.NoopRecorder
 	mu      sync.Mutex
-	records []oversizedPayloadRecord
+	dropped []payloadDropRecord
+	sizes   []payloadSizeRecord
+	budgets []payloadBudgetRecord
 }
 
-type oversizedPayloadRecord struct {
+type payloadDropRecord struct {
+	source   metrics.PayloadSource
+	apiGroup string
+	kind     string
+}
+
+type payloadSizeRecord struct {
+	source   metrics.PayloadSource
+	outcome  metrics.PayloadOutcome
 	apiGroup string
 	kind     string
 	size     int64
 }
 
-func (r *oversizedPayloadRecorder) RecordOversizedCRPayload(
-	_ context.Context, apiGroup, kind string, sizeBytes int64,
+type payloadBudgetRecord struct {
+	source metrics.PayloadSource
+	budget int64
+	used   int64
+}
+
+func (r *payloadRecorder) RecordPayloadDropped(_ context.Context, source metrics.PayloadSource, apiGroup, kind string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.dropped = append(r.dropped, payloadDropRecord{source: source, apiGroup: apiGroup, kind: kind})
+}
+
+func (r *payloadRecorder) RecordPayloadSize(
+	_ context.Context, source metrics.PayloadSource, outcome metrics.PayloadOutcome, apiGroup, kind string, sizeBytes int64,
 ) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.records = append(r.records, oversizedPayloadRecord{apiGroup: apiGroup, kind: kind, size: sizeBytes})
+	r.sizes = append(r.sizes, payloadSizeRecord{source: source, outcome: outcome, apiGroup: apiGroup, kind: kind, size: sizeBytes})
 }
 
-func (r *oversizedPayloadRecorder) Records() []oversizedPayloadRecord {
+func (r *payloadRecorder) RecordPayloadBudget(_ context.Context, source metrics.PayloadSource, budgetBytes, usedBytes int64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return append([]oversizedPayloadRecord(nil), r.records...)
+	r.budgets = append(r.budgets, payloadBudgetRecord{source: source, budget: budgetBytes, used: usedBytes})
+}
+
+func (r *payloadRecorder) Dropped() []payloadDropRecord {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]payloadDropRecord(nil), r.dropped...)
+}
+
+func (r *payloadRecorder) Sizes() []payloadSizeRecord {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]payloadSizeRecord(nil), r.sizes...)
+}
+
+func (r *payloadRecorder) Budgets() []payloadBudgetRecord {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]payloadBudgetRecord(nil), r.budgets...)
 }
 
 type recordedSave struct {
@@ -686,30 +726,56 @@ func TestResourceCollector_EmitsAllCRDsButOnlyFilteredCRs(t *testing.T) {
 	})
 }
 
-func TestResourceCollector_DropsOversizedCRObject(t *testing.T) {
+func TestResourceCollector_AppliesPayloadBudgets(t *testing.T) {
 	crGVR := schema.GroupVersionResource{Group: "kubevirt.io", Version: "v1", Resource: "virtualmachines"}
-	crObj := makeTestCR("vm-1", "default", "kubevirt.io", "v1", "VirtualMachine")
-	crObj.Object["spec"] = map[string]interface{}{"large": "0123456789abcdefghijklmnopqrstuvwxyz"}
-	sink := &consumertest.LogsSink{}
-	recorder := &oversizedPayloadRecorder{}
+	staticGVR := schema.GroupVersionResource{Group: "storage.sbomscanner.kubewarden.io", Version: "v1alpha1", Resource: "sboms"}
+	crSmall := makeTestCR("a-small", "default", "kubevirt.io", "v1", "VirtualMachine")
+	crSmall.Object["spec"] = map[string]interface{}{"payload": "small"}
+	crLarge := makeTestCR("b-large", "default", "kubevirt.io", "v1", "VirtualMachine")
+	crLarge.Object["spec"] = map[string]interface{}{"payload": "0123456789abcdefghijklmnopqrstuvwxyz"}
+	staticLarge := makeTestCR("sbom-1", "default", "storage.sbomscanner.kubewarden.io", "v1alpha1", "SBOM")
+	staticLarge.Object["spec"] = map[string]interface{}{"payload": "0123456789abcdefghijklmnopqrstuvwxyz"}
+	recorder := &payloadRecorder{}
 	c := &resourceCollector{
 		logger:   zaptest.NewLogger(t),
-		config:   &Config{ClusterName: "test-cluster", MaxCRDataSize: 20},
-		consumer: sink,
+		config:   &Config{ClusterName: "test-cluster", MaxCRTotalDataSizeBytes: 140, MaxObjectTotalDataSizeBytes: 20},
+		consumer: &consumertest.LogsSink{},
 		metrics:  recorder,
 		enricher: noopResourceAttributeEnricher{},
 	}
 
-	c.emitChanges(context.Background(), []ResourceChange{
-		{Obj: crObj, EventType: watch.Added, GVR: crGVR, Source: ObjectSourceCR},
+	filtered := c.applyPayloadBudgets(context.Background(), map[schema.GroupVersionResource]ObjectGroup{
+		crGVR:     {Source: ObjectSourceCR, Objects: []*unstructured.Unstructured{crLarge, crSmall}},
+		staticGVR: {Source: ObjectSourceStatic, Objects: []*unstructured.Unstructured{staticLarge}},
 	})
 
-	assert.Equal(t, 0, sink.LogRecordCount())
-	records := recorder.Records()
-	require.Len(t, records, 1)
-	assert.Equal(t, "kubevirt.io", records[0].apiGroup)
-	assert.Equal(t, "VirtualMachine", records[0].kind)
-	assert.Greater(t, records[0].size, int64(20))
+	require.Contains(t, filtered, crGVR)
+	require.Len(t, filtered[crGVR].Objects, 1)
+	assert.Equal(t, "a-small", filtered[crGVR].Objects[0].GetName())
+	assert.NotContains(t, filtered, staticGVR)
+	assert.ElementsMatch(t, []payloadDropRecord{
+		{source: metrics.PayloadSourceCR, apiGroup: "kubevirt.io", kind: "VirtualMachine"},
+		{source: metrics.PayloadSourceObject, apiGroup: "storage.sbomscanner.kubewarden.io", kind: "SBOM"},
+	}, recorder.Dropped())
+	budgets := recorder.Budgets()
+	require.Len(t, budgets, 2)
+	assert.Contains(t, budgets, payloadBudgetRecord{source: metrics.PayloadSourceObject, budget: 20, used: 0})
+	crBudget := findPayloadBudget(t, budgets, metrics.PayloadSourceCR)
+	assert.Equal(t, int64(140), crBudget.budget)
+	assert.Greater(t, crBudget.used, int64(0))
+}
+
+func findPayloadBudget(
+	t *testing.T, budgets []payloadBudgetRecord, source metrics.PayloadSource,
+) payloadBudgetRecord {
+	t.Helper()
+	for _, budget := range budgets {
+		if budget.source == source {
+			return budget
+		}
+	}
+	require.Failf(t, "missing payload budget", "source %q not recorded", source)
+	return payloadBudgetRecord{}
 }
 
 func TestResourceCollector_CRDWatchedMarkerHonorsWildcard(t *testing.T) {
@@ -793,17 +859,28 @@ func TestConfig_Simplified(t *testing.T) {
 		require.NoError(t, cfg.Validate())
 		assert.Equal(t, 10*time.Second, cfg.IncrementInterval)
 		assert.Equal(t, 5*time.Minute, cfg.SnapshotInterval)
-		assert.Equal(t, defaultMaxCRDataSize, cfg.MaxCRDataSize)
+		assert.Equal(t, defaultMaxCRTotalDataSizeBytes, cfg.MaxCRTotalDataSizeBytes)
+		assert.Equal(t, defaultMaxObjectTotalDataSizeBytes, cfg.MaxObjectTotalDataSizeBytes)
 	})
 
-	t.Run("negative max CR data size", func(t *testing.T) {
+	t.Run("negative max CR total data size", func(t *testing.T) {
 		cfg := &Config{
-			DiscoveryMode: DiscoveryModeAll,
-			MaxCRDataSize: -1,
+			DiscoveryMode:           DiscoveryModeAll,
+			MaxCRTotalDataSizeBytes: -1,
 		}
 		err := cfg.Validate()
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "max_cr_data_size must be non-negative")
+		assert.Contains(t, err.Error(), "max_cr_total_data_size_bytes must be non-negative")
+	})
+
+	t.Run("negative max object total data size", func(t *testing.T) {
+		cfg := &Config{
+			DiscoveryMode:               DiscoveryModeAll,
+			MaxObjectTotalDataSizeBytes: -1,
+		}
+		err := cfg.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "max_object_total_data_size_bytes must be non-negative")
 	})
 
 	t.Run("increment interval too short", func(t *testing.T) {

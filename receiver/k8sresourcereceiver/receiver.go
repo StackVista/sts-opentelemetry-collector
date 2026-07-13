@@ -190,7 +190,8 @@ func (r *k8sresourceReceiver) startCollector(ctx context.Context) error {
 		zap.Duration("increment_interval", r.config.IncrementInterval),
 		zap.Duration("snapshot_interval", r.config.SnapshotInterval),
 		zap.String("discovery_mode", string(r.config.DiscoveryMode)),
-		zap.Int("max_cr_data_size", r.config.MaxCRDataSize),
+		zap.Int("max_cr_total_data_size_bytes", r.config.MaxCRTotalDataSizeBytes),
+		zap.Int("max_object_total_data_size_bytes", r.config.MaxObjectTotalDataSizeBytes),
 	)
 
 	return nil

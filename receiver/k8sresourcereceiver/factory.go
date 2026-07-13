@@ -37,8 +37,9 @@ func createDefaultConfig() component.Config {
 			Include: []string{"*"},
 			Exclude: []string{},
 		},
-		PeerSyncPort:  defaultPeerPort,
-		MaxCRDataSize: defaultMaxCRDataSize,
+		PeerSyncPort:                defaultPeerPort,
+		MaxCRTotalDataSizeBytes:     defaultMaxCRTotalDataSizeBytes,
+		MaxObjectTotalDataSizeBytes: defaultMaxObjectTotalDataSizeBytes,
 	}
 }
 
