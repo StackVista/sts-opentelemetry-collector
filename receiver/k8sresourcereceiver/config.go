@@ -20,8 +20,8 @@ type DiscoveryMode string
 const (
 	DiscoveryModeAPIGroups             DiscoveryMode = "api_groups"
 	DiscoveryModeAll                   DiscoveryMode = "all"
-	defaultMaxCRTotalDataSizeBytes                   = 1024 * 1024
-	defaultMaxObjectTotalDataSizeBytes               = 1024 * 1024
+	defaultMaxCRTotalDataSizeBytes                   = 10 * 1024 * 1024
+	defaultMaxObjectTotalDataSizeBytes               = 10 * 1024 * 1024
 
 	resourceSecrets   = "secrets"
 	resourceConfigMap = "configmaps"

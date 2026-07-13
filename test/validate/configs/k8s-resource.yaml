@@ -22,8 +22,8 @@ receivers:
     cluster_name: test-cluster
     snapshot_interval: 5m
     discovery_mode: api_groups
-    max_cr_total_data_size_bytes: 1048576
-    max_object_total_data_size_bytes: 1048576
+    max_cr_total_data_size_bytes: 10485760
+    max_object_total_data_size_bytes: 10485760
     cr_api_groups:
       include:
         - kubevirt.io

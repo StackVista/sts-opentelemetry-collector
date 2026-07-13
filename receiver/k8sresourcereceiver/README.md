@@ -157,8 +157,8 @@ See `classifyStaticObjectsCRDOverlap` for the resolution rules.
 | `SnapshotInterval`   | 5m      | Forces periodic full re-emit for platform TTL.     |
 | `PeerSyncPort`       | 4319    | HTTP server port on each replica.                  |
 | `PeerSyncDNS`        | —       | Headless service FQDN. Empty ⇒ single-replica.    |
-| `MaxCRTotalDataSizeBytes` | 1MiB    | Total CR payload budget per collection cycle.      |
-| `MaxObjectTotalDataSizeBytes` | 1MiB | Total static object payload budget per collection cycle. |
+| `MaxCRTotalDataSizeBytes` | 10MiB   | Total CR payload budget per collection cycle.      |
+| `MaxObjectTotalDataSizeBytes` | 10MiB | Total static object payload budget per collection cycle. |
 
 Payload budgets are applied after reading informer caches and before diffing
 against the peer cache. CRDs do not count against the budget. CRs and static
