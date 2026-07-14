@@ -1,9 +1,10 @@
-package topologyconnector
+package topologyconnector_test
 
 import (
 	"context"
 	"testing"
 
+	topologyConnector "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector"
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/internal"
 	"github.com/stretchr/testify/assert"
@@ -43,11 +44,11 @@ func removeMessage(dataSource, shardID string) internal.MessageWithKey {
 	}
 }
 
-func newTestPublisher(t *testing.T) (*TopologyStreamPublisher, *observer.ObservedLogs, *consumertest.LogsSink) {
+func newTestPublisher(t *testing.T) (*topologyConnector.TopologyStreamPublisher, *observer.ObservedLogs, *consumertest.LogsSink) {
 	t.Helper()
 	core, logs := observer.New(zap.InfoLevel)
 	sink := &consumertest.LogsSink{}
-	p := NewTopologyStreamPublisher(zap.New(core))
+	p := topologyConnector.NewTopologyStreamPublisher(zap.New(core))
 	p.SetLogsConsumer(sink)
 	return p, logs, sink
 }
@@ -114,7 +115,7 @@ func TestTopologyStreamPublisher_OnMappingRemovedEvicts(t *testing.T) {
 
 func TestTopologyStreamPublisher_NoConsumerDropsSilently(t *testing.T) {
 	core, logs := observer.New(zap.InfoLevel)
-	p := NewTopologyStreamPublisher(zap.New(core))
+	p := topologyConnector.NewTopologyStreamPublisher(zap.New(core))
 	// No SetLogsConsumer call.
 
 	p.Publish(context.Background(), []internal.MessageWithKey{dataMessage("urn:test:a", "0")})

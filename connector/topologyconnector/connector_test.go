@@ -114,7 +114,6 @@ func newConnectorEnv(t *testing.T, signal settingsproto.OtelInputSignal) *connec
 		Config{},
 		logger,
 		componenttest.NewNopTelemetrySettings(),
-		logsConsumer,
 		snapshotManager,
 		expressionRefManager,
 		metadataPublisher,

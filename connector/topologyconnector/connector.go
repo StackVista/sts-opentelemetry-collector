@@ -37,7 +37,6 @@ func newConnector(
 	cfg Config,
 	logger *zap.Logger,
 	telemetrySettings component.TelemetrySettings,
-	_ consumer.Logs,
 	snapshotManager *SnapshotManager,
 	expressionRefManager ExpressionRefManager,
 	metadataPublisher *MetadataPublisher,
@@ -216,4 +215,3 @@ func (p *connectorImpl) handleMappingRemovals(
 
 	p.metadataPublisher.PublishTombstones(removed)
 }
-
