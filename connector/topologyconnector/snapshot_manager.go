@@ -169,6 +169,18 @@ func (s *SnapshotManager) Update(
 		RemovedRelationMappings:  DiffSettings(prevRelations, newRelationMappings),
 	}
 
+	addedComponentMappings := DiffSettings(newComponentMappings, prevComponents)
+	addedRelationMappings := DiffSettings(newRelationMappings, prevRelations)
+
+	s.logger.Info("Updating mapping snapshots",
+		zap.Int("componentMappings", len(newComponentMappings)),
+		zap.Int("relationMappings", len(newRelationMappings)),
+		zap.Strings("addedComponentMappings", identifiersOf(addedComponentMappings)),
+		zap.Strings("removedComponentMappings", identifiersOf(change.RemovedComponentMappings)),
+		zap.Strings("addedRelationMappings", identifiersOf(addedRelationMappings)),
+		zap.Strings("removedRelationMappings", identifiersOf(change.RemovedRelationMappings)),
+	)
+
 	// Then still update per-signal internal views for Current()
 	for _, signal := range s.supportedSignals {
 		s.componentMappings[signal] = filterForSignal(newComponentMappings, signal)
@@ -199,6 +211,15 @@ func (s *SnapshotManager) Update(
 		// Leaving it as-is for now to prevent pre-maturely optimising.
 		go o.Update(signalsCopy, componentMappingsCopy, relationMappingsCopy)
 	}
+}
+
+// identifiersOf returns the GetIdentifier() value of each mapping, for concise logging.
+func identifiersOf[T settingsproto.SettingExtension](mappings []T) []string {
+	ids := make([]string, len(mappings))
+	for i, m := range mappings {
+		ids[i] = m.GetIdentifier()
+	}
+	return ids
 }
 
 func flattenMappings[T settingsproto.SettingExtension](

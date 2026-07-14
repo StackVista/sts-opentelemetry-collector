@@ -106,6 +106,9 @@ func newConnectorEnv(t *testing.T, signal settingsproto.OtelInputSignal) *connec
 	metadataPublisher := NewMetadataPublisher(logger)
 	metadataPublisher.SetLogsConsumer(logsConsumer)
 
+	streamPublisher := NewTopologyStreamPublisher(logger)
+	streamPublisher.SetLogsConsumer(logsConsumer)
+
 	conn := newConnector(
 		ctx,
 		Config{},
@@ -115,6 +118,7 @@ func newConnectorEnv(t *testing.T, signal settingsproto.OtelInputSignal) *connec
 		snapshotManager,
 		expressionRefManager,
 		metadataPublisher,
+		streamPublisher,
 		celEvaluator,
 		internal.NewNoopDeduplicator(),
 		mapper,
@@ -571,7 +575,7 @@ func TestPublishTopologyMessagesAsLogs(t *testing.T) {
 			},
 		}
 
-		connectorEnv.connector.publishMessagesAsLogs(connectorEnv.ctx, []internal.MessageWithKey{{
+		connectorEnv.connector.streamPublisher.Publish(connectorEnv.ctx, []internal.MessageWithKey{{
 			Key:     key,
 			Message: message,
 		}})
@@ -593,9 +597,9 @@ func TestPublishTopologyMessagesAsLogs(t *testing.T) {
 
 	t.Run("handles empty messages gracefully", func(t *testing.T) {
 		connectorEnv.logsConsumer.Reset()
-		connectorEnv.connector.publishMessagesAsLogs(connectorEnv.ctx, nil)
+		connectorEnv.connector.streamPublisher.Publish(connectorEnv.ctx, nil)
 		assert.Equal(t, 0, connectorEnv.logsConsumer.LogRecordCount())
-		connectorEnv.connector.publishMessagesAsLogs(connectorEnv.ctx, []internal.MessageWithKey{})
+		connectorEnv.connector.streamPublisher.Publish(connectorEnv.ctx, []internal.MessageWithKey{})
 		assert.Equal(t, 0, connectorEnv.logsConsumer.LogRecordCount())
 	})
 }
