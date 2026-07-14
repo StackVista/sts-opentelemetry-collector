@@ -15,10 +15,9 @@ import (
 )
 
 // streamKey identifies a single topology stream. A stream is the unit the platform keys on:
-// (owner, dataSource, shardId). dataSource is the mapping identifier; shardId is the stable
+// (dataSource, shardId). dataSource is the mapping identifier; shardId is the stable
 // per-element shard.
 type streamKey struct {
-	owner      topostreamv1.TopologyStreamOwner
 	dataSource string
 	shardID    string
 }
@@ -106,7 +105,6 @@ func (p *TopologyStreamPublisher) trackCreations(messages []internal.MessageWith
 			continue
 		}
 		k := streamKey{
-			owner:      mwk.Key.GetOwner(),
 			dataSource: mwk.Key.GetDataSource(),
 			shardID:    mwk.Key.GetShardId(),
 		}
