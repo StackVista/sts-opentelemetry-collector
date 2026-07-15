@@ -31,6 +31,22 @@ const (
 	KindObject ResourceKind = "object"
 )
 
+// PayloadSource identifies which payload budget a Kubernetes object belongs to.
+type PayloadSource string
+
+const (
+	PayloadSourceCR     PayloadSource = "cr"
+	PayloadSourceObject PayloadSource = "object"
+)
+
+// PayloadOutcome identifies whether a payload was forwarded or dropped by budget filtering.
+type PayloadOutcome string
+
+const (
+	PayloadForwarded PayloadOutcome = "forwarded"
+	PayloadDropped   PayloadOutcome = "dropped"
+)
+
 // BroadcastOutcome is the result of a peer broadcast (one ApplyDelta call).
 type BroadcastOutcome string
 

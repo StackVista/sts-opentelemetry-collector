@@ -2,6 +2,7 @@ package k8sresourcereceiver
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -126,6 +127,7 @@ func (c *resourceCollector) runIncrement(ctx context.Context) {
 	start := time.Now()
 	currentCRDs := c.informers.ReadCRDs()
 	currentObjects := c.informers.ReadObjects()
+	currentObjects = c.applyPayloadBudgets(ctx, currentObjects)
 	changes := c.peerStore.ComputeChanges(currentCRDs, currentObjects)
 
 	if c.lastSnapshotTime.IsZero() || time.Since(c.lastSnapshotTime) >= c.config.SnapshotInterval {
@@ -171,7 +173,7 @@ func (c *resourceCollector) emitSnapshot(
 
 	for _, crd := range currentCRDs {
 		if err := emit.LogCRD(
-			ctx, c.consumer, crd, watch.Added, c.config.ClusterName,
+			ctx, c.consumer, crd, watch.Added, c.config.ClusterName, c.crdCustomResourcesWatched(crd),
 		); err != nil {
 			c.logger.Debug("Failed to emit CRD snapshot log",
 				zap.String("name", crd.GetName()),
@@ -206,7 +208,7 @@ func (c *resourceCollector) emitSnapshot(
 		}
 		var err error
 		if ch.IsCRD {
-			err = emit.LogCRD(ctx, c.consumer, ch.Obj, watch.Deleted, c.config.ClusterName)
+			err = emit.LogCRD(ctx, c.consumer, ch.Obj, watch.Deleted, c.config.ClusterName, c.crdCustomResourcesWatched(ch.Obj))
 		} else {
 			err = emit.LogObject(
 				ctx, c.consumer, ch.Obj, watch.Deleted, c.config.ClusterName,
@@ -292,7 +294,10 @@ func (c *resourceCollector) emitChanges(ctx context.Context, changes []ResourceC
 	for _, change := range changes {
 		var err error
 		if change.IsCRD {
-			err = emit.LogCRD(ctx, c.consumer, change.Obj, change.EventType, c.config.ClusterName)
+			err = emit.LogCRD(
+				ctx, c.consumer, change.Obj, change.EventType,
+				c.config.ClusterName, c.crdCustomResourcesWatched(change.Obj),
+			)
 		} else {
 			err = emit.LogObject(
 				ctx, c.consumer, change.Obj, change.EventType, c.config.ClusterName,
@@ -330,4 +335,135 @@ func (c *resourceCollector) watchEventToChangeType(e watch.EventType) metrics.Ch
 
 func (c *resourceCollector) resourceAttributesFor(gvr schema.GroupVersionResource) map[string]string {
 	return c.enricher.AttributesFor(gvr)
+}
+
+func (c *resourceCollector) crdCustomResourcesWatched(crd *unstructured.Unstructured) bool {
+	apiGroup, _, _ := unstructured.NestedString(crd.Object, "spec", "group")
+	return c.config.shouldWatchAPIGroup(apiGroup)
+}
+
+type budgetCandidate struct {
+	gvr    schema.GroupVersionResource
+	group  ObjectGroup
+	obj    *unstructured.Unstructured
+	size   int
+	source metrics.PayloadSource
+}
+
+func (c *resourceCollector) applyPayloadBudgets(
+	ctx context.Context,
+	objects map[schema.GroupVersionResource]ObjectGroup,
+) map[schema.GroupVersionResource]ObjectGroup {
+	result := make(map[schema.GroupVersionResource]ObjectGroup, len(objects))
+	candidates := make(map[metrics.PayloadSource][]budgetCandidate)
+
+	for gvr, group := range objects {
+		payloadSource := payloadSourceForObjectSource(group.Source)
+		if payloadBudget(c.config, payloadSource) <= 0 {
+			// budgeting is disabled: the whole group is passed through
+			result[gvr] = group
+			continue
+		}
+		for _, obj := range group.Objects {
+			size, ok := serializedObjectSize(obj.Object)
+			if !ok {
+				c.addObjectToBudgetResult(result, gvr, group, obj)
+				continue
+			}
+			candidates[payloadSource] = append(candidates[payloadSource], budgetCandidate{
+				gvr: gvr, group: group, obj: obj, size: size, source: payloadSource,
+			})
+		}
+	}
+
+	for source, items := range candidates {
+		budget := payloadBudget(c.config, source)
+		used := c.applyPayloadBudget(ctx, result, source, budget, items)
+		c.metrics.RecordPayloadBudget(ctx, source, int64(budget), int64(used))
+	}
+
+	return result
+}
+
+func (c *resourceCollector) applyPayloadBudget(
+	ctx context.Context,
+	result map[schema.GroupVersionResource]ObjectGroup,
+	source metrics.PayloadSource,
+	budget int,
+	items []budgetCandidate,
+) int {
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].size != items[j].size {
+			return items[i].size < items[j].size
+		}
+		return budgetCandidateKey(items[i]) < budgetCandidateKey(items[j])
+	})
+
+	var used int
+	var droppedCount int
+	var droppedBytes int
+	for _, item := range items {
+		outcome := metrics.PayloadForwarded
+		if used+item.size <= budget {
+			used += item.size
+			c.addObjectToBudgetResult(result, item.gvr, item.group, item.obj)
+		} else {
+			outcome = metrics.PayloadDropped
+			droppedCount++
+			droppedBytes += item.size
+			c.metrics.RecordPayloadDropped(ctx, source, item.gvr.Group, item.obj.GetKind())
+			c.logger.Debug("Dropped Kubernetes object payload because total payload budget is full",
+				zap.String("source", string(source)),
+				zap.String("name", item.obj.GetName()),
+				zap.String("namespace", item.obj.GetNamespace()),
+				zap.String("gvr", emit.FormatGVRKey(item.gvr)),
+				zap.String("kind", item.obj.GetKind()),
+				zap.Int("payload_size", item.size),
+			)
+		}
+		c.metrics.RecordPayloadSize(ctx, source, outcome, item.gvr.Group, item.obj.GetKind(), int64(item.size))
+	}
+
+	if droppedCount > 0 {
+		c.logger.Warn("Dropped Kubernetes object payloads because total payload budget is full",
+			zap.String("source", string(source)),
+			zap.Int("dropped_count", droppedCount),
+			zap.Int("dropped_bytes", droppedBytes),
+			zap.Int("payload_budget", budget),
+			zap.Int("payload_budget_used", used),
+		)
+	}
+	return used
+}
+
+func (c *resourceCollector) addObjectToBudgetResult(
+	result map[schema.GroupVersionResource]ObjectGroup,
+	gvr schema.GroupVersionResource,
+	group ObjectGroup,
+	obj *unstructured.Unstructured,
+) {
+	current := result[gvr]
+	if current.Source == "" {
+		current.Source = group.Source
+	}
+	current.Objects = append(current.Objects, obj)
+	result[gvr] = current
+}
+
+func budgetCandidateKey(item budgetCandidate) string {
+	return objectResourceKey(item.gvr, item.obj.GetNamespace(), item.obj.GetName())
+}
+
+func payloadSourceForObjectSource(source ObjectSource) metrics.PayloadSource {
+	if source == ObjectSourceCR {
+		return metrics.PayloadSourceCR
+	}
+	return metrics.PayloadSourceObject
+}
+
+func payloadBudget(config *Config, source metrics.PayloadSource) int {
+	if source == metrics.PayloadSourceCR {
+		return config.MaxCRTotalDataSizeBytes
+	}
+	return config.MaxObjectTotalDataSizeBytes
 }

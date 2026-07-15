@@ -31,7 +31,7 @@ const apiExtensionsGroup = "apiextensions.k8s.io"
 // resources). The collector reads current state through this interface, enabling
 // the emission logic to be tested independently of the Kubernetes client.
 type Informers interface {
-	// ReadCRDs returns all matching CRDs from the CRD informer cache.
+	// ReadCRDs returns all CRDs from the CRD informer cache.
 	ReadCRDs() []*unstructured.Unstructured
 
 	// ReadObjects returns all objects from active, synced informer caches,
@@ -591,7 +591,7 @@ func (ri *ResourceInformers) stopCRInformer(gvr schema.GroupVersionResource) {
 
 // --- Cache readers ---
 
-// ReadCRDs reads all matching CRDs from the CRD informer cache.
+// ReadCRDs reads all CRDs from the CRD informer cache.
 func (ri *ResourceInformers) ReadCRDs() []*unstructured.Unstructured {
 	if ri.crdInformer == nil {
 		return nil
@@ -602,11 +602,6 @@ func (ri *ResourceInformers) ReadCRDs() []*unstructured.Unstructured {
 	for _, obj := range items {
 		crd, ok := toUnstructured(obj)
 		if !ok {
-			continue
-		}
-
-		apiGroup, _, _ := unstructured.NestedString(crd.Object, "spec", "group")
-		if !ri.config.shouldWatchAPIGroup(apiGroup) {
 			continue
 		}
 

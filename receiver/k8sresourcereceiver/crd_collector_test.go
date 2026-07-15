@@ -67,7 +67,7 @@ func testConfig(includes []string, excludes []string) *Config {
 		IncrementInterval: 1 * time.Second,
 		SnapshotInterval:  1 * time.Hour, // Long to prevent snapshots during tests
 		DiscoveryMode:     DiscoveryModeAPIGroups,
-		CRDAPIGroupFilters: &CRDAPIGroupFilters{
+		CustomResourceAPIGroups: &APIGroups{
 			Include: includes,
 			Exclude: excludes,
 		},
@@ -173,6 +173,72 @@ type recordingPeerStore struct {
 	cache            *resourceCache
 	lastSnapshotTime time.Time
 	saves            []recordedSave
+}
+
+type payloadRecorder struct {
+	metrics.NoopRecorder
+	mu      sync.Mutex
+	dropped []payloadDropRecord
+	sizes   []payloadSizeRecord
+	budgets []payloadBudgetRecord
+}
+
+type payloadDropRecord struct {
+	source   metrics.PayloadSource
+	apiGroup string
+	kind     string
+}
+
+type payloadSizeRecord struct {
+	source   metrics.PayloadSource
+	outcome  metrics.PayloadOutcome
+	apiGroup string
+	kind     string
+	size     int64
+}
+
+type payloadBudgetRecord struct {
+	source metrics.PayloadSource
+	budget int64
+	used   int64
+}
+
+func (r *payloadRecorder) RecordPayloadDropped(_ context.Context, source metrics.PayloadSource, apiGroup, kind string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.dropped = append(r.dropped, payloadDropRecord{source: source, apiGroup: apiGroup, kind: kind})
+}
+
+func (r *payloadRecorder) RecordPayloadSize(
+	_ context.Context, source metrics.PayloadSource, outcome metrics.PayloadOutcome, apiGroup, kind string, sizeBytes int64,
+) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.sizes = append(r.sizes, payloadSizeRecord{source: source, outcome: outcome, apiGroup: apiGroup, kind: kind, size: sizeBytes})
+}
+
+func (r *payloadRecorder) RecordPayloadBudget(_ context.Context, source metrics.PayloadSource, budgetBytes, usedBytes int64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.budgets = append(r.budgets, payloadBudgetRecord{source: source, budget: budgetBytes, used: usedBytes})
+}
+
+func (r *payloadRecorder) Dropped() []payloadDropRecord {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]payloadDropRecord(nil), r.dropped...)
+}
+
+func (r *payloadRecorder) Sizes() []payloadSizeRecord {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]payloadSizeRecord(nil), r.sizes...)
+}
+
+func (r *payloadRecorder) Budgets() []payloadBudgetRecord {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]payloadBudgetRecord(nil), r.budgets...)
 }
 
 type recordedSave struct {
@@ -620,6 +686,105 @@ func TestResourceCollector_EmitObject_AddsEnrichedResourceAttributes(t *testing.
 	assert.Equal(t, "https://rancher.example.com", value.Str())
 }
 
+func TestResourceCollector_EmitsAllCRDsButOnlyFilteredCRs(t *testing.T) {
+	scheme := testScheme()
+	registerCRGVR(scheme, "allowed.com", "v1", "TestResource")
+	registerCRGVR(scheme, "blocked.com", "v1", "TestResource")
+
+	allowedCRD := makeTestCRDUnstructured("testresources.allowed.com", "allowed.com", "TestResource", "testresources")
+	blockedCRD := makeTestCRDUnstructured("testresources.blocked.com", "blocked.com", "TestResource", "testresources")
+	allowedCR := makeTestCR("allowed-1", "default", "allowed.com", "v1", "TestResource")
+	blockedCR := makeTestCR("blocked-1", "default", "blocked.com", "v1", "TestResource")
+
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme,
+		map[schema.GroupVersionResource]string{
+			crdGVR: testCRDListKind,
+			{Group: "allowed.com", Version: "v1", Resource: "testresources"}: testResourceListKind,
+			{Group: "blocked.com", Version: "v1", Resource: "testresources"}: testResourceListKind,
+		},
+		allowedCRD, blockedCRD, allowedCR, blockedCR,
+	)
+
+	sink := &consumertest.LogsSink{}
+	collector := newTestCollector(t, testConfig([]string{"allowed.com"}, nil), sink, client, tracker.NewForbiddenTracker(1*time.Hour))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	require.NoError(t, collector.Start(ctx))
+	defer func() { require.NoError(t, collector.Shutdown(ctx)) }()
+
+	waitForInitialEmissions(t, sink, 3)
+	assertEventNamesByObjectName(t, sink, map[string]string{
+		"testresources.allowed.com": emit.EventNameCRD,
+		"testresources.blocked.com": emit.EventNameCRD,
+		"allowed-1":                 emit.EventNameCR,
+	})
+	assertCRDWatchedByName(t, sink, map[string]bool{
+		"testresources.allowed.com": true,
+		"testresources.blocked.com": false,
+	})
+}
+
+func TestResourceCollector_AppliesPayloadBudgets(t *testing.T) {
+	crGVR := schema.GroupVersionResource{Group: "kubevirt.io", Version: "v1", Resource: "virtualmachines"}
+	staticGVR := schema.GroupVersionResource{Group: "storage.sbomscanner.kubewarden.io", Version: "v1alpha1", Resource: "sboms"}
+	crSmall := makeTestCR("a-small", "default", "kubevirt.io", "v1", "VirtualMachine")
+	crSmall.Object["spec"] = map[string]interface{}{"payload": "small"}
+	crLarge := makeTestCR("b-large", "default", "kubevirt.io", "v1", "VirtualMachine")
+	crLarge.Object["spec"] = map[string]interface{}{"payload": "0123456789abcdefghijklmnopqrstuvwxyz"}
+	staticLarge := makeTestCR("sbom-1", "default", "storage.sbomscanner.kubewarden.io", "v1alpha1", "SBOM")
+	staticLarge.Object["spec"] = map[string]interface{}{"payload": "0123456789abcdefghijklmnopqrstuvwxyz"}
+	recorder := &payloadRecorder{}
+	c := &resourceCollector{
+		logger:   zaptest.NewLogger(t),
+		config:   &Config{ClusterName: "test-cluster", MaxCRTotalDataSizeBytes: 140, MaxObjectTotalDataSizeBytes: 20},
+		consumer: &consumertest.LogsSink{},
+		metrics:  recorder,
+		enricher: noopResourceAttributeEnricher{},
+	}
+
+	filtered := c.applyPayloadBudgets(context.Background(), map[schema.GroupVersionResource]ObjectGroup{
+		crGVR:     {Source: ObjectSourceCR, Objects: []*unstructured.Unstructured{crLarge, crSmall}},
+		staticGVR: {Source: ObjectSourceStatic, Objects: []*unstructured.Unstructured{staticLarge}},
+	})
+
+	require.Contains(t, filtered, crGVR)
+	require.Len(t, filtered[crGVR].Objects, 1)
+	assert.Equal(t, "a-small", filtered[crGVR].Objects[0].GetName())
+	assert.NotContains(t, filtered, staticGVR)
+	assert.ElementsMatch(t, []payloadDropRecord{
+		{source: metrics.PayloadSourceCR, apiGroup: "kubevirt.io", kind: "VirtualMachine"},
+		{source: metrics.PayloadSourceObject, apiGroup: "storage.sbomscanner.kubewarden.io", kind: "SBOM"},
+	}, recorder.Dropped())
+	budgets := recorder.Budgets()
+	require.Len(t, budgets, 2)
+	assert.Contains(t, budgets, payloadBudgetRecord{source: metrics.PayloadSourceObject, budget: 20, used: 0})
+	crBudget := findPayloadBudget(t, budgets, metrics.PayloadSourceCR)
+	assert.Equal(t, int64(140), crBudget.budget)
+	assert.Greater(t, crBudget.used, int64(0))
+}
+
+func findPayloadBudget(
+	t *testing.T, budgets []payloadBudgetRecord, source metrics.PayloadSource,
+) payloadBudgetRecord {
+	t.Helper()
+	for _, budget := range budgets {
+		if budget.source == source {
+			return budget
+		}
+	}
+	require.Failf(t, "missing payload budget", "source %q not recorded", source)
+	return payloadBudgetRecord{}
+}
+
+func TestResourceCollector_CRDWatchedMarkerHonorsWildcard(t *testing.T) {
+	collector := &resourceCollector{config: testConfig([]string{"*"}, nil)}
+	crd := makeTestCRDUnstructured("widgets.example.com", "example.com", "Widget", "widgets")
+
+	assert.True(t, collector.crdCustomResourcesWatched(crd))
+}
+
 // assertEventNamesByObjectName walks every emitted log record and matches
 // k8s.object.name → expected event name. Fails if any expected entry is missing
 // or any record carries the wrong event name.
@@ -643,13 +808,38 @@ func assertEventNamesByObjectName(t *testing.T, sink *consumertest.LogsSink, wan
 	assert.Equal(t, want, got)
 }
 
+func assertCRDWatchedByName(t *testing.T, sink *consumertest.LogsSink, want map[string]bool) {
+	t.Helper()
+	got := map[string]bool{}
+	for _, ld := range sink.AllLogs() {
+		for i := 0; i < ld.ResourceLogs().Len(); i++ {
+			rl := ld.ResourceLogs().At(i)
+			for j := 0; j < rl.ScopeLogs().Len(); j++ {
+				sl := rl.ScopeLogs().At(j)
+				for k := 0; k < sl.LogRecords().Len(); k++ {
+					lr := sl.LogRecords().At(k)
+					if lr.EventName() != emit.EventNameCRD {
+						continue
+					}
+					name, ok := lr.Attributes().Get(emit.AttrK8sObjectName)
+					require.True(t, ok, "CRD log record missing k8s.object.name")
+					watched, ok := lr.Attributes().Get(emit.AttrK8sCRDCRsWatched)
+					require.True(t, ok, "CRD log record missing watched marker")
+					got[name.Str()] = watched.Bool()
+				}
+			}
+		}
+	}
+	assert.Equal(t, want, got)
+}
+
 func TestConfig_Simplified(t *testing.T) {
 	t.Run("valid config", func(t *testing.T) {
 		cfg := &Config{
 			IncrementInterval: 10 * time.Second,
 			SnapshotInterval:  5 * time.Minute,
 			DiscoveryMode:     DiscoveryModeAPIGroups,
-			CRDAPIGroupFilters: &CRDAPIGroupFilters{
+			CustomResourceAPIGroups: &APIGroups{
 				Include: []string{testExampleGroup},
 				Exclude: []string{},
 			},
@@ -662,13 +852,35 @@ func TestConfig_Simplified(t *testing.T) {
 	t.Run("default intervals", func(t *testing.T) {
 		cfg := &Config{
 			DiscoveryMode: DiscoveryModeAPIGroups,
-			CRDAPIGroupFilters: &CRDAPIGroupFilters{
+			CustomResourceAPIGroups: &APIGroups{
 				Include: []string{"*"},
 			},
 		}
 		require.NoError(t, cfg.Validate())
 		assert.Equal(t, 10*time.Second, cfg.IncrementInterval)
 		assert.Equal(t, 5*time.Minute, cfg.SnapshotInterval)
+		assert.Equal(t, defaultMaxCRTotalDataSizeBytes, cfg.MaxCRTotalDataSizeBytes)
+		assert.Equal(t, defaultMaxObjectTotalDataSizeBytes, cfg.MaxObjectTotalDataSizeBytes)
+	})
+
+	t.Run("negative max CR total data size", func(t *testing.T) {
+		cfg := &Config{
+			DiscoveryMode:           DiscoveryModeAll,
+			MaxCRTotalDataSizeBytes: -1,
+		}
+		err := cfg.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "max_cr_total_data_size_bytes must be non-negative")
+	})
+
+	t.Run("negative max object total data size", func(t *testing.T) {
+		cfg := &Config{
+			DiscoveryMode:               DiscoveryModeAll,
+			MaxObjectTotalDataSizeBytes: -1,
+		}
+		err := cfg.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "max_object_total_data_size_bytes must be non-negative")
 	})
 
 	t.Run("increment interval too short", func(t *testing.T) {
@@ -715,14 +927,14 @@ func TestConfig_Simplified(t *testing.T) {
 			DiscoveryMode: DiscoveryModeAPIGroups,
 		}
 		require.NoError(t, cfg.Validate())
-		require.NotNil(t, cfg.CRDAPIGroupFilters)
-		assert.Equal(t, []string{"*"}, cfg.CRDAPIGroupFilters.Include)
+		require.NotNil(t, cfg.CustomResourceAPIGroups)
+		assert.Equal(t, []string{"*"}, cfg.CustomResourceAPIGroups.Include)
 	})
 
 	t.Run("empty include", func(t *testing.T) {
 		cfg := &Config{
 			DiscoveryMode: DiscoveryModeAPIGroups,
-			CRDAPIGroupFilters: &CRDAPIGroupFilters{
+			CustomResourceAPIGroups: &APIGroups{
 				Include: []string{},
 			},
 		}
@@ -745,7 +957,7 @@ func TestConfig_Simplified(t *testing.T) {
 	t.Run("special chars in patterns are literal", func(t *testing.T) {
 		cfg := &Config{
 			DiscoveryMode: DiscoveryModeAPIGroups,
-			CRDAPIGroupFilters: &CRDAPIGroupFilters{
+			CustomResourceAPIGroups: &APIGroups{
 				Include: []string{"example.com"},
 			},
 		}
@@ -759,7 +971,7 @@ func TestConfig_Simplified(t *testing.T) {
 	t.Run("shouldWatchAPIGroup with wildcard and exclude", func(t *testing.T) {
 		cfg := &Config{
 			DiscoveryMode: DiscoveryModeAPIGroups,
-			CRDAPIGroupFilters: &CRDAPIGroupFilters{
+			CustomResourceAPIGroups: &APIGroups{
 				Include: []string{testSuseWildcard, "longhorn.io"},
 				Exclude: []string{"internal.suse.com"},
 			},

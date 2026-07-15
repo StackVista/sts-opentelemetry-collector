@@ -63,6 +63,7 @@ func BuildObjectLogRecord(
 // CRDs are cluster-scoped resources that define custom resource types.
 func BuildCRDLogRecord(
 	crd *unstructured.Unstructured, eventType watch.EventType, timestamp time.Time, clusterName string,
+	customResourcesWatched bool,
 ) (plog.Logs, error) {
 	logs := plog.NewLogs()
 	resourceLogs := logs.ResourceLogs().AppendEmpty()
@@ -93,6 +94,7 @@ func BuildCRDLogRecord(
 	logRecord.Attributes().PutStr(AttrK8sResourceKind, crdKind)
 	logRecord.Attributes().PutStr(AttrK8sResourceGroup, crdGroup)
 	logRecord.Attributes().PutStr(AttrK8sResourceVersion, "v1")
+	logRecord.Attributes().PutBool(AttrK8sCRDCRsWatched, customResourcesWatched)
 	logRecord.Attributes().PutStr(AttrEventDomain, EventDomainK8s)
 	logRecord.Attributes().PutStr(AttrK8sObjectName, crd.GetName())
 
@@ -107,9 +109,9 @@ func FormatGVRKey(gvr schema.GroupVersionResource) string {
 // LogCRD builds and sends a CRD log record to the consumer.
 func LogCRD(
 	ctx context.Context, cons consumer.Logs, crd *unstructured.Unstructured,
-	eventType watch.EventType, clusterName string,
+	eventType watch.EventType, clusterName string, customResourcesWatched bool,
 ) error {
-	logs, err := BuildCRDLogRecord(crd, eventType, time.Now(), clusterName)
+	logs, err := BuildCRDLogRecord(crd, eventType, time.Now(), clusterName, customResourcesWatched)
 	if err != nil {
 		return err
 	}

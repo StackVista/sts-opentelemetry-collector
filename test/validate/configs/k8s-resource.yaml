@@ -1,5 +1,5 @@
 # De-templated copy of the agent k8s-resource collector config from
-# helm-charts-internal/stable/suse-observability-agent/templates/k8s-resource-collector-configmap.yaml
+# helm-charts-internal/stable/suse-observability-agent/templates/otel/k8sresourcecollector/configmap.yaml
 #
 # Kept in sync with the chart. Helm templating and ${...} references have been
 # replaced with literal values so the OTel Collector `validate` subcommand can
@@ -7,17 +7,74 @@
 # k8s_leader_elector extension. The HTTP OTLP exporter (otlphttp) is used so this
 # fixture exercises the otlphttp exporter from the BOM.
 receivers:
+  prometheus/self:
+    config:
+      scrape_configs:
+        - job_name: k8s-resource-collector
+          scrape_interval: 30s
+          static_configs:
+            - targets:
+                - 127.0.0.1:8888
+              labels:
+                k8s.pod.uid: test-pod-uid
   k8sresource:
     auth_type: serviceAccount
     cluster_name: test-cluster
     snapshot_interval: 5m
     discovery_mode: api_groups
-    crd_api_group_filters:
+    max_cr_total_data_size_bytes: 10485760
+    max_object_total_data_size_bytes: 10485760
+    cr_api_groups:
       include:
-        - "*"
+        - kubevirt.io
+        - openreports.io
+        - policies.kubewarden.io
+        - postgresql.cnpg.io
+        - sbomscanner.kubewarden.io
+        - security.rancher.io
+        - storage.sbomscanner.kubewarden.io
+        - wgpolicyk8s.io
     peer_sync_port: 4319
     peer_sync_dns: k8s-resource-collector-peers
     k8s_leader_elector: k8s_leader_elector
+
+processors:
+  transform/pre-k8sattributes:
+    error_mode: ignore
+    metric_statements:
+      - context: resource
+        statements:
+          - delete_key(resource.attributes, "k8s.namespace.name")
+  k8s_attributes:
+    auth_type: serviceAccount
+    extract:
+      labels:
+        - from: pod
+          key_regex: (.*)
+          tag_name: $$1
+      metadata:
+        - k8s.namespace.name
+        - k8s.deployment.name
+        - k8s.node.name
+        - k8s.pod.name
+        - k8s.pod.uid
+    passthrough: false
+    pod_association:
+      - sources:
+          - from: resource_attribute
+            name: k8s.pod.uid
+      - sources:
+          - from: connection
+  transform/self-metrics:
+    error_mode: ignore
+    metric_statements:
+      - context: resource
+        statements:
+          - set(resource.attributes["k8s.cluster.name"], "test-cluster")
+          - set(resource.attributes["service.name"], "suse-observability-agent-k8s-resource-collector")
+          - set(resource.attributes["service.instance.id"], resource.attributes["k8s.pod.uid"]) where resource.attributes["service.instance.id"] == nil and resource.attributes["k8s.pod.uid"] != nil
+          - set(resource.attributes["service.namespace"], resource.attributes["k8s.namespace.name"]) where resource.attributes["service.namespace"] == nil and resource.attributes["k8s.namespace.name"] != nil
+  batch: {}
 
 exporters:
   otlphttp/suse-observability:
@@ -54,9 +111,20 @@ service:
   telemetry:
     logs:
       level: info
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 127.0.0.1
+                port: 8888
   extensions: [health_check, pprof, bearertokenauth, k8s_leader_elector]
   pipelines:
     logs/k8s-resource:
       receivers: [k8sresource]
       processors: []
+      exporters: [otlphttp/suse-observability]
+    metrics/self:
+      receivers: [prometheus/self]
+      processors: [transform/pre-k8sattributes, k8s_attributes, transform/self-metrics, batch]
       exporters: [otlphttp/suse-observability]

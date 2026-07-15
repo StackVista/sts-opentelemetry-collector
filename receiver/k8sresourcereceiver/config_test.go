@@ -20,7 +20,7 @@ func TestConfigValidate(t *testing.T) {
 			name: "valid config with api_groups mode",
 			config: &Config{
 				DiscoveryMode: DiscoveryModeAPIGroups,
-				CRDAPIGroupFilters: &CRDAPIGroupFilters{
+				CustomResourceAPIGroups: &APIGroups{
 					Include: []string{"*"},
 					Exclude: []string{},
 				},
@@ -38,7 +38,7 @@ func TestConfigValidate(t *testing.T) {
 			name: "valid config with specific API groups",
 			config: &Config{
 				DiscoveryMode: DiscoveryModeAPIGroups,
-				CRDAPIGroupFilters: &CRDAPIGroupFilters{
+				CustomResourceAPIGroups: &APIGroups{
 					Include: []string{testPoliciesKubewarden, testSuseWildcard},
 					Exclude: []string{"internal.suse.com"},
 				},
@@ -49,13 +49,13 @@ func TestConfigValidate(t *testing.T) {
 			name: "empty include patterns",
 			config: &Config{
 				DiscoveryMode: DiscoveryModeAPIGroups,
-				CRDAPIGroupFilters: &CRDAPIGroupFilters{
+				CustomResourceAPIGroups: &APIGroups{
 					Include: []string{},
 					Exclude: []string{},
 				},
 			},
 			wantErr: true,
-			errMsg:  "crd_api_group_filters.include cannot be empty",
+			errMsg:  "cr_api_groups.include cannot be empty",
 		},
 		{
 			name: "invalid discovery mode",
@@ -76,10 +76,10 @@ func TestConfigValidate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "nil crd_api_group_filters gets default",
+			name: "nil cr_api_groups gets default",
 			config: &Config{
-				DiscoveryMode:      DiscoveryModeAPIGroups,
-				CRDAPIGroupFilters: nil,
+				DiscoveryMode:           DiscoveryModeAPIGroups,
+				CustomResourceAPIGroups: nil,
 			},
 			wantErr: false,
 		},
@@ -742,7 +742,7 @@ func TestShouldWatchAPIGroup(t *testing.T) {
 			name: "wildcard includes everything",
 			config: &Config{
 				DiscoveryMode: DiscoveryModeAPIGroups,
-				CRDAPIGroupFilters: &CRDAPIGroupFilters{
+				CustomResourceAPIGroups: &APIGroups{
 					Include: []string{"*"},
 				},
 			},
@@ -753,7 +753,7 @@ func TestShouldWatchAPIGroup(t *testing.T) {
 			name: "exact match included",
 			config: &Config{
 				DiscoveryMode: DiscoveryModeAPIGroups,
-				CRDAPIGroupFilters: &CRDAPIGroupFilters{
+				CustomResourceAPIGroups: &APIGroups{
 					Include: []string{testPoliciesKubewarden},
 				},
 			},
@@ -764,7 +764,7 @@ func TestShouldWatchAPIGroup(t *testing.T) {
 			name: "exact match not included",
 			config: &Config{
 				DiscoveryMode: DiscoveryModeAPIGroups,
-				CRDAPIGroupFilters: &CRDAPIGroupFilters{
+				CustomResourceAPIGroups: &APIGroups{
 					Include: []string{testPoliciesKubewarden},
 				},
 			},
@@ -775,7 +775,7 @@ func TestShouldWatchAPIGroup(t *testing.T) {
 			name: "subdomain wildcard match",
 			config: &Config{
 				DiscoveryMode: DiscoveryModeAPIGroups,
-				CRDAPIGroupFilters: &CRDAPIGroupFilters{
+				CustomResourceAPIGroups: &APIGroups{
 					Include: []string{testSuseWildcard},
 				},
 			},
@@ -786,7 +786,7 @@ func TestShouldWatchAPIGroup(t *testing.T) {
 			name: "excluded group not watched",
 			config: &Config{
 				DiscoveryMode: DiscoveryModeAPIGroups,
-				CRDAPIGroupFilters: &CRDAPIGroupFilters{
+				CustomResourceAPIGroups: &APIGroups{
 					Include: []string{"*"},
 					Exclude: []string{"internal.example.com"},
 				},
@@ -798,7 +798,7 @@ func TestShouldWatchAPIGroup(t *testing.T) {
 			name: "excluded wildcard pattern",
 			config: &Config{
 				DiscoveryMode: DiscoveryModeAPIGroups,
-				CRDAPIGroupFilters: &CRDAPIGroupFilters{
+				CustomResourceAPIGroups: &APIGroups{
 					Include: []string{testExampleWildcard},
 					Exclude: []string{"test.*.example.com"},
 				},
@@ -810,7 +810,7 @@ func TestShouldWatchAPIGroup(t *testing.T) {
 			name: "multiple include patterns",
 			config: &Config{
 				DiscoveryMode: DiscoveryModeAPIGroups,
-				CRDAPIGroupFilters: &CRDAPIGroupFilters{
+				CustomResourceAPIGroups: &APIGroups{
 					Include: []string{
 						testPoliciesKubewarden,
 						"longhorn.io",

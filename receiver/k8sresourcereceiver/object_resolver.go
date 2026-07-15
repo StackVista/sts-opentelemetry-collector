@@ -227,7 +227,7 @@ func formatGVR(gvr schema.GroupVersionResource) string {
 
 // classifyStaticObjectsCRDOverlap walks the CRD list once and:
 //   - rejects any static object whose GVR is also CRD-discovered (i.e. the
-//     CRD's group passes crd_api_group_filters), since both informers would emit
+//     CRD's group passes cr_api_groups), since both informers would emit
 //     the same resource;
 //   - marks CRDBacked=true on any static object whose GVR is defined by a
 //     CRD but whose group is filter-excluded — the static informer is the
@@ -276,7 +276,7 @@ func classifyStaticObjectsCRDOverlap(
 		if info.discovered {
 			overlaps = append(overlaps,
 				fmt.Sprintf(
-					"objects[%d] (%s) is defined by a CRD already covered by crd_api_group_filters; "+
+					"objects[%d] (%s) is defined by a CRD already covered by cr_api_groups; "+
 						"remove the entry or exclude its group", i, formatGVR(resolved[i].GVR),
 				))
 			continue

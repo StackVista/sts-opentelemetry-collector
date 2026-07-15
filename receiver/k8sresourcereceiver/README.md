@@ -139,7 +139,7 @@ both the snapshot and increment paths.
 
 `Config.Objects` entries are classified at startup against the cluster's CRDs:
 
-- Entry whose GVR is **also covered by `api_group_filters`** → reject (both
+- Entry whose GVR is **also covered by `cr_api_groups`** → reject (both
   informers would emit the same resource); operator must remove the entry or
   exclude the CRD's group.
 - Entry whose GVR is **defined by a CRD but filter-excluded** → marked
@@ -157,3 +157,12 @@ See `classifyStaticObjectsCRDOverlap` for the resolution rules.
 | `SnapshotInterval`   | 5m      | Forces periodic full re-emit for platform TTL.     |
 | `PeerSyncPort`       | 4319    | HTTP server port on each replica.                  |
 | `PeerSyncDNS`        | —       | Headless service FQDN. Empty ⇒ single-replica.    |
+| `MaxCRTotalDataSizeBytes` | 10MiB   | Total CR payload budget per collection cycle.      |
+| `MaxObjectTotalDataSizeBytes` | 10MiB | Total static object payload budget per collection cycle. |
+
+Payload budgets are applied after reading informer caches and before diffing
+against the peer cache. CRDs do not count against the budget. CRs and static
+objects have separate budgets; each bucket is filled smallest-payload-first and
+then by stable object identity. This maximises represented resources while making
+drops deterministic. Per-kind budgets or rotation could improve fairness later,
+but would add configuration and churn in the first version.
