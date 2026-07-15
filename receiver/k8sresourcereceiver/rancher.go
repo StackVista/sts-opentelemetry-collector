@@ -19,10 +19,10 @@ type rancherEnrichmentConfig struct {
 const (
 	rancherAttributeKey   = "rancher.manager.url"
 	rancherDeploymentName = "cattle-cluster-agent"
-	rancherContainerName  = "cattle-cluster-agent"
+	rancherContainerName  = "cluster-register"
 	rancherEnvVar         = "CATTLE_SERVER"
 	rancherNamespace      = "cattle-system"
-	rancherAPIGroup       = "apps"
+	rancherAPIGroup       = ""
 	rancherResource       = "deployments"
 )
 
