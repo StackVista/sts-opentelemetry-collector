@@ -83,11 +83,11 @@ func (p *TopologyStreamPublisher) Publish(ctx context.Context, messages []intern
 		return
 	}
 
-	p.trackCreations(messages)
-
 	if err := c.ConsumeLogs(ctx, log); err != nil {
 		p.logger.Error("Error sending logs to the next component", zap.Error(err))
 	}
+
+	p.trackCreations(messages)
 }
 
 // trackCreations records any stream keys seen for the first time, logging each once. Only
