@@ -21,13 +21,14 @@ var (
 )
 
 type connectorFactory struct {
-	celEvaluator         *internal.CelEvaluator
-	mapper               *internal.Mapper
-	deduplicator         internal.Deduplicator
-	snapshotManager      *SnapshotManager
-	expressionRefManager ExpressionRefManager
-	metadataPublisher    *MetadataPublisher
-	init                 sync.Once
+	celEvaluator            *internal.CelEvaluator
+	mapper                  *internal.Mapper
+	deduplicator            internal.Deduplicator
+	snapshotManager         *SnapshotManager
+	expressionRefManager    ExpressionRefManager
+	metadataPublisher       *MetadataPublisher
+	topologyStreamPublisher *TopologyStreamPublisher
+	init                    sync.Once
 }
 
 func (f *connectorFactory) initSharedState(
@@ -76,6 +77,7 @@ func (f *connectorFactory) initSharedState(
 		f.snapshotManager = snapshotManager
 		f.expressionRefManager = expressionRefManager
 		f.metadataPublisher = metadataPublisher
+		f.topologyStreamPublisher = NewTopologyStreamPublisher(logger)
 	})
 	return err
 }
@@ -136,15 +138,16 @@ func (f *connectorFactory) createTracesToLogsConnector(
 	}
 
 	f.metadataPublisher.SetLogsConsumer(nextConsumer)
+	f.topologyStreamPublisher.SetLogsConsumer(nextConsumer)
 	return newConnector(
 		ctx,
 		*typedCfg,
 		params.Logger,
 		params.TelemetrySettings,
-		nextConsumer,
 		f.snapshotManager,
 		f.expressionRefManager,
 		f.metadataPublisher,
+		f.topologyStreamPublisher,
 		f.celEvaluator,
 		f.deduplicator,
 		f.mapper,
@@ -168,15 +171,16 @@ func (f *connectorFactory) createMetricsToLogsConnector(
 	}
 
 	f.metadataPublisher.SetLogsConsumer(nextConsumer)
+	f.topologyStreamPublisher.SetLogsConsumer(nextConsumer)
 	return newConnector(
 		ctx,
 		*typedCfg,
 		params.Logger,
 		params.TelemetrySettings,
-		nextConsumer,
 		f.snapshotManager,
 		f.expressionRefManager,
 		f.metadataPublisher,
+		f.topologyStreamPublisher,
 		f.celEvaluator,
 		f.deduplicator,
 		f.mapper,
@@ -200,15 +204,16 @@ func (f *connectorFactory) createLogsToLogsConnector(
 	}
 
 	f.metadataPublisher.SetLogsConsumer(nextConsumer)
+	f.topologyStreamPublisher.SetLogsConsumer(nextConsumer)
 	return newConnector(
 		ctx,
 		*typedCfg,
 		params.Logger,
 		params.TelemetrySettings,
-		nextConsumer,
 		f.snapshotManager,
 		f.expressionRefManager,
 		f.metadataPublisher,
+		f.topologyStreamPublisher,
 		f.celEvaluator,
 		f.deduplicator,
 		f.mapper,

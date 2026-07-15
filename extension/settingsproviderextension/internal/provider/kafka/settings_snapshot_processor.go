@@ -87,7 +87,7 @@ func (d *DefaultSettingsSnapshotProcessor) handleSnapshotStart(msg stsSettingsMo
 		d.metricsRecorder.IncIncompleteSnapshots(d.ctx, msg.SettingType)
 	}
 
-	d.logger.Debug("Received snapshot start.",
+	d.logger.Info("Received snapshot start.",
 		zap.String("snapshotId", msg.Id),
 		zap.String("settingType", string(msg.SettingType)))
 
@@ -112,6 +112,13 @@ func (d *DefaultSettingsSnapshotProcessor) handleSettingsEnvelope(msg stsSetting
 	}
 
 	targetSnapshot.settings = append(targetSnapshot.settings, msg.Setting)
+
+	// Logged at Debug level because envelopes arrive once per setting, so this can be very high volume.
+	// The aggregate count is logged at Info level in handleSnapshotStop.
+	d.logger.Debug("Received settings envelope.",
+		zap.String("snapshotId", msg.Id),
+		zap.String("settingType", string(targetSnapshot.settingType)),
+		zap.Int("settingCount", len(targetSnapshot.settings)))
 	return nil
 }
 
@@ -130,7 +137,7 @@ func (d *DefaultSettingsSnapshotProcessor) handleSnapshotStop(msg stsSettingsMod
 	delete(d.InProgressSnapshots, targetSnapshot.settingType)
 	d.snapshotsLock.Unlock()
 
-	d.logger.Debug("Received snapshot stop. Processing complete snapshot.",
+	d.logger.Info("Received snapshot stop. Processing complete snapshot.",
 		zap.String("snapshotId", msg.Id),
 		zap.String("settingType", string(targetSnapshot.settingType)),
 		zap.Int("settingCount", len(targetSnapshot.settings)))

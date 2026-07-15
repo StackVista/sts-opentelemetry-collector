@@ -12,8 +12,10 @@ import (
 
 // ShardCount is the number of shards to use for the topology stream.
 const (
-	ShardCount     = 4
-	unknownShardID = "unknown"
+	ShardCount = 4
+	// UnknownShardID is the shard placeholder used for messages that are not tied to a concrete
+	// element shard (e.g. mapping-level error envelopes). It is not a real topology stream shard.
+	UnknownShardID = "unknown"
 )
 
 type MessageWithKey struct {
@@ -64,7 +66,7 @@ func ErrorsToMessageWithKey(
 		Key: &topostreamv1.TopologyStreamMessageKey{
 			Owner:      topostreamv1.TopologyStreamOwner_TOPOLOGY_STREAM_OWNER_OTEL,
 			DataSource: mapping.GetIdentifier(),
-			ShardId:    unknownShardID,
+			ShardId:    UnknownShardID,
 		},
 		Message: &topostreamv1.TopologyStreamMessage{
 			CollectionTimestamp: collectionTimestampMs,
