@@ -3,6 +3,7 @@ package k8sresourcereceiver
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"sync"
 	"time"
 
@@ -56,7 +57,7 @@ func resolveResourceAttributeEnrichments(
 	}
 	watches := make([]ObjectWatch, 0, len(enrichments))
 	for _, enrichment := range enrichments {
-		source := enrichment.ValueFrom.K8sContainerEnv.Object
+		source := enrichment.ValueFrom().Object
 		watches = append(watches, ObjectWatch{
 			Name:       source.Resource,
 			Group:      source.Group,
@@ -132,17 +133,17 @@ func (m *resourceAttributeManager) AttributesFor(gvr schema.GroupVersionResource
 
 	var attrs map[string]string
 	for _, enrichment := range m.enrichments {
-		if !enrichment.config.ApplyTo.matches(gvr) {
+		if !enrichment.config.ApplyTo().matches(gvr) {
 			continue
 		}
-		value, exists := m.resolvedValues[enrichment.config.Key]
+		value, exists := m.resolvedValues[enrichment.config.Key()]
 		if !exists || value == "" {
 			continue
 		}
 		if attrs == nil {
 			attrs = make(map[string]string)
 		}
-		attrs[enrichment.config.Key] = value
+		attrs[enrichment.config.Key()] = value
 	}
 	return attrs
 }
@@ -151,32 +152,30 @@ func (m *resourceAttributeManager) startInformer(
 	ctx context.Context,
 	enrichment *resolvedResourceAttributeEnrichment,
 ) error {
-	source := enrichment.config.ValueFrom.K8sContainerEnv
-	listOpts := metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name=%s", source.Object.Name)}
+	source := enrichment.config.ValueFrom()
+
+	namePattern, err := regexp.Compile(source.Object.Name)
+	if err != nil {
+		return err
+	}
 
 	lw := &cache.ListWatch{
 		ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
-			options.FieldSelector = listOpts.FieldSelector
 			return resourceClientFor(m.dynamicClient, enrichment.gvr, source.Object.Namespace).List(ctx, options)
 		},
 		WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
-			options.FieldSelector = listOpts.FieldSelector
 			return resourceClientFor(m.dynamicClient, enrichment.gvr, source.Object.Namespace).Watch(ctx, options)
 		},
 	}
 
 	informer := cache.NewSharedInformer(lw, &unstructured.Unstructured{}, 0)
 	if _, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj interface{}) { m.updateValue(enrichment, obj) },
-		UpdateFunc: func(_, newObj interface{}) { m.updateValue(enrichment, newObj) },
-		DeleteFunc: func(interface{}) {
-			m.metrics.RecordEnrichmentValueChange(
-				context.Background(), enrichment.config.Key, metrics.EnrichmentValueCleared,
-			)
-			m.deleteValue(enrichment.config.Key)
-		},
+		AddFunc:    func(obj interface{}) { m.updateValue(enrichment, namePattern, obj) },
+		UpdateFunc: func(_, newObj interface{}) { m.updateValue(enrichment, namePattern, newObj) },
+		DeleteFunc: func(obj interface{}) { m.deleteValue(enrichment, namePattern, obj) },
 	}); err != nil {
-		return fmt.Errorf("failed to add event handler for resource attribute enrichment %q: %w", enrichment.config.Key, err)
+		return fmt.Errorf("failed to add event handler for resource attribute enrichment %q: %w",
+			enrichment.config.Key(), err)
 	}
 	stopCh := make(chan struct{})
 
@@ -205,65 +204,87 @@ func (m *resourceAttributeManager) startInformer(
 	if !cache.WaitForCacheSync(syncCtx.Done(), informer.HasSynced) {
 		syncOutcome = metrics.EnrichmentSyncTimedOut
 		m.logger.Warn("Resource attribute enrichment source did not sync",
-			zap.String("key", enrichment.config.Key),
+			zap.String("key", enrichment.config.Key()),
 			zap.String("gvr", emit.FormatGVRKey(enrichment.gvr)),
 		)
 	}
-	m.metrics.RecordEnrichmentSync(ctx, enrichment.config.Key, syncOutcome)
+	m.metrics.RecordEnrichmentSync(ctx, enrichment.config.Key(), syncOutcome)
 	return nil
 }
 
-func (m *resourceAttributeManager) updateValue(enrichment *resolvedResourceAttributeEnrichment, obj interface{}) {
+func (m *resourceAttributeManager) updateValue(
+	enrichment *resolvedResourceAttributeEnrichment,
+	namePattern *regexp.Regexp,
+	obj interface{},
+) {
 	u, ok := toUnstructured(obj)
 	if !ok {
 		return
 	}
-	value, found, unsupported := extractStaticContainerEnv(
-		u,
-		enrichment.config.ValueFrom.K8sContainerEnv.Container,
-		enrichment.config.ValueFrom.K8sContainerEnv.Env,
-	)
+	if !nameMatches(namePattern, u) {
+		return
+	}
+	value, found, unsupported := enrichment.config.Extract(u)
 	if unsupported {
 		m.logger.Warn("Resource attribute enrichment env var uses unsupported valueFrom",
-			zap.String("key", enrichment.config.Key),
-			zap.String("container", enrichment.config.ValueFrom.K8sContainerEnv.Container),
-			zap.String("env", enrichment.config.ValueFrom.K8sContainerEnv.Env),
+			zap.String("key", enrichment.config.Key()),
 		)
 		m.metrics.RecordEnrichmentValueChange(
-			context.Background(), enrichment.config.Key, metrics.EnrichmentValueUnsupported,
+			context.Background(), enrichment.config.Key(), metrics.EnrichmentValueUnsupported,
 		)
-		m.deleteValue(enrichment.config.Key)
+		m.deleteValue(enrichment, namePattern, obj)
 		return
 	}
 	if !found {
 		m.logger.Debug("Resource attribute enrichment env var is missing",
-			zap.String("key", enrichment.config.Key),
-			zap.String("container", enrichment.config.ValueFrom.K8sContainerEnv.Container),
-			zap.String("env", enrichment.config.ValueFrom.K8sContainerEnv.Env),
+			zap.String("key", enrichment.config.Key()),
 		)
 		m.metrics.RecordEnrichmentValueChange(
-			context.Background(), enrichment.config.Key, metrics.EnrichmentValueCleared,
+			context.Background(), enrichment.config.Key(), metrics.EnrichmentValueCleared,
 		)
-		m.deleteValue(enrichment.config.Key)
+		m.deleteValue(enrichment, namePattern, obj)
 		return
 	}
 
 	m.mu.Lock()
-	previous, existed := m.resolvedValues[enrichment.config.Key]
-	m.resolvedValues[enrichment.config.Key] = value
+	previous, existed := m.resolvedValues[enrichment.config.Key()]
+	m.resolvedValues[enrichment.config.Key()] = value
 	m.mu.Unlock()
 	if !existed || previous != value {
-		m.logger.Info("Resource attribute enrichment value available", zap.String("key", enrichment.config.Key))
+		m.logger.Info("Resource attribute enrichment value available", zap.String("key", enrichment.config.Key()))
 		m.metrics.RecordEnrichmentValueChange(
-			context.Background(), enrichment.config.Key, metrics.EnrichmentValueSet,
+			context.Background(), enrichment.config.Key(), metrics.EnrichmentValueSet,
 		)
 	}
 }
 
-func (m *resourceAttributeManager) deleteValue(key string) {
+func (m *resourceAttributeManager) deleteValue(
+	enrichment *resolvedResourceAttributeEnrichment,
+	namePattern *regexp.Regexp,
+	obj interface{},
+) {
+	u, ok := toUnstructured(obj)
+	if !ok {
+		return
+	}
+	if !nameMatches(namePattern, u) {
+		return
+	}
+
+	m.metrics.RecordEnrichmentValueChange(
+		context.Background(), enrichment.config.Key(), metrics.EnrichmentValueCleared,
+	)
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	delete(m.resolvedValues, key)
+	delete(m.resolvedValues, enrichment.config.Key())
+}
+
+func nameMatches(namePattern *regexp.Regexp, u *unstructured.Unstructured) bool {
+	name, found, err := unstructured.NestedString(u.Object, "metadata", "name")
+	if !found || err != nil || !namePattern.Match([]byte(name)) {
+		return false
+	}
+	return true
 }
 
 const (
@@ -271,57 +292,6 @@ const (
 	templateKey       = "template"
 	specContainersKey = "containers"
 )
-
-// extractStaticContainerEnv searches spec.template.spec.containers then
-// spec.template.spec.initContainers for a container named containerName, and
-// returns the static value of the env var named envName within that container.
-// Returns (value, found, unsupported): unsupported=true when the env entry
-// uses valueFrom (dynamic reference) rather than a static literal value.
-// Once the named container is found in a slice, the search does not continue
-// into subsequent slices even if the env var is absent there.
-func extractStaticContainerEnv(obj *unstructured.Unstructured, containerName, envName string) (string, bool, bool) {
-	for _, path := range [][]string{
-		{specKey, templateKey, specKey, specContainersKey},
-		{specKey, templateKey, specKey, "initContainers"},
-	} {
-		containers, found, _ := unstructured.NestedSlice(obj.Object, path...)
-		if !found {
-			continue
-		}
-		for _, rawContainer := range containers {
-			container, ok := rawContainer.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			name, _, _ := unstructured.NestedString(container, "name")
-			if name != containerName {
-				continue
-			}
-			// Container matched — search for the env var here; do not fall through to initContainers.
-			envs, found, _ := unstructured.NestedSlice(container, "env")
-			if !found {
-				return "", false, false
-			}
-			for _, rawEnv := range envs {
-				env, ok := rawEnv.(map[string]interface{})
-				if !ok {
-					continue
-				}
-				name, _, _ := unstructured.NestedString(env, "name")
-				if name != envName {
-					continue
-				}
-				if _, found, _ := unstructured.NestedMap(env, "valueFrom"); found {
-					return "", false, true
-				}
-				value, found, _ := unstructured.NestedString(env, "value")
-				return value, found, false
-			}
-			return "", false, false
-		}
-	}
-	return "", false, false
-}
 
 func (applyTo ResourceAttributeApplyTo) matches(gvr schema.GroupVersionResource) bool {
 	return matchesAny(applyTo.APIGroups, gvr.Group) && matchesAny(applyTo.Resources, gvr.Resource)

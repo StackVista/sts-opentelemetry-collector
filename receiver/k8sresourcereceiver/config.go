@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/collector/component"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/discovery"
@@ -128,30 +129,24 @@ type ObjectWatch struct {
 }
 
 // ResourceAttributeEnrichment declares one resource attribute derived from a Kubernetes object.
-type ResourceAttributeEnrichment struct {
-	Key string `mapstructure:"key"`
+type ResourceAttributeEnrichment interface {
+	Key() string
 
-	ValueFrom ResourceAttributeValueFrom `mapstructure:"value_from"`
+	ValueFrom() ResourceAttributeValueFrom
 
-	ApplyTo ResourceAttributeApplyTo `mapstructure:"apply_to"`
+	Extract(unstructured *unstructured.Unstructured) (string, bool, bool)
+
+	ApplyTo() ResourceAttributeApplyTo
 }
 
 // ResourceAttributeValueFrom declares the source of an enriched resource attribute.
 type ResourceAttributeValueFrom struct {
-	K8sContainerEnv *K8sContainerEnvSource `mapstructure:"k8s_container_env"`
-}
-
-// K8sContainerEnvSource extracts a static env[].value from a container in a Kubernetes object.
-type K8sContainerEnvSource struct {
 	Object K8sObjectSource `mapstructure:"object"`
-
-	Container string `mapstructure:"container"`
-
-	Env string `mapstructure:"env"`
 }
 
 // K8sObjectSource identifies one Kubernetes object used as an enrichment source.
 type K8sObjectSource struct {
+	// regular expression that matches the resource name
 	Name string `mapstructure:"name"`
 
 	Group string `mapstructure:"group"`
@@ -266,7 +261,8 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if c.RancherEnrichment.Enabled {
-		c.ResourceAttributes = append(c.ResourceAttributes, rancherResourceAttributeEnrichment())
+		c.ResourceAttributes = append(c.ResourceAttributes, rancherManagerURLEnrichment())
+		c.ResourceAttributes = append(c.ResourceAttributes, rancherClusterIDEnrichment())
 	}
 	if err := c.validateResourceAttributes(); err != nil {
 		return err
@@ -297,54 +293,48 @@ var reservedResourceAttributeKeys = map[string]struct{}{
 func (c *Config) validateResourceAttributes() error {
 	seen := make(map[string]int, len(c.ResourceAttributes))
 	for i := range c.ResourceAttributes {
-		enrichment := &c.ResourceAttributes[i]
-		if strings.TrimSpace(enrichment.Key) == "" {
+		enrichment := c.ResourceAttributes[i]
+		if strings.TrimSpace(enrichment.Key()) == "" {
 			return fmt.Errorf("resource_attributes[%d].key is required", i)
 		}
-		if _, reserved := reservedResourceAttributeKeys[enrichment.Key]; reserved {
+		if _, reserved := reservedResourceAttributeKeys[enrichment.Key()]; reserved {
 			return fmt.Errorf(
 				"resource_attributes[%d].key %q is reserved and cannot be used as an enrichment key",
-				i, enrichment.Key,
+				i, enrichment.Key(),
 			)
 		}
-		if previous, exists := seen[enrichment.Key]; exists {
+		if previous, exists := seen[enrichment.Key()]; exists {
 			return fmt.Errorf(
 				"resource_attributes[%d].key duplicates resource_attributes[%d].key %q",
-				i, previous, enrichment.Key,
+				i, previous, enrichment.Key(),
 			)
 		}
-		seen[enrichment.Key] = i
+		seen[enrichment.Key()] = i
 
-		if enrichment.ValueFrom.K8sContainerEnv == nil {
-			return fmt.Errorf("resource_attributes[%d].value_from.k8s_container_env is required", i)
-		}
-		source := enrichment.ValueFrom.K8sContainerEnv
-		if strings.TrimSpace(source.Object.Name) == "" {
-			return fmt.Errorf("resource_attributes[%d].value_from.k8s_container_env.object.name is required", i)
-		}
-		if strings.TrimSpace(source.Object.Resource) == "" {
-			return fmt.Errorf("resource_attributes[%d].value_from.k8s_container_env.object.resource is required", i)
-		}
-		if strings.TrimSpace(source.Object.Namespace) == "" {
-			return fmt.Errorf("resource_attributes[%d].value_from.k8s_container_env.object.namespace is required", i)
-		}
-		if strings.TrimSpace(source.Container) == "" {
-			return fmt.Errorf("resource_attributes[%d].value_from.k8s_container_env.container is required", i)
-		}
-		if strings.TrimSpace(source.Env) == "" {
-			return fmt.Errorf("resource_attributes[%d].value_from.k8s_container_env.env is required", i)
-		}
-		if len(enrichment.ApplyTo.APIGroups) == 0 && len(enrichment.ApplyTo.Resources) == 0 {
+		if len(enrichment.ApplyTo().APIGroups) == 0 && len(enrichment.ApplyTo().Resources) == 0 {
 			return fmt.Errorf(
 				"resource_attributes[%d].apply_to.api_groups or "+
 					"resource_attributes[%d].apply_to.resources is required", i, i)
 		}
-		for j, g := range enrichment.ApplyTo.APIGroups {
+
+		source := enrichment.ValueFrom().Object
+		if strings.TrimSpace(source.Name) == "" {
+			return fmt.Errorf("resource_attributes[%d].value_from.object.name is required", i)
+		}
+		if strings.TrimSpace(source.Resource) == "" {
+			return fmt.Errorf("resource_attributes[%d].value_from.object.resource is required", i)
+		}
+		if strings.TrimSpace(source.Namespace) == "" {
+			return fmt.Errorf("resource_attributes[%d].value_from.object.namespace is required", i)
+		}
+
+		for j, g := range enrichment.ApplyTo().APIGroups {
 			if strings.TrimSpace(g) == "" {
 				return fmt.Errorf("resource_attributes[%d].apply_to.api_groups[%d] must not be empty", i, j)
 			}
 		}
-		for j, res := range enrichment.ApplyTo.Resources {
+
+		for j, res := range enrichment.ApplyTo().Resources {
 			if strings.TrimSpace(res) == "" {
 				return fmt.Errorf("resource_attributes[%d].apply_to.resources[%d] must not be empty", i, j)
 			}

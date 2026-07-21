@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 func TestConfigValidate(t *testing.T) {
@@ -424,17 +425,6 @@ func TestConfigValidate(t *testing.T) {
 			errMsg:  `resource_attributes[1].key duplicates resource_attributes[0].key`,
 		},
 		{
-			name: "resource_attributes k8s_container_env required",
-			config: &Config{
-				DiscoveryMode: DiscoveryModeAll,
-				ResourceAttributes: []ResourceAttributeEnrichment{
-					{Key: "my.attr", ApplyTo: ResourceAttributeApplyTo{APIGroups: []string{"kubevirt.io"}}},
-				},
-			},
-			wantErr: true,
-			errMsg:  "resource_attributes[0].value_from.k8s_container_env is required",
-		},
-		{
 			name: "resource_attributes object.name required",
 			config: &Config{
 				DiscoveryMode: DiscoveryModeAll,
@@ -443,7 +433,7 @@ func TestConfigValidate(t *testing.T) {
 				},
 			},
 			wantErr: true,
-			errMsg:  "resource_attributes[0].value_from.k8s_container_env.object.name is required",
+			errMsg:  "resource_attributes[0].value_from.object.name is required",
 		},
 		{
 			name: "resource_attributes object.resource required",
@@ -454,7 +444,7 @@ func TestConfigValidate(t *testing.T) {
 				},
 			},
 			wantErr: true,
-			errMsg:  "resource_attributes[0].value_from.k8s_container_env.object.resource is required",
+			errMsg:  "resource_attributes[0].value_from.object.resource is required",
 		},
 		{
 			name: "resource_attributes object.namespace required",
@@ -465,29 +455,7 @@ func TestConfigValidate(t *testing.T) {
 				},
 			},
 			wantErr: true,
-			errMsg:  "resource_attributes[0].value_from.k8s_container_env.object.namespace is required",
-		},
-		{
-			name: "resource_attributes container required",
-			config: &Config{
-				DiscoveryMode: DiscoveryModeAll,
-				ResourceAttributes: []ResourceAttributeEnrichment{
-					withContainer(validResourceAttr(), ""),
-				},
-			},
-			wantErr: true,
-			errMsg:  "resource_attributes[0].value_from.k8s_container_env.container is required",
-		},
-		{
-			name: "resource_attributes env required",
-			config: &Config{
-				DiscoveryMode: DiscoveryModeAll,
-				ResourceAttributes: []ResourceAttributeEnrichment{
-					withEnv(validResourceAttr(), ""),
-				},
-			},
-			wantErr: true,
-			errMsg:  "resource_attributes[0].value_from.k8s_container_env.env is required",
+			errMsg:  "resource_attributes[0].value_from.object.namespace is required",
 		},
 		{
 			name: "resource_attributes apply_to must have api_groups or resources",
@@ -546,18 +514,15 @@ func TestRancherEnrichmentInjectedWhenEnabled(t *testing.T) {
 	}
 	require.NoError(t, cfg.Validate())
 
-	require.Len(t, cfg.ResourceAttributes, 1)
+	require.Len(t, cfg.ResourceAttributes, 2)
 	ra := cfg.ResourceAttributes[0]
-	assert.Equal(t, rancherAttributeKey, ra.Key)
-	require.NotNil(t, ra.ValueFrom.K8sContainerEnv)
-	src := ra.ValueFrom.K8sContainerEnv
-	assert.Equal(t, rancherDeploymentName, src.Object.Name)
+	assert.Equal(t, rancherManagerURLKey, ra.Key())
+	src := ra.ValueFrom()
+	assert.Equal(t, agentDeploymentName, src.Object.Name)
 	assert.Equal(t, rancherAPIGroup, src.Object.Group)
-	assert.Equal(t, rancherResource, src.Object.Resource)
+	assert.Equal(t, agentResource, src.Object.Resource)
 	assert.Equal(t, rancherNamespace, src.Object.Namespace)
-	assert.Equal(t, rancherContainerName, src.Container)
-	assert.Equal(t, rancherEnvVar, src.Env)
-	assert.Equal(t, []string{"*"}, ra.ApplyTo.APIGroups)
+	assert.Equal(t, []string{"*"}, ra.ApplyTo().APIGroups)
 }
 
 func TestRancherEnrichmentNotInjectedWhenDisabled(t *testing.T) {
@@ -579,65 +544,90 @@ func TestRancherEnrichmentCoexistsWithUserResourceAttributes(t *testing.T) {
 	}
 	require.NoError(t, cfg.Validate())
 	// User entry preserved; rancher entry appended.
-	require.Len(t, cfg.ResourceAttributes, 2)
-	assert.Equal(t, "my.attr", cfg.ResourceAttributes[0].Key)
-	assert.Equal(t, rancherAttributeKey, cfg.ResourceAttributes[1].Key)
+	require.Len(t, cfg.ResourceAttributes, 3)
+	assert.Equal(t, "my.attr", cfg.ResourceAttributes[0].Key())
+	assert.Equal(t, rancherManagerURLKey, cfg.ResourceAttributes[1].Key())
+	assert.Equal(t, rancherClusterIDKey, cfg.ResourceAttributes[2].Key())
+}
+
+type TestResourceAttributeEnrichment struct {
+	TestKey string `mapstructure:"key"`
+
+	TestValueFrom ResourceAttributeValueFrom `mapstructure:"value_from"`
+
+	// Extract(unstructured *unstructured.Unstructured) (string, bool, bool)
+
+	TestApplyTo ResourceAttributeApplyTo `mapstructure:"apply_to"`
+
+	K8sContainerEnv *K8sContainerEnvSource `mapstructure:"k8s_container_env"`
+}
+
+// K8sContainerEnvSource extracts a static env[].value from a container in a Kubernetes object.
+type K8sContainerEnvSource struct {
+	Container string `mapstructure:"container"`
+	Env       string `mapstructure:"env"`
+}
+
+func (r TestResourceAttributeEnrichment) Key() string {
+	return r.TestKey
+}
+
+func (r TestResourceAttributeEnrichment) ValueFrom() ResourceAttributeValueFrom {
+	return r.TestValueFrom
+}
+
+func (r TestResourceAttributeEnrichment) ApplyTo() ResourceAttributeApplyTo {
+	return r.TestApplyTo
+}
+
+func (r TestResourceAttributeEnrichment) Extract(_ *unstructured.Unstructured) (string, bool, bool) {
+	return "", false, false
 }
 
 // validResourceAttr returns a fully-populated ResourceAttributeEnrichment that passes validation.
 // Individual test cases mutate specific fields via the with* helpers.
-func validResourceAttr() ResourceAttributeEnrichment {
-	return ResourceAttributeEnrichment{
-		Key: "my.attr",
-		ValueFrom: ResourceAttributeValueFrom{
-			K8sContainerEnv: &K8sContainerEnvSource{
-				Object: K8sObjectSource{
-					Name:      "my-deployment",
-					Resource:  "deployments",
-					Namespace: "my-namespace",
-				},
-				Container: "my-container",
-				Env:       "MY_ENV_VAR",
+func validResourceAttr() TestResourceAttributeEnrichment {
+	return TestResourceAttributeEnrichment{
+		TestKey: "my.attr",
+		TestValueFrom: ResourceAttributeValueFrom{
+			Object: K8sObjectSource{
+				Name:      "my-deployment",
+				Resource:  "deployments",
+				Namespace: "my-namespace",
 			},
 		},
-		ApplyTo: ResourceAttributeApplyTo{
+		K8sContainerEnv: &K8sContainerEnvSource{
+			Container: "my-container",
+			Env:       "MY_ENV_VAR",
+		},
+		TestApplyTo: ResourceAttributeApplyTo{
 			APIGroups: []string{"kubevirt.io"},
 		},
 	}
 }
 
-func withKey(r ResourceAttributeEnrichment, key string) ResourceAttributeEnrichment {
-	r.Key = key
+func withKey(r TestResourceAttributeEnrichment, key string) TestResourceAttributeEnrichment {
+	r.TestKey = key
 	return r
 }
 
-func withApplyTo(r ResourceAttributeEnrichment, applyTo ResourceAttributeApplyTo) ResourceAttributeEnrichment {
-	r.ApplyTo = applyTo
+func withApplyTo(r TestResourceAttributeEnrichment, applyTo ResourceAttributeApplyTo) TestResourceAttributeEnrichment {
+	r.TestApplyTo = applyTo
 	return r
 }
 
-func withObjectName(r ResourceAttributeEnrichment, name string) ResourceAttributeEnrichment {
-	r.ValueFrom.K8sContainerEnv.Object.Name = name
+func withObjectName(r TestResourceAttributeEnrichment, name string) TestResourceAttributeEnrichment {
+	r.TestValueFrom.Object.Name = name
 	return r
 }
 
-func withObjectResource(r ResourceAttributeEnrichment, resource string) ResourceAttributeEnrichment {
-	r.ValueFrom.K8sContainerEnv.Object.Resource = resource
+func withObjectResource(r TestResourceAttributeEnrichment, resource string) TestResourceAttributeEnrichment {
+	r.TestValueFrom.Object.Resource = resource
 	return r
 }
 
-func withObjectNamespace(r ResourceAttributeEnrichment, namespace string) ResourceAttributeEnrichment {
-	r.ValueFrom.K8sContainerEnv.Object.Namespace = namespace
-	return r
-}
-
-func withContainer(r ResourceAttributeEnrichment, container string) ResourceAttributeEnrichment {
-	r.ValueFrom.K8sContainerEnv.Container = container
-	return r
-}
-
-func withEnv(r ResourceAttributeEnrichment, env string) ResourceAttributeEnrichment {
-	r.ValueFrom.K8sContainerEnv.Env = env
+func withObjectNamespace(r TestResourceAttributeEnrichment, namespace string) TestResourceAttributeEnrichment {
+	r.TestValueFrom.Object.Namespace = namespace
 	return r
 }
 
