@@ -8,10 +8,12 @@ CHECKOUT_DIR="checkout"
 
 rm -rf "$CHECKOUT_DIR"
 
-if [ -z "${GITLAB_READ_TOKEN}" ]; then
-  git clone git@gitlab.com:stackvista/platform/shared-protobuf-protocols.git "$CHECKOUT_DIR"
+# The repo migrated to GitHub (STAC-25257). Authenticate with a GitHub App installation
+# token (minted in CI, permission-contents: read on shared-protobuf-protocols) when cloning.
+if [ -z "${GITHUB_SHARED_PROTOBUF_TOKEN:-}" ]; then
+  git clone https://github.com/StackVista/shared-protobuf-protocols.git "$CHECKOUT_DIR"
 else
-  git clone "https://stackstate-system-user:${GITLAB_READ_TOKEN}@gitlab.com/stackvista/platform/shared-protobuf-protocols.git" "$CHECKOUT_DIR"
+  git clone "https://x-access-token:${GITHUB_SHARED_PROTOBUF_TOKEN}@github.com/StackVista/shared-protobuf-protocols.git" "$CHECKOUT_DIR"
 fi
 
 git -C "$CHECKOUT_DIR" checkout "$PROTOBUF_VERSION"
