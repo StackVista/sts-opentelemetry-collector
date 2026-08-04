@@ -89,8 +89,18 @@ jobs:
           sudo apt-get install -y protobuf-compiler
           go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.8
 
+      - name: Generate shared-protobuf-protocols read token
+        id: protobuf-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.READ_PROTOBUF_PROTOCOLS_GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.READ_PROTOBUF_PROTOCOLS_GH_APP_PRIVATE_KEY }}
+          repositories: shared-protobuf-protocols
+          permission-contents: read
+
       - name: Generate go model
         env:
+          GITHUB_SHARED_PROTOBUF_TOKEN: ${{ steps.protobuf-token.outputs.token }}
           GITLAB_READ_TOKEN: ${{ secrets.GITLAB_READ_TOKEN }}
         run: |
           ./connector/topologyconnector/scripts/generate_protobuf_model.sh
