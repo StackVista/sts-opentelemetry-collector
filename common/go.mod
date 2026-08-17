@@ -1,6 +1,6 @@
 module github.com/stackvista/sts-opentelemetry-collector/common
 
-go 1.26.5
+go 1.26.6
 
 require (
 	github.com/valyala/fasttemplate v1.2.2
