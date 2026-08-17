@@ -9,6 +9,9 @@ if [ -z "$NEW_GO_VERSION" ]; then
   exit 1
 fi
 
+echo "Upgrading Go version to $NEW_GO_VERSION in go.work file..."
+go work edit -go="$NEW_GO_VERSION"
+
 echo "Upgrading Go version to $NEW_GO_VERSION in all go.mod files..."
 
 find . -type f -name "go.mod" | while read -r gomod_file; do
@@ -16,8 +19,5 @@ find . -type f -name "go.mod" | while read -r gomod_file; do
   module_dir=$(dirname "$gomod_file")
   (cd "$module_dir" && go mod edit -go="$NEW_GO_VERSION" && go mod tidy)
 done
-
-echo "Upgrading Go version to $NEW_GO_VERSION in go.work file..."
-go work edit -go="$NEW_GO_VERSION"
 
 echo "Go version upgrade complete."

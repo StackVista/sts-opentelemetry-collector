@@ -2,6 +2,7 @@
 ARG BASE_IMAGE=registry.suse.com/bci/bci-micro:15.7-60.5
 
 FROM --platform=$BUILDPLATFORM registry.suse.com/bci/golang:1.26 AS builder
+ENV GOTOOLCHAIN=auto
 
 ARG TARGETOS=linux
 ARG TARGETARCH

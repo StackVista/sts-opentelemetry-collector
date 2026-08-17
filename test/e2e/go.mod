@@ -1,6 +1,6 @@
 module e2e
 
-go 1.26.5
+go 1.26.6
 
 require (
 	github.com/google/uuid v1.6.0

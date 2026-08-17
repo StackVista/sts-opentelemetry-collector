@@ -1,6 +1,6 @@
 module github.com/stackvista/sts-opentelemetry-collector/extension/servicetokenauthextension
 
-go 1.26.5
+go 1.26.6
 
 require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
