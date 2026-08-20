@@ -8,11 +8,7 @@ CHECKOUT_DIR="checkout"
 
 rm -rf "$CHECKOUT_DIR"
 
-if [ -z "${GITLAB_READ_TOKEN}" ]; then
-  git clone git@gitlab.com:stackvista/platform/stackstate-openapi.git "$CHECKOUT_DIR"
-else
-  git clone "https://stackstate-system-user:${GITLAB_READ_TOKEN}@gitlab.com/stackvista/platform/stackstate-openapi.git" "$CHECKOUT_DIR"
-fi
+git clone https://github.com/StackVista/stackstate-openapi.git "$CHECKOUT_DIR"
 
 git -C "$CHECKOUT_DIR" checkout "$OPENAPI_VERSION"
 cp "$CHECKOUT_DIR/spec_settings/openapi.yaml" "spec/openapi.yaml"
