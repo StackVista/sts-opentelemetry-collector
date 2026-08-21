@@ -135,51 +135,19 @@ jobs:
           path: /tmp/image.tar
           retention-days: 1
 
-  scan:
-    name: Scan (${{ matrix.image }} ${{ matrix.arch }})
+  publish:
+    name: Scan, sign, and publish (${{ matrix.image }})
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      security-events: write   # for SARIF upload from inside the action
+      packages: write
+      id-token: write          # keyless cosign signing
+      security-events: write   # SARIF upload from scan-image
     strategy:
       fail-fast: false
       matrix:
         image: [server, agent]
-        arch: [linux-amd64, linux-arm64]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-
-      - name: Download image artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: image-${{ matrix.image }}-${{ matrix.arch }}
-          path: /tmp
-
-      - name: Load image into local docker daemon
-        run: |
-          set -euo pipefail
-          loaded=$(docker load -i /tmp/image.tar | awk -F': ' '/Loaded image/ {print $NF}')
-          echo "Loaded $loaded"
-          docker tag "$loaded" scan-target:${{ matrix.image }}-${{ matrix.arch }}
-
-      - name: Run image-pipeline scan-image
-        uses: StackVista/image-pipeline/.github/actions/scan-image@6284a6fc006a7cc46a7f00d02c50d5f21b117b63
-        with:
-          image: scan-target:${{ matrix.image }}-${{ matrix.arch }}
-          mode: gate
-          sarif-category: sts-opentelemetry-collector-${{ matrix.image }}-${{ matrix.arch }}
-
-  publish:
-    name: Publish release tags
-    needs: [build, scan]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -189,96 +157,56 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
 
-      - name: Log in to Quay
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.QUAY_USER }}
-          password: ${{ secrets.QUAY_PASSWORD }}
-
-      - name: Compute scan-handle tag base
-        id: scan_base
-        env:
-          REGISTRY: ${{ env.REGISTRY }}
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
-        run: |
-          sanitized="${GITHUB_REF_NAME//\//-}"
-          echo "tag=${REGISTRY}/${IMAGE_NAME}:scan-${sanitized}" >> "$GITHUB_OUTPUT"
-
-      - name: Docker meta (server release tags)
-        id: meta_server
-        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-
-      - name: Docker meta (agent release tags)
-        id: meta_agent
+      - name: Docker meta (release tags)
+        id: meta
         uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           flavor: |
-            suffix=-agent
+            suffix=${{ matrix.image == 'agent' && '-agent' || '' }}
 
-      - name: Download all image artifacts
+      - name: Download image artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          pattern: image-*
+          pattern: image-${{ matrix.image }}-*
           path: /tmp/artifacts
 
-      - name: Push per-arch and assemble multi-arch manifests
-        # Two-stage push, run once per image variant (server, agent):
-        #   1. Each per-arch tarball is loaded, tagged with a mutable
-        #      per-ref handle (`scan-<ref>-<variant>-<arch>`), and pushed.
-        #      The handle tag exists only so `imagetools create` can address
-        #      the per-arch manifest by digest. The variant is included so
-        #      the server and agent handle tags do not collide.
-        #   2. `docker buildx imagetools create` assembles a fresh
-        #      multi-arch manifest list from the per-arch digests and
-        #      attaches every release tag emitted by metadata-action for that
-        #      variant in one operation.
-        env:
-          SCAN_BASE: ${{ steps.scan_base.outputs.tag }}
-          RELEASE_TAGS_SERVER: ${{ steps.meta_server.outputs.tags }}
-          RELEASE_TAGS_AGENT: ${{ steps.meta_agent.outputs.tags }}
+      # scan-sign-push expects <tarball-dir>/image-<arch>.tar (arch = amd64|arm64).
+      # The build job emits image-<variant>-<arch>/image.tar (arch = linux-<arch>),
+      # so stage them under the expected names for this variant.
+      - name: Stage per-arch tarballs
         run: |
           set -euo pipefail
+          mkdir -p /tmp/sts-images
+          cp "/tmp/artifacts/image-${{ matrix.image }}-linux-amd64/image.tar" /tmp/sts-images/image-amd64.tar
+          cp "/tmp/artifacts/image-${{ matrix.image }}-linux-arm64/image.tar" /tmp/sts-images/image-arm64.tar
 
-          assemble() {
-            local variant="$1"
-            local release_tags="$2"
+      # Publish (push + sign) only on release-tag refs; on branches/PRs the action
+      # runs the scan gate only (secrets fail-closed) so a bad image is caught
+      # before merge, without pushing or signing.
+      - name: Decide whether to publish
+        id: gate
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
 
-            local per_arch_refs=()
-            local arch tarball loaded arch_tag digest
-            for arch in linux-amd64 linux-arm64; do
-              tarball="/tmp/artifacts/image-${variant}-${arch}/image.tar"
-              loaded=$(docker load -i "$tarball" | awk -F': ' '/Loaded image/ {print $NF}')
-              arch_tag="${SCAN_BASE}-${variant}-${arch}"
-              docker tag "$loaded" "$arch_tag"
-              docker push "$arch_tag"
-              # Resolve the manifest digest via inspect rather than parsing
-              # `docker push` stdout — the `digest:` line format has shifted
-              # between docker versions.
-              digest=$(docker buildx imagetools inspect "$arch_tag" --format '{{.Manifest.Digest}}')
-              per_arch_refs+=("${SCAN_BASE%:*}@${digest}")
-            done
-
-            local tag_args=()
-            local tag
-            while IFS= read -r tag; do
-              [ -z "$tag" ] && continue
-              tag_args+=(--tag "$tag")
-            done <<< "$release_tags"
-
-            if [ "${#tag_args[@]}" -eq 0 ]; then
-              echo "::notice::metadata-action produced no release tags for ${variant} on this ref; skipping multi-arch assembly"
-              return 0
-            fi
-
-            docker buildx imagetools create "${tag_args[@]}" "${per_arch_refs[@]}"
-          }
-
-          assemble server "$RELEASE_TAGS_SERVER"
-          assemble agent "$RELEASE_TAGS_AGENT"
+      - name: Scan (and, on tags, sign and push)
+        uses: StackVista/image-pipeline/.github/actions/scan-sign-push@966825ab47758bf0b5e6db1824086548141362b1
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: ${{ steps.meta.outputs.tags }}
+          arches: amd64,arm64
+          source-mode: tarball
+          tarball-dir: /tmp/sts-images
+          publish: ${{ steps.gate.outputs.publish }}
+          sarif-category-prefix: sts-opentelemetry-collector-${{ matrix.image }}
+          target-registry: ${{ env.REGISTRY }}
+          target-registry-user: ${{ secrets.QUAY_USER }}
+          target-registry-password: ${{ secrets.QUAY_PASSWORD }}
 
   detect-modules:
     runs-on: ubuntu-latest
