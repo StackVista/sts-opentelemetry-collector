@@ -207,6 +207,7 @@ jobs:
           target-registry: ${{ env.REGISTRY }}
           target-registry-user: ${{ secrets.QUAY_USER }}
           target-registry-password: ${{ secrets.QUAY_PASSWORD }}
+          fail-on-existing-tags: 'false'
 
   detect-modules:
     runs-on: ubuntu-latest
