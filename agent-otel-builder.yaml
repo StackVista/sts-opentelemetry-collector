@@ -46,3 +46,4 @@ processors:
 replaces:
   - github.com/stackvista/sts-opentelemetry-collector/common => ../common
   - google.golang.org/grpc => google.golang.org/grpc v1.82.1
+  - github.com/klauspost/compress => github.com/klauspost/compress v1.18.7
