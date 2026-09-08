@@ -181,8 +181,48 @@ jobs:
           cp "/tmp/artifacts/image-${{ matrix.image }}-linux-amd64/image.tar" /tmp/sts-images/image-amd64.tar
           cp "/tmp/artifacts/image-${{ matrix.image }}-linux-arm64/image.tar" /tmp/sts-images/image-arm64.tar
 
+      # scan-sign-push scans each arch for CVEs but hard-codes `mode: inform`,
+      # which always exits 0 — it reports HIGH/CRITICAL findings without blocking
+      # the release. Run the same scan in gate mode first, once per published
+      # arch, so an unmanaged HIGH/CRITICAL fails this job before any image is
+      # pushed or signed. Only its secret scan is fail-closed on its own.
+      - name: Load per-arch images for the CVE gate
+        env:
+          GATE_REPO: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          GATE_TAG: cve-gate-${{ matrix.image }}
+        run: |
+          set -euo pipefail
+          for arch in amd64 arm64; do
+            loaded=$(docker load -i "/tmp/sts-images/image-${arch}.tar" | awk -F': ' '/Loaded image/ {print $NF}')
+            target="${GATE_REPO}:${GATE_TAG}-${arch}"
+            docker tag "$loaded" "$target"
+            # Scan under the published repository name so the product purls in our
+            # OpenVEX statements match. A second repository name left on the same
+            # image can win purl construction and stop those statements applying,
+            # failing this gate on a finding that policy has already answered.
+            if [ "$loaded" != "$target" ]; then
+              docker rmi "$loaded" > /dev/null
+            fi
+          done
+
+      - name: CVE gate (amd64)
+        uses: StackVista/image-pipeline/.github/actions/scan-image@6284a6fc006a7cc46a7f00d02c50d5f21b117b63
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cve-gate-${{ matrix.image }}-amd64
+          mode: gate
+          severity: HIGH,CRITICAL
+          upload-sarif: 'false'
+
+      - name: CVE gate (arm64)
+        uses: StackVista/image-pipeline/.github/actions/scan-image@6284a6fc006a7cc46a7f00d02c50d5f21b117b63
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cve-gate-${{ matrix.image }}-arm64
+          mode: gate
+          severity: HIGH,CRITICAL
+          upload-sarif: 'false'
+
       # Publish (push + sign) only on release-tag refs; on branches/PRs the action
-      # runs the scan gate only (secrets fail-closed) so a bad image is caught
+      # runs its scan steps only (secrets fail-closed) so a bad image is caught
       # before merge, without pushing or signing.
       - name: Decide whether to publish
         id: gate
