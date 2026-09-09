@@ -181,11 +181,6 @@ jobs:
           cp "/tmp/artifacts/image-${{ matrix.image }}-linux-amd64/image.tar" /tmp/sts-images/image-amd64.tar
           cp "/tmp/artifacts/image-${{ matrix.image }}-linux-arm64/image.tar" /tmp/sts-images/image-arm64.tar
 
-      # scan-sign-push scans each arch for CVEs but hard-codes `mode: inform`,
-      # which always exits 0 — it reports HIGH/CRITICAL findings without blocking
-      # the release. Run the same scan in gate mode first, once per published
-      # arch, so an unmanaged HIGH/CRITICAL fails this job before any image is
-      # pushed or signed. Only its secret scan is fail-closed on its own.
       - name: Load per-arch images for the CVE gate
         env:
           GATE_REPO: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
