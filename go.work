@@ -6,6 +6,7 @@ use (
 	./connector/topologyconnector
 	./exporter/clickhousestsexporter
 	./exporter/stskafkaexporter
+	./exporter/stsk8slogsexporter
 	./exporter/ststopologyexporter
 	./extension/servicetokenauthextension
 	./extension/settingsproviderextension
