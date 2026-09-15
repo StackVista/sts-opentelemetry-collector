@@ -19,11 +19,13 @@ import (
 	"google.golang.org/protobuf/types/dynamicpb"
 )
 
+const testClusterName = "production-eu"
+
 const testTimestamp = pcommon.Timestamp(1750000000123456789)
 
 func testEncoder(t *testing.T) *encoder {
 	t.Helper()
-	e, err := newEncoder("production-eu")
+	e, err := newEncoder(testClusterName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +36,7 @@ func testLogs() plog.Logs {
 	logs := plog.NewLogs()
 	resource := logs.ResourceLogs().AppendEmpty()
 	attrs := resource.Resource().Attributes()
-	attrs.PutStr("k8s.cluster.name", "production-eu")
+	attrs.PutStr("k8s.cluster.name", testClusterName)
 	attrs.PutStr("k8s.pod.uid", "12345678-1234-1234-1234-123456789abc")
 	attrs.PutStr("k8s.pod.name", "payments-0")
 	attrs.PutStr("k8s.container.name", "app")
@@ -84,7 +86,7 @@ func field(message protoreflect.Message, name protoreflect.Name) protoreflect.Va
 }
 
 func TestClusterNameValidation(t *testing.T) {
-	for _, name := range []string{"production-eu", "cluster with spaces", "cluster's-name", "集群", "cluster{a=b},other"} {
+	for _, name := range []string{testClusterName, "cluster with spaces", "cluster's-name", "集群", "cluster{a=b},other"} {
 		if _, err := newEncoder(name); err != nil {
 			t.Errorf("rejected supported cluster name: %v", err)
 		}

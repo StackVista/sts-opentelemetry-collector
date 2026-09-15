@@ -1,0 +1,8 @@
+type: stsk8slogs
+
+status:
+  class: exporter
+  stability:
+    development: [logs]
+  codeowners:
+    active: SUSE

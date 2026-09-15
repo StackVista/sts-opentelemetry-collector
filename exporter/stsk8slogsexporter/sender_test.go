@@ -180,7 +180,7 @@ func TestSenderDeadlinesAndCancellation(t *testing.T) {
 						t.Fatal("lifetime expiry not distinguished")
 					}
 				case phaseAttempt:
-					if failure.reason != "attempt_timeout" || errors.Is(err, context.DeadlineExceeded) || time.Since(started) != 2*time.Second {
+					if failure.reason != failureAttemptTimeout || errors.Is(err, context.DeadlineExceeded) || time.Since(started) != 2*time.Second {
 						t.Fatal("attempt timeout misclassified as lifetime expiry")
 					}
 				}

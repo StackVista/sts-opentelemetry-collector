@@ -411,7 +411,7 @@ jobs:
       - name: Validate agent config fixtures
         run: |
           set -euo pipefail
-          for cfg in scraper.yaml k8s-resource.yaml telemetry-gateway.yaml; do
+          for cfg in scraper.yaml k8s-resource.yaml telemetry-gateway.yaml legacy-logs-exporter.yaml; do
             echo "::group::validate ${cfg}"
             docker run --rm -v "$PWD/test/validate/configs:/cfg" \
               sts-otel-agent:validate validate --config "/cfg/${cfg}"

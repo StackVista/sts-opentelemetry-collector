@@ -19,6 +19,7 @@ import (
 )
 
 const failureConfiguration = "configuration"
+const failureAttemptTimeout = "attempt_timeout"
 
 type exportFailure struct {
 	reason string
@@ -87,7 +88,7 @@ func (s *sender) send(ctx context.Context, payload []byte) error {
 			return contextFailure(ctx.Err())
 		}
 		if attempt.Err() != nil || errors.Is(err, context.DeadlineExceeded) {
-			return &exportFailure{reason: "attempt_timeout"}
+			return &exportFailure{reason: failureAttemptTimeout}
 		}
 		var verification *tls.CertificateVerificationError
 		var unknown x509.UnknownAuthorityError
