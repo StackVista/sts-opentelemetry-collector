@@ -56,13 +56,43 @@ and exits, with no lifetime-sized sleeps.
 | Repeated fingerprint after truncation | Default retains the old offset and reports at debug level; explicit `read_whole_file` reads the shorter file |
 | Native gRPC success and partial success | Decoded records, authorization and rejection reporting without whole-request retry |
 | Custom CA, missing CA and proxy variants | Trust/rejection for discovery and both exports; explicit HTTP proxy and gRPC HTTPS_PROXY/NO_PROXY behavior |
+| Injected admission saturation, both routes | Eight concurrent calls occupy admission; four workers hold completion and four requests stay queued; the ninth call is counted and rejected before export |
+| Injected worker delay, both routes | Backend acceptance precedes waiter deadline; connector stops while the selected exporter is stopping; final failed drain waits for worker release |
+| Injected signal callback failure, both directions | Persisted intent/message, restored readiness, fixed route, cooldown suppression and exactly one real SIGTERM after three fresh observations |
 
 The binary-independent checks also reject 29 omitted authored bound fields and
 12 invalid exporter-bound variants through the shared validator, without
 Collector default insertion or typed-config marshaling.
 
-The race detector covers the harness; the supplied agent is a normal OCB build.
+The ordinary suite uses a normal OCB build and runs the harness with the race
+detector. The injected cases use a separate agent built with the race detector.
 Component race tests run separately. The suite timeout is 180s.
+
+Build and run the injected cases from the repository root:
+
+```sh
+go run ./test/logsagent/cmd/faultagent -output /tmp/otel-agent-faults
+OTEL_AGENT_FAULT_BINARY=/tmp/otel-agent-faults \
+  go test -race -count=1 -timeout=180s -run '^TestInjected' \
+  ./test/logsagent -require-fault-agent
+```
+
+The helper generates the agent from its normal BOM and builds with Go source
+overlays under a temporary directory. `-build-dir` can reuse an existing
+OCB-generated directory. Exact-match patches fail if their source anchors change.
+Repository files, the module cache and the published binary are not modified.
+CI requires both the ordinary suite and a separate fault-injection job.
+
+The overlays add file barriers controlled by the parent fixture. Admission
+testing fans one parsed Filelog record into eight numbered concurrent calls to
+the real connector, then submits the original as the excess call. This is forced
+load, not evidence that ordinary Filelog exceeds its configured concurrency.
+Worker testing pauses inside the stock disabled queue batcher after the sender
+returns and before result completion. It leaves the real queue, context deadline,
+receiver and Collector shutdown running. Final reporting fails the test binary
+if any instrumented worker callback has not finished. Signal testing substitutes the existing
+restart callback and allows its real SIGTERM implementation after fault removal.
+These hooks exist only in the separate test binary.
 
 Negative startup cases require the intended error category.
 Startup checks effective bounds after Collector default insertion; authored
@@ -80,8 +110,6 @@ Checkpoint-write faults use Linux `prlimit` on the temporary child process.
 The gRPC NO_PROXY case needs a local non-loopback IPv4 interface because the
 underlying proxy library already bypasses loopback.
 
-Remaining process gaps: forced admission saturation, canceled queue waiters
-with workers still running, and failed signal callbacks.
 Kubernetes grace, enrichment, permissions/SELinux, container
 replacement, Promtail migration/rollback and resource/throughput tests require
 separate fixtures. Fresh-directory tests model lost state, not an actual Pod

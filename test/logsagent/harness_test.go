@@ -29,9 +29,14 @@ var configTemplate string
 
 func TestMain(m *testing.M) {
 	requireAgent := flag.Bool("require-agent", false, "fail instead of skipping when OTEL_AGENT_BINARY is absent")
+	requireFaultAgent := flag.Bool("require-fault-agent", false, "fail when OTEL_AGENT_FAULT_BINARY is absent")
 	flag.Parse()
 	if *requireAgent && os.Getenv("OTEL_AGENT_BINARY") == "" {
 		fmt.Fprintln(os.Stderr, "-require-agent needs OTEL_AGENT_BINARY")
+		os.Exit(2)
+	}
+	if *requireFaultAgent && os.Getenv("OTEL_AGENT_FAULT_BINARY") == "" {
+		fmt.Fprintln(os.Stderr, "-require-fault-agent needs OTEL_AGENT_FAULT_BINARY")
 		os.Exit(2)
 	}
 	os.Exit(m.Run())
@@ -66,9 +71,14 @@ type fixture struct {
 
 func newFixture(t *testing.T, mode string) *fixture {
 	t.Helper()
-	binary := os.Getenv("OTEL_AGENT_BINARY")
+	return newBinaryFixture(t, mode, "OTEL_AGENT_BINARY")
+}
+
+func newBinaryFixture(t *testing.T, mode, variable string) *fixture {
+	t.Helper()
+	binary := os.Getenv(variable)
 	if binary == "" {
-		t.Skip("OTEL_AGENT_BINARY absent; assembled-process test not run")
+		t.Skipf("%s absent; assembled-process test not run", variable)
 	}
 	absolute, err := filepath.Abs(binary)
 	if err != nil {
@@ -76,7 +86,7 @@ func newFixture(t *testing.T, mode string) *fixture {
 	}
 	info, err := os.Stat(absolute)
 	if err != nil || info.IsDir() || info.Mode()&0111 == 0 {
-		t.Fatalf("OTEL_AGENT_BINARY must name an executable file: %s", absolute)
+		t.Fatalf("%s must name an executable file: %s", variable, absolute)
 	}
 	root := t.TempDir()
 	b := newBackend(t, mode)
