@@ -61,6 +61,7 @@ type fixture struct {
 	root     string
 	settings settings
 	backend  *backend
+	childEnv []string
 }
 
 func newFixture(t *testing.T, mode string) *fixture {
@@ -145,7 +146,7 @@ func (f *fixture) start(mutate func(map[string]any), synchronous bool) *process 
 	}
 	cmd := exec.Command(f.binary, "--feature-gates="+gate, "--config="+path) //nolint:gosec // Runs the explicitly supplied test binary with synthetic configuration.
 	cmd.Dir = f.root
-	cmd.Env = childEnvironment(f.root)
+	cmd.Env = append(childEnvironment(f.root), f.childEnv...)
 	p := &process{
 		t: f.t, cmd: cmd, done: make(chan struct{}), health: "http://" + f.settings.Health,
 		client: &http.Client{
@@ -177,7 +178,7 @@ func (f *fixture) start(mutate func(map[string]any), synchronous bool) *process 
 
 func (f *fixture) appendRecords(file, first, count int) []string {
 	f.t.Helper()
-	path := filepath.Join(f.root, "pods", fmt.Sprintf("default_fixture-%d_12345678-1234-1234-1234-123456789abc", file), "app", "0.log")
+	path := f.sourcePath(file)
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		f.t.Fatal(err)
 	}

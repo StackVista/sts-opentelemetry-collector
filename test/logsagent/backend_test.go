@@ -45,9 +45,16 @@ type request struct {
 }
 
 type responsePlan struct {
-	status   int
-	failures int
-	partial  bool
+	status        int
+	failures      int
+	partial       bool
+	lostResponses int
+}
+
+type featureReply struct {
+	mode   string
+	status int
+	body   string
 }
 
 type backend struct {
@@ -58,6 +65,7 @@ type backend struct {
 	featureStatus    int
 	featureBody      string
 	featureCalls     int
+	featureReplies   chan featureReply
 	plans            map[string]responsePlan
 	requests         []request
 	legacyDescriptor protoreflect.MessageDescriptor
@@ -136,7 +144,16 @@ func (b *backend) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		b.mu.Lock()
 		b.featureCalls++
 		mode, status, body := b.mode, b.featureStatus, b.featureBody
+		replies := b.featureReplies
 		b.mu.Unlock()
+		if replies != nil {
+			select {
+			case reply := <-replies:
+				mode, status, body = reply.mode, reply.status, reply.body
+			case <-r.Context().Done():
+				return
+			}
+		}
 		if body == "" {
 			body = fmt.Sprintf(`{"otel-logs":%t}`, mode == "native")
 		}
@@ -199,10 +216,28 @@ func (b *backend) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	if plan.failures > 0 {
 		status = http.StatusServiceUnavailable
 		plan.failures--
-		b.plans[mode] = plan
 	}
+	loseResponse := plan.lostResponses > 0
+	if loseResponse {
+		plan.lostResponses--
+	}
+	b.plans[mode] = plan
 	b.requests = append(b.requests, request{mode: mode, status: status, records: records})
 	b.mu.Unlock()
+	if loseResponse {
+		hijacker, ok := w.(http.Hijacker)
+		if !ok {
+			b.t.Error("fixture server does not support dropping responses")
+			return
+		}
+		conn, _, err := hijacker.Hijack()
+		if err != nil {
+			b.t.Errorf("drop stored response: %v", err)
+			return
+		}
+		_ = conn.Close()
+		return
+	}
 	if mode == "native" {
 		w.Header().Set("Content-Type", "application/x-protobuf")
 	}
