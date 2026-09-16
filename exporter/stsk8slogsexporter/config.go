@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/collector/config/configopaque"
 	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/config/configretry"
+	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 )
 
@@ -29,6 +30,20 @@ type Config struct {
 type TLSConfig struct {
 	CAFile             string `mapstructure:"ca_file"`
 	InsecureSkipVerify bool   `mapstructure:"insecure_skip_verify"`
+}
+
+func (cfg Config) Marshal(conf *confmap.Conf) error {
+	type plainConfig Config
+	if err := conf.Marshal(plainConfig(cfg)); err != nil {
+		return err
+	}
+	if queue := cfg.QueueSettings.Get(); queue != nil {
+		// The upstream sizer's pointer-only marshaler is lost inside configoptional.
+		return conf.Merge(confmap.NewFromStringMap(map[string]any{
+			"sending_queue": map[string]any{"sizer": queue.Sizer.String()},
+		}))
+	}
+	return nil
 }
 
 // Validate rejects configurations that lose completion tracking or retry bounds.

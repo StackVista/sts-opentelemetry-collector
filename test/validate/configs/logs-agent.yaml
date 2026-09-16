@@ -1,0 +1,150 @@
+extensions:
+  file_storage/logs:
+    directory: /var/lib/otelcol/checkpoints
+    create_directory: true
+    recreate: false
+  stslogscapability/logs:
+    receiver_url: http://127.0.0.1:18080/stsAgent
+    api_key: synthetic-fixture-key
+    state_directory: /var/lib/otelcol/controller
+    health_endpoint: 0.0.0.0:13133
+    termination_message_path: /dev/termination-log
+    query_timeout: 20s
+    attempt_timeout: 5s
+    max_attempts: 3
+    initial_backoff: 500ms
+    max_backoff: 2s
+    poll_interval: 60s
+    jitter: 0.2
+    stable_observations: 3
+    restart_cooldown: 10m
+  bearertokenauth/native:
+    scheme: SUSEObservability
+    token: synthetic-fixture-key
+receivers:
+  filelog/pods:
+    include: [/var/log/pods/*/*/*.log]
+    exclude:
+      - /var/log/pods/fixture_logs-agent-fixture_*/logs-agent/*.log
+    include_file_path: true
+    start_at: beginning
+    preserve_trailing_whitespaces: true
+    storage: file_storage/logs
+    max_concurrent_files: 4
+    max_log_size: 256KiB
+    retry_on_failure:
+      enabled: false
+    operators:
+      - type: container
+        id: container
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 128
+    spike_limit_mib: 32
+  transform/static_pod:
+    error_mode: propagate
+    log_statements:
+      - context: resource
+        statements:
+          - delete_key(attributes, "k8s.pod.uid") where attributes["k8s.pod.uid"] != nil and not IsMatch(attributes["k8s.pod.uid"], "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+  k8sattributes:
+    auth_type: serviceAccount
+    filter:
+      node: fixture-node
+    extract:
+      metadata:
+        - k8s.namespace.name
+        - k8s.pod.name
+        - k8s.pod.uid
+        - k8s.node.name
+        - k8s.container.name
+        - container.id
+        - container.image.name
+        - container.image.tag
+        - k8s.deployment.name
+        - k8s.replicaset.name
+        - k8s.statefulset.name
+        - k8s.daemonset.name
+        - k8s.job.name
+        - k8s.cronjob.name
+    pod_association:
+      - sources:
+          - from: resource_attribute
+            name: k8s.pod.uid
+      - sources:
+          - from: resource_attribute
+            name: k8s.pod.name
+          - from: resource_attribute
+            name: k8s.namespace.name
+  transform/cluster:
+    error_mode: propagate
+    log_statements:
+      - context: resource
+        statements:
+          - set(attributes["k8s.cluster.name"], "fixture-cluster")
+connectors:
+  stslogsroute/logs:
+    capability_extension: stslogscapability/logs
+    legacy_pipeline: logs/legacy
+    native_pipeline: logs/native
+    max_concurrent_calls: 8
+    max_record_bytes: 262144
+    max_request_bytes: 1048576
+    export_lifetime: 90s
+exporters:
+  stsk8slogs/legacy:
+    endpoint: http://127.0.0.1:18080/stsAgent/logs/k8s
+    api_key: synthetic-fixture-key
+    cluster_name: fixture-cluster
+    timeout: 5s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 5s
+      max_elapsed_time: 30s
+    sending_queue:
+      enabled: true
+      sizer: requests
+      queue_size: 8
+      num_consumers: 4
+      wait_for_result: true
+      block_on_overflow: true
+  otlp_http/native:
+    endpoint: http://127.0.0.1:4318
+    auth:
+      authenticator: bearertokenauth/native
+    timeout: 5s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 5s
+      max_elapsed_time: 30s
+    sending_queue:
+      enabled: true
+      sizer: requests
+      queue_size: 8
+      num_consumers: 4
+      wait_for_result: true
+      block_on_overflow: true
+service:
+  telemetry:
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888
+  extensions: [file_storage/logs, stslogscapability/logs, bearertokenauth/native]
+  pipelines:
+    logs/input:
+      receivers: [filelog/pods]
+      processors: [memory_limiter, transform/static_pod, k8sattributes, transform/cluster]
+      exporters: [stslogsroute/logs]
+    logs/legacy:
+      receivers: [stslogsroute/logs]
+      exporters: [stsk8slogs/legacy]
+    logs/native:
+      receivers: [stslogsroute/logs]
+      exporters: [otlp_http/native]

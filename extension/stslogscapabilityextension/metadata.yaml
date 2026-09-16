@@ -1,0 +1,7 @@
+type: stslogscapability
+scope_name: github.com/stackvista/sts-opentelemetry-collector/extension/stslogscapabilityextension
+status:
+  class: extension
+  stability:
+    development: [extension]
+  distributions: [agent]

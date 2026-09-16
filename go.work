@@ -2,15 +2,19 @@ go 1.26.6
 
 use (
 	./common
+	./connector/stslogsrouteconnector
 	./connector/stsservicegraphconnector
 	./connector/topologyconnector
 	./exporter/clickhousestsexporter
+	./exporter/otlpconfigexporter
 	./exporter/stskafkaexporter
 	./exporter/stsk8slogsexporter
 	./exporter/ststopologyexporter
 	./extension/servicetokenauthextension
+	./extension/stslogscapabilityextension
 	./extension/settingsproviderextension
 	./processor/stsusageprocessor
 	./receiver/k8sresourcereceiver
 	./test/e2e
+	./test/logsagent
 )
