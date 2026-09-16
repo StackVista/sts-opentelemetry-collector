@@ -31,7 +31,7 @@ func TestSnapshotManager_StartStopLifecycle(t *testing.T) {
 	initialRelations := []settingsproto.OtelRelationMapping{relationMapping("r1", settingsproto.TRACES)}
 	provider := topologyConnector.NewMockStsSettingsProvider(initialComponents, initialRelations)
 
-	manager := topologyConnector.NewSnapshotManager(logger, []settingsproto.OtelInputSignal{settingsproto.TRACES})
+	manager := topologyConnector.NewSnapshotManager(logger, []settingsproto.OtelInputSignal{settingsproto.TRACES}, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -89,7 +89,7 @@ func TestSnapshotManager_StartStopLifecycle(t *testing.T) {
 
 func TestSnapshotManager_UpdateDetectsChanges(t *testing.T) {
 	logger := zap.NewNop()
-	manager := topologyConnector.NewSnapshotManager(logger, []settingsproto.OtelInputSignal{settingsproto.TRACES})
+	manager := topologyConnector.NewSnapshotManager(logger, []settingsproto.OtelInputSignal{settingsproto.TRACES}, nil)
 
 	initialComponentMappings := []settingsproto.OtelComponentMapping{
 		componentMapping("c1", settingsproto.TRACES),
@@ -133,7 +133,7 @@ func TestSnapshotManager_UpdateDetectsChanges(t *testing.T) {
 
 func TestSnapshotManager_CurrentReturnsCopy(t *testing.T) {
 	logger := zap.NewNop()
-	manager := topologyConnector.NewSnapshotManager(logger, []settingsproto.OtelInputSignal{settingsproto.TRACES})
+	manager := topologyConnector.NewSnapshotManager(logger, []settingsproto.OtelInputSignal{settingsproto.TRACES}, nil)
 
 	initialComponentMappings := []settingsproto.OtelComponentMapping{componentMapping("c1", settingsproto.TRACES)}
 	initialRelationMappings := []settingsproto.OtelRelationMapping{relationMapping("r1", settingsproto.TRACES)}
@@ -155,8 +155,8 @@ func TestSnapshotManager_CurrentReturnsCopy(t *testing.T) {
 
 func TestSnapshotManager_MappingsAreFilteredForSignal(t *testing.T) {
 	logger := zap.NewNop()
-	tracesManager := topologyConnector.NewSnapshotManager(logger, []settingsproto.OtelInputSignal{settingsproto.TRACES, settingsproto.METRICS})
-	metricsManager := topologyConnector.NewSnapshotManager(logger, []settingsproto.OtelInputSignal{settingsproto.TRACES, settingsproto.METRICS})
+	tracesManager := topologyConnector.NewSnapshotManager(logger, []settingsproto.OtelInputSignal{settingsproto.TRACES, settingsproto.METRICS}, nil)
+	metricsManager := topologyConnector.NewSnapshotManager(logger, []settingsproto.OtelInputSignal{settingsproto.TRACES, settingsproto.METRICS}, nil)
 
 	initialComponentMappings := []settingsproto.OtelComponentMapping{componentMapping("c1", settingsproto.TRACES)}
 	initialRelationMappings := []settingsproto.OtelRelationMapping{relationMapping("r1", settingsproto.METRICS)}
