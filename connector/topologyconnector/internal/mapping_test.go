@@ -681,3 +681,37 @@ func errorStrings(errs []error) []string {
 	}
 	return out
 }
+
+func TestNestedConfigurationAndStatus(t *testing.T) {
+	evaluator, err := NewCELEvaluator(context.Background(), makeMeteredCacheSettings(100, time.Minute))
+	require.NoError(t, err)
+	mapper := NewMapper(context.Background(), makeMeteredCacheSettings(100, time.Minute), makeMeteredCacheSettings(100, time.Minute))
+	ctx := NewLogEvalContext(NewLog("object", map[string]any{
+		"metadata": map[string]any{"name": "example", "managedFields": []any{"noise"}},
+		"spec":     map[string]any{"replicas": int64(2)},
+	}, nil), nil, NewResource(nil))
+	mapping := &settingsproto.OtelComponentMapping{
+		Output: settingsproto.OtelComponentMappingOutput{
+			Identifier: strExpr("'example'"), Name: strExpr("'example'"), TypeName: strExpr("'service'"),
+			Required: &settingsproto.OtelComponentMappingFieldMapping{
+				Configuration: ptr(anyExpr("{'metadata': omit(log.body.metadata, ['managedFields']), 'spec': log.body.spec}")),
+			},
+			Optional: &settingsproto.OtelComponentMappingFieldMapping{
+				Status: ptr(anyExpr("{'conditions': [{'ready': true, 'reason': null}], 'nested': {'count': 2}}")),
+			},
+		},
+	}
+	component, errs := mapper.MapComponent(mapping, evaluator, ctx)
+	require.Empty(t, errs)
+	require.NotNil(t, component)
+	require.NotNil(t, component.ResourceDefinition)
+	require.Equal(t, map[string]any{
+		"metadata": map[string]any{"name": "example"},
+		"spec":     map[string]any{"replicas": float64(2)},
+	}, component.ResourceDefinition.AsMap())
+	require.NotNil(t, component.StatusData)
+	require.Equal(t, map[string]any{
+		"conditions": []any{map[string]any{"ready": true, "reason": nil}},
+		"nested":     map[string]any{"count": float64(2)},
+	}, component.StatusData.AsMap())
+}
