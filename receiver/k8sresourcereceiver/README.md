@@ -1,4 +1,25 @@
-# Peer-sync protocol
+# Kubernetes resource receiver
+
+## Pod container summary attributes
+
+Core Pod object logs include three integer attributes when
+`status.containerStatuses` is present and valid:
+
+| Attribute | Value |
+|---|---|
+| `k8s.pod.container_count` | Number of regular container statuses |
+| `k8s.pod.ready_container_count` | Number whose `ready` is true |
+| `k8s.pod.restart_count` | Sum of regular container restart counts |
+
+Init and ephemeral container statuses are excluded. An empty status list emits
+zeros; an absent or malformed list omits the summary attributes. Missing ready
+and restart fields count as false and zero. Negative or noninteger restart
+counts and nonboolean ready values make the summary invalid, without dropping
+the object event. The raw object body is unchanged. These attributes let
+StackPack presentations reproduce legacy readiness and restart values without
+platform expression extensions.
+
+## Peer-sync protocol
 
 A short reference for the in-process peer sync that keeps `k8sresourcereceiver`
 replicas warm. The goal is to avoid a cold informer LIST during failover: when

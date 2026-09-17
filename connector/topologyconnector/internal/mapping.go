@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/google/cel-go/common/types"
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
@@ -297,27 +298,16 @@ func toStructValue(val interface{}) *structpb.Struct {
 		return nil
 	}
 
-	// Try direct map[string]interface{} first
-	if mapVal, ok := val.(map[string]interface{}); ok {
-		return convertMapToStruct(mapVal)
-	}
-
-	// Handle map[ref.Val]ref.Val from CEL (use the existing mapify logic)
-	mapVal, mapifyErr := mapify(val)
-	if mapifyErr != nil {
-		return nil
-	}
-
-	return convertMapToStruct(mapVal)
-}
-
-// convertMapToStruct converts a map[string]interface{} to a protobuf Struct.
-func convertMapToStruct(mapVal map[string]interface{}) *structpb.Struct {
-	pbStruct, err := structpb.NewStruct(mapVal)
+	// CEL-created maps can contain nested CEL values, including pick/omit results.
+	native, err := types.DefaultTypeAdapter.NativeToValue(val).ConvertToNative(types.JSONStructType)
 	if err != nil {
 		return nil
 	}
-	return pbStruct
+	result, ok := native.(*structpb.Struct)
+	if !ok {
+		return nil
+	}
+	return result
 }
 
 func stringifyTagValue(value interface{}) (string, error) {
