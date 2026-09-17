@@ -73,8 +73,12 @@ func podContainerSummary(obj *unstructured.Unstructured) (containerSummary, bool
 	if obj.GetKind() != "Pod" || obj.GroupVersionKind().Group != "" {
 		return summary, false
 	}
-	statuses, found, err := unstructured.NestedSlice(obj.Object, "status", "containerStatuses")
+	raw, found, err := unstructured.NestedFieldNoCopy(obj.Object, "status", "containerStatuses")
 	if err != nil || !found {
+		return summary, false
+	}
+	statuses, ok := raw.([]interface{})
+	if !ok {
 		return summary, false
 	}
 	summary.total = int64(len(statuses))

@@ -43,6 +43,10 @@ func TestPodContainerSummaryAttributes(t *testing.T) {
 		{name: "missing status", apiVersion: "v1", kind: "Pod"},
 		{name: "missing container statuses", apiVersion: "v1", kind: "Pod", status: map[string]interface{}{"phase": "Pending"}},
 		{
+			name: "non-list container statuses", apiVersion: "v1", kind: "Pod",
+			status: map[string]interface{}{"containerStatuses": "invalid"},
+		},
+		{
 			name: "invalid count preserves event without summary", apiVersion: "v1", kind: "Pod",
 			status: map[string]interface{}{"containerStatuses": []interface{}{map[string]interface{}{"restartCount": "invalid"}}},
 		},
