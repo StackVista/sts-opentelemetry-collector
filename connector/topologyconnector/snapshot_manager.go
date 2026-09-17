@@ -39,8 +39,8 @@ type onRemovalsFunc = func(
 	relationMappings []settingsproto.OtelRelationMapping,
 )
 
-// SnapshotUpdateListener is notified when mapping snapshots change. Implementors
-// can precompute derived data (e.g., expression reference summaries) asynchronously.
+// SnapshotUpdateListener prepares derived data before new mappings become visible.
+// Update runs under the snapshot lock and must not call back into SnapshotManager.
 type SnapshotUpdateListener interface {
 	Update(
 		signals []settingsproto.OtelInputSignal,
@@ -160,6 +160,7 @@ func (s *SnapshotManager) Update(
 	onRemovals onRemovalsFunc,
 ) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	prevComponents := flattenMappings(s.componentMappings)
 	prevRelations := flattenMappings(s.relationMappings)
@@ -187,8 +188,7 @@ func (s *SnapshotManager) Update(
 		s.relationMappings[signal] = filterForSignal(newRelationMappings, signal)
 	}
 
-	// Copy current state needed for async ref precomputation
-	observersCopy := append([]SnapshotUpdateListener(nil), s.observers...)
+	// Give observers copies so they cannot mutate the active mapping slices.
 	signalsCopy := append([]settingsproto.OtelInputSignal(nil), s.supportedSignals...)
 	componentMappingsCopy := make(map[settingsproto.OtelInputSignal][]settingsproto.OtelComponentMapping)
 	relationMappingsCopy := make(map[settingsproto.OtelInputSignal][]settingsproto.OtelRelationMapping)
@@ -201,15 +201,9 @@ func (s *SnapshotManager) Update(
 		onRemovals(ctx, change.RemovedComponentMappings, change.RemovedRelationMappings)
 	}
 
-	s.mu.Unlock()
-
-	// Notify observers asynchronously so we don't block the snapshot update path.
-	for _, obs := range observersCopy {
-		o := obs
-		// If the number of observers (atm, only ExpressionRefManager is a subscriber) or update frequency grows,
-		// we should consider serializing (with a buffered worker) updates per observer to avoid a flurry of goroutines.
-		// Leaving it as-is for now to prevent pre-maturely optimising.
-		go o.Update(signalsCopy, componentMappingsCopy, relationMappingsCopy)
+	// Publish references in snapshot order before consumers can read the mappings.
+	for _, obs := range s.observers {
+		obs.Update(signalsCopy, componentMappingsCopy, relationMappingsCopy)
 	}
 }
 
