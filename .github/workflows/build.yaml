@@ -146,6 +146,9 @@ jobs:
       security-events: write   # SARIF upload from scan-image
     strategy:
       fail-fast: false
+      # The pinned publisher shares run/attempt-scoped staging tags across variants.
+      # Serialize the entire jobs, including staging, signing, and handle cleanup.
+      max-parallel: 1
       matrix:
         image: [server, agent]
     steps:
