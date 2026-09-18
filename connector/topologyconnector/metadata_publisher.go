@@ -18,13 +18,15 @@ const metadataTopic = "sts_topology_stream_metadata"
 
 // MetadataPublisher publishes topology stream metadata to a compacted Kafka topic
 // so that the SyncService can enrich components with human-readable mapping names.
-// It implements SnapshotUpdateListener and publishes on every snapshot update.
-// The topic is compacted, so repeated publishes for unchanged mappings are harmless
-// and provide self-healing if topic state is ever lost.
+// Pending records are coalesced by mapping key, matching topic compaction.
 type MetadataPublisher struct {
 	logger       *zap.Logger
 	mu           sync.RWMutex
 	logsConsumer consumer.Logs
+
+	pendingMu  sync.Mutex
+	pending    map[string]plog.LogRecord
+	publishing bool
 }
 
 func NewMetadataPublisher(logger *zap.Logger) *MetadataPublisher {
@@ -43,8 +45,7 @@ func (p *MetadataPublisher) SetLogsConsumer(c consumer.Logs) {
 	}
 }
 
-// Update implements SnapshotUpdateListener. It publishes metadata for all current
-// component and relation mappings on every snapshot update.
+// Update queues metadata without waiting for downstream export.
 func (p *MetadataPublisher) Update(
 	_ []settingsproto.OtelInputSignal,
 	componentMappings map[settingsproto.OtelInputSignal][]settingsproto.OtelComponentMapping,
@@ -92,9 +93,7 @@ func (p *MetadataPublisher) Update(
 	}
 
 	p.logger.Info("Publishing topology stream metadata", zap.Int("mappings", logs.LogRecordCount()))
-	if err := c.ConsumeLogs(context.Background(), logs); err != nil {
-		p.logger.Error("failed to publish metadata logs", zap.Error(err))
-	}
+	p.enqueue(c, logs)
 }
 
 // PublishTombstones publishes tombstone (null-value) records for removed mappings.
@@ -123,8 +122,49 @@ func (p *MetadataPublisher) PublishTombstones(removedMappings []settingsproto.Se
 	}
 
 	p.logger.Info("Publishing metadata tombstones for removed mappings", zap.Int("count", logs.LogRecordCount()))
-	if err := c.ConsumeLogs(context.Background(), logs); err != nil {
-		p.logger.Error("failed to publish metadata tombstones", zap.Error(err))
+	p.enqueue(c, logs)
+}
+
+func (p *MetadataPublisher) enqueue(c consumer.Logs, logs plog.Logs) {
+	p.pendingMu.Lock()
+	defer p.pendingMu.Unlock()
+
+	if p.pending == nil {
+		p.pending = make(map[string]plog.LogRecord)
+	}
+	records := logs.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+	for i := range records.Len() {
+		record := records.At(i)
+		key, _ := record.Attributes().Get(stskafkaexporter.KafkaMessageKey)
+		p.pending[string(key.Bytes().AsRaw())] = record
+	}
+	if !p.publishing {
+		p.publishing = true
+		go p.publishPending(c)
+	}
+}
+
+func (p *MetadataPublisher) publishPending(c consumer.Logs) {
+	for {
+		p.pendingMu.Lock()
+		if len(p.pending) == 0 {
+			p.publishing = false
+			p.pendingMu.Unlock()
+			return
+		}
+		pending := p.pending
+		p.pending = nil
+		p.pendingMu.Unlock()
+
+		logs := plog.NewLogs()
+		records := logs.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty().LogRecords()
+		for _, record := range pending {
+			record.CopyTo(records.AppendEmpty())
+		}
+		// Records and tombstones share one sender so an older value cannot restore a deleted mapping.
+		if err := c.ConsumeLogs(context.Background(), logs); err != nil {
+			p.logger.Error("failed to publish metadata logs", zap.Error(err))
+		}
 	}
 }
 

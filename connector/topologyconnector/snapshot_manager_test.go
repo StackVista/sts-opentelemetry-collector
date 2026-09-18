@@ -12,6 +12,8 @@ import (
 	"go.uber.org/zap"
 
 	topologyConnector "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector"
+	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/internal"
+	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 )
 
@@ -184,4 +186,109 @@ func TestDiffSettings_GenericFunction(t *testing.T) {
 }
 
 func dummyOnRemovals(_ context.Context, _ []settingsproto.OtelComponentMapping, _ []settingsproto.OtelRelationMapping) {
+}
+
+type snapshotListenerFunc func(
+	[]settingsproto.OtelInputSignal,
+	map[settingsproto.OtelInputSignal][]settingsproto.OtelComponentMapping,
+	map[settingsproto.OtelInputSignal][]settingsproto.OtelRelationMapping,
+)
+
+func (f snapshotListenerFunc) Update(
+	signals []settingsproto.OtelInputSignal,
+	components map[settingsproto.OtelInputSignal][]settingsproto.OtelComponentMapping,
+	relations map[settingsproto.OtelInputSignal][]settingsproto.OtelRelationMapping,
+) {
+	f(signals, components, relations)
+}
+
+func TestSnapshotManager_UpdatesReferencesInSnapshotOrder(t *testing.T) {
+	for _, signal := range []settingsproto.OtelInputSignal{settingsproto.TRACES, settingsproto.METRICS, settingsproto.LOGS} {
+		t.Run(string(signal), func(t *testing.T) {
+			refs := topologyConnector.NewExpressionRefManager(zap.NewNop(), newTestCELEvaluator(t))
+			firstStarted := make(chan struct{})
+			releaseFirst := make(chan struct{})
+			latestFinished := make(chan struct{})
+			listenerFinished := make(chan struct{}, 2)
+			var releaseOnce sync.Once
+			release := func() { releaseOnce.Do(func() { close(releaseFirst) }) }
+			defer release()
+
+			listener := snapshotListenerFunc(func(
+				signals []settingsproto.OtelInputSignal,
+				components map[settingsproto.OtelInputSignal][]settingsproto.OtelComponentMapping,
+				relations map[settingsproto.OtelInputSignal][]settingsproto.OtelRelationMapping,
+			) {
+				if len(relations[signal]) == 0 {
+					close(firstStarted)
+					<-releaseFirst
+				}
+				refs.Update(signals, components, relations)
+				if len(relations[signal]) > 0 {
+					close(latestFinished)
+				}
+				listenerFinished <- struct{}{}
+			})
+			manager := topologyConnector.NewSnapshotManager(zap.NewNop(), []settingsproto.OtelInputSignal{signal}, listener)
+			component := componentMapping("component", signal)
+			component.Output.Identifier = sExpr(`resource.attributes["service.name"]`)
+			relation := relationMapping("relation", signal)
+			relation.Output.SourceId = sExpr(`resource.attributes["service.name"]`)
+			relation.Output.TargetId = sExpr(`resource.attributes["peer.service"]`)
+			components := []settingsproto.OtelComponentMapping{component}
+
+			var updates sync.WaitGroup
+			updates.Go(func() {
+				manager.Update(t.Context(), components, nil, dummyOnRemovals)
+			})
+			select {
+			case <-firstStarted:
+			case <-time.After(5 * time.Second):
+				t.Fatal("first reference update did not start")
+			}
+			currentFinished := make(chan struct{})
+			go func() {
+				manager.Current(signal)
+				close(currentFinished)
+			}()
+			select {
+			case <-currentFinished:
+				t.Error("mappings became visible before their references were ready")
+			case <-time.After(100 * time.Millisecond):
+			}
+			updates.Go(func() {
+				manager.Update(t.Context(), components, []settingsproto.OtelRelationMapping{relation}, dummyOnRemovals)
+			})
+			select {
+			case <-latestFinished:
+				t.Error("newer references were published while the older update was still running")
+			case <-time.After(100 * time.Millisecond):
+			}
+			release()
+			updates.Wait()
+			<-currentFinished
+			for range 2 {
+				select {
+				case <-listenerFinished:
+				case <-time.After(5 * time.Second):
+					t.Fatal("reference update did not finish")
+				}
+			}
+
+			_, currentRelations := manager.Current(signal)
+			require.Len(t, currentRelations, 1)
+			assert.NotNil(t, refs.Current(signal, relation.Identifier))
+			dedup := internal.NewTopologyDeduplicator(t.Context(), zap.NewNop(), internal.DeduplicationConfig{
+				Enabled:     true,
+				CacheConfig: metrics.MeteredCacheSettings{Size: 10},
+			}, refs)
+			evalCtx := &internal.ExpressionEvalContext{
+				Resource: internal.NewResource(map[string]any{"service.name": "checkout", "peer.service": "payment"}),
+			}
+			for _, id := range []string{component.Identifier, relation.Identifier} {
+				assert.True(t, dedup.ShouldSend(id, signal, evalCtx, time.Minute))
+				assert.False(t, dedup.ShouldSend(id, signal, evalCtx, time.Minute), "duplicate output for %s", id)
+			}
+		})
+	}
 }
