@@ -40,7 +40,7 @@ type onRemovalsFunc = func(
 )
 
 // SnapshotUpdateListener prepares derived data before new mappings become visible.
-// Update runs under the snapshot lock and must not call back into SnapshotManager.
+// Update runs under the snapshot lock; it must not export data or call SnapshotManager.
 type SnapshotUpdateListener interface {
 	Update(
 		signals []settingsproto.OtelInputSignal,
@@ -201,7 +201,7 @@ func (s *SnapshotManager) Update(
 		onRemovals(ctx, change.RemovedComponentMappings, change.RemovedRelationMappings)
 	}
 
-	// Publish references in snapshot order before consumers can read the mappings.
+	// Prepare references and queue metadata before consumers can read the mappings.
 	for _, obs := range s.observers {
 		obs.Update(signalsCopy, componentMappingsCopy, relationMappingsCopy)
 	}
