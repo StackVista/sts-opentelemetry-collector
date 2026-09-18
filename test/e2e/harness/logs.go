@@ -78,7 +78,7 @@ func BuildAndSendLogs(ctx context.Context, logger *zap.Logger, endpoint string, 
 		if err != nil {
 			return fmt.Errorf("failed to marshal log body to JSON: %w", err)
 		}
-		record.SetBody(attribute.BytesValue(bodyBytes))
+		record.SetBody(attribute.ByteSliceValue(bodyBytes))
 
 		// Add attributes if provided
 		if len(logSpec.Attributes) > 0 {
