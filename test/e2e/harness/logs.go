@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	"go.opentelemetry.io/otel/log"
 	sdkLog "go.opentelemetry.io/otel/sdk/log"
@@ -77,7 +78,7 @@ func BuildAndSendLogs(ctx context.Context, logger *zap.Logger, endpoint string, 
 		if err != nil {
 			return fmt.Errorf("failed to marshal log body to JSON: %w", err)
 		}
-		record.SetBody(log.BytesValue(bodyBytes))
+		record.SetBody(attribute.BytesValue(bodyBytes))
 
 		// Add attributes if provided
 		if len(logSpec.Attributes) > 0 {
@@ -99,23 +100,23 @@ func BuildAndSendLogs(ctx context.Context, logger *zap.Logger, endpoint string, 
 	return nil
 }
 
-// convertToLogAttributes converts map[string]interface{} to []log.KeyValue
-func convertToLogAttributes(attrs map[string]interface{}) []log.KeyValue {
-	out := make([]log.KeyValue, 0, len(attrs))
+// convertToLogAttributes converts map[string]interface{} to []attribute.KeyValue
+func convertToLogAttributes(attrs map[string]interface{}) []attribute.KeyValue {
+	out := make([]attribute.KeyValue, 0, len(attrs))
 	for k, v := range attrs {
 		switch val := v.(type) {
 		case string:
-			out = append(out, log.String(k, val))
+			out = append(out, attribute.String(k, val))
 		case int:
-			out = append(out, log.Int(k, val))
+			out = append(out, attribute.Int(k, val))
 		case int64:
-			out = append(out, log.Int64(k, val))
+			out = append(out, attribute.Int64(k, val))
 		case float64:
-			out = append(out, log.Float64(k, val))
+			out = append(out, attribute.Float64(k, val))
 		case bool:
-			out = append(out, log.Bool(k, val))
+			out = append(out, attribute.Bool(k, val))
 		default:
-			out = append(out, log.String(k, fmt.Sprintf("%v", val)))
+			out = append(out, attribute.String(k, fmt.Sprintf("%v", val)))
 		}
 	}
 	return out

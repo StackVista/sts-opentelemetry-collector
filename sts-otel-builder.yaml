@@ -55,3 +55,5 @@ processors:
 
 replaces:
   - github.com/stackvista/sts-opentelemetry-collector/common => ../common
+  # OTel log v0.21.0 uses attribute.Value; the bridge must use the matching API.
+  - go.opentelemetry.io/contrib/bridges/otelzap => go.opentelemetry.io/contrib/bridges/otelzap v0.20.0
