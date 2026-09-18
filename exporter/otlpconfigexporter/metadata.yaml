@@ -1,0 +1,8 @@
+type: otlpconfig
+status:
+  class: exporter
+  stability:
+    stable: [traces, metrics, logs]
+    alpha: [profiles]
+  codeowners:
+    active: SUSE

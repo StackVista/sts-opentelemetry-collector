@@ -321,6 +321,7 @@ jobs:
             exit 1
           fi
 
+          go test -race ./common/...
           for plugin_path in $plugin_paths; do
             echo "::group::go test ${plugin_path}/..."
             go test "${plugin_path}/..."
@@ -383,6 +384,26 @@ jobs:
           OTEL_COLLECTOR_IMAGE: sts-opentelemetry-collector:e2e
         run: go test -v ./test/e2e/...
 
+  logs-process-faults:
+    name: Logs process fault injection
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - name: Build agent with test-only source overlays and race detection
+        run: go run ./test/logsagent/cmd/faultagent -output /tmp/otel-agent-faults
+      - name: Test admission, worker shutdown and signal failures
+        env:
+          OTEL_AGENT_FAULT_BINARY: /tmp/otel-agent-faults
+        run: go test -race -count=1 -timeout=180s -run '^TestInjected' ./test/logsagent -require-fault-agent
+
   validate:
     name: Validate agent configs
     needs: build
@@ -401,6 +422,12 @@ jobs:
           name: image-agent-linux-amd64
           path: /tmp
 
+      - name: Setup Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+
       - name: Load image into local docker daemon
         run: |
           set -euo pipefail
@@ -411,9 +438,18 @@ jobs:
       - name: Validate agent config fixtures
         run: |
           set -euo pipefail
-          for cfg in scraper.yaml k8s-resource.yaml telemetry-gateway.yaml; do
+          for cfg in scraper.yaml k8s-resource.yaml telemetry-gateway.yaml legacy-logs-exporter.yaml logs-agent.yaml; do
             echo "::group::validate ${cfg}"
             docker run --rm -v "$PWD/test/validate/configs:/cfg" \
               sts-otel-agent:validate validate --config "/cfg/${cfg}"
             echo "::endgroup::"
           done
+
+      - name: Test Filelog routing and process lifecycle
+        run: |
+          set -euo pipefail
+          container=$(docker create sts-otel-agent:validate)
+          trap 'docker rm "$container" >/dev/null' EXIT
+          docker cp "$container:/usr/bin/sts-opentelemetry-agent-collector" /tmp/otel-agent
+          chmod +x /tmp/otel-agent
+          OTEL_AGENT_BINARY=/tmp/otel-agent go test -race -count=1 -timeout=180s ./test/logsagent/... -require-agent

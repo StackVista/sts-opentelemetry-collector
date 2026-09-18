@@ -1,0 +1,116 @@
+extensions:
+  file_storage/logs:
+    directory: {{printf "%q" .Checkpoints}}
+    create_directory: true
+    recreate: false
+  stslogscapability/logs:
+    receiver_url: {{printf "%q" .ReceiverURL}}
+    api_key: ${env:STS_API_KEY}
+    state_directory: {{printf "%q" .Controller}}
+    health_endpoint: {{printf "%q" .Health}}
+    termination_message_path: {{printf "%q" .Termination}}
+    query_timeout: 500ms
+    attempt_timeout: 200ms
+    max_attempts: 2
+    initial_backoff: 20ms
+    max_backoff: 40ms
+    poll_interval: 100ms
+    jitter: 0
+    stable_observations: 3
+    restart_cooldown: 30s
+  bearertokenauth/native:
+    scheme: SUSEObservability
+    token: ${env:STS_API_KEY}
+receivers:
+  filelog/pods:
+    include: [{{printf "%q" .Include}}]
+    include_file_path: true
+    start_at: beginning
+    storage: file_storage/logs
+    fingerprint_size: 64
+    preserve_trailing_whitespaces: true
+    poll_interval: 50ms
+    max_concurrent_files: {{.Files}}
+    max_log_size: 256KiB
+    retry_on_failure:
+      enabled: false
+    operators:
+      - type: container
+        id: container
+processors:
+  memory_limiter:
+    check_interval: 100ms
+    limit_mib: 128
+    spike_limit_mib: 32
+  transform/identity:
+    error_mode: propagate
+    log_statements:
+      - context: resource
+        statements:
+          - set(attributes["k8s.cluster.name"], "fixture-cluster")
+          - set(attributes["k8s.pod.uid"], "12345678-1234-1234-1234-123456789abc")
+          - set(attributes["k8s.pod.name"], "fixture-0")
+          - set(attributes["k8s.container.name"], "app")
+connectors:
+  stslogsroute/logs:
+    capability_extension: stslogscapability/logs
+    legacy_pipeline: logs/legacy
+    native_pipeline: logs/native
+    max_concurrent_calls: {{.Concurrency}}
+    max_record_bytes: 262144
+    max_request_bytes: 1048576
+    export_lifetime: {{.Lifetime}}
+exporters:
+  stsk8slogs/legacy:
+    endpoint: {{printf "%q" .LegacyURL}}
+    api_key: ${env:STS_API_KEY}
+    cluster_name: fixture-cluster
+    timeout: {{.AttemptTimeout}}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 100ms
+      max_interval: 200ms
+      max_elapsed_time: {{.RetryBudget}}
+    sending_queue:
+      enabled: true
+      sizer: requests
+      queue_size: {{.Concurrency}}
+      num_consumers: {{.Workers}}
+      wait_for_result: true
+      block_on_overflow: true
+  otlp_http/native:
+    endpoint: {{printf "%q" .NativeURL}}
+    auth:
+      authenticator: bearertokenauth/native
+    timeout: {{.AttemptTimeout}}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 100ms
+      max_interval: 200ms
+      max_elapsed_time: {{.RetryBudget}}
+    sending_queue:
+      enabled: true
+      sizer: requests
+      queue_size: {{.Concurrency}}
+      num_consumers: {{.Workers}}
+      wait_for_result: true
+      block_on_overflow: true
+service:
+  telemetry:
+    logs:
+      encoding: json
+      level: debug
+    metrics:
+      level: none
+  extensions: [file_storage/logs, stslogscapability/logs, bearertokenauth/native]
+  pipelines:
+    logs/input:
+      receivers: [filelog/pods]
+      processors: [memory_limiter, transform/identity]
+      exporters: [stslogsroute/logs]
+    logs/legacy:
+      receivers: [stslogsroute/logs]
+      exporters: [stsk8slogs/legacy]
+    logs/native:
+      receivers: [stslogsroute/logs]
+      exporters: [otlp_http/native]

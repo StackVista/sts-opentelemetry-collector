@@ -30,7 +30,8 @@ type SnapshotManager struct {
 	started  bool
 	refCount int // how many connectors are currently using this instance
 
-	observers []SnapshotUpdateListener
+	precompute SnapshotUpdateListener
+	observers  []SnapshotUpdateListener
 }
 
 type onRemovalsFunc = func(
@@ -39,8 +40,7 @@ type onRemovalsFunc = func(
 	relationMappings []settingsproto.OtelRelationMapping,
 )
 
-// SnapshotUpdateListener is notified when mapping snapshots change. Implementors
-// can precompute derived data (e.g., expression reference summaries) asynchronously.
+// SnapshotUpdateListener is notified when mapping snapshots change.
 type SnapshotUpdateListener interface {
 	Update(
 		signals []settingsproto.OtelInputSignal,
@@ -49,9 +49,12 @@ type SnapshotUpdateListener interface {
 	)
 }
 
+// precompute runs under the snapshot lock and must not call back into SnapshotManager.
+// Other observers run asynchronously after the mappings become visible.
 func NewSnapshotManager(
 	logger *zap.Logger,
 	supportedSignals []settingsproto.OtelInputSignal,
+	precompute SnapshotUpdateListener,
 	observers ...SnapshotUpdateListener,
 ) *SnapshotManager {
 	return &SnapshotManager{
@@ -59,6 +62,7 @@ func NewSnapshotManager(
 		supportedSignals:  supportedSignals,
 		componentMappings: make(map[settingsproto.OtelInputSignal][]settingsproto.OtelComponentMapping),
 		relationMappings:  make(map[settingsproto.OtelInputSignal][]settingsproto.OtelRelationMapping),
+		precompute:        precompute,
 		observers:         observers,
 	}
 }
@@ -187,8 +191,6 @@ func (s *SnapshotManager) Update(
 		s.relationMappings[signal] = filterForSignal(newRelationMappings, signal)
 	}
 
-	// Copy current state needed for async ref precomputation
-	observersCopy := append([]SnapshotUpdateListener(nil), s.observers...)
 	signalsCopy := append([]settingsproto.OtelInputSignal(nil), s.supportedSignals...)
 	componentMappingsCopy := make(map[settingsproto.OtelInputSignal][]settingsproto.OtelComponentMapping)
 	relationMappingsCopy := make(map[settingsproto.OtelInputSignal][]settingsproto.OtelRelationMapping)
@@ -201,15 +203,13 @@ func (s *SnapshotManager) Update(
 		onRemovals(ctx, change.RemovedComponentMappings, change.RemovedRelationMappings)
 	}
 
+	if s.precompute != nil {
+		s.precompute.Update(signalsCopy, componentMappingsCopy, relationMappingsCopy)
+	}
 	s.mu.Unlock()
 
-	// Notify observers asynchronously so we don't block the snapshot update path.
-	for _, obs := range observersCopy {
-		o := obs
-		// If the number of observers (atm, only ExpressionRefManager is a subscriber) or update frequency grows,
-		// we should consider serializing (with a buffered worker) updates per observer to avoid a flurry of goroutines.
-		// Leaving it as-is for now to prevent pre-maturely optimising.
-		go o.Update(signalsCopy, componentMappingsCopy, relationMappingsCopy)
+	for _, observer := range s.observers {
+		go observer.Update(signalsCopy, componentMappingsCopy, relationMappingsCopy)
 	}
 }
 

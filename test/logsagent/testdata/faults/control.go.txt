@@ -1,0 +1,65 @@
+package logsagent
+
+import (
+	"os"
+	"path/filepath"
+	"sync/atomic"
+	"time"
+)
+
+var faultWorkers atomic.Int64
+
+func FaultWorker() func() {
+	if !FaultEnabled("worker") {
+		return func() {}
+	}
+	faultWorkers.Add(1)
+	return func() {
+		FaultMark("worker_finished")
+		faultWorkers.Add(-1)
+	}
+}
+
+func FaultFinalDrain() {
+	if faultWorkers.Load() != 0 {
+		panic("drain finalized before exporter workers finished")
+	}
+	FaultMark("drain_finalized")
+}
+
+func FaultEnabled(name string) bool {
+	root := os.Getenv("OTEL_LOGS_FAULT_DIR")
+	if root == "" {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(root, name+".hold"))
+	if err != nil && !os.IsNotExist(err) {
+		panic(err)
+	}
+	return err == nil
+}
+
+func FaultMark(name string) {
+	root := os.Getenv("OTEL_LOGS_FAULT_DIR")
+	if root == "" {
+		return
+	}
+	file, err := os.CreateTemp(root, name+"-*")
+	if err != nil {
+		panic(err)
+	}
+	if err := file.Close(); err != nil {
+		panic(err)
+	}
+}
+
+func FaultPause(name string) {
+	if !FaultEnabled(name) {
+		return
+	}
+	FaultMark(name + "_entered")
+	for FaultEnabled(name) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	FaultMark(name + "_released")
+}
