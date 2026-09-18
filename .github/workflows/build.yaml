@@ -63,7 +63,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           flavor: |
-            suffix=${{ matrix.image == 'agent' && '-agent' || '' }}
+            suffix=${{ matrix.image == 'agent' && '-agent' || '' }},onlatest=true
           labels: |
             org.opencontainers.image.source=https://github.com/${{github.repository_owner}}/${{ github.repository }}
 
@@ -163,7 +163,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           flavor: |
-            suffix=${{ matrix.image == 'agent' && '-agent' || '' }}
+            suffix=${{ matrix.image == 'agent' && '-agent' || '' }},onlatest=true
 
       - name: Download image artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
