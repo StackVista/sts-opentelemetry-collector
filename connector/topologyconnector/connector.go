@@ -2,7 +2,9 @@ package topologyconnector
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/internal"
@@ -30,6 +32,7 @@ type connectorImpl struct {
 	mapper               *internal.Mapper
 	metricsRecorder      metrics.ConnectorMetricsRecorder
 	supportedSignal      settingsproto.OtelInputSignal
+	started              atomic.Bool
 }
 
 func newConnector(
@@ -72,6 +75,7 @@ func (p *connectorImpl) Start(ctx context.Context, host component.Host) error {
 	if err := p.snapshotManager.Start(ctx, settingsProvider, p.handleMappingRemovals); err != nil {
 		return fmt.Errorf("failed to start snapshot manager: %w", err)
 	}
+	p.started.Store(true)
 
 	return nil
 }
@@ -89,9 +93,15 @@ func resolveSettingsProvider(host component.Host, logger *zap.Logger) (stsSettin
 	return provider, nil
 }
 
-func (p *connectorImpl) Shutdown(_ context.Context) error {
-	p.snapshotManager.Stop()
-	return nil
+func (p *connectorImpl) Shutdown(ctx context.Context) error {
+	if !p.started.Swap(false) {
+		return nil
+	}
+	last, err := p.snapshotManager.Stop(ctx)
+	if !last {
+		return err
+	}
+	return errors.Join(err, p.metadataPublisher.Shutdown(ctx))
 }
 
 func (p *connectorImpl) Capabilities() consumer.Capabilities {
