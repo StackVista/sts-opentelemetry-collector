@@ -93,11 +93,15 @@ func TestDiscoveryUsesSharedClientAndHealth(t *testing.T) {
 		fail   bool
 	}{
 		{`{"otel-logs":true}`, 200, logsagent.Native, false},
+		{`{"otel-logs":true,"k8s-rbac":"true","capacity":42}`, 200, logsagent.Native, false},
+		{`{"otel-logs":false,"k8s-rbac":null}`, 200, logsagent.Legacy, false},
 		{`{}`, 200, logsagent.Legacy, false},
 		{`unavailable`, 503, logsagent.Legacy, false},
 		{`not found`, 404, logsagent.Legacy, false},
 		{`{"otel-logs":"true"}`, 200, logsagent.Legacy, false},
+		{`{"otel-logs":null,"k8s-rbac":true}`, 200, logsagent.Legacy, false},
 		{`denied`, 401, "", true},
+		{`forbidden`, 403, "", true},
 	} {
 		t.Run(tc.body, func(t *testing.T) {
 			var calls atomic.Int32

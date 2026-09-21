@@ -6,6 +6,10 @@ selects native export; absence, unsupported discovery and exhausted transient
 discovery failures select legacy export. Authentication, configuration and
 unexpected rejection errors fail startup.
 
+Only `otel-logs` requires a boolean value; unrelated capabilities do not affect
+selection. Configure the final Receiver URL: redirects are rejected, including
+same-host redirects. Receiver proxying uses the explicit `proxy_url` setting.
+
 The selected destination remains fixed. Polling starts after pipeline readiness.
 A stable change requests SIGTERM after writing restart intent and the termination
 message. Failed writes or signaling reset the observation sequence and impose

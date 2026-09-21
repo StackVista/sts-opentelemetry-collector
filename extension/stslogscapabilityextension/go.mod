@@ -3,7 +3,7 @@ module github.com/stackvista/sts-opentelemetry-collector/extension/stslogscapabi
 go 1.26.6
 
 require (
-	github.com/StackVista/stackstate-receiver-go-client v0.0.0-20260914133345-d9a80385b612
+	github.com/StackVista/stackstate-receiver-go-client v0.0.0-20260921133709-a78db1356f26
 	github.com/stackvista/sts-opentelemetry-collector/common v0.0.0
 	go.opentelemetry.io/collector/component v1.59.0
 	go.opentelemetry.io/collector/component/componentstatus v0.153.0

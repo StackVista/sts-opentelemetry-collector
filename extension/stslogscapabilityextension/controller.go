@@ -114,6 +114,7 @@ func (c *controller) Start(ctx context.Context, _ component.Host) error {
 	client, err := features.NewClient(api.FeaturesAPI, features.QueryOptions{
 		Timeout: c.cfg.QueryTimeout, AttemptTimeout: c.cfg.AttemptTimeout, MaxAttempts: c.cfg.MaxAttempts,
 		InitialBackoff: c.cfg.InitialBackoff, MaxBackoff: c.cfg.MaxBackoff,
+		BooleanCapabilities: []string{"otel-logs"},
 	})
 	if err != nil {
 		c.closeIdle()
