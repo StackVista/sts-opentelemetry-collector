@@ -16,10 +16,12 @@ type SnapshotChange struct {
 }
 
 type SnapshotManager struct {
-	logger  *zap.Logger
-	mu      sync.RWMutex
-	cancel  context.CancelFunc
-	stopped chan struct{}
+	logger *zap.Logger
+	mu     sync.RWMutex
+
+	lifecycleMu sync.Mutex
+	cancel      context.CancelFunc
+	stopped     chan struct{}
 
 	supportedSignals []settingsproto.OtelInputSignal
 
@@ -68,12 +70,12 @@ func (s *SnapshotManager) Start(
 	settingsProvider stsSettingsApi.StsSettingsProvider,
 	onRemovals onRemovalsFunc,
 ) error {
-	s.mu.Lock()
+	s.lifecycleMu.Lock()
 
-	s.refCount++
 	if s.started {
+		s.refCount++
 		s.logger.Debug("SnapshotManager already started, skipping re-init")
-		s.mu.Unlock()
+		s.lifecycleMu.Unlock()
 		return nil
 	}
 
@@ -83,23 +85,28 @@ func (s *SnapshotManager) Start(
 		settingsproto.SettingTypeOtelRelationMapping,
 	)
 	if err != nil {
-		s.mu.Unlock()
+		s.lifecycleMu.Unlock()
 		return err
 	}
 
-	s.stopped = make(chan struct{})
+	stopped := make(chan struct{})
+	s.stopped = stopped
 	ctxWithCancel, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
 	s.started = true
-	s.mu.Unlock()
+	s.refCount++
+	s.lifecycleMu.Unlock()
 
 	go func() {
-		defer close(s.stopped)
+		defer close(stopped)
 		for {
 			select {
 			case <-ctxWithCancel.Done():
 				return
-			case <-settingUpdatesCh:
+			case _, ok := <-settingUpdatesCh:
+				if !ok || ctxWithCancel.Err() != nil {
+					return
+				}
 				s.logger.Info("Settings update received, updating mapping snapshots")
 				s.GetAndUpdateSettingSnapshots(ctxWithCancel, settingsProvider, onRemovals)
 			}
@@ -111,23 +118,28 @@ func (s *SnapshotManager) Start(
 	return nil
 }
 
-func (s *SnapshotManager) Stop() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// Stop returns true only for the last connector and waits outside the snapshot lock.
+func (s *SnapshotManager) Stop(ctx context.Context) (bool, error) {
+	s.lifecycleMu.Lock()
 
 	if s.refCount > 0 {
 		s.refCount--
 	}
 
-	if s.refCount == 0 && s.started {
-		s.logger.Info("Stopping SnapshotManager (no more active connectors)")
-		if s.cancel != nil {
-			s.cancel()
-		}
-		if s.stopped != nil {
-			<-s.stopped
-		}
-		s.started = false
+	if s.refCount != 0 || !s.started {
+		s.lifecycleMu.Unlock()
+		return false, nil
+	}
+	s.logger.Info("Stopping SnapshotManager (no more active connectors)")
+	s.cancel()
+	stopped := s.stopped
+	s.started = false
+	s.lifecycleMu.Unlock()
+	select {
+	case <-stopped:
+		return true, nil
+	case <-ctx.Done():
+		return true, ctx.Err()
 	}
 }
 
@@ -161,6 +173,9 @@ func (s *SnapshotManager) Update(
 ) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if ctx.Err() != nil {
+		return
+	}
 
 	prevComponents := flattenMappings(s.componentMappings)
 	prevRelations := flattenMappings(s.relationMappings)

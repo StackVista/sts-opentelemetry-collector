@@ -2,6 +2,7 @@ package topologyconnector
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
@@ -27,11 +28,44 @@ type MetadataPublisher struct {
 	pendingMu  sync.Mutex
 	pending    map[string]plog.LogRecord
 	publishing bool
+	closing    bool
+	done       chan struct{}
+	drainErr   error
+	//nolint:containedctx
+	exportCtx context.Context
+	cancel    context.CancelFunc
 }
 
 func NewMetadataPublisher(logger *zap.Logger) *MetadataPublisher {
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	close(done)
 	return &MetadataPublisher{
-		logger: logger,
+		logger:    logger,
+		exportCtx: ctx,
+		cancel:    cancel,
+		done:      done,
+	}
+}
+
+// Shutdown drains accepted metadata before downstream consumers stop.
+func (p *MetadataPublisher) Shutdown(ctx context.Context) error {
+	p.pendingMu.Lock()
+	p.closing = true
+	done := p.done
+	p.pendingMu.Unlock()
+	defer p.cancel()
+
+	select {
+	case <-done:
+		if ctx.Err() != nil {
+			return fmt.Errorf("drain topology metadata: %w", ctx.Err())
+		}
+		p.pendingMu.Lock()
+		defer p.pendingMu.Unlock()
+		return p.drainErr
+	case <-ctx.Done():
+		return fmt.Errorf("drain topology metadata: %w", ctx.Err())
 	}
 }
 
@@ -129,6 +163,10 @@ func (p *MetadataPublisher) enqueue(c consumer.Logs, logs plog.Logs) {
 	p.pendingMu.Lock()
 	defer p.pendingMu.Unlock()
 
+	if p.closing {
+		p.logger.Warn("Ignoring metadata after publisher shutdown")
+		return
+	}
 	if p.pending == nil {
 		p.pending = make(map[string]plog.LogRecord)
 	}
@@ -140,6 +178,7 @@ func (p *MetadataPublisher) enqueue(c consumer.Logs, logs plog.Logs) {
 	}
 	if !p.publishing {
 		p.publishing = true
+		p.done = make(chan struct{})
 		go p.publishPending(c)
 	}
 }
@@ -147,8 +186,10 @@ func (p *MetadataPublisher) enqueue(c consumer.Logs, logs plog.Logs) {
 func (p *MetadataPublisher) publishPending(c consumer.Logs) {
 	for {
 		p.pendingMu.Lock()
-		if len(p.pending) == 0 {
+		if len(p.pending) == 0 || p.exportCtx.Err() != nil {
+			p.pending = nil
 			p.publishing = false
+			close(p.done)
 			p.pendingMu.Unlock()
 			return
 		}
@@ -162,7 +203,12 @@ func (p *MetadataPublisher) publishPending(c consumer.Logs) {
 			record.CopyTo(records.AppendEmpty())
 		}
 		// Records and tombstones share one sender so an older value cannot restore a deleted mapping.
-		if err := c.ConsumeLogs(context.Background(), logs); err != nil {
+		if err := c.ConsumeLogs(p.exportCtx, logs); err != nil {
+			p.pendingMu.Lock()
+			if p.closing && p.drainErr == nil {
+				p.drainErr = fmt.Errorf("export topology metadata during shutdown: %w", err)
+			}
+			p.pendingMu.Unlock()
 			p.logger.Error("failed to publish metadata logs", zap.Error(err))
 		}
 	}

@@ -71,7 +71,9 @@ func TestSnapshotManager_StartStopLifecycle(t *testing.T) {
 			len(removedRelationMappings) == 1 && removedRelationMappings[0].Identifier == "r1"
 	}, time.Second, 50*time.Millisecond, "expected removal callback to fire")
 
-	manager.Stop()
+	last, err := manager.Stop(ctx)
+	require.NoError(t, err)
+	require.True(t, last)
 
 	provider.ComponentMappings = []settingsproto.OtelComponentMapping{componentMapping("c3", settingsproto.TRACES)}
 	provider.RelationMappings = []settingsproto.OtelRelationMapping{relationMapping("r3", settingsproto.TRACES)}

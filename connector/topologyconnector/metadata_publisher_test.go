@@ -146,7 +146,7 @@ func TestSnapshotManager_MetadataBackpressure(t *testing.T) {
 				unblock()
 				<-updated
 				<-exported
-				manager.Stop()
+				_, _ = manager.Stop(t.Context())
 			})
 			select {
 			case <-entered:
@@ -158,7 +158,7 @@ func TestSnapshotManager_MetadataBackpressure(t *testing.T) {
 				if operation == "read" {
 					manager.Current(settingsproto.TRACES)
 				} else {
-					manager.Stop()
+					_, _ = manager.Stop(t.Context())
 				}
 				close(done)
 			}()
