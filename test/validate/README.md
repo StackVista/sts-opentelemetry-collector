@@ -15,7 +15,8 @@ A missing or misnamed component in the BOM makes `validate` fail, breaking the b
 ## Files
 
 - `configs/legacy-logs-exporter.yaml` — legacy Kubernetes logs exporter registration
-  and queue/retry configuration, using a synthetic credential and loopback endpoint.
+  and synchronous retry configuration, using a synthetic credential and loopback endpoint.
+- `configs/logs-agent.yaml` — Filelog, checkpoint storage, capability selection and both export paths.
 - `configs/scraper.yaml` — de-templated copy of the Prometheus-scraper collector config from
   `helm-charts-internal/stable/suse-observability-agent/templates/otel/scraper/configmap.yaml`
   (mTLS branch enabled to cover the superset of components).

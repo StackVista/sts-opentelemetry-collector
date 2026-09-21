@@ -27,7 +27,7 @@ revisiting shared metadata.
 
 Admission is nonblocking. Admitted calls retain caller context values but have
 an independent export lifetime. During drain, new calls must fit the controller's
-validated queue/retry bound before its absolute deadline. Existing call
+validated retry/timeout bound before its absolute deadline. Existing call
 deadlines stay unchanged. Cross-pipeline validation belongs to the controller.
 
 Metrics use only bounded `mode`, `reason`, `outcome` and `draining` attributes:
@@ -42,10 +42,13 @@ rejection, separated by reason.
 - `stslogsroute.outstanding_requests`: synchronous connector calls.
 
 Acknowledgement counts requests, including successful partial responses; it
-does not assert that every record was stored. A queue waiter may return before
-its exporter worker finishes. The registered observer and connector shutdown
-account for calls only; the controller finalizes draining after exporter
-shutdown.
+does not assert that every record was stored. Exporter-helper runs retries
+synchronously with queues disabled; admission bounds concurrent calls.
+The connector joins admitted calls, and the controller finalizes draining after
+exporter shutdown. The per-call bound is the greater of each exporter's
+retry budget plus attempt timeout, with 20 seconds of overhead in the lifetime.
+CRI recombination can serialize calls before admission; later flushes are rejected
+when they cannot fit the remaining absolute drain budget.
 
 Every pre-export rejection observed during drain is included in the controller's
 `DrainRejected` count. DEBUG messages `Logs export completed` and

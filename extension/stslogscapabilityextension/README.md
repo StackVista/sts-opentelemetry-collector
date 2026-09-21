@@ -18,12 +18,12 @@ and no authentication failure or pending shutdown. Valid discovery restores
 readiness after an authentication failure without changing the route.
 
 Before receivers start, `NotifyConfig` validates both exporters' effective
-queue/retry bounds and the synchronous pipeline graph. Collector defaulting and
+retry/timeout bounds, disabled queues and the synchronous pipeline graph. Collector defaulting and
 marshaling remove authored-value provenance; configuration fixtures separately
 require explicit bounds. Filelog also requires `stanza.synchronousLogEmitter`.
 
 Shutdown sets one absolute drain deadline without canceling admitted exports.
 Final reporting combines connector-call outcomes with the selected exporter's
 stopped status. It reports export completion only; it does not verify Filelog
-checkpoint persistence. Queue waiters and exporter workers may finish at different
-times. The controller stores no credentials or log payloads in its state.
+checkpoint persistence. Admitted synchronous calls must finish before successful
+shutdown. The controller stores no credentials or log payloads in its state.

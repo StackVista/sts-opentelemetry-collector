@@ -9,7 +9,6 @@ import (
 
 	"github.com/StackVista/stackstate-receiver-go-client/pkg/openapiclient"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/config/configretry"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
@@ -25,11 +24,6 @@ func NewFactory() exporter.Factory {
 }
 
 func createDefaultConfig() component.Config {
-	queue := exporterhelper.NewDefaultQueueConfig()
-	queue.QueueSize = 8
-	queue.NumConsumers = 4
-	queue.WaitForResult = true
-	queue.BlockOnOverflow = true
 	retry := configretry.NewDefaultBackOffConfig()
 	retry.InitialInterval = time.Second
 	retry.MaxInterval = 5 * time.Second
@@ -37,7 +31,6 @@ func createDefaultConfig() component.Config {
 	return &Config{
 		TimeoutSettings: exporterhelper.TimeoutConfig{Timeout: 5 * time.Second},
 		BackOffConfig:   retry,
-		QueueSettings:   configoptional.Some(queue),
 	}
 }
 

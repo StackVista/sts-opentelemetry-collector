@@ -47,15 +47,8 @@ func TestFixtureBounds(t *testing.T) {
 		}
 		e := section(c, "exporters", exporter)
 		q := section(e, "sending_queue")
-		if q["queue_size"] != s.Concurrency || q["num_consumers"] != s.Workers || s.Workers > s.Concurrency ||
-			q["wait_for_result"] != true || q["block_on_overflow"] != true || q["sizer"] != "requests" {
-			t.Fatalf("%s queue does not preserve bounded synchronous export", mode)
-		}
-		if _, exists := q["batch"]; exists {
-			t.Fatal("fixture enabled queue merging")
-		}
-		if _, exists := q["storage"]; exists {
-			t.Fatal("fixture enabled a persistent payload queue")
+		if len(q) != 1 || q["enabled"] != false {
+			t.Fatal("fixture must disable exporter queues")
 		}
 		if _, exists := section(c, "service", "pipelines", "logs/"+mode)["processors"]; exists {
 			t.Fatal("terminal fixture pipeline contains processors")
@@ -82,11 +75,6 @@ func TestAuthoredFixtureRejectsOmittedBounds(t *testing.T) {
 			{"retry_on_failure", "max_interval"},
 			{"retry_on_failure", "max_elapsed_time"},
 			{"sending_queue", "enabled"},
-			{"sending_queue", "sizer"},
-			{"sending_queue", "queue_size"},
-			{"sending_queue", "num_consumers"},
-			{"sending_queue", "wait_for_result"},
-			{"sending_queue", "block_on_overflow"},
 		} {
 			paths = append(paths, append([]string{"exporters", exporter}, field...))
 		}
@@ -111,22 +99,14 @@ func TestAuthoredFixtureRejectsInvalidBounds(t *testing.T) {
 			reason string
 			mutate func(map[string]any)
 		}{
-			{"fewer_workers", "export_lifetime", func(e map[string]any) {
-				section(e, "sending_queue")["num_consumers"] = 1
-			}},
-			{"queue_below_admission", "queue_size", func(e map[string]any) {
-				section(e, "sending_queue")["queue_size"] = 7
-			}},
-			{"workers_above_admission", "num_consumers", func(e map[string]any) {
-				section(e, "sending_queue")["num_consumers"] = 9
-			}},
+			{"enabled_queue", "enabled", func(e map[string]any) { section(e, "sending_queue")["enabled"] = true }},
 			{"longer_retry", "export_lifetime", func(e map[string]any) {
 				section(e, "retry_on_failure")["max_elapsed_time"] = "10s"
 			}},
 			{"unlimited_retry", "max_elapsed_time", func(e map[string]any) {
 				section(e, "retry_on_failure")["max_elapsed_time"] = "0s"
 			}},
-			{"queue_batching", "batch", func(e map[string]any) {
+			{"queue_batching", "sending_queue", func(e map[string]any) {
 				section(e, "sending_queue")["batch"] = map[string]any{}
 			}},
 		} {

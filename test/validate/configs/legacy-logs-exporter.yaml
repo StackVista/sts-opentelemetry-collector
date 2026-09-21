@@ -16,12 +16,7 @@ exporters:
       max_interval: 5s
       max_elapsed_time: 30s
     sending_queue:
-      enabled: true
-      sizer: requests
-      queue_size: 8
-      num_consumers: 4
-      wait_for_result: true
-      block_on_overflow: true
+      enabled: false
 
 service:
   pipelines:

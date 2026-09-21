@@ -71,7 +71,7 @@ connectors:
     max_concurrent_calls: 8
     max_record_bytes: 262144
     max_request_bytes: 1048576
-    export_lifetime: 90s
+    export_lifetime: 55s
 exporters:
   stsk8slogs/legacy:
     endpoint: http://127.0.0.1:18080/stsAgent/logs/k8s
@@ -83,12 +83,7 @@ exporters:
       max_interval: 5s
       max_elapsed_time: 30s
     sending_queue:
-      enabled: true
-      sizer: requests
-      queue_size: 8
-      num_consumers: 4
-      wait_for_result: true
-      block_on_overflow: true
+      enabled: false
   otlp_http/native:
     endpoint: http://127.0.0.1:14318
     timeout: 5s
@@ -98,12 +93,7 @@ exporters:
       max_interval: 5s
       max_elapsed_time: 30s
     sending_queue:
-      enabled: true
-      sizer: requests
-      queue_size: 8
-      num_consumers: 4
-      wait_for_result: true
-      block_on_overflow: true
+      enabled: false
 service:
   extensions: [file_storage/logs, stslogscapability/logs]
   pipelines:
@@ -159,8 +149,8 @@ func TestValidatePipelineConfig(t *testing.T) {
 		ExtensionID:      "stslogscapability/logs",
 		LegacyExporterID: "stsk8slogs/legacy",
 		NativeExporterID: "otlp_http/native",
-		ExportLifetime:   90 * time.Second,
-		QueueRetryBound:  70 * time.Second,
+		ExportLifetime:   55 * time.Second,
+		QueueRetryBound:  35 * time.Second,
 	}
 	tests := []struct {
 		name    string
@@ -196,14 +186,6 @@ func TestValidatePipelineConfig(t *testing.T) {
 			want: base,
 		},
 		{
-			name: "nil storage preserves in-memory queue",
-			changes: map[string]any{
-				"exporters::stsk8slogs/legacy::sending_queue::storage": nil,
-				"exporters::otlp_http/native::sending_queue::storage":  nil,
-			},
-			want: base,
-		},
-		{
 			name: "slower inactive native exporter determines bound",
 			changes: map[string]any{
 				"exporters::otlp_http/native::retry_on_failure::max_elapsed_time": "31s",
@@ -212,20 +194,7 @@ func TestValidatePipelineConfig(t *testing.T) {
 			want: logsagent.PipelineConfig{
 				ExtensionID: base.ExtensionID, LegacyExporterID: base.LegacyExporterID,
 				NativeExporterID: base.NativeExporterID, ExportLifetime: 92 * time.Second,
-				QueueRetryBound: 72 * time.Second,
-			},
-		},
-		{
-			name: "round up worker waves and ignore spare queue capacity",
-			changes: map[string]any{
-				"exporters::stsk8slogs/legacy::sending_queue::num_consumers": 3,
-				"exporters::stsk8slogs/legacy::sending_queue::queue_size":    100,
-				"connectors::stslogsroute/logs::export_lifetime":             125 * time.Second,
-			},
-			want: logsagent.PipelineConfig{
-				ExtensionID: base.ExtensionID, LegacyExporterID: base.LegacyExporterID,
-				NativeExporterID: base.NativeExporterID, ExportLifetime: 125 * time.Second,
-				QueueRetryBound: 105 * time.Second,
+				QueueRetryBound: 36 * time.Second,
 			},
 		},
 		{
@@ -289,26 +258,9 @@ func TestValidatePipelineConfigRejectsExporterChanges(t *testing.T) {
 		{"sending_queue", nil, "enabled"},
 		{"sending_queue", false, "configured mapping"},
 		{"sending_queue", map[string]any{}, "enabled"},
-		{"sending_queue::enabled", false, "enabled"},
+		{"sending_queue::enabled", true, "enabled"},
 		{"sending_queue::enabled", nil, "enabled"},
 		{"sending_queue::enabled", "true", "enabled"},
-		{"sending_queue::num_consumers", 3, "export_lifetime"},
-		{"sending_queue::num_consumers", 9, "max_concurrent_calls >= num_consumers"},
-		{"sending_queue::num_consumers", 0, "num_consumers"},
-		{"sending_queue::num_consumers", 4.0, "num_consumers"},
-		{"sending_queue::queue_size", 7, "queue_size >= max_concurrent_calls"},
-		{"sending_queue::queue_size", uint64(math.MaxUint64), "queue_size"},
-		{"sending_queue::queue_size", "8", "queue_size"},
-		{"sending_queue::wait_for_result", false, "wait_for_result"},
-		{"sending_queue::block_on_overflow", false, "block_on_overflow"},
-		{"sending_queue::sizer", "bytes", "sizer"},
-		{"sending_queue::sizer", "items", "sizer"},
-		{"sending_queue::batch", map[string]any{}, "batch"},
-		{"sending_queue::batch", nil, "batch"},
-		{"sending_queue::batch", map[string]any{"enabled": false}, "batch"},
-		{"sending_queue::batch", false, "batch"},
-		{"sending_queue::storage", "file_storage/logs", "storage"},
-		{"sending_queue::storage", "", "storage"},
 	}
 	for _, exporter := range []string{"stsk8slogs/legacy", "otlp_http/native"} {
 		for _, tt := range tests {
@@ -322,8 +274,6 @@ func TestValidatePipelineConfigRejectsExporterChanges(t *testing.T) {
 			"timeout", "retry_on_failure", "retry_on_failure::enabled",
 			"retry_on_failure::initial_interval", "retry_on_failure::max_interval",
 			"retry_on_failure::max_elapsed_time", "sending_queue", "sending_queue::enabled",
-			"sending_queue::num_consumers", "sending_queue::queue_size", "sending_queue::sizer",
-			"sending_queue::wait_for_result", "sending_queue::block_on_overflow",
 		} {
 			t.Run(exporter+"/missing/"+field, func(t *testing.T) {
 				values := fixtureMap(t, pipelineFixture)
@@ -384,7 +334,7 @@ func TestValidatePipelineConfigRejectsGraphChanges(t *testing.T) {
 		{"small admission", "connectors::stslogsroute/logs::max_concurrent_calls", 5, "max_concurrent_files + 2"},
 		{"zero record limit", "connectors::stslogsroute/logs::max_record_bytes", 0, "positive integer"},
 		{"small request limit", "connectors::stslogsroute/logs::max_request_bytes", 10, "must not exceed"},
-		{"short lifetime", "connectors::stslogsroute/logs::export_lifetime", "89.999999999s", "plus 20s"},
+		{"short lifetime", "connectors::stslogsroute/logs::export_lifetime", "54.999999999s", "plus 20s"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -437,12 +387,10 @@ func TestValidatePipelineConfigOverflow(t *testing.T) {
 		name    string
 		timeout string
 		elapsed string
-		workers int
 		want    string
 	}{
-		{"addition", "9223372036854775807ns", "30s", 4, "sum overflows"},
-		{"multiplication", "1ns", "4611686018427387904ns", 4, "bound overflows"},
-		{"overhead", "1ns", "9223372036854775806ns", 8, "plus 20s"},
+		{"addition", "9223372036854775807ns", "30s", "sum overflows"},
+		{"overhead", "1ns", "9223372036854775806ns", "plus 20s"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -450,7 +398,6 @@ func TestValidatePipelineConfigOverflow(t *testing.T) {
 			fixtureSet(t, values, "connectors::stslogsroute/logs::export_lifetime", "9223372036854775807ns")
 			fixtureSet(t, values, "exporters::otlp_http/native::timeout", tt.timeout)
 			fixtureSet(t, values, "exporters::otlp_http/native::retry_on_failure::max_elapsed_time", tt.elapsed)
-			fixtureSet(t, values, "exporters::otlp_http/native::sending_queue::num_consumers", tt.workers)
 			assertPipelineRejected(t, values, tt.want)
 		})
 	}
@@ -482,52 +429,26 @@ func TestValidatePipelineConfigEmpty(t *testing.T) {
 	}
 }
 
-func TestNativeExporterNamesAndSizers(t *testing.T) {
+func TestNativeExporterNamesAndDisabledQueues(t *testing.T) {
 	for _, kind := range []string{"otlp_http", "otlphttp", "otlp_grpc", "otlp"} {
-		for _, form := range []string{"authored", "effective"} {
-			for _, sizer := range []struct {
-				name  string
-				value any
-				valid bool
-			}{
-				{"requests", "requests", true},
-				{"items", "items", false},
-				{"bytes", "bytes", false},
-				{"unresolved", map[string]any{}, false},
-			} {
-				t.Run(kind+"/"+form+"/"+sizer.name, func(t *testing.T) {
-					nativeID := kind + "/native"
-					values := fixtureMap(t, strings.ReplaceAll(pipelineFixture, "otlp_http/native", nativeID))
-					fixtureSet(t, values, "exporters::"+nativeID+"::sending_queue::sizer", sizer.value)
-					validate := logsagent.ValidatePipelineConfig
-					if form == "effective" {
-						validate = logsagent.ValidateEffectivePipelineConfig
-						fixtureDelete(t, values, "extensions::file_storage/logs::recreate")
-						for _, exporterID := range []string{"stsk8slogs/legacy", nativeID} {
-							queuePath := "exporters::" + exporterID + "::sending_queue"
-							fixtureDelete(t, values, queuePath+"::enabled")
-							fixtureSet(t, values, queuePath+"::batch", nil)
-						}
-					}
-					conf := confmap.NewFromStringMap(values)
-					before := snapshotConfig(t, conf)
-					got, err := validate(conf)
-					if sizer.valid {
-						want := logsagent.PipelineConfig{
-							ExtensionID: "stslogscapability/logs", LegacyExporterID: "stsk8slogs/legacy",
-							NativeExporterID: nativeID, ExportLifetime: 90 * time.Second,
-							QueueRetryBound: 70 * time.Second,
-						}
-						if err != nil || got != want {
-							t.Fatalf("got %+v, %v; want %+v", got, err, want)
-						}
-					} else if err == nil || !strings.Contains(err.Error(), "sizer") || got != (logsagent.PipelineConfig{}) {
-						t.Fatalf("invalid sizer must fail without bounds: got %+v, %v", got, err)
-					}
-					if before != snapshotConfig(t, conf) {
-						t.Fatal("validation mutated the configuration")
-					}
-				})
+		for _, effective := range []bool{false, true} {
+			nativeID := kind + "/native"
+			values := fixtureMap(t, strings.ReplaceAll(pipelineFixture, "otlp_http/native", nativeID))
+			validate := logsagent.ValidatePipelineConfig
+			if effective {
+				validate = logsagent.ValidateEffectivePipelineConfig
+				for _, id := range []string{"stsk8slogs/legacy", nativeID} {
+					fixtureSet(t, values, "exporters::"+id+"::sending_queue", nil)
+				}
+			}
+			conf := confmap.NewFromStringMap(values)
+			before := snapshotConfig(t, conf)
+			got, err := validate(conf)
+			if err != nil || got.QueueRetryBound != 35*time.Second {
+				t.Fatalf("%s effective=%t: %+v, %v", kind, effective, got, err)
+			}
+			if before != snapshotConfig(t, conf) {
+				t.Fatal("validation mutated configuration")
 			}
 		}
 	}
@@ -536,14 +457,12 @@ func TestNativeExporterNamesAndSizers(t *testing.T) {
 func TestEffectiveConfigOmittedRecreate(t *testing.T) {
 	values := fixtureMap(t, pipelineFixture)
 	fixtureDelete(t, values, "extensions::file_storage/logs::recreate")
-	fixtureDelete(t, values, "exporters::stsk8slogs/legacy::sending_queue::enabled")
-	fixtureDelete(t, values, "exporters::otlp_http/native::sending_queue::enabled")
-	fixtureSet(t, values, "exporters::stsk8slogs/legacy::sending_queue::batch", nil)
-	fixtureSet(t, values, "exporters::otlp_http/native::sending_queue::batch", nil)
+	fixtureSet(t, values, "exporters::stsk8slogs/legacy::sending_queue", nil)
+	fixtureSet(t, values, "exporters::otlp_http/native::sending_queue", nil)
 	conf := confmap.NewFromStringMap(values)
 	before := snapshotConfig(t, conf)
 	got, err := logsagent.ValidateEffectivePipelineConfig(conf)
-	if err != nil || got.QueueRetryBound != 70*time.Second {
+	if err != nil || got.QueueRetryBound != 35*time.Second {
 		t.Fatalf("effective bounds: %+v, %v", got, err)
 	}
 	if before != snapshotConfig(t, conf) {
@@ -563,8 +482,8 @@ func TestEffectiveConfigRejectsUnsafeValues(t *testing.T) {
 		{"extensions::file_storage/logs::recreate", nil},
 		{"extensions::file_storage/logs::recreate", "false"},
 		{"exporters::otlp_http/native::sending_queue::num_consumers", 1},
-		{"exporters::stsk8slogs/legacy::sending_queue", nil},
-		{"exporters::otlp_http/native::sending_queue", nil},
+		{"exporters::stsk8slogs/legacy::sending_queue", map[string]any{}},
+		{"exporters::otlp_http/native::sending_queue", map[string]any{"enabled": true}},
 		{"exporters::otlp_http/native::sending_queue", map[string]any{}},
 		{"exporters::otlp_http/native::sending_queue::sizer", map[string]any{}},
 		{"exporters::otlp_http/native::sending_queue::sizer", "bytes"},

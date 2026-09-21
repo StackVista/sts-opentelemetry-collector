@@ -3,6 +3,7 @@ package logsagent_test
 
 import (
 	"compress/gzip"
+	"context"
 	_ "embed"
 	"fmt"
 	"io"
@@ -68,6 +69,9 @@ type backend struct {
 	featureReplies   chan featureReply
 	plans            map[string]responsePlan
 	requests         []request
+	responseDelay    time.Duration
+	active           int
+	maxActive        int
 	legacyDescriptor protoreflect.MessageDescriptor
 }
 
@@ -133,6 +137,45 @@ func (b *backend) attempts(mode string) int {
 	return count
 }
 
+func (b *backend) enter(ctx context.Context) func() {
+	b.mu.Lock()
+	b.active++
+	b.maxActive = max(b.maxActive, b.active)
+	delay := b.responseDelay
+	b.mu.Unlock()
+	if delay > 0 {
+		timer := time.NewTimer(delay)
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+		}
+		timer.Stop()
+	}
+	return func() {
+		b.mu.Lock()
+		b.active--
+		b.mu.Unlock()
+	}
+}
+
+func (b *backend) record(mode string, records []wireRecord) (responsePlan, int, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	plan := b.plans[mode]
+	status := plan.status
+	if plan.failures > 0 {
+		status = http.StatusServiceUnavailable
+		plan.failures--
+	}
+	loseResponse := plan.lostResponses > 0
+	if loseResponse {
+		plan.lostResponses--
+	}
+	b.plans[mode] = plan
+	b.requests = append(b.requests, request{mode: mode, status: status, records: records})
+	return plan, status, loseResponse
+}
+
 func (b *backend) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.RawQuery != "" {
 		b.t.Error("fixture received unexpected URL query")
@@ -179,6 +222,7 @@ func (b *backend) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	defer b.enter(r.Context())()
 	if r.Method != http.MethodPost || r.Header.Get("Content-Type") != "application/x-protobuf" {
 		b.t.Error("export did not use POST application/x-protobuf")
 	}
@@ -210,20 +254,7 @@ func (b *backend) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	b.mu.Lock()
-	plan := b.plans[mode]
-	status := plan.status
-	if plan.failures > 0 {
-		status = http.StatusServiceUnavailable
-		plan.failures--
-	}
-	loseResponse := plan.lostResponses > 0
-	if loseResponse {
-		plan.lostResponses--
-	}
-	b.plans[mode] = plan
-	b.requests = append(b.requests, request{mode: mode, status: status, records: records})
-	b.mu.Unlock()
+	plan, status, loseResponse := b.record(mode, records)
 	if loseResponse {
 		hijacker, ok := w.(http.Hijacker)
 		if !ok {

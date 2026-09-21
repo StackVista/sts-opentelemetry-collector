@@ -7,22 +7,22 @@ import (
 	"time"
 )
 
-var faultWorkers atomic.Int64
+var faultCalls atomic.Int64
 
-func FaultWorker() func() {
-	if !FaultEnabled("worker") {
+func FaultCall() func() {
+	if !FaultEnabled("completion") {
 		return func() {}
 	}
-	faultWorkers.Add(1)
+	faultCalls.Add(1)
 	return func() {
-		FaultMark("worker_finished")
-		faultWorkers.Add(-1)
+		FaultMark("completion_finished")
+		faultCalls.Add(-1)
 	}
 }
 
 func FaultFinalDrain() {
-	if faultWorkers.Load() != 0 {
-		panic("drain finalized before exporter workers finished")
+	if faultCalls.Load() != 0 {
+		panic("drain finalized before synchronous export calls finished")
 	}
 	FaultMark("drain_finalized")
 }

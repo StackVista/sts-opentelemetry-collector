@@ -6,7 +6,6 @@ use (
 	./connector/stsservicegraphconnector
 	./connector/topologyconnector
 	./exporter/clickhousestsexporter
-	./exporter/otlpconfigexporter
 	./exporter/stskafkaexporter
 	./exporter/stsk8slogsexporter
 	./exporter/ststopologyexporter

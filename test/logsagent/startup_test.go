@@ -20,7 +20,7 @@ func TestStartupRejectsInvalidBounds(t *testing.T) {
 	tests := make([]boundCase, 0, 27)
 	tests = append(tests, []boundCase{
 		{"deadline_below_required", "export_lifetime", func(c map[string]any) {
-			section(c, "connectors", "stslogsroute/logs")["export_lifetime"] = "24s"
+			section(c, "connectors", "stslogsroute/logs")["export_lifetime"] = "22s"
 		}},
 		{"negative_deadline", "export_lifetime", func(c map[string]any) {
 			section(c, "connectors", "stslogsroute/logs")["export_lifetime"] = "-1s"
@@ -41,26 +41,13 @@ func TestStartupRejectsInvalidBounds(t *testing.T) {
 			reason string
 			edit   func(map[string]any)
 		}{
-			{"small_queue", "queue_size", func(e map[string]any) { section(e, "sending_queue")["queue_size"] = 7 }},
-			{"too_many_workers", "num_consumers", func(e map[string]any) { section(e, "sending_queue")["num_consumers"] = 9 }},
-			{"too_few_workers", "export_lifetime", func(e map[string]any) { section(e, "sending_queue")["num_consumers"] = 1 }},
-			{"queue_batching", "batch", func(e map[string]any) {
-				section(e, "sending_queue")["batch"] = map[string]any{
-					"sizer": "items", "min_size": 0, "max_size": 0, "flush_timeout": "1s",
-				}
-			}},
-			{"queue_batch_null", "batch", func(e map[string]any) { section(e, "sending_queue")["batch"] = nil }},
-			{"persistent_queue", "persistent queue", func(e map[string]any) { section(e, "sending_queue")["storage"] = "file_storage/logs" }},
-			{"no_wait_for_result", "wait", func(e map[string]any) { section(e, "sending_queue")["wait_for_result"] = false }},
+			{"enabled_queue", "sending_queue", func(e map[string]any) { e["sending_queue"] = map[string]any{"enabled": true} }},
 			{"unlimited_retry", "retry", func(e map[string]any) { section(e, "retry_on_failure")["max_elapsed_time"] = "0s" }},
 			{"long_retry", "export_lifetime", func(e map[string]any) { section(e, "retry_on_failure")["max_elapsed_time"] = "10s" }},
 			{"missing_timeout", "export_lifetime", func(e map[string]any) { delete(e, "timeout") }},
 			{"missing_retry_budget", "export_lifetime", func(e map[string]any) { delete(section(e, "retry_on_failure"), "max_elapsed_time") }},
 		} {
 			reason := item.reason
-			if item.name == "persistent_queue" && exporter == "stsk8slogs/legacy" {
-				reason = "without storage"
-			}
 			tests = append(tests, boundCase{
 				exporter + "/" + item.name, reason, func(c map[string]any) { item.edit(section(c, "exporters", exporter)) },
 			})

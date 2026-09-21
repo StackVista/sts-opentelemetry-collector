@@ -76,7 +76,7 @@ func (e *logsExporter) ConsumeLogs(ctx context.Context, logs plog.Logs) error {
 	return e.Logs.ConsumeLogs(ctx, valid)
 }
 
-// Validation precedes the queue so retries neither recount drops nor acknowledge invalid records.
+// Validation precedes retries so they neither recount drops nor acknowledge invalid records.
 func (e *encoder) filter(logs plog.Logs) (plog.Logs, map[invalidReason]int) {
 	valid := plog.NewLogs()
 	invalid := make(map[invalidReason]int)

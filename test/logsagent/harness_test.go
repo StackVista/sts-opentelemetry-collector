@@ -45,28 +45,29 @@ func TestMain(m *testing.M) {
 type settings struct {
 	Checkpoints, Controller, Health, Termination string
 	Include, ReceiverURL, LegacyURL, NativeURL   string
-	Files, Concurrency, Workers                  int
+	Files, Concurrency                           int
 	Lifetime, RetryBudget, AttemptTimeout        time.Duration
 }
 
 func defaultSettings() settings {
 	return settings{
-		Files: 4, Concurrency: 8, Workers: 4,
+		Files: 4, Concurrency: 8,
 		Lifetime: 25 * time.Second, RetryBudget: 2 * time.Second, AttemptTimeout: 200 * time.Millisecond,
 	}
 }
 
 func (s settings) minimumLifetime() time.Duration {
-	return time.Duration((s.Concurrency+s.Workers-1)/s.Workers)*(s.RetryBudget+s.AttemptTimeout) + 20*time.Second
+	return (s.RetryBudget + s.AttemptTimeout) + 20*time.Second
 }
 
 type fixture struct {
-	t        *testing.T
-	binary   string
-	root     string
-	settings settings
-	backend  *backend
-	childEnv []string
+	t         *testing.T
+	binary    string
+	root      string
+	settings  settings
+	backend   *backend
+	childEnv  []string
+	configure func(map[string]any)
 }
 
 func newFixture(t *testing.T, mode string) *fixture {
@@ -139,8 +140,22 @@ func (f *fixture) start(mutate func(map[string]any), synchronous bool) *process 
 		f.t.Fatal(err)
 	}
 	config := renderConfig(f.t, f.settings)
+	if f.configure != nil {
+		f.configure(config)
+	}
 	if mutate != nil {
 		mutate(config)
+	}
+	if os.Getenv("OTEL_COMPARISON_DESIGN") == "queued" {
+		for _, value := range section(config, "exporters") {
+			exporter, ok := value.(map[string]any)
+			if ok {
+				exporter["sending_queue"] = map[string]any{
+					"enabled": true, "sizer": "requests", "queue_size": f.settings.Concurrency,
+					"num_consumers": 4, "wait_for_result": true, "block_on_overflow": true,
+				}
+			}
+		}
 	}
 	data, err := yaml.Marshal(config)
 	if err != nil {

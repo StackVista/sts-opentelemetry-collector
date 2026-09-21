@@ -12,7 +12,7 @@ import (
 )
 
 func TestRoutes(t *testing.T) {
-	for _, mode := range []string{"legacy", "native"} {
+	for _, transport := range []string{"legacy", "native", "native_grpc"} {
 		for _, scenario := range []struct {
 			name       string
 			plan       responsePlan
@@ -28,8 +28,8 @@ func TestRoutes(t *testing.T) {
 			{"not_found", responsePlan{status: 404}, false, false, []string{"permanent_rejection"}},
 			{"too_large", responsePlan{status: 413}, false, false, []string{"permanent_rejection"}},
 		} {
-			t.Run(mode+"/"+scenario.name, func(t *testing.T) {
-				f := newFixture(t, mode)
+			t.Run(transport+"/"+scenario.name, func(t *testing.T) {
+				f, mode := newTransportFixture(t, transport)
 				f.backend.setPlan(mode, scenario.plan)
 				p := f.start(nil, true)
 				p.ready()
@@ -86,14 +86,14 @@ func TestNativePartialSuccess(t *testing.T) {
 }
 
 func TestSIGTERMDuringRetries(t *testing.T) {
-	for _, mode := range []string{"legacy", "native"} {
+	for _, transport := range []string{"legacy", "native", "native_grpc"} {
 		for _, recovery := range []bool{true, false} {
 			name := "outage"
 			if recovery {
 				name = "recovery"
 			}
-			t.Run(mode+"/"+name, func(t *testing.T) {
-				f := newFixture(t, mode)
+			t.Run(transport+"/"+name, func(t *testing.T) {
+				f, mode := newTransportFixture(t, transport)
 				f.backend.setPlan(mode, responsePlan{status: 503})
 				p := f.start(nil, true)
 				p.ready()
@@ -150,15 +150,15 @@ func assertOrdinaryDrain(t *testing.T, p *process, recovered bool) {
 }
 
 func TestCapabilityRestartDuringRetries(t *testing.T) {
-	for _, oldMode := range []string{"legacy", "native"} {
+	for _, transport := range []string{"legacy", "native", "legacy_grpc", "native_grpc"} {
 		for _, recovery := range []bool{true, false} {
 			name := "outage"
 			if recovery {
 				name = "recovery"
 			}
-			t.Run(oldMode+"/"+name, func(t *testing.T) {
+			t.Run(transport+"/"+name, func(t *testing.T) {
+				f, oldMode := newTransportFixture(t, transport)
 				newMode := otherMode(oldMode)
-				f := newFixture(t, oldMode)
 				f.backend.setPlan(oldMode, responsePlan{status: 503})
 				p := f.start(nil, true)
 				p.ready()

@@ -3,7 +3,7 @@
 Encodes OTel pod logs for the Receiver's existing `/stsAgent/logs/k8s`
 endpoint. The agent distribution registers this exporter as `stsk8slogs`.
 The [configuration fixture](../../test/validate/configs/legacy-logs-exporter.yaml)
-shows the endpoint, authentication and bounded queue/retry settings.
+shows the endpoint, authentication and bounded synchronous retry settings.
 
 The configured cluster name must be nonempty UTF-8 and must not contain double
 quotes, backslashes or non-printable characters. The Receiver's label parser
@@ -28,9 +28,8 @@ when retried.
 
 Invalid records are removed before entering exporter-helper, and counted once
 by `otelcol_stsk8slogs_invalid_log_records` with bounded `reason` attributes.
-The upstream exporter sent/failed counters count valid records only. The memory
-queue waits for export results and blocks when full. Persistent queues, queue
-batching, disabled retries and unlimited retry durations are rejected.
+The upstream exporter sent/failed counters count valid records only. Exporter
+queues must be disabled. Disabled retries and unlimited retry durations are rejected.
 The sender bounds each HTTP attempt; the caller owns the overall export lifetime.
 
 The Receiver client is pinned to a Go pseudo-version of its reviewed commit.

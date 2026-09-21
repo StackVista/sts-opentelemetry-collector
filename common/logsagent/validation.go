@@ -136,8 +136,8 @@ func ValidatePipelineConfig(conf *confmap.Conf) (PipelineConfig, error) {
 		return PipelineConfig{}, errors.New("max_concurrent_calls must be at least max_concurrent_files + 2")
 	}
 
-	legacyBound := exporterBound(exporters.namedObject(cfg.LegacyExporterID, "legacy exporter"), calls)
-	nativeBound := exporterBound(exporters.namedObject(cfg.NativeExporterID, "native exporter"), calls)
+	legacyBound := exporterBound(exporters.namedObject(cfg.LegacyExporterID, "legacy exporter"))
+	nativeBound := exporterBound(exporters.namedObject(cfg.NativeExporterID, "native exporter"))
 	if err != nil {
 		return PipelineConfig{}, err
 	}
@@ -145,7 +145,7 @@ func ValidatePipelineConfig(conf *confmap.Conf) (PipelineConfig, error) {
 	const overhead = 20 * time.Second
 	if cfg.QueueRetryBound > time.Duration(math.MaxInt64)-overhead ||
 		cfg.ExportLifetime < cfg.QueueRetryBound+overhead {
-		return PipelineConfig{}, errors.New("export_lifetime must cover both queue/retry bounds plus 20s")
+		return PipelineConfig{}, errors.New("export_lifetime must cover both retry/timeout bounds plus 20s")
 	}
 	return cfg, nil
 }
@@ -176,16 +176,9 @@ func ValidateEffectivePipelineConfig(conf *confmap.Conf) (PipelineConfig, error)
 			continue
 		}
 		fields, _ := raw.(map[string]any)
-		queue, ok := fields["sending_queue"].(map[string]any)
-		if !ok || queue == nil {
-			continue
-		}
-		// configoptional marshals enabled queues as objects and disabled queues as null.
-		if _, exists := queue["enabled"]; !exists {
-			queue["enabled"] = true
-		}
-		if queue["batch"] == nil {
-			delete(queue, "batch")
+		// Only a present null in effective config proves configoptional disabled the queue.
+		if queue, exists := fields["sending_queue"]; exists && queue == nil {
+			fields["sending_queue"] = map[string]any{"enabled": false}
 		}
 	}
 	return ValidatePipelineConfig(confmap.NewFromStringMap(values))
@@ -207,7 +200,7 @@ func terminalExporter(pipeline configFields, routeID string) string {
 	return exporters[0]
 }
 
-func exporterBound(exporter configFields, calls int64) time.Duration {
+func exporterBound(exporter configFields) time.Duration {
 	timeout := exporter.duration("timeout")
 	retry := exporter.object("retry_on_failure")
 	retry.boolean("enabled", true)
@@ -217,20 +210,9 @@ func exporterBound(exporter configFields, calls int64) time.Duration {
 	retry.optionalNumber("multiplier", 1, math.MaxFloat64)
 	retry.optionalNumber("randomization_factor", 0, 1)
 	queue := exporter.object("sending_queue")
-	queue.boolean("enabled", true)
-	queue.boolean("wait_for_result", true)
-	queue.boolean("block_on_overflow", true)
-	if queue.text("sizer") != "requests" {
-		queue.fail("sizer", "must be requests")
-	}
-	size := queue.positiveInt("queue_size")
-	workers := queue.positiveInt("num_consumers")
-	// Explicit null activates the upstream batch defaults in authored configuration.
-	if _, exists := queue.values["batch"]; exists {
-		queue.fail("batch", "must be omitted; queue batching is unsupported")
-	}
-	if queue.values["storage"] != nil {
-		queue.fail("storage", "must be omitted or null; persistent payload queues are unsupported")
+	queue.boolean("enabled", false)
+	if len(queue.values) != 1 {
+		queue.fail("", "must contain only enabled: false")
 	}
 	if *exporter.err != nil {
 		return 0
@@ -239,25 +221,11 @@ func exporterBound(exporter configFields, calls int64) time.Duration {
 		retry.fail("", "requires initial_interval <= max_interval <= max_elapsed_time")
 		return 0
 	}
-	if size < calls || workers > calls {
-		queue.fail("", "requires queue_size >= max_concurrent_calls >= num_consumers")
-		return 0
-	}
-	// Quotient/remainder avoids overflowing C + W - 1.
-	waves := calls / workers
-	if calls%workers != 0 {
-		waves++
-	}
 	if elapsed > time.Duration(math.MaxInt64)-timeout {
 		exporter.fail("", "retry and timeout duration sum overflows")
 		return 0
 	}
-	attemptBound := elapsed + timeout
-	if int64(attemptBound) > math.MaxInt64/waves {
-		exporter.fail("", "queue/retry duration bound overflows")
-		return 0
-	}
-	return time.Duration(waves) * attemptBound
+	return elapsed + timeout
 }
 
 func componentType(id string, allowed ...string) bool {

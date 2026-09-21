@@ -25,12 +25,13 @@ process cases explicitly skip. An invalid supplied binary fails.
 Debug-level collector logging exposes the connector's bounded completion events;
 all fixture records, credentials and endpoints are synthetic.
 
-Both exporters explicitly use C=8 queue slots, W=4 workers, R=2s retries and
-T=200ms attempts. Filelog allows four concurrent files and disables receiver
-retry. The 25s export lifetime exceeds `ceil(C/W)*(R+T)+20s = 24.4s`.
-Both terminal pipelines have no processors, queue batching or payload storage;
+Both exporters explicitly disable queues. The connector admits C=8 calls,
+with R=2s retries and T=200ms attempts. Filelog allows four concurrent files and
+disables receiver retry. The 25s export lifetime exceeds `max(R+T)+20s = 22.2s`.
+Both terminal pipelines have no processors or payload storage;
 checkpoint recreation is disabled. Normal drain tests wait on observed events
-and exits, with no lifetime-sized sleeps.
+and exits. CRI recombination serializes some calls before admission; the bound
+does not promise a full retry budget for every buffered fragment during drain.
 
 | Process coverage implemented | Evidence asserted |
 | --- | --- |
@@ -46,7 +47,7 @@ and exits, with no lifetime-sized sleeps.
 | Invalid lifetime, concurrency, queue, retry and synchronous gate | Real startup rejection; each terminal exporter's bounds are challenged |
 | Omitted exporter timeout/retry settings | Insufficient effective lifetime rejected; sufficient lifetime permits startup, immediate-success export and shutdown |
 | Sequential partial-CRI shutdown during outage | One absolute drain budget, completed retries and late rejection, exact final counters after exporter shutdown |
-| Timer flush with a stopped/resumed child process | Expired export deadline, rejection of remaining fragments and final worker shutdown |
+| Timer flush with a stopped/resumed child process | Expired export deadline, rejection of remaining fragments and final export shutdown |
 | Record/request size limits | Rejection before export and corresponding counters |
 | Capability observation reset, both directions | Current-mode, malformed, authentication, transient and unsupported queries interrupt the candidate sequence; authentication readiness recovers |
 | Failed restart marker/message writes | Old route remains usable; cooldown expires before three fresh observations request one successful restart |
@@ -56,12 +57,12 @@ and exits, with no lifetime-sized sleeps.
 | Repeated fingerprint after truncation | Default retains the old offset and reports at debug level; explicit `read_whole_file` reads the shorter file |
 | Native gRPC success and partial success | Decoded records, authorization and rejection reporting without whole-request retry |
 | Custom CA, missing CA and proxy variants | Trust/rejection for discovery and both exports; explicit HTTP proxy and gRPC HTTPS_PROXY/NO_PROXY behavior |
-| Injected admission saturation, both routes | Eight concurrent calls occupy admission; four workers hold completion and four requests stay queued; the ninth call is counted and rejected before export |
-| Injected worker delay, both routes | Backend acceptance precedes waiter deadline; connector stops while the selected exporter is stopping; final failed drain waits for worker release |
+| Injected admission saturation, both routes | Eight synchronous calls hold completion; the ninth call is counted and rejected before export |
+| Injected completion delay, both routes | Backend acceptance precedes deadline expiry; connector and final failed drain wait for the admitted call to return |
 | Injected signal callback failure, both directions | Persisted intent/message, restored readiness, fixed route, cooldown suppression and exactly one real SIGTERM after three fresh observations |
 
-The binary-independent checks also reject 29 omitted authored bound fields and
-12 invalid exporter-bound variants through the shared validator, without
+The binary-independent checks reject omitted authored bound fields and
+invalid exporter-bound variants through the shared validator, without
 Collector default insertion or typed-config marshaling.
 
 The ordinary suite uses a normal OCB build and runs the harness with the race
@@ -87,10 +88,10 @@ The overlays add file barriers controlled by the parent fixture. Admission
 testing fans one parsed Filelog record into eight numbered concurrent calls to
 the real connector, then submits the original as the excess call. This is forced
 load, not evidence that ordinary Filelog exceeds its configured concurrency.
-Worker testing pauses inside the stock disabled queue batcher after the sender
-returns and before result completion. It leaves the real queue, context deadline,
+Completion testing pauses an admitted synchronous call after export returns and
+before connector accounting finishes. It leaves the real context deadline,
 receiver and Collector shutdown running. Final reporting fails the test binary
-if any instrumented worker callback has not finished. Signal testing substitutes the existing
+if any instrumented call has not finished. Signal testing substitutes the existing
 restart callback and allows its real SIGTERM implementation after fault removal.
 These hooks exist only in the separate test binary.
 
@@ -110,7 +111,28 @@ Checkpoint-write faults use Linux `prlimit` on the temporary child process.
 The gRPC NO_PROXY case needs a local non-loopback IPv4 interface because the
 underlying proxy library already bypasses loopback.
 
+The opt-in Linux comparison uses the same harness for a queued baseline and the
+synchronous candidate:
+
+```sh
+OTEL_COMPARISON_DESIGN=synchronous OTEL_AGENT_BINARY=/path/to/candidate \
+  GOMAXPROCS=4 go test -count=1 -v -run '^TestQueueComparison$' -timeout=180s
+OTEL_COMPARISON_DESIGN=queued OTEL_AGENT_BINARY=/path/to/queued-baseline \
+  GOMAXPROCS=4 go test -count=1 -v -run '^TestQueueComparison$' -timeout=180s
+```
+
+The queued option restores the baseline fixture's eight request slots and four
+workers only in the test harness. Run designs sequentially, alternating order,
+for at least three repetitions. `QUEUE_COMPARISON` reports numbered-record
+delivery/loss/duplicates, throughput, request concurrency, child CPU/peak RSS,
+undelivered records at approximately 500ms and final drain counters.
+Inputs cover healthy CRI traffic, delayed CRI/Docker responses, recovery after
+one second, retry exhaustion and records near the size limit. Docker saturation
+uses six concurrent files; all other cases use four. Both designs retain the same
+25s lifetime and child GOMAXPROCS=2. These synthetic loads are comparative
+measurements, not an owner-approved capacity target.
+
 Kubernetes grace, enrichment, permissions/SELinux, container
-replacement, Promtail migration/rollback and resource/throughput tests require
+replacement and Promtail migration/rollback require
 separate fixtures. Fresh-directory tests model lost state, not an actual Pod
 replacement. This suite makes no live Receiver or product-acceptance claim.

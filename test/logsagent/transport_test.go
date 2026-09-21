@@ -22,9 +22,11 @@ import (
 
 	"go.opentelemetry.io/collector/pdata/plog/plogotlp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	_ "google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 type grpcLogsBackend struct {
@@ -34,6 +36,7 @@ type grpcLogsBackend struct {
 }
 
 func (s *grpcLogsBackend) Export(ctx context.Context, req plogotlp.ExportRequest) (plogotlp.ExportResponse, error) {
+	defer s.backend.enter(ctx)()
 	md, _ := metadata.FromIncomingContext(ctx)
 	if values := md.Get("authorization"); len(values) != 1 || values[0] != "SUSEObservability "+syntheticKey {
 		s.backend.t.Error("incorrect synthetic native gRPC authorization")
@@ -46,9 +49,20 @@ func (s *grpcLogsBackend) Export(ctx context.Context, req plogotlp.ExportRequest
 	if err != nil {
 		return plogotlp.NewExportResponse(), err
 	}
-	s.backend.mu.Lock()
-	s.backend.requests = append(s.backend.requests, request{mode: "native", status: http.StatusOK, records: records})
-	s.backend.mu.Unlock()
+	_, httpStatus, lost := s.backend.record("native", records)
+	if lost || httpStatus == http.StatusServiceUnavailable {
+		return plogotlp.NewExportResponse(), status.Error(codes.Unavailable, "synthetic temporary failure")
+	}
+	if httpStatus != http.StatusOK {
+		code := codes.InvalidArgument
+		switch httpStatus {
+		case http.StatusUnauthorized:
+			code = codes.Unauthenticated
+		case http.StatusForbidden:
+			code = codes.PermissionDenied
+		}
+		return plogotlp.NewExportResponse(), status.Error(code, "synthetic permanent failure")
+	}
 	resp := plogotlp.NewExportResponse()
 	if s.partial {
 		resp.PartialSuccess().SetRejectedLogRecords(1)
@@ -367,4 +381,16 @@ func TestTransportGRPCHTTPSProxy(t *testing.T) {
 			}
 		})
 	}
+}
+
+func newTransportFixture(t *testing.T, transport string) (*fixture, string) {
+	t.Helper()
+	mode := strings.TrimSuffix(transport, "_grpc")
+	f := newFixture(t, mode)
+	if strings.HasSuffix(transport, "_grpc") {
+		server, ca := transportTLS(f)
+		endpoint := grpcTransport(f, server.TLS.Certificates[0], "127.0.0.1", false)
+		f.configure = func(config map[string]any) { useNativeGRPC(config, endpoint, ca) }
+	}
+	return f, mode
 }

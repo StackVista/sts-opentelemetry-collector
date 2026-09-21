@@ -72,12 +72,7 @@ exporters:
       max_interval: 200ms
       max_elapsed_time: {{.RetryBudget}}
     sending_queue:
-      enabled: true
-      sizer: requests
-      queue_size: {{.Concurrency}}
-      num_consumers: {{.Workers}}
-      wait_for_result: true
-      block_on_overflow: true
+      enabled: false
   otlp_http/native:
     endpoint: {{printf "%q" .NativeURL}}
     auth:
@@ -89,12 +84,7 @@ exporters:
       max_interval: 200ms
       max_elapsed_time: {{.RetryBudget}}
     sending_queue:
-      enabled: true
-      sizer: requests
-      queue_size: {{.Concurrency}}
-      num_consumers: {{.Workers}}
-      wait_for_result: true
-      block_on_overflow: true
+      enabled: false
 service:
   telemetry:
     logs:

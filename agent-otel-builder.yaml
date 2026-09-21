@@ -24,14 +24,8 @@ exporters:
   - gomod: github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8slogsexporter v0.0.0
     path: ./exporter/stsk8slogsexporter
   - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.153.0
-  - gomod: github.com/stackvista/sts-opentelemetry-collector/exporter/otlpconfigexporter v0.0.0
-    import: github.com/stackvista/sts-opentelemetry-collector/exporter/otlpconfigexporter/grpc
-    name: otlpgrpcexporter
-    path: ./exporter/otlpconfigexporter
-  - gomod: github.com/stackvista/sts-opentelemetry-collector/exporter/otlpconfigexporter v0.0.0
-    import: github.com/stackvista/sts-opentelemetry-collector/exporter/otlpconfigexporter/http
-    name: otlphttpexporter
-    path: ./exporter/otlpconfigexporter
+  - gomod: go.opentelemetry.io/collector/exporter/otlpexporter v0.153.0
+  - gomod: go.opentelemetry.io/collector/exporter/otlphttpexporter v0.153.0
 
 receivers:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.153.0

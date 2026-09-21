@@ -55,14 +55,14 @@ func assertNoFinalDrain(t *testing.T, p *process) {
 	t.Helper()
 	select {
 	case <-p.done:
-		t.Fatalf("collector exited while its worker was held: %v", p.err)
+		t.Fatalf("collector exited while its export call was held: %v", p.err)
 	default:
 	}
 	if len(stressEvents(p, "Logs export drain finished", "")) != 0 {
-		t.Fatal("collector finalized the drain before exporter worker shutdown")
+		t.Fatal("collector finalized the drain before export completion")
 	}
 	if p.status("/live") != http.StatusOK || p.status("/ready") != http.StatusServiceUnavailable {
-		t.Fatal("collector must remain live and unready while joining exporter workers")
+		t.Fatal("collector must remain live and unready while joining export calls")
 	}
 }
 
@@ -72,7 +72,12 @@ func TestInjectedAdmissionSaturation(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
 			f, control := newFaultFixture(t, mode)
-			control.hold("worker")
+			stage, concurrent := "completion", f.settings.Concurrency
+			if os.Getenv("OTEL_COMPARISON_DESIGN") == "queued" {
+				stage, concurrent = "worker", 4
+			}
+			f.backend.responseDelay = 100 * time.Millisecond
+			control.hold(stage)
 			control.hold("admission")
 			port, endpoint := stressMetrics(t)
 			p := f.start(stressValidated(t, func(config map[string]any) {
@@ -86,7 +91,7 @@ func TestInjectedAdmissionSaturation(t *testing.T) {
 			p.ready()
 			bodies := f.appendRecords(0, 0, 1)
 			control.wait("admission_full", 1)
-			control.wait("worker_entered", f.settings.Workers)
+			control.wait(stage+"_entered", concurrent)
 			control.wait("admission_rejected", 1)
 			eventually(t, 3*time.Second, "exact saturation counters", func() bool {
 				return stressMetric(p, endpoint, "stslogsroute_pre_export_rejected_requests", "admission_saturated") == 1 &&
@@ -95,19 +100,26 @@ func TestInjectedAdmissionSaturation(t *testing.T) {
 			if len(stressEvents(p, "Logs export completed", "")) != 0 {
 				t.Fatal("admission was not saturated with outstanding result waiters")
 			}
-			if f.backend.attempts(mode) != f.settings.Workers || f.backend.bodies(mode, false)[bodies[0]] != 0 {
-				t.Fatal("queued or excess calls reached the backend while workers were held")
+			if f.backend.attempts(mode) != concurrent || f.backend.bodies(mode, false)[bodies[0]] != 0 {
+				t.Fatal("excess calls reached the backend while completions were held")
 			}
+			f.backend.mu.Lock()
+			maxConcurrent := f.backend.maxActive
+			f.backend.mu.Unlock()
+			if maxConcurrent != concurrent {
+				t.Fatalf("backend concurrency=%d, want %d", maxConcurrent, concurrent)
+			}
+			t.Logf("Observed backend concurrency=%d for %d admitted calls", maxConcurrent, f.settings.Concurrency)
 			p.signal()
 			assertDraining(t, p)
 			assertNoFinalDrain(t, p)
 			control.release("admission")
-			control.release("worker")
+			control.release(stage)
 			p.wait(8*time.Second, true)
 			control.wait("drain_finalized", 1)
 			assertOrdinaryDrain(t, p, true)
 			if len(stressEvents(p, "Logs export completed", "acknowledged")) != f.settings.Concurrency {
-				t.Fatal("not all admitted calls completed after worker release")
+				t.Fatal("not all admitted calls completed after completion release")
 			}
 			admitted := make([]string, 0, f.settings.Concurrency)
 			for i := range f.settings.Concurrency {
@@ -120,33 +132,35 @@ func TestInjectedAdmissionSaturation(t *testing.T) {
 	}
 }
 
-func TestInjectedWaiterDeadlineBeforeWorkerShutdown(t *testing.T) {
+func TestInjectedDelayedSynchronousCompletion(t *testing.T) {
 	t.Parallel()
 	for _, mode := range []string{"legacy", "native"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
 			f, control := newFaultFixture(t, mode)
-			control.hold("worker")
+			control.hold("completion")
 			p := f.start(stressValidated(t, nil), true)
 			p.ready()
 			bodies := f.appendRecords(0, 0, 1)
-			control.wait("worker_entered", 1)
+			control.wait("completion_entered", 1)
 			f.backend.waitBodies(mode, bodies, true)
 			p.signal()
 			assertDraining(t, p)
-			eventually(t, f.settings.Lifetime+3*time.Second, "waiter deadline and downstream shutdown", func() bool {
-				return p.event("Logs export completed", map[string]any{
-					"outcome": "deadline_expired", "draining": true, "log_records": float64(1),
-				}) && control.count("connector_stopped") == 1 && control.count("selected_exporter_stopping") == 1
-			})
-			if control.count("worker_released") != 0 {
-				t.Fatal("worker already returned before connector shutdown")
+			timer := time.NewTimer(f.settings.Lifetime + 100*time.Millisecond)
+			defer timer.Stop()
+			select {
+			case <-timer.C:
+			case <-p.done:
+				t.Fatal("collector exited with an admitted call held")
+			}
+			if len(stressEvents(p, "Logs export completed", "")) != 0 || control.count("connector_stopped") != 0 {
+				t.Fatal("synchronous completion escaped the admission boundary")
 			}
 			assertNoFinalDrain(t, p)
-			control.release("worker")
+			control.release("completion")
 			p.wait(5*time.Second, true)
-			control.wait("worker_released", 1)
-			control.wait("worker_finished", 1)
+			control.wait("completion_released", 1)
+			control.wait("completion_finished", 1)
 			control.wait("drain_finalized", 1)
 			stressFinal(t, p, 1, 1, 0)
 			f.backend.assertRecords(mode, bodies, true)

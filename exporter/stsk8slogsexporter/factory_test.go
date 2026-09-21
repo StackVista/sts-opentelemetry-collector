@@ -59,6 +59,7 @@ func newStartedLogsExporter(t *testing.T, cfg *Config) exporter.Logs {
 func TestFactoryDefaultsAndConfiguration(t *testing.T) {
 	const queueKey = "sending_queue"
 	const retryKey = "retry_on_failure"
+	const enabledKey = "enabled"
 	factory := NewFactory()
 	cfg, ok := factory.CreateDefaultConfig().(*Config)
 	if !ok {
@@ -67,13 +68,8 @@ func TestFactoryDefaultsAndConfiguration(t *testing.T) {
 	if factory.Type() != component.MustNewType("stsk8slogs") || cfg.TimeoutSettings.Timeout != 5*time.Second ||
 		!cfg.BackOffConfig.Enabled || cfg.BackOffConfig.InitialInterval != time.Second ||
 		cfg.BackOffConfig.MaxInterval != 5*time.Second || cfg.BackOffConfig.MaxElapsedTime != 30*time.Second ||
-		!cfg.QueueSettings.HasValue() {
+		cfg.QueueSettings.HasValue() {
 		t.Fatal("factory defaults do not preserve legacy delivery guarantees")
-	}
-	queue := cfg.QueueSettings.Get()
-	if queue == nil || queue.QueueSize != 8 || queue.NumConsumers != 4 || !queue.WaitForResult ||
-		!queue.BlockOnOverflow || queue.StorageID != nil || queue.Batch.HasValue() {
-		t.Fatal("unexpected queue defaults")
 	}
 	if err := componenttest.CheckConfigStruct(cfg); err != nil {
 		t.Fatal(err)
@@ -99,12 +95,7 @@ func TestFactoryDefaultsAndConfiguration(t *testing.T) {
 					"max_interval":     "4s",
 					"max_elapsed_time": "20s",
 				},
-				queueKey: map[string]any{
-					"queue_size":        16,
-					"num_consumers":     2,
-					"wait_for_result":   true,
-					"block_on_overflow": true,
-				},
+				queueKey: map[string]any{enabledKey: false},
 			},
 			valid: true,
 		},
@@ -121,10 +112,10 @@ func TestFactoryDefaultsAndConfiguration(t *testing.T) {
 				queueKey: false,
 			},
 		},
-		{name: "disabled_queue_section", data: map[string]any{queueKey: map[string]any{"enabled": false}}},
+		{name: "disabled_queue_section", valid: true, data: map[string]any{queueKey: map[string]any{enabledKey: false}}},
 		{name: "no_result_wait", data: map[string]any{queueKey: map[string]any{"wait_for_result": false}}},
 		{name: "no_overflow_wait", data: map[string]any{queueKey: map[string]any{"block_on_overflow": false}}},
-		{name: "disabled_retries", data: map[string]any{retryKey: map[string]any{"enabled": false}}},
+		{name: "disabled_retries", data: map[string]any{retryKey: map[string]any{enabledKey: false}}},
 		{name: "unbounded_retries", data: map[string]any{retryKey: map[string]any{"max_elapsed_time": "0s"}}},
 		{
 			name: "storage",
@@ -169,9 +160,9 @@ func TestFactoryDefaultsAndConfiguration(t *testing.T) {
 				if !ok {
 					t.Fatal("unexpected config type")
 				}
-				if decoded.TimeoutSettings.Timeout != 7*time.Second || decoded.ProxyURL != "http://proxy.example:8080" ||
+				if tc.name == "full" && (decoded.TimeoutSettings.Timeout != 7*time.Second || decoded.ProxyURL != "http://proxy.example:8080" ||
 					decoded.TLS.CAFile != "/etc/ssl/legacy-ca.pem" || !decoded.TLS.InsecureSkipVerify ||
-					decoded.QueueSettings.Get().QueueSize != 16 {
+					decoded.QueueSettings.HasValue()) {
 					t.Fatal("configuration did not decode into the factory config")
 				}
 			} else if err == nil {
@@ -236,14 +227,12 @@ func TestFactoryPipelineStatusHandling(t *testing.T) {
 	}
 }
 
-func TestFactoryWaitsForBackendAndJoinsQueueWorkers(t *testing.T) {
-	entered := make(chan struct{})
+func TestFactorySynchronousCompletionAndCancellation(t *testing.T) {
+	entered := make(chan struct{}, 2)
 	release := make(chan struct{})
-	exited := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer close(exited)
 		_, _ = io.Copy(io.Discard, r.Body)
-		close(entered)
+		entered <- struct{}{}
 		select {
 		case <-release:
 		case <-r.Context().Done():
@@ -251,81 +240,46 @@ func TestFactoryWaitsForBackendAndJoinsQueueWorkers(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer server.Close()
-	releaseBackend := sync.OnceFunc(func() { close(release) })
-	defer releaseBackend()
-
-	cfg := factoryConfig(t, server.URL+"/stsAgent/logs/k8s")
-	queue := cfg.QueueSettings.Get()
-	queue.QueueSize = 1
-	queue.NumConsumers = 1
-	exp, err := NewFactory().CreateLogs(
-		context.Background(),
-		exportertest.NewNopSettings(component.MustNewType("stsk8slogs")),
-		cfg,
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := exp.Start(context.Background(), componenttest.NewNopHost()); err != nil {
-		t.Fatal(err)
-	}
-
-	firstDone := make(chan error, 1)
-	go func() { firstDone <- exp.ConsumeLogs(context.Background(), testLogs()) }()
+	finish := sync.OnceFunc(func() { close(release) })
+	defer finish()
+	exp := newStartedLogsExporter(t, factoryConfig(t, server.URL+"/stsAgent/logs/k8s"))
+	done := make(chan error, 1)
+	go func() { done <- exp.ConsumeLogs(context.Background(), testLogs()) }()
 	select {
 	case <-entered:
 	case <-time.After(5 * time.Second):
-		t.Fatal("backend was not called")
+		t.Fatal("backend not called")
 	}
 	select {
-	case err := <-firstDone:
-		t.Fatalf("ConsumeLogs returned before backend response: %v", err)
+	case err := <-done:
+		t.Fatalf("returned before completion: %v", err)
 	default:
 	}
-
-	secondDone := make(chan error, 1)
-	secondCtx, secondCancel := context.WithCancel(context.Background())
-	go func() { secondDone <- exp.ConsumeLogs(secondCtx, testLogs()) }()
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-	defer cancel()
-	if err := exp.ConsumeLogs(ctx, testLogs()); !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("queue saturation ignored cancellation: %v", err)
-	}
-	secondCancel()
+	ctx, cancel := context.WithCancel(context.Background())
+	canceled := make(chan error, 1)
+	go func() { canceled <- exp.ConsumeLogs(ctx, testLogs()) }()
 	select {
-	case err := <-secondDone:
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("second synchronous call serialized")
+	}
+	cancel()
+	select {
+	case err := <-canceled:
 		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("queued ConsumeLogs ignored cancellation: %v", err)
+			t.Fatalf("cancellation: %v", err)
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("queued ConsumeLogs did not observe cancellation")
+		t.Fatal("cancellation ignored")
 	}
-
-	shutdownDone := make(chan error, 1)
-	go func() { shutdownDone <- exp.Shutdown(context.Background()) }()
+	finish()
 	select {
-	case err := <-shutdownDone:
-		t.Fatalf("Shutdown returned while an export worker was still waiting: %v", err)
-	case <-time.After(20 * time.Millisecond):
-	}
-	releaseBackend()
-	select {
-	case err := <-shutdownDone:
+	case err := <-done:
 		if err != nil {
 			t.Fatal(err)
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("Shutdown did not join queue workers")
-	}
-	select {
-	case <-exited:
-	case <-time.After(5 * time.Second):
-		t.Fatal("Shutdown returned before the active worker exited")
-	}
-	select {
-	case <-firstDone:
-	case <-time.After(5 * time.Second):
-		t.Fatal("first ConsumeLogs did not return")
+		t.Fatal("completion ignored")
 	}
 }
 
