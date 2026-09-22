@@ -12,6 +12,17 @@ const (
 	OTELNativeMode Mode = "native"
 )
 
+func (m Mode) String() string {
+	switch m {
+	case PromtailMode:
+		return "PromtailMode"
+	case OTELNativeMode:
+		return "OTELNativeMode"
+	default:
+		return string(m)
+	}
+}
+
 // Controller fixes routing for one process and shares its absolute drain deadline.
 type Controller interface {
 	SelectedMode() Mode

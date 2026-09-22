@@ -201,8 +201,9 @@ func TestInjectedSignalFailureRecoversAfterCooldown(t *testing.T) {
 				t.Fatal("signal failure lost the persisted restart intent")
 			}
 			message, err := os.ReadFile(f.settings.Termination)
+			names := map[string]string{"legacy": "PromtailMode", "native": "OTELNativeMode"}
 			if err != nil || string(message) != fmt.Sprintf(
-				"Logs capability changed from %s to %s; requesting graceful restart.\n", mode, target.mode) {
+				"Logs capability changed from %s to %s; requesting graceful restart.\n", names[mode], names[target.mode]) {
 				t.Fatal("signal callback ran without the expected termination message")
 			}
 			control.release("signal")
