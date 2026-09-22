@@ -1,0 +1,48 @@
+# Metric names the agent assembles at runtime, which scanning source cannot find.
+#
+# Each row is a concrete name the node-agent can emit, with the source location that builds
+# it so a reviewer can check the list has not gone stale. Keep this file sorted by metric.
+#
+# The reason lists come from includeContainerStateReason in the pod provider. The resource
+# lists come from the container spec, so extended resources (for example nvidia.com/gpu)
+# produce further names that are not enumerable ahead of time.
+metric,check,kind,source,note
+kubernetes.containers.containercannotrun.terminated,kubelet,gauge,containers/kubelet/provider/pod/provider.go:43,terminated reason fan-out
+kubernetes.containers.containercreating.waiting,kubelet,gauge,containers/kubelet/provider/pod/provider.go:38,waiting reason fan-out
+kubernetes.containers.crashloopbackoff.waiting,kubelet,gauge,containers/kubelet/provider/pod/provider.go:37,waiting reason fan-out
+kubernetes.containers.createcontainerconfigerror.waiting,kubelet,gauge,containers/kubelet/provider/pod/provider.go:41,waiting reason fan-out
+kubernetes.containers.createcontainererror.waiting,kubelet,gauge,containers/kubelet/provider/pod/provider.go:39,waiting reason fan-out
+kubernetes.containers.errimagepull.waiting,kubelet,gauge,containers/kubelet/provider/pod/provider.go:35,waiting reason fan-out
+kubernetes.containers.error.terminated,kubelet,gauge,containers/kubelet/provider/pod/provider.go:43,terminated reason fan-out
+kubernetes.containers.imagepullbackoff.waiting,kubelet,gauge,containers/kubelet/provider/pod/provider.go:36,waiting reason fan-out
+kubernetes.containers.invalidimagename.waiting,kubelet,gauge,containers/kubelet/provider/pod/provider.go:40,waiting reason fan-out
+kubernetes.containers.oomkilled.terminated,kubelet,gauge,containers/kubelet/provider/pod/provider.go:43,terminated reason fan-out
+kubernetes.cpu.limits,kubelet,gauge,containers/kubelet/provider/pod/provider.go:188,resource name from the container spec
+kubernetes.cpu.requests,kubelet,gauge,containers/kubelet/provider/pod/provider.go:179,resource name from the container spec
+kubernetes.ephemeral-storage.limits,kubelet,gauge,containers/kubelet/provider/pod/provider.go:188,resource name from the container spec
+kubernetes.ephemeral-storage.requests,kubelet,gauge,containers/kubelet/provider/pod/provider.go:179,resource name from the container spec
+kubernetes.kubelet.check.log,kubelet,service_check,containers/kubelet/provider/health/provider.go,health provider sub-check
+kubernetes.kubelet.check.ping,kubelet,service_check,containers/kubelet/provider/health/provider.go,health provider sub-check
+kubernetes.kubelet.cpu.usage,kubelet,gauge,containers/kubelet/provider/summary/provider.go:172,system container name prefix
+kubernetes.kubelet.memory.rss,kubelet,gauge,containers/kubelet/provider/summary/provider.go:166,system container name prefix
+kubernetes.kubelet.memory.usage,kubelet,gauge,containers/kubelet/provider/summary/provider.go:168,system container name prefix
+kubernetes.liveness_probe.failure.total,kubelet,gauge,containers/kubelet/provider/probe/provider.go,probe type and result fan-out
+kubernetes.liveness_probe.success.total,kubelet,gauge,containers/kubelet/provider/probe/provider.go,probe type and result fan-out
+kubernetes.liveness_probe.unknown.total,kubelet,gauge,containers/kubelet/provider/probe/provider.go,probe type and result fan-out
+kubernetes.memory.limits,kubelet,gauge,containers/kubelet/provider/pod/provider.go:188,resource name from the container spec
+kubernetes.memory.requests,kubelet,gauge,containers/kubelet/provider/pod/provider.go:179,resource name from the container spec
+kubernetes.node.filesystem.usage,kubelet,gauge,containers/kubelet/provider/summary/provider.go:158,node filesystem prefix
+kubernetes.node.filesystem.usage_pct,kubelet,gauge,containers/kubelet/provider/summary/provider.go:158,node filesystem prefix
+kubernetes.node.image.filesystem.usage,kubelet,gauge,containers/kubelet/provider/summary/provider.go:160,node image filesystem prefix
+kubernetes.node.image.filesystem.usage_pct,kubelet,gauge,containers/kubelet/provider/summary/provider.go:160,node image filesystem prefix
+kubernetes.readiness_probe.failure.total,kubelet,gauge,containers/kubelet/provider/probe/provider.go,probe type and result fan-out
+kubernetes.readiness_probe.success.total,kubelet,gauge,containers/kubelet/provider/probe/provider.go,probe type and result fan-out
+kubernetes.readiness_probe.unknown.total,kubelet,gauge,containers/kubelet/provider/probe/provider.go,probe type and result fan-out
+kubernetes.runtime.cpu.usage,kubelet,gauge,containers/kubelet/provider/summary/provider.go:172,system container name prefix
+kubernetes.runtime.memory.rss,kubelet,gauge,containers/kubelet/provider/summary/provider.go:166,system container name prefix
+kubernetes.runtime.memory.usage,kubelet,gauge,containers/kubelet/provider/summary/provider.go:168,system container name prefix
+kubernetes.slis.kubernetes_healthcheck,kubelet,gauge,containers/kubelet/provider/slis/provider.go:72,SLI name from the scraped family
+kubernetes.slis.kubernetes_healthchecks_total,kubelet,count,containers/kubelet/provider/slis/provider.go:70,SLI name from the scraped family
+kubernetes.startup_probe.failure.total,kubelet,gauge,containers/kubelet/provider/probe/provider.go,probe type and result fan-out
+kubernetes.startup_probe.success.total,kubelet,gauge,containers/kubelet/provider/probe/provider.go,probe type and result fan-out
+kubernetes.startup_probe.unknown.total,kubelet,gauge,containers/kubelet/provider/probe/provider.go,probe type and result fan-out
