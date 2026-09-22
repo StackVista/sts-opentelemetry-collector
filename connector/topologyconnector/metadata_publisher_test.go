@@ -2,19 +2,176 @@
 package topologyconnector
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	topostreamv1 "github.com/stackvista/sts-opentelemetry-collector/connector/topologyconnector/generated/topostream/topo_stream.v1"
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter"
 	"github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension/generated/settingsproto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.uber.org/zap/zaptest"
 	"google.golang.org/protobuf/proto"
 )
+
+func TestMetadataPublisher_SerializesPendingRecords(t *testing.T) {
+	for _, finalState := range []string{"deleted", "recreated"} {
+		t.Run(finalState, func(t *testing.T) {
+			received := make(chan plog.Logs, 32)
+			release := make(chan struct{})
+			var releaseOnce sync.Once
+			unblock := func() { releaseOnce.Do(func() { close(release) }) }
+			defer unblock()
+			var calls atomic.Int32
+			sink, err := consumer.NewLogs(func(_ context.Context, logs plog.Logs) error {
+				call := calls.Add(1)
+				received <- logs
+				if call == 1 {
+					<-release
+					return errors.New("first export failed")
+				}
+				return nil
+			})
+			require.NoError(t, err)
+			publisher := NewMetadataPublisher(zaptest.NewLogger(t))
+			publisher.SetLogsConsumer(sink)
+			mapping := settingsproto.OtelComponentMapping{Identifier: "urn:test:mapping", Name: "original"}
+			publish := func(mapping settingsproto.OtelComponentMapping) {
+				publisher.Update(nil, map[settingsproto.OtelInputSignal][]settingsproto.OtelComponentMapping{
+					settingsproto.TRACES: {mapping},
+				}, nil)
+			}
+			receive := func() plog.Logs {
+				t.Helper()
+				select {
+				case logs := <-received:
+					return logs
+				case <-time.After(5 * time.Second):
+					t.Fatal("metadata export did not arrive")
+					return plog.Logs{}
+				}
+			}
+			firstDone := make(chan struct{})
+			go func() {
+				publish(mapping)
+				close(firstDone)
+			}()
+			first := extractMetadataRecords(t, receive())
+			require.Len(t, first, 1)
+			assertMetadataLogRecord(t, first[0], "urn:test:mapping", "original")
+
+			queued := make(chan struct{})
+			go func() {
+				for i := range 20 {
+					mapping.Name = fmt.Sprintf("update-%d", i)
+					publish(mapping)
+				}
+				publisher.PublishTombstones([]settingsproto.SettingExtension{mapping})
+				if finalState == "recreated" {
+					mapping.Name = "recreated"
+					publish(mapping)
+				}
+				close(queued)
+			}()
+			t.Cleanup(func() {
+				unblock()
+				<-firstDone
+				<-queued
+				require.Eventually(t, func() bool {
+					publisher.pendingMu.Lock()
+					defer publisher.pendingMu.Unlock()
+					return !publisher.publishing
+				}, 5*time.Second, time.Millisecond)
+			})
+			select {
+			case <-queued:
+			case <-time.After(500 * time.Millisecond):
+				t.Fatal("pending metadata blocked on the active export")
+			}
+			select {
+			case <-received:
+				t.Fatal("a newer export overtook the blocked export")
+			case <-time.After(100 * time.Millisecond):
+			}
+			unblock()
+			latest := extractMetadataRecords(t, receive())
+			require.Len(t, latest, 1, "pending updates for one mapping must coalesce")
+			if finalState == "deleted" {
+				assert.Empty(t, latest[0].Body().Bytes().AsRaw())
+			} else {
+				assertMetadataLogRecord(t, latest[0], "urn:test:mapping", "recreated")
+			}
+			assert.Equal(t, int32(2), calls.Load())
+		})
+	}
+}
+
+func TestSnapshotManager_MetadataBackpressure(t *testing.T) {
+	for _, operation := range []string{"read", "stop"} {
+		t.Run(operation, func(t *testing.T) {
+			entered := make(chan struct{})
+			release := make(chan struct{})
+			exported := make(chan struct{})
+			var releaseOnce sync.Once
+			unblock := func() { releaseOnce.Do(func() { close(release) }) }
+			defer unblock()
+			sink, err := consumer.NewLogs(func(context.Context, plog.Logs) error {
+				close(entered)
+				<-release
+				close(exported)
+				return nil
+			})
+			require.NoError(t, err)
+			publisher := NewMetadataPublisher(zaptest.NewLogger(t))
+			publisher.SetLogsConsumer(sink)
+			manager := NewSnapshotManager(zaptest.NewLogger(t), []settingsproto.OtelInputSignal{settingsproto.TRACES}, publisher)
+			onRemovals := func(context.Context, []settingsproto.OtelComponentMapping, []settingsproto.OtelRelationMapping) {}
+			require.NoError(t, manager.Start(t.Context(), NewMockStsSettingsProvider(nil, nil), onRemovals))
+			updated := make(chan struct{})
+			go func() {
+				manager.Update(t.Context(), []settingsproto.OtelComponentMapping{
+					{Identifier: "urn:test:mapping", Input: settingsproto.OtelInput{Signal: []settingsproto.OtelInputSignal{settingsproto.TRACES}}},
+				}, nil, onRemovals)
+				close(updated)
+			}()
+			t.Cleanup(func() {
+				unblock()
+				<-updated
+				<-exported
+				_, _ = manager.Stop(t.Context())
+			})
+			select {
+			case <-entered:
+			case <-time.After(5 * time.Second):
+				t.Fatal("metadata export did not start")
+			}
+			done := make(chan struct{})
+			go func() {
+				if operation == "read" {
+					manager.Current(settingsproto.TRACES)
+				} else {
+					_, _ = manager.Stop(t.Context())
+				}
+				close(done)
+			}()
+			select {
+			case <-done:
+			case <-time.After(500 * time.Millisecond):
+				t.Errorf("%s blocked on metadata export", operation)
+			}
+			unblock()
+			<-done
+		})
+	}
+}
 
 func extractMetadataRecords(t *testing.T, logs plog.Logs) []plog.LogRecord {
 	t.Helper()
@@ -29,6 +186,12 @@ func extractMetadataRecords(t *testing.T, logs plog.Logs) []plog.LogRecord {
 		}
 	}
 	return records
+}
+
+func awaitMetadataLogs(t *testing.T, sink *consumertest.LogsSink, count int) []plog.Logs {
+	t.Helper()
+	require.Eventually(t, func() bool { return len(sink.AllLogs()) == count }, 5*time.Second, time.Millisecond)
+	return sink.AllLogs()
 }
 
 func assertMetadataLogRecord(t *testing.T, lr plog.LogRecord, expectedDataSource, expectedDisplayName string) {
@@ -84,7 +247,7 @@ func TestMetadataPublisher(t *testing.T) {
 			relationMappings,
 		)
 
-		allLogs := sink.AllLogs()
+		allLogs := awaitMetadataLogs(t, sink, 1)
 		require.Len(t, allLogs, 1)
 		records := extractMetadataRecords(t, allLogs[0])
 		require.Len(t, records, 2)
@@ -126,7 +289,7 @@ func TestMetadataPublisher(t *testing.T) {
 			nil,
 		)
 
-		allLogs := sink.AllLogs()
+		allLogs := awaitMetadataLogs(t, sink, 1)
 		require.Len(t, allLogs, 1)
 		records := extractMetadataRecords(t, allLogs[0])
 		assert.Len(t, records, 1)
@@ -145,8 +308,9 @@ func TestMetadataPublisher(t *testing.T) {
 		}
 
 		publisher.Update([]settingsproto.OtelInputSignal{settingsproto.TRACES}, mappings, nil)
+		awaitMetadataLogs(t, sink, 1)
 		publisher.Update([]settingsproto.OtelInputSignal{settingsproto.TRACES}, mappings, nil)
-		assert.Len(t, sink.AllLogs(), 2, "should republish on every snapshot — compaction handles dedup")
+		awaitMetadataLogs(t, sink, 2)
 	})
 
 	t.Run("skips publish when no consumer is set", func(t *testing.T) {
@@ -197,7 +361,7 @@ func TestMetadataPublisher(t *testing.T) {
 			nil,
 		)
 
-		records := extractMetadataRecords(t, sink.AllLogs()[0])
+		records := extractMetadataRecords(t, awaitMetadataLogs(t, sink, 1)[0])
 		var msg topostreamv1.TopologyStreamMetadataMessage
 		require.NoError(t, proto.Unmarshal(records[0].Body().Bytes().AsRaw(), &msg))
 
@@ -225,7 +389,7 @@ func TestMetadataPublisher(t *testing.T) {
 
 		publisher.PublishTombstones(removed)
 
-		allLogs := sink.AllLogs()
+		allLogs := awaitMetadataLogs(t, sink, 1)
 		require.Len(t, allLogs, 1)
 		records := extractMetadataRecords(t, allLogs[0])
 		require.Len(t, records, 1)

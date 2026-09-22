@@ -5,14 +5,17 @@ const (
 	ScopeName = "github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver"
 
 	// Attribute keys for log records
-	AttrK8sResourceKind    = "k8s.resource.kind"
-	AttrK8sResourceGroup   = "k8s.resource.group"
-	AttrK8sResourceVersion = "k8s.resource.version"
-	AttrK8sCRDCRsWatched   = "k8s.crd.custom_resources_watched"
-	AttrK8sObjectName      = "k8s.object.name"
-	AttrEventDomain        = "event.domain"
-	AttrK8sNamespaceName   = "k8s.namespace.name"
-	AttrK8sClusterName     = "k8s.cluster.name"
+	AttrK8sResourceKind           = "k8s.resource.kind"
+	AttrK8sResourceGroup          = "k8s.resource.group"
+	AttrK8sResourceVersion        = "k8s.resource.version"
+	AttrK8sCRDCRsWatched          = "k8s.crd.custom_resources_watched"
+	AttrK8sObjectName             = "k8s.object.name"
+	AttrEventDomain               = "event.domain"
+	AttrK8sNamespaceName          = "k8s.namespace.name"
+	AttrK8sClusterName            = "k8s.cluster.name"
+	AttrK8sPodRestartCount        = "k8s.pod.restart_count"
+	AttrK8sPodContainerCount      = "k8s.pod.container_count"
+	AttrK8sPodReadyContainerCount = "k8s.pod.ready_container_count"
 
 	// EventDomainK8s is the value for the event.domain attribute.
 	EventDomainK8s = "k8s"

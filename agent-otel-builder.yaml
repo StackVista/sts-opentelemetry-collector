@@ -56,3 +56,13 @@ replaces:
   - google.golang.org/grpc => google.golang.org/grpc v1.83.2
   - github.com/klauspost/compress => github.com/klauspost/compress v1.18.7
   - golang.org/x/crypto => golang.org/x/crypto v0.56.0
+  # The agent does not include the server modules that select these fixed exporters.
+  # Keep its generated distribution on the patched OTel SDK release as well.
+  - go.opentelemetry.io/otel/exporters/otlp/otlptrace => go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.45.0
+  - go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc => go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.45.0
+  - go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp => go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.45.0
+  - go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc => go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.21.0
+  - go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp => go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp v0.21.0
+  - go.opentelemetry.io/otel/exporters/stdout/stdoutlog => go.opentelemetry.io/otel/exporters/stdout/stdoutlog v0.21.0
+  # OTel log v0.21.0 uses attribute.Value; the bridge must use the matching API.
+  - go.opentelemetry.io/contrib/bridges/otelzap => go.opentelemetry.io/contrib/bridges/otelzap v0.20.0

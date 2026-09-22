@@ -55,8 +55,52 @@ func BuildObjectLogRecord(
 	if obj.GetNamespace() != "" {
 		logRecord.Attributes().PutStr(AttrK8sNamespaceName, obj.GetNamespace())
 	}
+	if summary, ok := podContainerSummary(obj); ok {
+		logRecord.Attributes().PutInt(AttrK8sPodRestartCount, summary.restarts)
+		logRecord.Attributes().PutInt(AttrK8sPodContainerCount, summary.total)
+		logRecord.Attributes().PutInt(AttrK8sPodReadyContainerCount, summary.ready)
+	}
 
 	return logs, nil
+}
+
+type containerSummary struct {
+	total, ready, restarts int64
+}
+
+func podContainerSummary(obj *unstructured.Unstructured) (containerSummary, bool) {
+	summary := containerSummary{}
+	if obj.GetKind() != "Pod" || obj.GroupVersionKind().Group != "" {
+		return summary, false
+	}
+	raw, found, err := unstructured.NestedFieldNoCopy(obj.Object, "status", "containerStatuses")
+	if err != nil || !found {
+		return summary, false
+	}
+	statuses, ok := raw.([]interface{})
+	if !ok {
+		return summary, false
+	}
+	summary.total = int64(len(statuses))
+	for _, value := range statuses {
+		status, ok := value.(map[string]interface{})
+		if !ok {
+			return summary, false
+		}
+		count, _, err := unstructured.NestedInt64(status, "restartCount")
+		if err != nil || count < 0 {
+			return summary, false
+		}
+		ready, _, err := unstructured.NestedBool(status, "ready")
+		if err != nil {
+			return summary, false
+		}
+		if ready {
+			summary.ready++
+		}
+		summary.restarts += count
+	}
+	return summary, true
 }
 
 // BuildCRDLogRecord creates an OTLP log record from a CRD and event type.
