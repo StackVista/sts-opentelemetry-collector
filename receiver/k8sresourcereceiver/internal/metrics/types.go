@@ -92,6 +92,7 @@ const (
 	BootstrapApplied     BootstrapOutcome = "applied"
 	BootstrapLeaderEmpty BootstrapOutcome = "leader_empty"
 	BootstrapTimedOut    BootstrapOutcome = "timed_out"
+	BootstrapCanceled    BootstrapOutcome = "canceled"
 )
 
 // BootstrapSource reports which kind of peer the snapshot was pulled from.
