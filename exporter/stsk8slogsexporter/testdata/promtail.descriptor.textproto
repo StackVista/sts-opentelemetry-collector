@@ -1,3 +1,6 @@
+# Source: StackVista/stackstate@567467619f58498dba51ed94e431ce7e2f7fafb7
+# stackstate-receiver-project/stackstate-receiver/src/main/protobuf/promtail.proto
+# Handwritten FileDescriptorProto; preserves all wire fields, including int64 Stdtime.nanos.
 name: "promtail.proto"
 package: "com.stackstate.api.receiver.apimodel"
 syntax: "proto3"

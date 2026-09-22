@@ -14,7 +14,7 @@ import (
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 )
 
-// NewFactory creates the legacy Kubernetes logs exporter.
+// NewFactory creates the Promtail-compatible Kubernetes logs exporter.
 func NewFactory() exporter.Factory {
 	return exporter.NewFactory(
 		component.MustNewType("stsk8slogs"),
@@ -37,7 +37,7 @@ func createDefaultConfig() component.Config {
 func createLogsExporter(ctx context.Context, set exporter.Settings, config component.Config) (exporter.Logs, error) {
 	cfg, ok := config.(*Config)
 	if !ok {
-		return nil, errors.New("invalid legacy logs exporter configuration")
+		return nil, errors.New("invalid Promtail-compatible logs exporter configuration")
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -53,10 +53,10 @@ func createLogsExporter(ctx context.Context, set exporter.Settings, config compo
 	if cfg.TLS.CAFile != "" {
 		pem, err := os.ReadFile(cfg.TLS.CAFile)
 		if err != nil {
-			return nil, errors.New("cannot read legacy logs CA bundle")
+			return nil, errors.New("cannot read Promtail-compatible logs CA bundle")
 		}
 		if len(pem) == 0 {
-			return nil, errors.New("legacy logs CA bundle is empty")
+			return nil, errors.New("the Promtail-compatible logs CA bundle is empty")
 		}
 		opts.CABundlePEM = pem
 	}

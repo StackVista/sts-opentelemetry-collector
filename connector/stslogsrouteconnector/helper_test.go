@@ -75,7 +75,7 @@ func TestActualHelperTerminalClassifications(t *testing.T) {
 				exporterhelper.WithRetry(retry))
 			cfg := defaults(t)
 			cfg.ExportLifetime = tc.lifetime
-			ctrl := &controllerStub{mode: logsagent.Native, bound: time.Millisecond}
+			ctrl := &controllerStub{mode: logsagent.OTELNativeMode, bound: time.Millisecond}
 			c, reader := newRoute(t, cfg, ctrl, exp, exp)
 			before := time.Now()
 			err := c.ConsumeLogs(context.Background(), logsData())
@@ -104,7 +104,7 @@ func TestHelperLifetimeExpiryDuringAttempt(t *testing.T) {
 	}, exporterhelper.WithRetry(retry))
 	cfg := defaults(t)
 	cfg.ExportLifetime = 20 * time.Millisecond
-	ctrl := &controllerStub{mode: logsagent.Legacy, bound: time.Millisecond}
+	ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Millisecond}
 	c, reader := newRoute(t, cfg, ctrl, exp, exp)
 	require.Error(t, c.ConsumeLogs(context.Background(), logsData()))
 	require.EqualValues(t, 1, ctrl.observer.Snapshot().DeadlineExpired)
@@ -124,7 +124,7 @@ func TestHelperRetryRecovery(t *testing.T) {
 		}
 		return nil
 	}, exporterhelper.WithRetry(retry))
-	ctrl := &controllerStub{mode: logsagent.Legacy, bound: time.Second}
+	ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Second}
 	c, reader := newRoute(t, defaults(t), ctrl, exp, exp)
 	require.NoError(t, c.ConsumeLogs(context.Background(), logsData()))
 	require.Equal(t, 3, attempts)
@@ -150,7 +150,7 @@ func TestQueueWaiterCompletionDoesNotMeanWorkerCompletion(t *testing.T) {
 	cfg := defaults(t)
 	cfg.MaxConcurrentCalls = 1
 	cfg.ExportLifetime = 50 * time.Millisecond
-	ctrl := &controllerStub{mode: logsagent.Native, bound: time.Millisecond}
+	ctrl := &controllerStub{mode: logsagent.OTELNativeMode, bound: time.Millisecond}
 	c, reader := newRoute(t, cfg, ctrl, exp, exp)
 	result := make(chan error, 1)
 	go func() { result <- c.ConsumeLogs(context.Background(), logsData()) }()

@@ -1,8 +1,8 @@
-# Legacy Kubernetes logs exporter
+# Promtail-compatible Kubernetes logs exporter
 
 Encodes OTel pod logs for the Receiver's existing `/stsAgent/logs/k8s`
 endpoint. The agent distribution registers this exporter as `stsk8slogs`.
-The [configuration fixture](../../test/validate/configs/legacy-logs-exporter.yaml)
+The [configuration fixture](../../test/validate/configs/promtail-logs-exporter.yaml)
 shows the endpoint, authentication and bounded synchronous retry settings.
 
 The configured cluster name must be nonempty UTF-8 and must not contain double

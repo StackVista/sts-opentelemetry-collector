@@ -13,7 +13,7 @@ import (
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 )
 
-// Config configures the legacy Receiver endpoint and bounded in-memory delivery.
+// Config configures the Promtail-compatible Receiver endpoint and bounded in-memory delivery.
 type Config struct {
 	Endpoint        string                                                   `mapstructure:"endpoint"`
 	APIKey          configopaque.String                                      `mapstructure:"api_key"`
@@ -65,9 +65,9 @@ func validateClusterName(name string) error {
 	if strings.TrimSpace(name) == "" || !utf8.ValidString(name) {
 		return errors.New("cluster_name must be a nonempty UTF-8 string")
 	}
-	// The legacy Receiver strips label quotes without decoding escape sequences.
+	// The Promtail-compatible Receiver strips label quotes without decoding escape sequences.
 	if strings.ContainsAny(name, "\"\\") || strings.ContainsFunc(name, func(r rune) bool { return !unicode.IsPrint(r) }) {
-		return errors.New("cluster_name must not require escaping in legacy log labels: " +
+		return errors.New("cluster_name must not require escaping in Promtail-compatible log labels: " +
 			"double quotes, backslashes and non-printable characters are unsupported")
 	}
 	return nil

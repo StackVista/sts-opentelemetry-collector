@@ -3,8 +3,8 @@
 Standalone Go module for a built agent supplied through `OTEL_AGENT_BINARY`.
 Each process uses stock Filelog/container parsing and file storage, a memory
 limiter, synthetic pod identity from transform, and local feature/Loki/OTLP HTTP
-and gRPC servers. Requests are decoded as Snappy/protobuf or OTLP protobuf. The legacy
-descriptor mirrors the existing exporter's Receiver wire fixture.
+and gRPC servers. Requests are decoded as Snappy/protobuf or OTLP protobuf. The
+Promtail descriptor mirrors the existing exporter's Receiver wire fixture.
 Authored configurations are checked directly with the shared
 `ValidatePipelineConfig`; this test module resolves `common` from `../../common`.
 
@@ -56,6 +56,7 @@ does not promise a full retry budget for every buffered fragment during drain.
 | Timestamped rename/copytruncate, both routes | Default fingerprint size; rotation while running or stopped; growth beyond the old offset; restart without missing or duplicate records |
 | Repeated fingerprint after truncation | Default retains the old offset and reports at debug level; explicit `read_whole_file` reads the shorter file |
 | Native gRPC success and partial success | Decoded records, authorization and rejection reporting without whole-request retry |
+| Inactive native gRPC with an unavailable endpoint | PromtailMode startup, readiness, delivery and drain; measured CPU time and reconnect logs |
 | Custom CA, missing CA and proxy variants | Trust/rejection for discovery and both exports; explicit HTTP proxy and gRPC HTTPS_PROXY/NO_PROXY behavior |
 | Injected admission saturation, both routes | Eight synchronous calls hold completion; the ninth call is counted and rejected before export |
 | Injected completion delay, both routes | Backend acceptance precedes deadline expiry; connector and final failed drain wait for the admitted call to return |
@@ -83,6 +84,11 @@ overlays under a temporary directory. `-build-dir` can reuse an existing
 OCB-generated directory. Exact-match patches fail if their source anchors change.
 Repository files, the module cache and the published binary are not modified.
 CI requires both the ordinary suite and a separate fault-injection job.
+
+Fixture mode strings retain the serialized `legacy`/`native` values to verify
+restart-state and telemetry compatibility with `PromtailMode`/`OTELNativeMode`.
+The inactive gRPC test measures a short local sample, not steady-state CPU cost
+or Kubernetes acceptance.
 
 The overlays add file barriers controlled by the parent fixture. Admission
 testing fans one parsed Filelog record into eight numbered concurrent calls to

@@ -30,7 +30,7 @@ func TestStockOTLPDisabledQueueMarshaling(t *testing.T) {
 			t.Run(factory.Type().String()+"/"+tc.name, func(t *testing.T) {
 				for _, nested := range []bool{false, true} {
 					values := renderConfig(t, defaultSettings())
-					input := section(values, "exporters", "otlp_http/native")
+					input := section(values, "exporters", "otlp_http/otel_native")
 					if tc.omitted {
 						delete(input, "sending_queue")
 					} else {
@@ -42,7 +42,7 @@ func TestStockOTLPDisabledQueueMarshaling(t *testing.T) {
 					}
 					var object any = cfg
 					if nested {
-						object = map[string]any{"exporters": map[string]component.Config{"otlp_http/native": cfg}}
+						object = map[string]any{"exporters": map[string]component.Config{"otlp_http/otel_native": cfg}}
 					}
 					effective := confmap.New()
 					if err := effective.Marshal(object); err != nil {
@@ -50,7 +50,7 @@ func TestStockOTLPDisabledQueueMarshaling(t *testing.T) {
 					}
 					if nested {
 						var err error
-						effective, err = effective.Sub("exporters::otlp_http/native")
+						effective, err = effective.Sub("exporters::otlp_http/otel_native")
 						if err != nil {
 							t.Fatal(err)
 						}
@@ -59,7 +59,7 @@ func TestStockOTLPDisabledQueueMarshaling(t *testing.T) {
 					if !present || (queue == nil) != tc.valid {
 						t.Fatalf("unexpected effective queue: present=%t disabled=%t", present, queue == nil)
 					}
-					section(values, "exporters")["otlp_http/native"] = effective.ToStringMap()
+					section(values, "exporters")["otlp_http/otel_native"] = effective.ToStringMap()
 					if _, err := logsagent.ValidateEffectivePipelineConfig(confmap.NewFromStringMap(values)); (err == nil) != tc.valid {
 						t.Fatalf("effective config accepted=%t: %v", err == nil, err)
 					}
@@ -83,9 +83,9 @@ func TestStartupNativeQueueDefaultsAreRejected(t *testing.T) {
 			t.Run(transport+"/"+tc.name, func(t *testing.T) {
 				f, _ := newTransportFixture(t, transport)
 				p := f.start(func(config map[string]any) {
-					id := "otlp_http/native"
+					id := "otlp_http/otel_native"
 					if transport == "native_grpc" {
-						id = "otlp/native"
+						id = "otlp/otel_native"
 					}
 					exporter := section(config, "exporters", id)
 					if tc.omitted {

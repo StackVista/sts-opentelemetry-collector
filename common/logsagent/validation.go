@@ -13,11 +13,11 @@ import (
 )
 
 type PipelineConfig struct {
-	ExtensionID      string
-	LegacyExporterID string
-	NativeExporterID string
-	ExportLifetime   time.Duration
-	QueueRetryBound  time.Duration
+	ExtensionID          string
+	PromtailExporterID   string
+	OTELNativeExporterID string
+	ExportLifetime       time.Duration
+	RetryBound           time.Duration
 }
 
 // ValidatePipelineConfig requires explicitly authored bounds for configuration fixtures.
@@ -82,19 +82,19 @@ func ValidatePipelineConfig(conf *confmap.Conf) (PipelineConfig, error) {
 			inputID = id
 		}
 	}
-	legacy := pipelines.namedObject(legacyID, "legacy pipeline")
-	native := pipelines.namedObject(nativeID, "native pipeline")
+	legacy := pipelines.namedObject(legacyID, "Promtail pipeline")
+	native := pipelines.namedObject(nativeID, "OTELNative pipeline")
 	input := pipelines.namedObject(inputID, "input pipeline")
-	cfg.LegacyExporterID = terminalExporter(legacy, routeID)
-	cfg.NativeExporterID = terminalExporter(native, routeID)
+	cfg.PromtailExporterID = terminalExporter(legacy, routeID)
+	cfg.OTELNativeExporterID = terminalExporter(native, routeID)
 	if err != nil {
 		return PipelineConfig{}, err
 	}
-	if !componentType(cfg.LegacyExporterID, "stsk8slogs") {
-		return PipelineConfig{}, errors.New("legacy pipeline must export to stsk8slogs")
+	if !componentType(cfg.PromtailExporterID, "stsk8slogs") {
+		return PipelineConfig{}, errors.New("the Promtail pipeline must export to stsk8slogs")
 	}
-	if !componentType(cfg.NativeExporterID, "otlp_http", "otlphttp", "otlp_grpc", "otlp") {
-		return PipelineConfig{}, errors.New("native pipeline requires an OTLP exporter")
+	if !componentType(cfg.OTELNativeExporterID, "otlp_http", "otlphttp", "otlp_grpc", "otlp") {
+		return PipelineConfig{}, errors.New("OTELNative pipeline requires an OTLP exporter")
 	}
 	if outputs := input.strings("exporters", false); len(outputs) != 1 || outputs[0] != routeID {
 		return PipelineConfig{}, errors.New("input pipeline must export only to the route connector")
@@ -136,15 +136,15 @@ func ValidatePipelineConfig(conf *confmap.Conf) (PipelineConfig, error) {
 		return PipelineConfig{}, errors.New("max_concurrent_calls must be at least max_concurrent_files + 2")
 	}
 
-	legacyBound := exporterBound(exporters.namedObject(cfg.LegacyExporterID, "legacy exporter"))
-	nativeBound := exporterBound(exporters.namedObject(cfg.NativeExporterID, "native exporter"))
+	legacyBound := exporterBound(exporters.namedObject(cfg.PromtailExporterID, "Promtail-compatible exporter"))
+	nativeBound := exporterBound(exporters.namedObject(cfg.OTELNativeExporterID, "OTELNative exporter"))
 	if err != nil {
 		return PipelineConfig{}, err
 	}
-	cfg.QueueRetryBound = max(legacyBound, nativeBound)
+	cfg.RetryBound = max(legacyBound, nativeBound)
 	const overhead = 20 * time.Second
-	if cfg.QueueRetryBound > time.Duration(math.MaxInt64)-overhead ||
-		cfg.ExportLifetime < cfg.QueueRetryBound+overhead {
+	if cfg.RetryBound > time.Duration(math.MaxInt64)-overhead ||
+		cfg.ExportLifetime < cfg.RetryBound+overhead {
 		return PipelineConfig{}, errors.New("export_lifetime must cover both retry/timeout bounds plus 20s")
 	}
 	return cfg, nil

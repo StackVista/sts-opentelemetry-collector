@@ -27,7 +27,7 @@ import (
 )
 
 //go:embed testdata/promtail.descriptor.textproto
-var legacyDescriptor string
+var promtailDescriptor string
 
 type wireRecord struct {
 	body      string
@@ -59,20 +59,20 @@ type featureReply struct {
 }
 
 type backend struct {
-	t                *testing.T
-	server           *httptest.Server
-	mu               sync.Mutex
-	mode             string
-	featureStatus    int
-	featureBody      string
-	featureCalls     int
-	featureReplies   chan featureReply
-	plans            map[string]responsePlan
-	requests         []request
-	responseDelay    time.Duration
-	active           int
-	maxActive        int
-	legacyDescriptor protoreflect.MessageDescriptor
+	t                  *testing.T
+	server             *httptest.Server
+	mu                 sync.Mutex
+	mode               string
+	featureStatus      int
+	featureBody        string
+	featureCalls       int
+	featureReplies     chan featureReply
+	plans              map[string]responsePlan
+	requests           []request
+	responseDelay      time.Duration
+	active             int
+	maxActive          int
+	promtailDescriptor protoreflect.MessageDescriptor
 }
 
 func newBackend(t *testing.T, mode string) *backend {
@@ -83,7 +83,7 @@ func newBackend(t *testing.T, mode string) *backend {
 			"legacy": {status: http.StatusOK},
 			"native": {status: http.StatusOK},
 		},
-		legacyDescriptor: receiverDescriptor(t),
+		promtailDescriptor: receiverDescriptor(t),
 	}
 	b.server = httptest.NewServer(http.HandlerFunc(b.serveHTTP))
 	t.Cleanup(b.server.Close)
@@ -93,7 +93,7 @@ func newBackend(t *testing.T, mode string) *backend {
 func receiverDescriptor(t *testing.T) protoreflect.MessageDescriptor {
 	t.Helper()
 	var descriptor descriptorpb.FileDescriptorProto
-	if err := prototext.Unmarshal([]byte(legacyDescriptor), &descriptor); err != nil {
+	if err := prototext.Unmarshal([]byte(promtailDescriptor), &descriptor); err != nil {
 		t.Fatal(err)
 	}
 	file, err := protodesc.NewFile(&descriptor, nil)
@@ -245,7 +245,7 @@ func (b *backend) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	var records []wireRecord
 	if mode == "legacy" {
-		records, err = decodeLegacy(b.legacyDescriptor, payload)
+		records, err = decodePromtail(b.promtailDescriptor, payload)
 	} else {
 		records, err = decodeNative(payload)
 	}
@@ -294,7 +294,7 @@ func field(message protoreflect.Message, name protoreflect.Name) protoreflect.Va
 
 var labelPattern = regexp.MustCompile(`([a-z_]+)="([^"]*)"`)
 
-func decodeLegacy(descriptor protoreflect.MessageDescriptor, payload []byte) ([]wireRecord, error) {
+func decodePromtail(descriptor protoreflect.MessageDescriptor, payload []byte) ([]wireRecord, error) {
 	data, err := snappy.Decode(nil, payload)
 	if err != nil {
 		return nil, err

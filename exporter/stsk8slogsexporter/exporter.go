@@ -29,7 +29,7 @@ func newLogsExporter(ctx context.Context, set exporter.Settings, cfg *Config, se
 	invalid, err := set.MeterProvider.Meter(
 		"github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8slogsexporter",
 	).Int64Counter("otelcol_stsk8slogs_invalid_log_records",
-		metric.WithDescription("Legacy log records rejected before export, by validation reason."),
+		metric.WithDescription("Promtail-compatible log records rejected before export, by validation reason."),
 		metric.WithUnit("{record}"))
 	if err != nil {
 		return nil, err
@@ -67,7 +67,7 @@ func (e *logsExporter) ConsumeLogs(ctx context.Context, logs plog.Logs) error {
 	valid, invalid := e.encoder.filter(logs)
 	for reason, count := range invalid {
 		e.invalid.Add(ctx, int64(count), metric.WithAttributes(e.id, attribute.String("reason", string(reason))))
-		e.logger.Warn("Dropping invalid legacy log records",
+		e.logger.Warn("Dropping invalid Promtail-compatible log records",
 			zap.String("reason", string(reason)), zap.Int("log_records", count))
 	}
 	if valid.LogRecordCount() == 0 {

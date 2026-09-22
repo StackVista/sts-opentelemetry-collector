@@ -70,7 +70,7 @@ func TestRecordSizeMatchesProtobufEnvelopes(t *testing.T) {
 							expectedOversized++
 						}
 					}
-					ctrl := &controllerStub{mode: logsagent.Native, bound: time.Second}
+					ctrl := &controllerStub{mode: logsagent.OTELNativeMode, bound: time.Second}
 					calls := 0
 					next := logsConsumer(t, func(context.Context, plog.Logs) error { calls++; return nil })
 					c, reader := newRoute(t, cfg, ctrl, next, next)
@@ -117,7 +117,7 @@ func TestManyRecordsWithSharedMetadata(t *testing.T) {
 	wire, err := plogotlp.NewExportRequestFromLogs(data).MarshalProto()
 	require.NoError(t, err)
 	require.LessOrEqual(t, len(wire), cfg.MaxRequestBytes)
-	ctrl := &controllerStub{mode: logsagent.Native, bound: time.Second}
+	ctrl := &controllerStub{mode: logsagent.OTELNativeMode, bound: time.Second}
 	next := logsConsumer(t, func(_ context.Context, received plog.Logs) error {
 		require.Equal(t, 80000, received.LogRecordCount())
 		return nil
@@ -140,11 +140,11 @@ func BenchmarkSharedMetadataSizing(b *testing.B) {
 				next, err := consumer.NewLogs(func(context.Context, plog.Logs) error { return nil })
 				require.NoError(b, err)
 				router := connector.NewLogsRouter(map[pipeline.ID]consumer.Logs{
-					cfg.LegacyPipeline: next, cfg.NativePipeline: next,
+					cfg.PromtailPipeline: next, cfg.OTELNativePipeline: next,
 				})
 				c, err := factory.CreateLogsToLogs(context.Background(), settings(nil), cfg, router)
 				require.NoError(b, err)
-				ctrl := &controllerStub{mode: logsagent.Native, bound: time.Second}
+				ctrl := &controllerStub{mode: logsagent.OTELNativeMode, bound: time.Second}
 				require.NoError(b, c.Start(context.Background(), hostStub{cfg.CapabilityExtension: ctrl}))
 				b.Cleanup(func() { require.NoError(b, c.Shutdown(context.Background())) })
 				b.ReportAllocs()

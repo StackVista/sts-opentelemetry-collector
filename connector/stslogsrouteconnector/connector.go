@@ -44,17 +44,17 @@ func (c *logsConnector) Start(_ context.Context, host component.Host) error {
 		return errors.New("capability_extension does not provide a logs agent controller")
 	}
 	mode := controller.SelectedMode()
-	selectedID := c.cfg.LegacyPipeline
+	selectedID := c.cfg.PromtailPipeline
 	switch mode {
-	case logsagent.Legacy:
-	case logsagent.Native:
-		selectedID = c.cfg.NativePipeline
+	case logsagent.PromtailMode:
+	case logsagent.OTELNativeMode:
+		selectedID = c.cfg.OTELNativePipeline
 	default:
 		return errors.New("capability_extension has no valid selected mode")
 	}
-	bound := controller.QueueRetryBound()
+	bound := controller.RetryBound()
 	if bound <= 0 || bound > c.cfg.ExportLifetime {
-		return errors.New("validated queue/retry bound must be positive and fit export_lifetime")
+		return errors.New("validated retry bound must be positive and fit export_lifetime")
 	}
 	selected, err := c.router.Consumer(selectedID)
 	if err != nil {

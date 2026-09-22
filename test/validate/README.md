@@ -14,7 +14,7 @@ A missing or misnamed component in the BOM makes `validate` fail, breaking the b
 
 ## Files
 
-- `configs/legacy-logs-exporter.yaml` — legacy Kubernetes logs exporter registration
+- `configs/promtail-logs-exporter.yaml` — Promtail-compatible Kubernetes logs exporter registration
   and synchronous retry configuration, using a synthetic credential and loopback endpoint.
 - `configs/logs-agent.yaml` — Filelog, checkpoint storage, capability selection and both export paths.
 - `configs/scraper.yaml` — de-templated copy of the Prometheus-scraper collector config from

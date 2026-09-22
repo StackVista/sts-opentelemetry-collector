@@ -5,7 +5,7 @@ receivers:
         endpoint: 127.0.0.1:14318
 
 exporters:
-  stsk8slogs/legacy:
+  stsk8slogs/promtail:
     endpoint: http://127.0.0.1:18080/stsAgent/logs/k8s
     api_key: synthetic-fixture-key
     cluster_name: fixture-cluster
@@ -22,4 +22,4 @@ service:
   pipelines:
     logs:
       receivers: [otlp]
-      exporters: [stsk8slogs/legacy]
+      exporters: [stsk8slogs/promtail]

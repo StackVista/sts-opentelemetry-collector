@@ -164,7 +164,7 @@ func startupMode(result features.Result) (logsagent.Mode, error) {
 	case features.Valid:
 		return observedMode(result), nil
 	case features.Unsupported, features.Transient, features.Timeout, features.Malformed:
-		return logsagent.Legacy, nil
+		return logsagent.PromtailMode, nil
 	default:
 		return "", fmt.Errorf("logs capability startup failed: %s", result.Class)
 	}
@@ -172,9 +172,9 @@ func startupMode(result features.Result) (logsagent.Mode, error) {
 
 func observedMode(result features.Result) logsagent.Mode {
 	if enabled, _ := result.Features["otel-logs"].(bool); enabled {
-		return logsagent.Native
+		return logsagent.OTELNativeMode
 	}
-	return logsagent.Legacy
+	return logsagent.PromtailMode
 }
 
 func (c *controller) NotifyConfig(_ context.Context, conf *confmap.Conf) error {
@@ -223,10 +223,10 @@ func (c *controller) DrainDeadline() time.Time {
 	return c.drainDeadline
 }
 
-func (c *controller) QueueRetryBound() time.Duration {
+func (c *controller) RetryBound() time.Duration {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.bounds.QueueRetryBound
+	return c.bounds.RetryBound
 }
 
 func (c *controller) Ready() error {
@@ -248,7 +248,10 @@ func (c *controller) Ready() error {
 	go func() {
 		defer close(c.pollDone)
 		for result := range poller.Results() {
-			c.observe(result)
+			if c.observe(result) {
+				// Shutdown joins this loop; a callback that calls Shutdown must run separately.
+				go c.signalRestart()
+			}
 		}
 		<-poller.Done()
 	}()
@@ -269,12 +272,12 @@ func (c *controller) NotReady() error {
 	return nil
 }
 
-func (c *controller) observe(result features.Result) {
+func (c *controller) observe(result features.Result) bool {
 	c.recordQuery(result)
 	c.mu.Lock()
 	if c.stopping || c.restartPending {
 		c.mu.Unlock()
-		return
+		return false
 	}
 	if result.Class == features.Authentication {
 		c.authFailed = true
@@ -287,7 +290,7 @@ func (c *controller) observe(result features.Result) {
 	if result.Class != features.Valid || mode == c.mode || now.Before(c.state.LastAttemptAt.Add(c.cfg.RestartCooldown)) {
 		c.candidate, c.observations = "", 0
 		c.mu.Unlock()
-		return
+		return false
 	}
 	if c.candidate != mode {
 		c.candidate, c.observations = mode, 0
@@ -295,7 +298,7 @@ func (c *controller) observe(result features.Result) {
 	c.observations++
 	if c.observations < c.cfg.StableObservations {
 		c.mu.Unlock()
-		return
+		return false
 	}
 	c.restartPending = true
 	c.state = restartState{
@@ -312,30 +315,40 @@ func (c *controller) observe(result features.Result) {
 			state.OldMode, state.NewMode)
 		err = c.writeMessage(c.cfg.TerminationMessagePath, []byte(message))
 	}
-	if err == nil {
-		stage = restartSignal
-		c.mu.Lock()
-		if c.stopping {
-			c.restartPending = false
-			c.mu.Unlock()
-			c.set.Logger.Info("Logs capability restart superseded by shutdown")
-			return
-		}
-		err = c.requestRestart()
-		c.mu.Unlock()
-	}
 	if err != nil {
-		c.mu.Lock()
+		c.restartFailed(stage)
+		return false
+	}
+	return true
+}
+
+func (c *controller) signalRestart() {
+	c.mu.Lock()
+	if c.stopping {
 		c.restartPending = false
-		c.candidate, c.observations = "", 0
 		c.mu.Unlock()
-		c.restarts.Add(context.Background(), 1, metric.WithAttributes(attribute.String("outcome", stage+"_failed")))
-		c.set.Logger.Error("Logs capability restart request failed", zap.String("stage", stage))
+		c.set.Logger.Info("Logs capability restart superseded by shutdown")
+		return
+	}
+	state := c.state
+	// Dispatch wins this race with shutdown; the callback may synchronously re-enter it.
+	c.mu.Unlock()
+	if err := c.requestRestart(); err != nil {
+		c.restartFailed(restartSignal)
 		return
 	}
 	c.restarts.Add(context.Background(), 1, metric.WithAttributes(attribute.String("outcome", "requested")))
 	c.set.Logger.Info("Logs capability restart requested",
 		zap.String("old_mode", string(state.OldMode)), zap.String("new_mode", string(state.NewMode)))
+}
+
+func (c *controller) restartFailed(stage string) {
+	c.mu.Lock()
+	c.restartPending = false
+	c.candidate, c.observations = "", 0
+	c.mu.Unlock()
+	c.restarts.Add(context.Background(), 1, metric.WithAttributes(attribute.String("outcome", stage+"_failed")))
+	c.set.Logger.Error("Logs capability restart request failed", zap.String("stage", stage))
 }
 
 func (c *controller) ComponentStatusChanged(source *componentstatus.InstanceID, event *componentstatus.Event) {
@@ -344,9 +357,9 @@ func (c *controller) ComponentStatusChanged(source *componentstatus.InstanceID, 
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	id := c.bounds.LegacyExporterID
-	if c.mode == logsagent.Native {
-		id = c.bounds.NativeExporterID
+	id := c.bounds.PromtailExporterID
+	if c.mode == logsagent.OTELNativeMode {
+		id = c.bounds.OTELNativeExporterID
 	}
 	if source.ComponentID().String() != id {
 		return

@@ -22,8 +22,8 @@ func NewFactory() connector.Factory {
 func createDefaultConfig() component.Config {
 	return &Config{
 		CapabilityExtension: component.MustNewIDWithName("stslogscapability", "logs"),
-		LegacyPipeline:      pipeline.NewIDWithName(pipeline.SignalLogs, "legacy"),
-		NativePipeline:      pipeline.NewIDWithName(pipeline.SignalLogs, "native"),
+		PromtailPipeline:    pipeline.NewIDWithName(pipeline.SignalLogs, "promtail"),
+		OTELNativePipeline:  pipeline.NewIDWithName(pipeline.SignalLogs, "otel_native"),
 		MaxConcurrentCalls:  8,
 		MaxRecordBytes:      262144,
 		MaxRequestBytes:     1048576,

@@ -42,7 +42,9 @@ func loadState(directory string) (restartState, error) {
 	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
 		return state, errors.New("invalid trailing logs controller state")
 	}
-	validMode := func(mode logsagent.Mode) bool { return mode == logsagent.Legacy || mode == logsagent.Native }
+	validMode := func(mode logsagent.Mode) bool {
+		return mode == logsagent.PromtailMode || mode == logsagent.OTELNativeMode
+	}
 	if state.SchemaVersion != 1 || state.LastAttemptAt.IsZero() ||
 		!validMode(state.OldMode) || !validMode(state.NewMode) || state.OldMode == state.NewMode {
 		return state, errors.New("invalid logs controller state fields")

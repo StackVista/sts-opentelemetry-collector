@@ -108,17 +108,57 @@ func grpcTransport(f *fixture, cert tls.Certificate, host string, partial bool) 
 	return listener.Addr().String()
 }
 
-func useNativeGRPC(config map[string]any, endpoint, ca string) {
+func useOTELNativeGRPC(config map[string]any, endpoint, ca string) {
 	exporters := section(config, "exporters")
-	native := section(config, "exporters", "otlp_http/native")
-	delete(exporters, "otlp_http/native")
-	exporters["otlp/native"] = native
+	native := section(config, "exporters", "otlp_http/otel_native")
+	delete(exporters, "otlp_http/otel_native")
+	exporters["otlp/otel_native"] = native
 	native["endpoint"] = endpoint
 	native["tls"] = map[string]any{
 		"ca_file": ca, "include_system_ca_certs_pool": true,
 		"server_name_override": "example.com",
 	}
-	section(config, "service", "pipelines", "logs/native")["exporters"] = []any{"otlp/native"}
+	section(config, "service", "pipelines", "logs/otel_native")["exporters"] = []any{"otlp/otel_native"}
+}
+
+func TestInactiveOTELNativeGRPCUnavailable(t *testing.T) {
+	f := newFixture(t, "legacy")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint := listener.Addr().String()
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	p := f.start(func(config map[string]any) {
+		useOTELNativeGRPC(config, endpoint, "")
+	}, true)
+	p.ready()
+	startup := time.Since(start)
+	bodies := f.appendRecords(0, 0, 3)
+	f.backend.waitBodies("legacy", bodies, true)
+	p.waitExport("acknowledged")
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+		if p.status("/ready") != http.StatusOK {
+			t.Fatal("unused unavailable gRPC exporter made PromtailMode unready")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	p.signal()
+	p.wait(5*time.Second, true)
+	assertOrdinaryDrain(t, p, true)
+	f.backend.assertOnly("legacy")
+	f.backend.assertRecords("legacy", bodies, false)
+	output := p.output.String()
+	reconnects := strings.Count(output, "connection refused")
+	if reconnects == 0 {
+		t.Fatal("fixture did not observe the unused gRPC connection failure")
+	}
+	t.Logf("startup=%s wall=%s cpu=%s refused_connection_logs=%d log_bytes=%d",
+		startup, time.Since(start), p.cmd.ProcessState.UserTime()+p.cmd.ProcessState.SystemTime(),
+		reconnects, len(output))
 }
 
 func assertTransportDelivery(f *fixture, p *process, mode string) {
@@ -146,7 +186,7 @@ func TestTransportNativeGRPC(t *testing.T) {
 			server, ca := transportTLS(f)
 			endpoint := grpcTransport(f, server.TLS.Certificates[0], "127.0.0.1", partial)
 			p := f.start(func(config map[string]any) {
-				useNativeGRPC(config, endpoint, ca)
+				useOTELNativeGRPC(config, endpoint, ca)
 			}, true)
 			assertTransportDelivery(f, p, "native")
 			reported := p.event("Partial success response", map[string]any{
@@ -165,16 +205,16 @@ func TestTransportCustomCAHTTP(t *testing.T) {
 			f := newFixture(t, mode)
 			server, ca := transportTLS(f)
 			f.settings.ReceiverURL = server.URL + "/stsAgent"
-			f.settings.LegacyURL = server.URL + "/stsAgent/logs/k8s"
-			f.settings.NativeURL = server.URL + "/otel"
+			f.settings.PromtailURL = server.URL + "/stsAgent/logs/k8s"
+			f.settings.OTELNativeURL = server.URL + "/otel"
 			p := f.start(func(config map[string]any) {
 				for _, component := range []map[string]any{
 					section(config, "extensions", "stslogscapability/logs"),
-					section(config, "exporters", "stsk8slogs/legacy"),
+					section(config, "exporters", "stsk8slogs/promtail"),
 				} {
 					component["tls"] = map[string]any{"ca_file": ca}
 				}
-				section(config, "exporters", "otlp_http/native")["tls"] = map[string]any{
+				section(config, "exporters", "otlp_http/otel_native")["tls"] = map[string]any{
 					"ca_file": ca, "include_system_ca_certs_pool": true,
 				}
 			}, true)
@@ -200,14 +240,14 @@ func TestTransportMissingCA(t *testing.T) {
 			case "discovery":
 				f.settings.ReceiverURL = server.URL + "/stsAgent"
 			case "legacy":
-				f.settings.LegacyURL = server.URL + "/stsAgent/logs/k8s"
+				f.settings.PromtailURL = server.URL + "/stsAgent/logs/k8s"
 			case "native_http":
-				f.settings.NativeURL = server.URL + "/otel"
+				f.settings.OTELNativeURL = server.URL + "/otel"
 			case "native_grpc":
 				endpoint := grpcTransport(f, server.TLS.Certificates[0], "127.0.0.1", false)
 				mutate = func(config map[string]any) {
-					useNativeGRPC(config, endpoint, ca)
-					delete(section(config, "exporters", "otlp/native", "tls"), "ca_file")
+					useOTELNativeGRPC(config, endpoint, ca)
+					delete(section(config, "exporters", "otlp/otel_native", "tls"), "ca_file")
 				}
 			}
 			f.appendRecords(0, 0, 1)
@@ -230,7 +270,7 @@ func TestTransportMissingCA(t *testing.T) {
 				assertOrdinaryDrain(t, p, false)
 				reason := "certificate signed by unknown authority"
 				if client == "legacy" {
-					reason = "legacy log export configuration"
+					reason = "Promtail-compatible log export configuration"
 				}
 				if !strings.Contains(p.output.String(), reason) {
 					t.Fatalf("missing TLS rejection reason %q", reason)
@@ -273,8 +313,8 @@ func TestTransportHTTPExplicitProxy(t *testing.T) {
 			p := f.start(func(config map[string]any) {
 				for _, component := range []map[string]any{
 					section(config, "extensions", "stslogscapability/logs"),
-					section(config, "exporters", "stsk8slogs/legacy"),
-					section(config, "exporters", "otlp_http/native"),
+					section(config, "exporters", "stsk8slogs/promtail"),
+					section(config, "exporters", "otlp_http/otel_native"),
 				} {
 					component["proxy_url"] = proxy.URL
 				}
@@ -373,7 +413,7 @@ func TestTransportGRPCHTTPSProxy(t *testing.T) {
 			}
 			f.childEnv = []string{"HTTPS_PROXY=" + proxy.URL, "NO_PROXY=" + noProxy}
 			p := f.start(func(config map[string]any) {
-				useNativeGRPC(config, endpoint, ca)
+				useOTELNativeGRPC(config, endpoint, ca)
 			}, true)
 			assertTransportDelivery(f, p, "native")
 			if got := connects.Load(); (got == 0) != bypass {
@@ -390,7 +430,7 @@ func newTransportFixture(t *testing.T, transport string) (*fixture, string) {
 	if strings.HasSuffix(transport, "_grpc") {
 		server, ca := transportTLS(f)
 		endpoint := grpcTransport(f, server.TLS.Certificates[0], "127.0.0.1", false)
-		f.configure = func(config map[string]any) { useNativeGRPC(config, endpoint, ca) }
+		f.configure = func(config map[string]any) { useOTELNativeGRPC(config, endpoint, ca) }
 	}
 	return f, mode
 }

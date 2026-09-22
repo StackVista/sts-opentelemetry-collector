@@ -8,8 +8,8 @@ import (
 type Mode string
 
 const (
-	Legacy Mode = "legacy"
-	Native Mode = "native"
+	PromtailMode   Mode = "legacy"
+	OTELNativeMode Mode = "native"
 )
 
 // Controller fixes routing for one process and shares its absolute drain deadline.
@@ -17,7 +17,7 @@ type Controller interface {
 	SelectedMode() Mode
 	RegisterExportObserver(ExportObserver) error
 	DrainDeadline() time.Time
-	QueueRetryBound() time.Duration
+	RetryBound() time.Duration
 }
 
 // ExportObserver counts synchronous connector calls, not exporter workers.

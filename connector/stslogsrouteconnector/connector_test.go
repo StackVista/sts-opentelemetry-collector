@@ -48,7 +48,7 @@ func (s *controllerStub) DrainDeadline() time.Time {
 	return s.deadline
 }
 
-func (s *controllerStub) QueueRetryBound() time.Duration { return s.bound }
+func (s *controllerStub) RetryBound() time.Duration { return s.bound }
 
 func (s *controllerStub) RegisterExportObserver(observer logsagent.ExportObserver) error {
 	s.observer = observer
@@ -90,7 +90,7 @@ func newRoute(
 	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
 	t.Cleanup(func() { require.NoError(t, provider.Shutdown(context.Background())) })
 	router := connector.NewLogsRouter(map[pipeline.ID]consumer.Logs{
-		cfg.LegacyPipeline: legacy, cfg.NativePipeline: native,
+		cfg.PromtailPipeline: legacy, cfg.OTELNativePipeline: native,
 	})
 	c, err := route.NewFactory().CreateLogsToLogs(context.Background(), settings(provider), cfg, router)
 	require.NoError(t, err)
@@ -144,7 +144,7 @@ func metricSum(t *testing.T, reader *sdkmetric.ManualReader, name string, attrs 
 }
 
 func TestFixedRoute(t *testing.T) {
-	for _, mode := range []logsagent.Mode{logsagent.Legacy, logsagent.Native} {
+	for _, mode := range []logsagent.Mode{logsagent.PromtailMode, logsagent.OTELNativeMode} {
 		t.Run(string(mode), func(t *testing.T) {
 			ctrl := &controllerStub{mode: mode, bound: time.Second}
 			var legacy, native atomic.Int64
@@ -153,14 +153,14 @@ func TestFixedRoute(t *testing.T) {
 				logsConsumer(t, func(context.Context, plog.Logs) error { native.Add(1); return nil }))
 			require.NoError(t, c.ConsumeLogs(context.Background(), logsData()))
 			ctrl.mu.Lock()
-			if mode == logsagent.Legacy {
-				ctrl.mode = logsagent.Native
+			if mode == logsagent.PromtailMode {
+				ctrl.mode = logsagent.OTELNativeMode
 			} else {
-				ctrl.mode = logsagent.Legacy
+				ctrl.mode = logsagent.PromtailMode
 			}
 			ctrl.mu.Unlock()
 			require.NoError(t, c.ConsumeLogs(context.Background(), logsData()))
-			if mode == logsagent.Legacy {
+			if mode == logsagent.PromtailMode {
 				require.EqualValues(t, 2, legacy.Load())
 				require.Zero(t, native.Load())
 			} else {
@@ -168,8 +168,12 @@ func TestFixedRoute(t *testing.T) {
 				require.EqualValues(t, 2, native.Load())
 			}
 			require.Equal(t, logsagent.ExportSnapshot{Acknowledged: 2}, ctrl.observer.Snapshot())
+			label := "legacy"
+			if mode == logsagent.OTELNativeMode {
+				label = "native"
+			}
 			require.EqualValues(t, 2, metricSum(t, reader, "stslogsroute.export_requests",
-				attribute.String("mode", string(mode)), attribute.String("outcome", "acknowledged")))
+				attribute.String("mode", label), attribute.String("outcome", "acknowledged")))
 		})
 	}
 }
@@ -180,7 +184,7 @@ func TestDetachedCancellationAndValues(t *testing.T) {
 		t.Run(map[bool]string{true: "before", false: "during"}[canceledBefore], func(t *testing.T) {
 			cfg := defaults(t)
 			cfg.ExportLifetime = time.Second
-			ctrl := &controllerStub{mode: logsagent.Legacy, bound: time.Millisecond}
+			ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Millisecond}
 			parent, cancel := context.WithCancel(context.WithValue(context.Background(), valueKey{}, "retained"))
 			defer cancel()
 			if canceledBefore {
@@ -214,13 +218,13 @@ func TestExpiredCallerDeadlineIsDetached(t *testing.T) {
 		require.True(t, deadline.After(time.Now()))
 		return nil
 	})
-	ctrl := &controllerStub{mode: logsagent.Native, bound: time.Second}
+	ctrl := &controllerStub{mode: logsagent.OTELNativeMode, bound: time.Second}
 	c, _ := newRoute(t, defaults(t), ctrl, next, next)
 	require.NoError(t, c.ConsumeLogs(parent, logsData()))
 }
 
 func TestAdmissionSaturation(t *testing.T) {
-	for _, mode := range []logsagent.Mode{logsagent.Legacy, logsagent.Native} {
+	for _, mode := range []logsagent.Mode{logsagent.PromtailMode, logsagent.OTELNativeMode} {
 		t.Run(string(mode), func(t *testing.T) {
 			cfg := defaults(t)
 			ctrl := &controllerStub{mode: mode, bound: time.Millisecond}
@@ -264,7 +268,7 @@ func TestAdmissionSaturation(t *testing.T) {
 }
 
 func TestDrainRejectionsInFinalSnapshot(t *testing.T) {
-	for _, mode := range []logsagent.Mode{logsagent.Legacy, logsagent.Native} {
+	for _, mode := range []logsagent.Mode{logsagent.PromtailMode, logsagent.OTELNativeMode} {
 		t.Run(string(mode), func(t *testing.T) {
 			cfg := defaults(t)
 			cfg.MaxConcurrentCalls = 1
@@ -318,7 +322,7 @@ func TestConcurrentDrainRejections(t *testing.T) {
 	cfg := defaults(t)
 	cfg.MaxRecordBytes = 128
 	cfg.MaxRequestBytes = 256
-	ctrl := &controllerStub{mode: logsagent.Legacy, bound: time.Second}
+	ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Second}
 	next := logsConsumer(t, func(context.Context, plog.Logs) error { return nil })
 	c, _ := newRoute(t, cfg, ctrl, next, next)
 	ctrl.drain(time.Now().Add(time.Minute))
@@ -340,7 +344,7 @@ func TestConcurrentDrainRejections(t *testing.T) {
 func TestAbsoluteDrainBudget(t *testing.T) {
 	cfg := defaults(t)
 	cfg.ExportLifetime = time.Second
-	ctrl := &controllerStub{mode: logsagent.Legacy, bound: 100 * time.Millisecond}
+	ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: 100 * time.Millisecond}
 	fixedDeadline := time.Now().Add(700 * time.Millisecond)
 	ctrl.drain(fixedDeadline)
 	var received []time.Time
@@ -368,7 +372,7 @@ func TestAbsoluteDrainBudget(t *testing.T) {
 
 func TestDrainingPreservesAdmittedDeadline(t *testing.T) {
 	cfg := defaults(t)
-	ctrl := &controllerStub{mode: logsagent.Native, bound: time.Second}
+	ctrl := &controllerStub{mode: logsagent.OTELNativeMode, bound: time.Second}
 	next := logsConsumer(t, func(ctx context.Context, _ plog.Logs) error {
 		before, _ := ctx.Deadline()
 		ctrl.drain(time.Now().Add(-time.Second))
@@ -383,7 +387,7 @@ func TestDrainingPreservesAdmittedDeadline(t *testing.T) {
 }
 
 func TestRecordAndRequestSizeBounds(t *testing.T) {
-	for _, mode := range []logsagent.Mode{logsagent.Legacy, logsagent.Native} {
+	for _, mode := range []logsagent.Mode{logsagent.PromtailMode, logsagent.OTELNativeMode} {
 		for _, part := range []string{"body", "resource", "scope", "resource_schema", "scope_schema"} {
 			t.Run(string(mode)+"/"+part, func(t *testing.T) {
 				cfg := defaults(t)
@@ -430,7 +434,7 @@ func TestRecordAndRequestSizeBounds(t *testing.T) {
 			cfg := defaults(t)
 			cfg.MaxRecordBytes = len(wire) + delta
 			cfg.MaxRequestBytes = len(wire) + delta
-			ctrl := &controllerStub{mode: logsagent.Legacy, bound: time.Second}
+			ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Second}
 			next := logsConsumer(t, func(context.Context, plog.Logs) error { return nil })
 			c, reader := newRoute(t, cfg, ctrl, next, next)
 			err = c.ConsumeLogs(context.Background(), data)
@@ -447,7 +451,7 @@ func TestRecordAndRequestSizeBounds(t *testing.T) {
 }
 
 func TestUnknownAttemptDeadlineIsNotLifetimeExpiry(t *testing.T) {
-	ctrl := &controllerStub{mode: logsagent.Native, bound: time.Second}
+	ctrl := &controllerStub{mode: logsagent.OTELNativeMode, bound: time.Second}
 	next := logsConsumer(t, func(context.Context, plog.Logs) error { return context.DeadlineExceeded })
 	c, reader := newRoute(t, defaults(t), ctrl, next, next)
 	require.ErrorIs(t, c.ConsumeLogs(context.Background(), logsData()), context.DeadlineExceeded)
@@ -468,7 +472,7 @@ func TestOversizeRejectsAllAffectedRecordsBeforeSend(t *testing.T) {
 			}
 			calls := 0
 			next := logsConsumer(t, func(context.Context, plog.Logs) error { calls++; return nil })
-			ctrl := &controllerStub{mode: logsagent.Legacy, bound: time.Second}
+			ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Second}
 			c, reader := newRoute(t, cfg, ctrl, next, next)
 			require.True(t, consumererror.IsPermanent(c.ConsumeLogs(context.Background(), data)))
 			require.Zero(t, calls)
@@ -490,7 +494,7 @@ func TestRecordSizeDoesNotAccumulateSiblingMetadata(t *testing.T) {
 	first.ScopeLogs().At(0).CopyTo(first.ScopeLogs().AppendEmpty())
 	cfg := defaults(t)
 	cfg.MaxRecordBytes = len(wire)
-	ctrl := &controllerStub{mode: logsagent.Native, bound: time.Second}
+	ctrl := &controllerStub{mode: logsagent.OTELNativeMode, bound: time.Second}
 	next := logsConsumer(t, func(_ context.Context, data plog.Logs) error {
 		require.Equal(t, 3, data.LogRecordCount())
 		return nil
@@ -502,7 +506,7 @@ func TestRecordSizeDoesNotAccumulateSiblingMetadata(t *testing.T) {
 func TestOtherRecordValidationRemainsWithExporter(t *testing.T) {
 	data := logsData()
 	data.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().AppendEmpty().Body().SetBool(true)
-	ctrl := &controllerStub{mode: logsagent.Legacy, bound: time.Second}
+	ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Second}
 	next := logsConsumer(t, func(_ context.Context, received plog.Logs) error {
 		require.Equal(t, 2, received.LogRecordCount())
 		require.True(t, received.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(1).Body().Bool())
@@ -516,7 +520,7 @@ func TestOtherRecordValidationRemainsWithExporter(t *testing.T) {
 func TestLifetimeExpiryEvenWhenDownstreamReturnsSuccess(t *testing.T) {
 	cfg := defaults(t)
 	cfg.ExportLifetime = 20 * time.Millisecond
-	ctrl := &controllerStub{mode: logsagent.Native, bound: time.Millisecond}
+	ctrl := &controllerStub{mode: logsagent.OTELNativeMode, bound: time.Millisecond}
 	next := logsConsumer(t, func(ctx context.Context, _ plog.Logs) error { <-ctx.Done(); return nil })
 	c, _ := newRoute(t, cfg, ctrl, next, next)
 	require.ErrorIs(t, c.ConsumeLogs(context.Background(), logsData()), context.DeadlineExceeded)
@@ -524,7 +528,7 @@ func TestLifetimeExpiryEvenWhenDownstreamReturnsSuccess(t *testing.T) {
 }
 
 func TestShutdownWaitsForCallsAndRejectsNewCalls(t *testing.T) {
-	ctrl := &controllerStub{mode: logsagent.Legacy, bound: time.Second}
+	ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Second}
 	entered, release := make(chan struct{}), make(chan struct{})
 	next := logsConsumer(t, func(context.Context, plog.Logs) error { close(entered); <-release; return nil })
 	c, _ := newRoute(t, defaults(t), ctrl, next, next)
@@ -544,7 +548,7 @@ func TestShutdownWaitsForCallsAndRejectsNewCalls(t *testing.T) {
 }
 
 func TestDownstreamMutationDoesNotChangeInput(t *testing.T) {
-	ctrl := &controllerStub{mode: logsagent.Native, bound: time.Second}
+	ctrl := &controllerStub{mode: logsagent.OTELNativeMode, bound: time.Second}
 	next, err := consumer.NewLogs(func(_ context.Context, data plog.Logs) error {
 		data.ResourceLogs().RemoveIf(func(plog.ResourceLogs) bool { return true })
 		return nil
@@ -557,7 +561,7 @@ func TestDownstreamMutationDoesNotChangeInput(t *testing.T) {
 }
 
 func TestUnknownErrorContainingHelperTextIsNotClassified(t *testing.T) {
-	ctrl := &controllerStub{mode: logsagent.Native, bound: time.Second}
+	ctrl := &controllerStub{mode: logsagent.OTELNativeMode, bound: time.Second}
 	next := logsConsumer(t, func(context.Context, plog.Logs) error {
 		return errors.New("backend response: no more retries left: unavailable")
 	})

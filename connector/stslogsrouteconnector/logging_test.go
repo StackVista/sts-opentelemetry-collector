@@ -29,11 +29,11 @@ func TestExportDiagnosticsAreBoundedAndDebugOnly(t *testing.T) {
 			var downstreamErr error
 			next := logsConsumer(t, func(context.Context, plog.Logs) error { return downstreamErr })
 			router := connector.NewLogsRouter(map[pipeline.ID]consumer.Logs{
-				cfg.LegacyPipeline: next, cfg.NativePipeline: next,
+				cfg.PromtailPipeline: next, cfg.OTELNativePipeline: next,
 			})
 			c, err := route.NewFactory().CreateLogsToLogs(context.Background(), set, cfg, router)
 			require.NoError(t, err)
-			ctrl := &controllerStub{mode: logsagent.Native, bound: time.Second}
+			ctrl := &controllerStub{mode: logsagent.OTELNativeMode, bound: time.Second}
 			require.NoError(t, c.Start(context.Background(), hostStub{cfg.CapabilityExtension: ctrl}))
 			t.Cleanup(func() { require.NoError(t, c.Shutdown(context.Background())) })
 

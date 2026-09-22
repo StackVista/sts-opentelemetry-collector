@@ -29,9 +29,9 @@ type exportFailure struct {
 
 func (e *exportFailure) Error() string {
 	if e.status != 0 {
-		return fmt.Sprintf("legacy log export %s (HTTP %d)", e.reason, e.status)
+		return fmt.Sprintf("Promtail-compatible log export %s (HTTP %d)", e.reason, e.status)
 	}
-	return "legacy log export " + e.reason
+	return "Promtail-compatible log export " + e.reason
 }
 
 func (e *exportFailure) Unwrap() error { return e.cause }

@@ -43,10 +43,10 @@ func TestMain(m *testing.M) {
 }
 
 type settings struct {
-	Checkpoints, Controller, Health, Termination string
-	Include, ReceiverURL, LegacyURL, NativeURL   string
-	Files, Concurrency                           int
-	Lifetime, RetryBudget, AttemptTimeout        time.Duration
+	Checkpoints, Controller, Health, Termination     string
+	Include, ReceiverURL, PromtailURL, OTELNativeURL string
+	Files, Concurrency                               int
+	Lifetime, RetryBudget, AttemptTimeout            time.Duration
 }
 
 func defaultSettings() settings {
@@ -97,8 +97,8 @@ func newBinaryFixture(t *testing.T, mode, variable string) *fixture {
 	s.Termination = filepath.Join(root, "termination.log")
 	s.Include = filepath.Join(root, "pods", "*", "*", "*.log")
 	s.ReceiverURL = b.server.URL + "/stsAgent"
-	s.LegacyURL = b.server.URL + "/stsAgent/logs/k8s"
-	s.NativeURL = b.server.URL + "/otel"
+	s.PromtailURL = b.server.URL + "/stsAgent/logs/k8s"
+	s.OTELNativeURL = b.server.URL + "/otel"
 	return &fixture{t: t, binary: absolute, root: root, settings: s, backend: b}
 }
 

@@ -8,8 +8,8 @@ exports.
 | Configuration key | Default |
 | --- | --- |
 | `capability_extension` | `stslogscapability/logs` |
-| `legacy_pipeline` | `logs/legacy` |
-| `native_pipeline` | `logs/native` |
+| `legacy_pipeline` | `logs/promtail` |
+| `native_pipeline` | `logs/otel_native` |
 | `max_concurrent_calls` | `8` |
 | `max_record_bytes` | `262144` |
 | `max_request_bytes` | `1048576` |
@@ -18,7 +18,7 @@ exports.
 Size limits use uncompressed OTLP protobuf sizes. Each record is sized as its
 own request including resource, scope and schema metadata. An oversized request
 or any oversized record permanently rejects the entire request before export.
-Other record validation belongs to the legacy exporter, which can retain valid
+Other record validation belongs to the Promtail-compatible exporter, which can retain valid
 siblings.
 
 Resource and scope envelope sizes are computed once per group. Individual

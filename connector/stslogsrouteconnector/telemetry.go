@@ -35,7 +35,7 @@ func modeAttributes(mode logsagent.Mode) metric.MeasurementOption {
 
 func metricMode(mode logsagent.Mode) string {
 	switch mode {
-	case logsagent.Legacy, logsagent.Native:
+	case logsagent.PromtailMode, logsagent.OTELNativeMode:
 		return string(mode)
 	default:
 		return "unselected"

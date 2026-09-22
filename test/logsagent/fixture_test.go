@@ -20,14 +20,14 @@ import (
 func TestFixtureBounds(t *testing.T) {
 	s := defaultSettings()
 	if s.Lifetime < s.minimumLifetime() || s.minimumLifetime() <= 20*time.Second {
-		t.Fatalf("lifetime %s does not cover queue/retry bound %s", s.Lifetime, s.minimumLifetime())
+		t.Fatalf("lifetime %s does not cover retry bound %s", s.Lifetime, s.minimumLifetime())
 	}
 	c := renderConfig(t, s)
 	bounds, err := logsagent.ValidatePipelineConfig(confmap.NewFromStringMap(c))
 	if err != nil {
 		t.Fatalf("shared validator rejected authored fixture: %v", err)
 	}
-	if bounds.ExportLifetime != s.Lifetime || bounds.QueueRetryBound != s.minimumLifetime()-20*time.Second {
+	if bounds.ExportLifetime != s.Lifetime || bounds.RetryBound != s.minimumLifetime()-20*time.Second {
 		t.Fatalf("shared validator returned unexpected fixture bounds: %+v", bounds)
 	}
 	route := section(c, "connectors", "stslogsroute/logs")
@@ -41,16 +41,16 @@ func TestFixtureBounds(t *testing.T) {
 		t.Fatal("fixture enabled receiver retry or checkpoint recreation")
 	}
 	for _, mode := range []string{"legacy", "native"} {
-		exporter := "stsk8slogs/legacy"
+		exporter := "stsk8slogs/promtail"
 		if mode == "native" {
-			exporter = "otlp_http/native"
+			exporter = "otlp_http/otel_native"
 		}
 		e := section(c, "exporters", exporter)
 		q := section(e, "sending_queue")
 		if len(q) != 1 || q["enabled"] != false {
 			t.Fatal("fixture must disable exporter queues")
 		}
-		if _, exists := section(c, "service", "pipelines", "logs/"+mode)["processors"]; exists {
+		if _, exists := section(c, "service", "pipelines", map[string]string{"legacy": "logs/promtail", "native": "logs/otel_native"}[mode])["processors"]; exists {
 			t.Fatal("terminal fixture pipeline contains processors")
 		}
 	}
@@ -67,7 +67,7 @@ func TestAuthoredFixtureRejectsOmittedBounds(t *testing.T) {
 		{"receivers", "filelog/pods", "retry_on_failure", "enabled"},
 		{"extensions", "file_storage/logs", "recreate"},
 	}...)
-	for _, exporter := range []string{"stsk8slogs/legacy", "otlp_http/native"} {
+	for _, exporter := range []string{"stsk8slogs/promtail", "otlp_http/otel_native"} {
 		for _, field := range [][]string{
 			{"timeout"},
 			{"retry_on_failure", "enabled"},
@@ -93,7 +93,7 @@ func TestAuthoredFixtureRejectsOmittedBounds(t *testing.T) {
 }
 
 func TestAuthoredFixtureRejectsInvalidBounds(t *testing.T) {
-	for _, exporter := range []string{"stsk8slogs/legacy", "otlp_http/native"} {
+	for _, exporter := range []string{"stsk8slogs/promtail", "otlp_http/otel_native"} {
 		for _, tc := range []struct {
 			name   string
 			reason string
@@ -153,7 +153,7 @@ func TestWireDecoders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	legacy, err := decodeLegacy(descriptor, snappy.Encode(nil, payload))
+	legacy, err := decodePromtail(descriptor, snappy.Encode(nil, payload))
 	if err != nil {
 		t.Fatal(err)
 	}

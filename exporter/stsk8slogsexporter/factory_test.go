@@ -85,7 +85,7 @@ func TestFactoryDefaultsAndConfiguration(t *testing.T) {
 			name: "full",
 			data: map[string]any{
 				"tls": map[string]any{
-					"ca_file":              "/etc/ssl/legacy-ca.pem",
+					"ca_file":              "/etc/ssl/promtail-ca.pem",
 					"insecure_skip_verify": true,
 				},
 				"proxy_url": "http://proxy.example:8080",
@@ -161,7 +161,7 @@ func TestFactoryDefaultsAndConfiguration(t *testing.T) {
 					t.Fatal("unexpected config type")
 				}
 				if tc.name == "full" && (decoded.TimeoutSettings.Timeout != 7*time.Second || decoded.ProxyURL != "http://proxy.example:8080" ||
-					decoded.TLS.CAFile != "/etc/ssl/legacy-ca.pem" || !decoded.TLS.InsecureSkipVerify ||
+					decoded.TLS.CAFile != "/etc/ssl/promtail-ca.pem" || !decoded.TLS.InsecureSkipVerify ||
 					decoded.QueueSettings.HasValue()) {
 					t.Fatal("configuration did not decode into the factory config")
 				}

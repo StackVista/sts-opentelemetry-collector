@@ -35,7 +35,7 @@ func TestStartupRejectsInvalidBounds(t *testing.T) {
 			section(c, "receivers", "filelog/pods")["max_concurrent_files"] = 7
 		}},
 	}...)
-	for _, exporter := range []string{"stsk8slogs/legacy", "otlp_http/native"} {
+	for _, exporter := range []string{"stsk8slogs/promtail", "otlp_http/otel_native"} {
 		for _, item := range []struct {
 			name   string
 			reason string
@@ -73,10 +73,10 @@ func TestStartupAcceptsSafeEffectiveDefaults(t *testing.T) {
 		omit                 []string
 		retry, timeout       time.Duration
 	}{
-		{"legacy_timeout", "legacy", "stsk8slogs/legacy", []string{"timeout"}, 2 * time.Second, 5 * time.Second},
-		{"native_timeout", "native", "otlp_http/native", []string{"timeout"}, 2 * time.Second, 30 * time.Second},
-		{"legacy_retry", "legacy", "stsk8slogs/legacy", []string{"retry_on_failure", "max_elapsed_time"}, 30 * time.Second, 200 * time.Millisecond},
-		{"native_retry", "native", "otlp_http/native", []string{"retry_on_failure", "max_elapsed_time"}, 300 * time.Second, 200 * time.Millisecond},
+		{"legacy_timeout", "legacy", "stsk8slogs/promtail", []string{"timeout"}, 2 * time.Second, 5 * time.Second},
+		{"native_timeout", "native", "otlp_http/otel_native", []string{"timeout"}, 2 * time.Second, 30 * time.Second},
+		{"legacy_retry", "legacy", "stsk8slogs/promtail", []string{"retry_on_failure", "max_elapsed_time"}, 30 * time.Second, 200 * time.Millisecond},
+		{"native_retry", "native", "otlp_http/otel_native", []string{"retry_on_failure", "max_elapsed_time"}, 300 * time.Second, 200 * time.Millisecond},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFixture(t, tc.mode)
@@ -289,7 +289,7 @@ func TestCorruptFileStorageFailsStartup(t *testing.T) {
 	}
 }
 
-func TestLegacyInvalidSibling(t *testing.T) {
+func TestPromtailInvalidSibling(t *testing.T) {
 	f := newFixture(t, "legacy")
 	p := f.start(func(c map[string]any) {
 		transform := section(c, "processors", "transform/identity")

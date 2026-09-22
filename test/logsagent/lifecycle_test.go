@@ -67,7 +67,7 @@ func (p *process) waitExport(outcomes ...string) {
 	})
 }
 
-func TestNativePartialSuccess(t *testing.T) {
+func TestOTELNativePartialSuccess(t *testing.T) {
 	f := newFixture(t, "native")
 	f.backend.setPlan("native", responsePlan{status: 200, partial: true})
 	p := f.start(nil, true)

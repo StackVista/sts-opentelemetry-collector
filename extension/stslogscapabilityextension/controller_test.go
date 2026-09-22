@@ -56,13 +56,13 @@ func makeReady(c *controller, mode logsagent.Mode) {
 	c.initialized, c.configured, c.ready = true, true, true
 	c.observer = &logsagent.Accounting{}
 	c.bounds.ExportLifetime = 90 * time.Second
-	c.bounds.QueueRetryBound = 70 * time.Second
-	c.bounds.LegacyExporterID = "stsk8slogs/legacy"
-	c.bounds.NativeExporterID = "otlp_http/native"
+	c.bounds.RetryBound = 70 * time.Second
+	c.bounds.PromtailExporterID = "stsk8slogs/promtail"
+	c.bounds.OTELNativeExporterID = "otlp_http/otel_native"
 }
 
 func observation(mode logsagent.Mode) features.Result {
-	return features.Result{Class: features.Valid, Features: map[string]any{"otel-logs": mode == logsagent.Native}}
+	return features.Result{Class: features.Valid, Features: map[string]any{"otel-logs": mode == logsagent.OTELNativeMode}}
 }
 
 func TestStartupClassification(t *testing.T) {
@@ -71,9 +71,9 @@ func TestStartupClassification(t *testing.T) {
 		mode  logsagent.Mode
 		fail  bool
 	}{
-		{features.Valid, logsagent.Legacy, false}, {features.Unsupported, logsagent.Legacy, false},
-		{features.Transient, logsagent.Legacy, false}, {features.Timeout, logsagent.Legacy, false},
-		{features.Malformed, logsagent.Legacy, false}, {features.Authentication, "", true},
+		{features.Valid, logsagent.PromtailMode, false}, {features.Unsupported, logsagent.PromtailMode, false},
+		{features.Transient, logsagent.PromtailMode, false}, {features.Timeout, logsagent.PromtailMode, false},
+		{features.Malformed, logsagent.PromtailMode, false}, {features.Authentication, "", true},
 		{features.Configuration, "", true}, {features.Rejected, "", true}, {features.Canceled, "", true},
 	} {
 		t.Run(string(tc.class), func(t *testing.T) {
@@ -92,14 +92,14 @@ func TestDiscoveryUsesSharedClientAndHealth(t *testing.T) {
 		mode   logsagent.Mode
 		fail   bool
 	}{
-		{`{"otel-logs":true}`, 200, logsagent.Native, false},
-		{`{"otel-logs":true,"k8s-rbac":"true","capacity":42}`, 200, logsagent.Native, false},
-		{`{"otel-logs":false,"k8s-rbac":null}`, 200, logsagent.Legacy, false},
-		{`{}`, 200, logsagent.Legacy, false},
-		{`unavailable`, 503, logsagent.Legacy, false},
-		{`not found`, 404, logsagent.Legacy, false},
-		{`{"otel-logs":"true"}`, 200, logsagent.Legacy, false},
-		{`{"otel-logs":null,"k8s-rbac":true}`, 200, logsagent.Legacy, false},
+		{`{"otel-logs":true}`, 200, logsagent.OTELNativeMode, false},
+		{`{"otel-logs":true,"k8s-rbac":"true","capacity":42}`, 200, logsagent.OTELNativeMode, false},
+		{`{"otel-logs":false,"k8s-rbac":null}`, 200, logsagent.PromtailMode, false},
+		{`{}`, 200, logsagent.PromtailMode, false},
+		{`unavailable`, 503, logsagent.PromtailMode, false},
+		{`not found`, 404, logsagent.PromtailMode, false},
+		{`{"otel-logs":"true"}`, 200, logsagent.PromtailMode, false},
+		{`{"otel-logs":null,"k8s-rbac":true}`, 200, logsagent.PromtailMode, false},
 		{`denied`, 401, "", true},
 		{`forbidden`, 403, "", true},
 	} {
@@ -130,11 +130,11 @@ func TestDiscoveryUsesSharedClientAndHealth(t *testing.T) {
 			checkHealth(t, c, "/ready", http.StatusServiceUnavailable)
 			makeReady(c, tc.mode)
 			checkHealth(t, c, "/ready", http.StatusOK)
-			c.observe(features.Result{Class: features.Authentication})
+			observeAndRestart(c, features.Result{Class: features.Authentication})
 			checkHealth(t, c, "/ready", http.StatusServiceUnavailable)
-			c.observe(features.Result{Class: features.Transient})
+			observeAndRestart(c, features.Result{Class: features.Transient})
 			checkHealth(t, c, "/ready", http.StatusServiceUnavailable)
-			c.observe(observation(tc.mode))
+			observeAndRestart(c, observation(tc.mode))
 			checkHealth(t, c, "/ready", http.StatusOK)
 			_ = c.NotReady()
 			checkHealth(t, c, "/ready", http.StatusServiceUnavailable)
@@ -164,7 +164,7 @@ func TestFailedRestartRecoveryAndCooldown(t *testing.T) {
 				}
 				return nil
 			})
-			makeReady(c, logsagent.Legacy)
+			makeReady(c, logsagent.PromtailMode)
 			now := time.Now()
 			c.now = func() time.Time { return now }
 			c.writeState = func(directory string, state restartState) error {
@@ -182,9 +182,9 @@ func TestFailedRestartRecoveryAndCooldown(t *testing.T) {
 				return os.WriteFile(path, data, 0o600)
 			}
 			for range 3 {
-				c.observe(observation(logsagent.Native))
+				observeAndRestart(c, observation(logsagent.OTELNativeMode))
 			}
-			if c.restartPending || c.observations != 0 || c.mode != logsagent.Legacy || !c.ready {
+			if c.restartPending || c.observations != 0 || c.mode != logsagent.PromtailMode || !c.ready {
 				t.Fatal("failed attempt changed routing or remained latched")
 			}
 			if c.state.LastAttemptAt != now || writes != 1 {
@@ -192,31 +192,31 @@ func TestFailedRestartRecoveryAndCooldown(t *testing.T) {
 			}
 			fail = false
 			for range 5 {
-				c.observe(observation(logsagent.Native))
+				observeAndRestart(c, observation(logsagent.OTELNativeMode))
 			}
 			if writes != 1 {
 				t.Fatal("restart attempted during cooldown")
 			}
 			now = now.Add(c.cfg.RestartCooldown)
 			for range 2 {
-				c.observe(observation(logsagent.Native))
+				observeAndRestart(c, observation(logsagent.OTELNativeMode))
 			}
 			if writes != 1 {
 				t.Fatal("cooldown retained old observations")
 			}
-			c.observe(observation(logsagent.Native))
+			observeAndRestart(c, observation(logsagent.OTELNativeMode))
 			if !c.restartPending || writes != 2 || messages < 1 || signals < 1 {
 				t.Fatal("recovery did not request restart")
 			}
 			count := signals
-			c.observe(features.Result{Class: features.Authentication})
-			c.observe(observation(logsagent.Legacy))
-			c.observe(observation(logsagent.Native))
-			if !c.restartPending || signals != count || c.mode != logsagent.Legacy {
+			observeAndRestart(c, features.Result{Class: features.Authentication})
+			observeAndRestart(c, observation(logsagent.PromtailMode))
+			observeAndRestart(c, observation(logsagent.OTELNativeMode))
+			if !c.restartPending || signals != count || c.mode != logsagent.PromtailMode {
 				t.Fatal("successful signal latch was undone")
 			}
 			persisted, err := loadState(c.cfg.StateDirectory)
-			if err != nil || !persisted.PendingIntent || persisted.NewMode != logsagent.Native {
+			if err != nil || !persisted.PendingIntent || persisted.NewMode != logsagent.OTELNativeMode {
 				t.Fatalf("restart intent: %+v %v", persisted, err)
 			}
 		})
@@ -224,11 +224,11 @@ func TestFailedRestartRecoveryAndCooldown(t *testing.T) {
 }
 
 func TestObservationResetsAndBothDirections(t *testing.T) {
-	for _, initial := range []logsagent.Mode{logsagent.Legacy, logsagent.Native} {
+	for _, initial := range []logsagent.Mode{logsagent.PromtailMode, logsagent.OTELNativeMode} {
 		t.Run(string(initial), func(t *testing.T) {
-			target := logsagent.Native
+			target := logsagent.OTELNativeMode
 			if initial == target {
-				target = logsagent.Legacy
+				target = logsagent.PromtailMode
 			}
 			signals := 0
 			c := testController(t, func() error { signals++; return nil })
@@ -238,15 +238,15 @@ func TestObservationResetsAndBothDirections(t *testing.T) {
 				{Class: features.Unsupported}, {Class: features.Rejected}, {Class: features.Configuration},
 				observation(initial),
 			} {
-				c.observe(observation(target))
-				c.observe(observation(target))
-				c.observe(reset)
+				observeAndRestart(c, observation(target))
+				observeAndRestart(c, observation(target))
+				observeAndRestart(c, reset)
 				if signals != 0 || c.observations != 0 {
 					t.Fatal("failed/current observation did not reset sequence")
 				}
 			}
 			for range 3 {
-				c.observe(observation(target))
+				observeAndRestart(c, observation(target))
 			}
 			if signals != 1 || c.SelectedMode() != initial {
 				t.Fatal("transition changed the fixed route")
@@ -257,7 +257,7 @@ func TestObservationResetsAndBothDirections(t *testing.T) {
 
 func TestDrainDeadlineAndExporterCompletion(t *testing.T) {
 	c := testController(t, func() error { return nil })
-	makeReady(c, logsagent.Legacy)
+	makeReady(c, logsagent.PromtailMode)
 	now := time.Now()
 	c.now = func() time.Time { return now }
 	_ = c.NotReady()
@@ -269,7 +269,7 @@ func TestDrainDeadlineAndExporterCompletion(t *testing.T) {
 	}
 	core, logs := observer.New(zap.InfoLevel)
 	c.set.Logger = zap.New(core)
-	exporter := componentstatus.NewInstanceID(component.MustNewIDWithName("stsk8slogs", "legacy"),
+	exporter := componentstatus.NewInstanceID(component.MustNewIDWithName("stsk8slogs", "promtail"),
 		component.KindExporter)
 	c.ComponentStatusChanged(exporter, componentstatus.NewEvent(componentstatus.StatusStopping))
 	if err := c.Shutdown(context.Background()); err != nil {
@@ -290,7 +290,7 @@ func TestStateStartupRetainsCooldownAndChoosesIndependently(t *testing.T) {
 	c := testController(t, func() error { return nil })
 	c.cfg.ReceiverURL = server.URL + "/stsAgent"
 	state := restartState{SchemaVersion: 1, LastAttemptAt: time.Now(),
-		OldMode: logsagent.Legacy, NewMode: logsagent.Native, PendingIntent: true}
+		OldMode: logsagent.PromtailMode, NewMode: logsagent.OTELNativeMode, PendingIntent: true}
 	if err := saveState(c.cfg.StateDirectory, state); err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +301,7 @@ func TestStateStartupRetainsCooldownAndChoosesIndependently(t *testing.T) {
 	if err != nil || got.PendingIntent || !got.LastAttemptAt.Equal(state.LastAttemptAt) {
 		t.Fatalf("startup state %+v %v", got, err)
 	}
-	if c.SelectedMode() != logsagent.Legacy {
+	if c.SelectedMode() != logsagent.PromtailMode {
 		t.Fatal("pending intent forced startup mode")
 	}
 }
@@ -329,7 +329,7 @@ func TestShutdownPreventsRestartWhileWritingIntent(t *testing.T) {
 		t.Run(stage, func(t *testing.T) {
 			var signals atomic.Int32
 			c := testController(t, func() error { signals.Add(1); return nil })
-			makeReady(c, logsagent.Legacy)
+			makeReady(c, logsagent.PromtailMode)
 			writing, release, finished := make(chan struct{}), make(chan struct{}), make(chan struct{})
 			if stage == restartMarker {
 				c.writeState = func(string, restartState) error {
@@ -344,17 +344,17 @@ func TestShutdownPreventsRestartWhileWritingIntent(t *testing.T) {
 					return nil
 				}
 			}
-			c.observe(observation(logsagent.Native))
-			c.observe(observation(logsagent.Native))
+			observeAndRestart(c, observation(logsagent.OTELNativeMode))
+			observeAndRestart(c, observation(logsagent.OTELNativeMode))
 			go func() {
 				defer close(finished)
-				c.observe(observation(logsagent.Native))
+				observeAndRestart(c, observation(logsagent.OTELNativeMode))
 			}()
 			<-writing
 			_ = c.NotReady()
 			close(release)
 			<-finished
-			if signals.Load() != 0 || c.SelectedMode() != logsagent.Legacy {
+			if signals.Load() != 0 || c.SelectedMode() != logsagent.PromtailMode {
 				t.Fatal("restart signal escaped into an already stopping service")
 			}
 		})
@@ -363,14 +363,14 @@ func TestShutdownPreventsRestartWhileWritingIntent(t *testing.T) {
 
 func TestConcurrentStatusAndShutdown(t *testing.T) {
 	c := testController(t, func() error { return nil })
-	makeReady(c, logsagent.Native)
-	exporter := componentstatus.NewInstanceID(component.MustNewIDWithName("otlp_http", "native"),
+	makeReady(c, logsagent.OTELNativeMode)
+	exporter := componentstatus.NewInstanceID(component.MustNewIDWithName("otlp_http", "otel_native"),
 		component.KindExporter)
 	var workers sync.WaitGroup
 	for range 10 {
 		workers.Go(func() {
 			for range 100 {
-				c.observe(observation(logsagent.Native))
+				observeAndRestart(c, observation(logsagent.OTELNativeMode))
 				c.ComponentStatusChanged(exporter, componentstatus.NewEvent(componentstatus.StatusOK))
 				_ = c.DrainDeadline()
 			}
@@ -408,7 +408,7 @@ func TestPollingStartsAfterReadyAndJoinsOnShutdown(t *testing.T) {
 	if c.poller != nil {
 		t.Fatal("polling began before Ready")
 	}
-	makeReady(c, logsagent.Legacy)
+	makeReady(c, logsagent.PromtailMode)
 	if err := c.Ready(); err != nil {
 		t.Fatal(err)
 	}
@@ -434,10 +434,10 @@ func TestPollingStartsAfterReadyAndJoinsOnShutdown(t *testing.T) {
 
 func TestConcurrentShutdownFinalizesOnce(t *testing.T) {
 	c := testController(t, func() error { return nil })
-	makeReady(c, logsagent.Legacy)
+	makeReady(c, logsagent.PromtailMode)
 	core, entries := observer.New(zap.InfoLevel)
 	c.set.Logger = zap.New(core)
-	exporter := componentstatus.NewInstanceID(component.MustNewIDWithName("stsk8slogs", "legacy"),
+	exporter := componentstatus.NewInstanceID(component.MustNewIDWithName("stsk8slogs", "promtail"),
 		component.KindExporter)
 	c.ComponentStatusChanged(exporter, componentstatus.NewEvent(componentstatus.StatusStopped))
 	var workers sync.WaitGroup
@@ -455,3 +455,9 @@ func TestConcurrentShutdownFinalizesOnce(t *testing.T) {
 }
 
 var _ extension.Extension = (*controller)(nil)
+
+func observeAndRestart(c *controller, result features.Result) {
+	if c.observe(result) {
+		c.signalRestart()
+	}
+}

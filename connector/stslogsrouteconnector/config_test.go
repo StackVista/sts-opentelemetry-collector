@@ -27,8 +27,8 @@ func TestConfiguration(t *testing.T) {
 	var decoded route.Config
 	require.NoError(t, confmap.NewFromStringMap(map[string]any{
 		"capability_extension": "stslogscapability/logs",
-		"legacy_pipeline":      "logs/legacy",
-		"native_pipeline":      "logs/native",
+		"legacy_pipeline":      "logs/promtail",
+		"native_pipeline":      "logs/otel_native",
 		"max_concurrent_calls": 8,
 		"max_record_bytes":     262144,
 		"max_request_bytes":    1048576,
@@ -41,9 +41,9 @@ func TestConfiguration(t *testing.T) {
 		change func(*route.Config)
 	}{
 		{"missing extension", func(c *route.Config) { c.CapabilityExtension = component.ID{} }},
-		{"missing legacy", func(c *route.Config) { c.LegacyPipeline = pipeline.ID{} }},
-		{"wrong signal", func(c *route.Config) { c.NativePipeline = pipeline.NewID(pipeline.SignalTraces) }},
-		{"same pipeline", func(c *route.Config) { c.NativePipeline = c.LegacyPipeline }},
+		{"missing legacy", func(c *route.Config) { c.PromtailPipeline = pipeline.ID{} }},
+		{"wrong signal", func(c *route.Config) { c.OTELNativePipeline = pipeline.NewID(pipeline.SignalTraces) }},
+		{"same pipeline", func(c *route.Config) { c.OTELNativePipeline = c.PromtailPipeline }},
 		{"zero concurrency", func(c *route.Config) { c.MaxConcurrentCalls = 0 }},
 		{"negative concurrency", func(c *route.Config) { c.MaxConcurrentCalls = -1 }},
 		{"zero record bytes", func(c *route.Config) { c.MaxRecordBytes = 0 }},
@@ -66,7 +66,7 @@ func TestFactoryAndStartupFailures(t *testing.T) {
 	require.Equal(t, component.StabilityLevelDevelopment, factory.LogsToLogsStability())
 	_, err := factory.CreateLogsToLogs(context.Background(), settings(nil), cfg, next)
 	require.ErrorContains(t, err, "router")
-	router := connector.NewLogsRouter(map[pipeline.ID]consumer.Logs{cfg.LegacyPipeline: next})
+	router := connector.NewLogsRouter(map[pipeline.ID]consumer.Logs{cfg.PromtailPipeline: next})
 	_, err = factory.CreateLogsToLogs(context.Background(), settings(nil), struct{}{}, router)
 	require.Error(t, err)
 	invalid := *cfg
@@ -83,10 +83,10 @@ func TestFactoryAndStartupFailures(t *testing.T) {
 			component.ShutdownFunc
 		}{}},
 		{"unknown mode", &controllerStub{mode: "unknown", bound: time.Second}},
-		{"missing consumer", &controllerStub{mode: logsagent.Native, bound: time.Second}},
-		{"zero bound", &controllerStub{mode: logsagent.Legacy}},
-		{"bound exceeds lifetime", &controllerStub{mode: logsagent.Legacy, bound: time.Hour}},
-		{"registration fails", &controllerStub{mode: logsagent.Legacy, bound: time.Second, err: errors.New("failed")}},
+		{"missing consumer", &controllerStub{mode: logsagent.OTELNativeMode, bound: time.Second}},
+		{"zero bound", &controllerStub{mode: logsagent.PromtailMode}},
+		{"bound exceeds lifetime", &controllerStub{mode: logsagent.PromtailMode, bound: time.Hour}},
+		{"registration fails", &controllerStub{mode: logsagent.PromtailMode, bound: time.Second, err: errors.New("failed")}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c, err := factory.CreateLogsToLogs(context.Background(), settings(nil), cfg, router)
