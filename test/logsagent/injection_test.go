@@ -68,7 +68,7 @@ func assertNoFinalDrain(t *testing.T, p *process) {
 
 func TestInjectedAdmissionSaturation(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"legacy", "native"} {
+	for _, mode := range []string{"promtail", "native"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
 			f, control := newFaultFixture(t, mode)
@@ -134,7 +134,7 @@ func TestInjectedAdmissionSaturation(t *testing.T) {
 
 func TestInjectedDelayedSynchronousCompletion(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"legacy", "native"} {
+	for _, mode := range []string{"promtail", "native"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
 			f, control := newFaultFixture(t, mode)
@@ -174,7 +174,7 @@ func TestInjectedDelayedSynchronousCompletion(t *testing.T) {
 
 func TestInjectedSignalFailureRecoversAfterCooldown(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"legacy", "native"} {
+	for _, mode := range []string{"promtail", "native"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
 			f, control := newFaultFixture(t, mode)
@@ -201,7 +201,7 @@ func TestInjectedSignalFailureRecoversAfterCooldown(t *testing.T) {
 				t.Fatal("signal failure lost the persisted restart intent")
 			}
 			message, err := os.ReadFile(f.settings.Termination)
-			names := map[string]string{"legacy": "PromtailMode", "native": "OTELNativeMode"}
+			names := map[string]string{"promtail": "PromtailMode", "native": "OTELNativeMode"}
 			if err != nil || string(message) != fmt.Sprintf(
 				"Logs capability changed from %s to %s; requesting graceful restart.\n", names[mode], names[target.mode]) {
 				t.Fatal("signal callback ran without the expected termination message")

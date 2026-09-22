@@ -8,7 +8,7 @@ exports.
 | Configuration key | Default |
 | --- | --- |
 | `capability_extension` | `stslogscapability/logs` |
-| `legacy_pipeline` | `logs/promtail` |
+| `promtail_pipeline` | `logs/promtail` |
 | `native_pipeline` | `logs/otel_native` |
 | `max_concurrent_calls` | `8` |
 | `max_record_bytes` | `262144` |

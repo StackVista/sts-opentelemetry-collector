@@ -44,7 +44,7 @@ func ValidatePipelineConfig(conf *confmap.Conf) (PipelineConfig, error) {
 		ExtensionID:    route.text("capability_extension"),
 		ExportLifetime: route.duration("export_lifetime"),
 	}
-	legacyID := route.text("legacy_pipeline")
+	promtailID := route.text("promtail_pipeline")
 	nativeID := route.text("native_pipeline")
 	calls := route.positiveInt("max_concurrent_calls")
 	recordBytes := route.positiveInt("max_record_bytes")
@@ -58,7 +58,7 @@ func ValidatePipelineConfig(conf *confmap.Conf) (PipelineConfig, error) {
 	if !componentType(cfg.ExtensionID, "stslogscapability") {
 		return PipelineConfig{}, errors.New("route capability_extension must reference stslogscapability")
 	}
-	if legacyID == nativeID || !componentType(legacyID, "logs") || !componentType(nativeID, "logs") {
+	if promtailID == nativeID || !componentType(promtailID, "logs") || !componentType(nativeID, "logs") {
 		return PipelineConfig{}, errors.New("route must reference two distinct logs pipelines")
 	}
 
@@ -75,17 +75,17 @@ func ValidatePipelineConfig(conf *confmap.Conf) (PipelineConfig, error) {
 	}
 	var inputID string
 	for id := range pipelines.values {
-		if id != legacyID && id != nativeID {
+		if id != promtailID && id != nativeID {
 			if inputID != "" || !componentType(id, "logs") {
 				return PipelineConfig{}, errors.New("logs agent requires one logs input pipeline")
 			}
 			inputID = id
 		}
 	}
-	legacy := pipelines.namedObject(legacyID, "Promtail pipeline")
+	promtail := pipelines.namedObject(promtailID, "Promtail pipeline")
 	native := pipelines.namedObject(nativeID, "OTELNative pipeline")
 	input := pipelines.namedObject(inputID, "input pipeline")
-	cfg.PromtailExporterID = terminalExporter(legacy, routeID)
+	cfg.PromtailExporterID = terminalExporter(promtail, routeID)
 	cfg.OTELNativeExporterID = terminalExporter(native, routeID)
 	if err != nil {
 		return PipelineConfig{}, err
@@ -136,12 +136,12 @@ func ValidatePipelineConfig(conf *confmap.Conf) (PipelineConfig, error) {
 		return PipelineConfig{}, errors.New("max_concurrent_calls must be at least max_concurrent_files + 2")
 	}
 
-	legacyBound := exporterBound(exporters.namedObject(cfg.PromtailExporterID, "Promtail-compatible exporter"))
+	promtailBound := exporterBound(exporters.namedObject(cfg.PromtailExporterID, "Promtail-compatible exporter"))
 	nativeBound := exporterBound(exporters.namedObject(cfg.OTELNativeExporterID, "OTELNative exporter"))
 	if err != nil {
 		return PipelineConfig{}, err
 	}
-	cfg.RetryBound = max(legacyBound, nativeBound)
+	cfg.RetryBound = max(promtailBound, nativeBound)
 	const overhead = 20 * time.Second
 	if cfg.RetryBound > time.Duration(math.MaxInt64)-overhead ||
 		cfg.ExportLifetime < cfg.RetryBound+overhead {

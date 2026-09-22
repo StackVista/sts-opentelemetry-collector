@@ -10,7 +10,7 @@ import (
 
 func TestCheckpointWriteFailureReplaysAfterRestart(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"legacy", "native"} {
+	for _, mode := range []string{"promtail", "native"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
 			f := newFixture(t, mode)

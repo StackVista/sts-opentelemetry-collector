@@ -83,14 +83,14 @@ func settings(provider *sdkmetric.MeterProvider) connector.Settings {
 }
 
 func newRoute(
-	t *testing.T, cfg *route.Config, ctrl *controllerStub, legacy, native consumer.Logs,
+	t *testing.T, cfg *route.Config, ctrl *controllerStub, promtail, native consumer.Logs,
 ) (connector.Logs, *sdkmetric.ManualReader) {
 	t.Helper()
 	reader := sdkmetric.NewManualReader()
 	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
 	t.Cleanup(func() { require.NoError(t, provider.Shutdown(context.Background())) })
 	router := connector.NewLogsRouter(map[pipeline.ID]consumer.Logs{
-		cfg.PromtailPipeline: legacy, cfg.OTELNativePipeline: native,
+		cfg.PromtailPipeline: promtail, cfg.OTELNativePipeline: native,
 	})
 	c, err := route.NewFactory().CreateLogsToLogs(context.Background(), settings(provider), cfg, router)
 	require.NoError(t, err)
@@ -147,9 +147,9 @@ func TestFixedRoute(t *testing.T) {
 	for _, mode := range []logsagent.Mode{logsagent.PromtailMode, logsagent.OTELNativeMode} {
 		t.Run(string(mode), func(t *testing.T) {
 			ctrl := &controllerStub{mode: mode, bound: time.Second}
-			var legacy, native atomic.Int64
+			var promtail, native atomic.Int64
 			c, reader := newRoute(t, defaults(t), ctrl,
-				logsConsumer(t, func(context.Context, plog.Logs) error { legacy.Add(1); return nil }),
+				logsConsumer(t, func(context.Context, plog.Logs) error { promtail.Add(1); return nil }),
 				logsConsumer(t, func(context.Context, plog.Logs) error { native.Add(1); return nil }))
 			require.NoError(t, c.ConsumeLogs(context.Background(), logsData()))
 			ctrl.mu.Lock()
@@ -161,14 +161,14 @@ func TestFixedRoute(t *testing.T) {
 			ctrl.mu.Unlock()
 			require.NoError(t, c.ConsumeLogs(context.Background(), logsData()))
 			if mode == logsagent.PromtailMode {
-				require.EqualValues(t, 2, legacy.Load())
+				require.EqualValues(t, 2, promtail.Load())
 				require.Zero(t, native.Load())
 			} else {
-				require.Zero(t, legacy.Load())
+				require.Zero(t, promtail.Load())
 				require.EqualValues(t, 2, native.Load())
 			}
 			require.Equal(t, logsagent.ExportSnapshot{Acknowledged: 2}, ctrl.observer.Snapshot())
-			label := "legacy"
+			label := "promtail"
 			if mode == logsagent.OTELNativeMode {
 				label = "native"
 			}

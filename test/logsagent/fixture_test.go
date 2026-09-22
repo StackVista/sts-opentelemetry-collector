@@ -40,7 +40,7 @@ func TestFixtureBounds(t *testing.T) {
 		section(c, "extensions", "file_storage/logs")["recreate"] != false {
 		t.Fatal("fixture enabled receiver retry or checkpoint recreation")
 	}
-	for _, mode := range []string{"legacy", "native"} {
+	for _, mode := range []string{"promtail", "native"} {
 		exporter := "stsk8slogs/promtail"
 		if mode == "native" {
 			exporter = "otlp_http/otel_native"
@@ -50,7 +50,7 @@ func TestFixtureBounds(t *testing.T) {
 		if len(q) != 1 || q["enabled"] != false {
 			t.Fatal("fixture must disable exporter queues")
 		}
-		if _, exists := section(c, "service", "pipelines", map[string]string{"legacy": "logs/promtail", "native": "logs/otel_native"}[mode])["processors"]; exists {
+		if _, exists := section(c, "service", "pipelines", map[string]string{"promtail": "logs/promtail", "native": "logs/otel_native"}[mode])["processors"]; exists {
 			t.Fatal("terminal fixture pipeline contains processors")
 		}
 	}
@@ -153,7 +153,7 @@ func TestWireDecoders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	legacy, err := decodePromtail(descriptor, snappy.Encode(nil, payload))
+	promtail, err := decodePromtail(descriptor, snappy.Encode(nil, payload))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +181,7 @@ func TestWireDecoders(t *testing.T) {
 		cluster: "fixture-cluster", podUID: "12345678-1234-1234-1234-123456789abc",
 		podName: "fixture-0", container: "app", stream: "stdout",
 	}}
-	if !reflect.DeepEqual(legacy, expected) || !reflect.DeepEqual(native, expected) {
-		t.Fatalf("wire decoders disagree with fixture: legacy=%+v native=%+v", legacy, native)
+	if !reflect.DeepEqual(promtail, expected) || !reflect.DeepEqual(native, expected) {
+		t.Fatalf("wire decoders disagree with fixture: promtail=%+v native=%+v", promtail, native)
 	}
 }

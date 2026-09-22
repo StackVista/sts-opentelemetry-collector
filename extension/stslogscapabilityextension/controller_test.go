@@ -309,8 +309,8 @@ func TestStateStartupRetainsCooldownAndChoosesIndependently(t *testing.T) {
 func TestCorruptStateRejected(t *testing.T) {
 	for _, data := range []string{
 		"", "null", "{}", `{"schema_version":2}`, "invalid", strings.Repeat("x", 16385),
-		`{"last_attempt_at":"2026-01-01T00:00:00Z","old_mode":"legacy","new_mode":"native","pending_intent":true}`,
-		`{"schema_version":null,"last_attempt_at":"2026-01-01T00:00:00Z","old_mode":"legacy","new_mode":"native"}`,
+		`{"last_attempt_at":"2026-01-01T00:00:00Z","old_mode":"promtail","new_mode":"native","pending_intent":true}`,
+		`{"schema_version":null,"last_attempt_at":"2026-01-01T00:00:00Z","old_mode":"promtail","new_mode":"native"}`,
 	} {
 		t.Run(data[:min(len(data), 20)], func(t *testing.T) {
 			c := testController(t, func() error { return nil })

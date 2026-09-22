@@ -100,7 +100,7 @@ func stressPending(t *testing.T, f *fixture, mode string, partials []string) {
 
 func TestStressSequentialPartialDrain(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"legacy", "native"} {
+	for _, mode := range []string{"promtail", "native"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
 			f := newFixture(t, mode)
@@ -171,7 +171,7 @@ func stressStopped(t *testing.T, p *process) {
 
 func TestStressTimerFlushDeadlineAfterSchedulingStall(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"legacy", "native"} {
+	for _, mode := range []string{"promtail", "native"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
 			f := newFixture(t, mode)
@@ -317,7 +317,7 @@ func stressMetric(p *process, endpoint, metric, reason string) float64 {
 
 func TestStressSourceSizeRejections(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"legacy", "native"} {
+	for _, mode := range []string{"promtail", "native"} {
 		for _, scenario := range []struct {
 			reason string
 			count  int

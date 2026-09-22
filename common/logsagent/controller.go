@@ -8,7 +8,7 @@ import (
 type Mode string
 
 const (
-	PromtailMode   Mode = "legacy"
+	PromtailMode   Mode = "promtail"
 	OTELNativeMode Mode = "native"
 )
 

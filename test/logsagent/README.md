@@ -36,7 +36,7 @@ does not promise a full retry budget for every buffered fragment during drain.
 | Process coverage implemented | Evidence asserted |
 | --- | --- |
 | Both routes: success, transient recovery, outage, HTTP 401/403/404/413 | Decoded bodies/identity/timestamps, attempts, fixed destination, terminal result and exit |
-| Native partial success; legacy invalid sibling | No whole-request retry after partial success, rejection reporting, valid sibling delivery |
+| Native partial success; promtail invalid sibling | No whole-request retry after partial success, rejection reporting, valid sibling delivery |
 | SIGTERM during retries, both routes, recovery/outage | Real signal, unready/live during drain, accepted bodies, bounded exit, finalized exporter shutdown |
 | Both capability transitions during retries, recovery/outage | Old route through shutdown, persisted intent/message, replacement discovery, retained offsets with no old-record replay |
 | Four files with transient failures | All 40 records delivered once after recovery |
@@ -85,8 +85,8 @@ OCB-generated directory. Exact-match patches fail if their source anchors change
 Repository files, the module cache and the published binary are not modified.
 CI requires both the ordinary suite and a separate fault-injection job.
 
-Fixture mode strings retain the serialized `legacy`/`native` values to verify
-restart-state and telemetry compatibility with `PromtailMode`/`OTELNativeMode`.
+Fixture modes use `promtail`/`native` values. State tests verify both directions,
+pending/consumed markers, retained cooldown and fresh capability selection.
 The inactive gRPC test measures a short local sample, not steady-state CPU cost
 or Kubernetes acceptance.
 

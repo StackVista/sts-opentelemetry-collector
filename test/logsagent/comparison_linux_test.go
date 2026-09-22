@@ -93,7 +93,7 @@ func TestQueueComparison(t *testing.T) {
 	if design != "queued" && design != "synchronous" {
 		t.Fatal("unknown comparison design")
 	}
-	for _, transport := range []string{"legacy", "native", "native_grpc"} {
+	for _, transport := range []string{"promtail", "native", "native_grpc"} {
 		for _, scenario := range []struct {
 			name    string
 			records int

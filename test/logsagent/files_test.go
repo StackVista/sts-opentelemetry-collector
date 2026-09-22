@@ -19,7 +19,7 @@ func (f *fixture) sourcePath(file int) string {
 
 func TestLostResponseDuplicatesStoredRecords(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"legacy", "native"} {
+	for _, mode := range []string{"promtail", "native"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
 			f := newFixture(t, mode)
@@ -52,7 +52,7 @@ func TestLostResponseDuplicatesStoredRecords(t *testing.T) {
 
 func TestSourceRotationAndTruncation(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"legacy", "native"} {
+	for _, mode := range []string{"promtail", "native"} {
 		for _, operation := range []string{"rename", "copytruncate"} {
 			for _, offline := range []bool{false, true} {
 				timing := "running"
@@ -119,7 +119,7 @@ func TestSourceRotationAndTruncation(t *testing.T) {
 
 func TestRepeatedFingerprintAfterTruncation(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"legacy", "native"} {
+	for _, mode := range []string{"promtail", "native"} {
 		for _, behavior := range []string{"default", "read_whole_file"} {
 			t.Run(mode+"/"+behavior, func(t *testing.T) {
 				t.Parallel()

@@ -98,14 +98,14 @@ func TestPollingRestartCallbackReentry(t *testing.T) {
 	}
 }
 
-func TestSchemaOneModeCompatibility(t *testing.T) {
+func TestStateRoundTripAndFreshSelection(t *testing.T) {
 	const nativeWireMode = "native"
-	for _, old := range []string{"legacy", nativeWireMode} {
+	for _, old := range []string{"promtail", nativeWireMode} {
 		for _, pending := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/pending=%t", old, pending), func(t *testing.T) {
 				next := nativeWireMode
 				if old == next {
-					next = "legacy"
+					next = "promtail"
 				}
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 					w.Header().Set("Content-Type", "application/json")

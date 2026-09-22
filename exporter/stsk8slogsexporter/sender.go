@@ -46,20 +46,20 @@ type sender struct {
 // newSender borrows the discovery client's owned transport, including its proxy and trust.
 func newSender(client *http.Client, endpoint, apiKey string, timeout time.Duration) (*sender, error) {
 	if client == nil || client.Transport == nil {
-		return nil, errors.New("legacy sender requires an explicitly configured HTTP transport")
+		return nil, errors.New("promtail sender requires an explicitly configured HTTP transport")
 	}
 	u, err := url.Parse(endpoint)
 	if err != nil || u == nil || (u.Scheme != "https" && u.Scheme != "http") || u.Hostname() == "" ||
 		u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.Contains(endpoint, "#") ||
 		!strings.HasSuffix(u.Path, "/stsAgent/logs/k8s") {
-		return nil, errors.New("legacy endpoint must be an absolute HTTP(S) URL ending in " +
+		return nil, errors.New("promtail endpoint must be an absolute HTTP(S) URL ending in " +
 			"/stsAgent/logs/k8s without userinfo, query or fragment")
 	}
 	if strings.TrimSpace(apiKey) == "" || strings.ContainsFunc(apiKey, func(r rune) bool { return r < 32 || r == 127 }) {
-		return nil, errors.New("legacy sender requires a valid API key")
+		return nil, errors.New("promtail sender requires a valid API key")
 	}
 	if timeout <= 0 {
-		return nil, errors.New("legacy attempt timeout must be positive")
+		return nil, errors.New("promtail attempt timeout must be positive")
 	}
 	owned := *client
 	owned.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }

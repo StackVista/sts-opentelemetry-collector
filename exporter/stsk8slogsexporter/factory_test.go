@@ -69,7 +69,7 @@ func TestFactoryDefaultsAndConfiguration(t *testing.T) {
 		!cfg.BackOffConfig.Enabled || cfg.BackOffConfig.InitialInterval != time.Second ||
 		cfg.BackOffConfig.MaxInterval != 5*time.Second || cfg.BackOffConfig.MaxElapsedTime != 30*time.Second ||
 		cfg.QueueSettings.HasValue() {
-		t.Fatal("factory defaults do not preserve legacy delivery guarantees")
+		t.Fatal("factory defaults do not preserve promtail delivery guarantees")
 	}
 	if err := componenttest.CheckConfigStruct(cfg); err != nil {
 		t.Fatal(err)

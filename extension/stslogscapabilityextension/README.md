@@ -42,7 +42,6 @@ Shutdown itself. Shutdown before callback dispatch suppresses the signal; once
 dispatched, a callback can finish concurrently with shutdown. A failed callback
 resets observations without clearing shutdown or changing the selected route.
 
-Go modes are named `PromtailMode` and `OTELNativeMode`. Schema-1 state, structured
-mode fields and telemetry retain `legacy` and `native` for compatibility. The
-existing `legacy_pipeline` and `native_pipeline` configuration keys remain valid;
-pipeline IDs in the fixtures use `promtail` and `otel_native`.
+Go modes are named `PromtailMode` and `OTELNativeMode`. State, structured mode
+fields and telemetry use `promtail` and `native`. Configuration uses
+`promtail_pipeline` and `native_pipeline`; fixture IDs are `promtail`/`otel_native`.

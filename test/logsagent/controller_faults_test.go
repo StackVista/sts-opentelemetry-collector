@@ -57,7 +57,7 @@ func assertNoRestart(t *testing.T, p *process) {
 
 func TestCapabilityObservationReset(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"legacy", "native"} {
+	for _, mode := range []string{"promtail", "native"} {
 		for _, reset := range []struct {
 			name    string
 			reply   featureReply
@@ -114,7 +114,7 @@ func TestCapabilityObservationReset(t *testing.T) {
 
 func TestRestartWriteFailureRecoversAfterCooldown(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"legacy", "native"} {
+	for _, mode := range []string{"promtail", "native"} {
 		for _, stage := range []string{"marker", "message"} {
 			t.Run(mode+"/"+stage, func(t *testing.T) {
 				t.Parallel()

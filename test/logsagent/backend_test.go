@@ -80,8 +80,8 @@ func newBackend(t *testing.T, mode string) *backend {
 	b := &backend{
 		t: t, mode: mode, featureStatus: http.StatusOK,
 		plans: map[string]responsePlan{
-			"legacy": {status: http.StatusOK},
-			"native": {status: http.StatusOK},
+			"promtail": {status: http.StatusOK},
+			"native":   {status: http.StatusOK},
 		},
 		promtailDescriptor: receiverDescriptor(t),
 	}
@@ -208,9 +208,9 @@ func (b *backend) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	var mode string
 	switch r.URL.Path {
 	case "/stsAgent/logs/k8s":
-		mode = "legacy"
+		mode = "promtail"
 		if r.Header.Get("sts-api-key") != syntheticKey {
-			b.t.Error("incorrect synthetic legacy authorization")
+			b.t.Error("incorrect synthetic promtail authorization")
 		}
 	case "/otel/v1/logs":
 		mode = "native"
@@ -244,7 +244,7 @@ func (b *backend) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var records []wireRecord
-	if mode == "legacy" {
+	if mode == "promtail" {
 		records, err = decodePromtail(b.promtailDescriptor, payload)
 	} else {
 		records, err = decodeNative(payload)
@@ -317,10 +317,10 @@ func decodePromtail(descriptor protoreflect.MessageDescriptor, payload []byte) (
 			ts := field(entry, "timestamp").Message()
 			seconds, nanos := field(ts, "seconds").Int(), field(ts, "nanos").Int()
 			if seconds < 0 || nanos < 0 || nanos >= int64(time.Second) {
-				return nil, fmt.Errorf("invalid legacy timestamp: seconds=%d nanos=%d", seconds, nanos)
+				return nil, fmt.Errorf("invalid promtail timestamp: seconds=%d nanos=%d", seconds, nanos)
 			}
 			if uint64(seconds) > (math.MaxUint64-uint64(nanos))/uint64(time.Second) {
-				return nil, fmt.Errorf("legacy timestamp exceeds uint64 nanoseconds")
+				return nil, fmt.Errorf("promtail timestamp exceeds uint64 nanoseconds")
 			}
 			records = append(records, wireRecord{
 				body:      field(entry, "line").String(),

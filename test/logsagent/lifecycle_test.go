@@ -12,7 +12,7 @@ import (
 )
 
 func TestRoutes(t *testing.T) {
-	for _, transport := range []string{"legacy", "native", "native_grpc"} {
+	for _, transport := range []string{"promtail", "native", "native_grpc"} {
 		for _, scenario := range []struct {
 			name       string
 			plan       responsePlan
@@ -86,7 +86,7 @@ func TestOTELNativePartialSuccess(t *testing.T) {
 }
 
 func TestSIGTERMDuringRetries(t *testing.T) {
-	for _, transport := range []string{"legacy", "native", "native_grpc"} {
+	for _, transport := range []string{"promtail", "native", "native_grpc"} {
 		for _, recovery := range []bool{true, false} {
 			name := "outage"
 			if recovery {
@@ -150,7 +150,7 @@ func assertOrdinaryDrain(t *testing.T, p *process, recovered bool) {
 }
 
 func TestCapabilityRestartDuringRetries(t *testing.T) {
-	for _, transport := range []string{"legacy", "native", "legacy_grpc", "native_grpc"} {
+	for _, transport := range []string{"promtail", "native", "promtail_grpc", "native_grpc"} {
 		for _, recovery := range []bool{true, false} {
 			name := "outage"
 			if recovery {
@@ -180,7 +180,9 @@ func TestCapabilityRestartDuringRetries(t *testing.T) {
 					t.Fatalf("incorrect restart intent: %+v", state)
 				}
 				termination, err := os.ReadFile(f.settings.Termination)
-				if err != nil || !strings.Contains(string(termination), oldMode) || !strings.Contains(string(termination), newMode) {
+				names := map[string]string{"promtail": "PromtailMode", "native": "OTELNativeMode"}
+				if err != nil || !strings.Contains(string(termination), names[oldMode]) ||
+					!strings.Contains(string(termination), names[newMode]) {
 					t.Fatal("restart termination message missing transition")
 				}
 				checkpoints, err := os.ReadDir(f.settings.Checkpoints)
@@ -227,13 +229,13 @@ func readControllerState(t *testing.T, f *fixture) map[string]any {
 
 func otherMode(mode string) string {
 	if mode == "native" {
-		return "legacy"
+		return "promtail"
 	}
 	return "native"
 }
 
 func TestConcurrentFiles(t *testing.T) {
-	for _, mode := range []string{"legacy", "native"} {
+	for _, mode := range []string{"promtail", "native"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newFixture(t, mode)
 			f.backend.setPlan(mode, responsePlan{status: 200, failures: 4})
@@ -255,7 +257,7 @@ func TestConcurrentFiles(t *testing.T) {
 }
 
 func TestFreshStateReplaysAvailableFiles(t *testing.T) {
-	for _, mode := range []string{"legacy", "native"} {
+	for _, mode := range []string{"promtail", "native"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newFixture(t, mode)
 			before := f.appendRecords(0, 0, 3)

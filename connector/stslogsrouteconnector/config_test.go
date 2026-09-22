@@ -27,7 +27,7 @@ func TestConfiguration(t *testing.T) {
 	var decoded route.Config
 	require.NoError(t, confmap.NewFromStringMap(map[string]any{
 		"capability_extension": "stslogscapability/logs",
-		"legacy_pipeline":      "logs/promtail",
+		"promtail_pipeline":    "logs/promtail",
 		"native_pipeline":      "logs/otel_native",
 		"max_concurrent_calls": 8,
 		"max_record_bytes":     262144,
@@ -41,7 +41,7 @@ func TestConfiguration(t *testing.T) {
 		change func(*route.Config)
 	}{
 		{"missing extension", func(c *route.Config) { c.CapabilityExtension = component.ID{} }},
-		{"missing legacy", func(c *route.Config) { c.PromtailPipeline = pipeline.ID{} }},
+		{"missing promtail", func(c *route.Config) { c.PromtailPipeline = pipeline.ID{} }},
 		{"wrong signal", func(c *route.Config) { c.OTELNativePipeline = pipeline.NewID(pipeline.SignalTraces) }},
 		{"same pipeline", func(c *route.Config) { c.OTELNativePipeline = c.PromtailPipeline }},
 		{"zero concurrency", func(c *route.Config) { c.MaxConcurrentCalls = 0 }},

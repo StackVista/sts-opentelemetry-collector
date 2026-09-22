@@ -55,7 +55,7 @@ func TestStartupRejectsInvalidBounds(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			f := newFixture(t, "legacy")
+			f := newFixture(t, "promtail")
 			f.appendRecords(0, 0, 1)
 			p := f.start(tc.mutate, true)
 			p.wait(8*time.Second, false)
@@ -73,9 +73,9 @@ func TestStartupAcceptsSafeEffectiveDefaults(t *testing.T) {
 		omit                 []string
 		retry, timeout       time.Duration
 	}{
-		{"legacy_timeout", "legacy", "stsk8slogs/promtail", []string{"timeout"}, 2 * time.Second, 5 * time.Second},
+		{"promtail_timeout", "promtail", "stsk8slogs/promtail", []string{"timeout"}, 2 * time.Second, 5 * time.Second},
 		{"native_timeout", "native", "otlp_http/otel_native", []string{"timeout"}, 2 * time.Second, 30 * time.Second},
-		{"legacy_retry", "legacy", "stsk8slogs/promtail", []string{"retry_on_failure", "max_elapsed_time"}, 30 * time.Second, 200 * time.Millisecond},
+		{"promtail_retry", "promtail", "stsk8slogs/promtail", []string{"retry_on_failure", "max_elapsed_time"}, 30 * time.Second, 200 * time.Millisecond},
 		{"native_retry", "native", "otlp_http/otel_native", []string{"retry_on_failure", "max_elapsed_time"}, 300 * time.Second, 200 * time.Millisecond},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -101,7 +101,7 @@ func TestStartupAcceptsSafeEffectiveDefaults(t *testing.T) {
 }
 
 func TestStartupRequiresSynchronousGate(t *testing.T) {
-	f := newFixture(t, "legacy")
+	f := newFixture(t, "promtail")
 	f.appendRecords(0, 0, 1)
 	p := f.start(nil, false)
 	p.wait(8*time.Second, false)
@@ -143,17 +143,17 @@ func TestDiscoveryStartup(t *testing.T) {
 			}
 			p.ready()
 			expected := f.appendRecords(0, 0, 1)
-			f.backend.waitBodies("legacy", expected, true)
+			f.backend.waitBodies("promtail", expected, true)
 			p.signal()
 			p.wait(5*time.Second, true)
-			f.backend.assertOnly("legacy")
-			f.backend.assertRecords("legacy", expected, true)
+			f.backend.assertOnly("promtail")
+			f.backend.assertRecords("promtail", expected, true)
 		})
 	}
 }
 
 func TestRuntimeDiscoveryAuthenticationRecovery(t *testing.T) {
-	for _, mode := range []string{"legacy", "native"} {
+	for _, mode := range []string{"promtail", "native"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newFixture(t, mode)
 			p := f.start(nil, true)
@@ -176,7 +176,7 @@ func TestRuntimeDiscoveryAuthenticationRecovery(t *testing.T) {
 }
 
 func TestPersistedIntentDoesNotOverrideDiscovery(t *testing.T) {
-	for _, selected := range []string{"legacy", "native"} {
+	for _, selected := range []string{"promtail", "native"} {
 		t.Run(selected, func(t *testing.T) {
 			f := newFixture(t, selected)
 			if err := os.MkdirAll(f.settings.Controller, 0700); err != nil {
@@ -218,7 +218,7 @@ func TestPersistedIntentDoesNotOverrideDiscovery(t *testing.T) {
 }
 
 func TestCorruptControllerStateFailsStartup(t *testing.T) {
-	f := newFixture(t, "legacy")
+	f := newFixture(t, "promtail")
 	if err := os.MkdirAll(f.settings.Controller, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -250,11 +250,11 @@ func (p *process) assertStartupReason(reason string) {
 }
 
 func TestCorruptFileStorageFailsStartup(t *testing.T) {
-	f := newFixture(t, "legacy")
+	f := newFixture(t, "promtail")
 	p := f.start(nil, true)
 	p.ready()
 	expected := f.appendRecords(0, 0, 1)
-	f.backend.waitBodies("legacy", expected, true)
+	f.backend.waitBodies("promtail", expected, true)
 	p.signal()
 	p.wait(5*time.Second, true)
 	entries, err := os.ReadDir(f.settings.Checkpoints)
@@ -290,7 +290,7 @@ func TestCorruptFileStorageFailsStartup(t *testing.T) {
 }
 
 func TestPromtailInvalidSibling(t *testing.T) {
-	f := newFixture(t, "legacy")
+	f := newFixture(t, "promtail")
 	p := f.start(func(c map[string]any) {
 		transform := section(c, "processors", "transform/identity")
 		statements, ok := transform["log_statements"].([]any)
@@ -305,10 +305,10 @@ func TestPromtailInvalidSibling(t *testing.T) {
 	p.ready()
 	bodies := f.appendRecords(0, 0, 3)
 	valid := []string{bodies[0], bodies[2]}
-	f.backend.waitBodies("legacy", valid, true)
+	f.backend.waitBodies("promtail", valid, true)
 	p.waitExport("acknowledged")
 	p.signal()
 	p.wait(5*time.Second, true)
-	f.backend.assertOnly("legacy")
-	f.backend.assertRecords("legacy", valid, false)
+	f.backend.assertOnly("promtail")
+	f.backend.assertRecords("promtail", valid, false)
 }

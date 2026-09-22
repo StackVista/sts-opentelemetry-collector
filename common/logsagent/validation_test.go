@@ -66,7 +66,7 @@ processors:
 connectors:
   stslogsroute/logs:
     capability_extension: stslogscapability/logs
-    legacy_pipeline: logs/promtail
+    promtail_pipeline: logs/promtail
     native_pipeline: logs/otel_native
     max_concurrent_calls: 8
     max_record_bytes: 262144
@@ -311,7 +311,7 @@ func TestValidatePipelineConfigRejectsGraphChanges(t *testing.T) {
 		{"receiver scalar", "service::pipelines::logs/input::receivers", "filelog/pods", "exactly one filelog"},
 		{"terminal fanout", "service::pipelines::logs/otel_native::exporters", []string{"otlp_http/otel_native", "debug"}, "exactly one exporter"},
 		{"terminal direct receiver", "service::pipelines::logs/promtail::receivers", []string{"filelog/pods"}, "only the route"},
-		{"wrong legacy", "service::pipelines::logs/promtail::exporters", []string{"debug"}, "stsk8slogs"},
+		{"wrong promtail", "service::pipelines::logs/promtail::exporters", []string{"debug"}, "stsk8slogs"},
 		{"wrong native", "service::pipelines::logs/otel_native::exporters", []string{"stsk8slogs/promtail"}, "OTLP exporter"},
 		{"native cycle", "service::pipelines::logs/otel_native::exporters", []string{"stslogsroute/logs"}, "OTLP exporter"},
 		{"missing exporter", "service::pipelines::logs/otel_native::exporters", []string{"otlp/absent"}, "configured mapping"},

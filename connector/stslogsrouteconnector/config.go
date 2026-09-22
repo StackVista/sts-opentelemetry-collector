@@ -10,7 +10,7 @@ import (
 
 type Config struct {
 	CapabilityExtension component.ID  `mapstructure:"capability_extension"`
-	PromtailPipeline    pipeline.ID   `mapstructure:"legacy_pipeline"`
+	PromtailPipeline    pipeline.ID   `mapstructure:"promtail_pipeline"`
 	OTELNativePipeline  pipeline.ID   `mapstructure:"native_pipeline"`
 	MaxConcurrentCalls  int           `mapstructure:"max_concurrent_calls"`
 	MaxRecordBytes      int           `mapstructure:"max_record_bytes"`
@@ -23,10 +23,10 @@ func (c *Config) Validate() error {
 		return errors.New("capability_extension is required")
 	}
 	if c.PromtailPipeline.Signal() != pipeline.SignalLogs || c.OTELNativePipeline.Signal() != pipeline.SignalLogs {
-		return errors.New("legacy_pipeline and native_pipeline must be logs pipelines")
+		return errors.New("promtail_pipeline and native_pipeline must be logs pipelines")
 	}
 	if c.PromtailPipeline == c.OTELNativePipeline {
-		return errors.New("legacy_pipeline and native_pipeline must differ")
+		return errors.New("promtail_pipeline and native_pipeline must differ")
 	}
 	if c.MaxConcurrentCalls <= 0 {
 		return errors.New("max_concurrent_calls must be positive")

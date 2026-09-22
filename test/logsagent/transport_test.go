@@ -122,7 +122,7 @@ func useOTELNativeGRPC(config map[string]any, endpoint, ca string) {
 }
 
 func TestInactiveOTELNativeGRPCUnavailable(t *testing.T) {
-	f := newFixture(t, "legacy")
+	f := newFixture(t, "promtail")
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -138,7 +138,7 @@ func TestInactiveOTELNativeGRPCUnavailable(t *testing.T) {
 	p.ready()
 	startup := time.Since(start)
 	bodies := f.appendRecords(0, 0, 3)
-	f.backend.waitBodies("legacy", bodies, true)
+	f.backend.waitBodies("promtail", bodies, true)
 	p.waitExport("acknowledged")
 	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
 		if p.status("/ready") != http.StatusOK {
@@ -149,8 +149,8 @@ func TestInactiveOTELNativeGRPCUnavailable(t *testing.T) {
 	p.signal()
 	p.wait(5*time.Second, true)
 	assertOrdinaryDrain(t, p, true)
-	f.backend.assertOnly("legacy")
-	f.backend.assertRecords("legacy", bodies, false)
+	f.backend.assertOnly("promtail")
+	f.backend.assertRecords("promtail", bodies, false)
 	output := p.output.String()
 	reconnects := strings.Count(output, "connection refused")
 	if reconnects == 0 {
@@ -200,7 +200,7 @@ func TestTransportNativeGRPC(t *testing.T) {
 }
 
 func TestTransportCustomCAHTTP(t *testing.T) {
-	for _, mode := range []string{"legacy", "native"} {
+	for _, mode := range []string{"promtail", "native"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newFixture(t, mode)
 			server, ca := transportTLS(f)
@@ -227,11 +227,11 @@ func TestTransportCustomCAHTTP(t *testing.T) {
 }
 
 func TestTransportMissingCA(t *testing.T) {
-	for _, client := range []string{"discovery", "legacy", "native_http", "native_grpc"} {
+	for _, client := range []string{"discovery", "promtail", "native_http", "native_grpc"} {
 		t.Run(client, func(t *testing.T) {
 			mode := "native"
-			if client == "legacy" {
-				mode = "legacy"
+			if client == "promtail" {
+				mode = "promtail"
 			}
 			f := newFixture(t, mode)
 			server, ca := transportTLS(f)
@@ -239,7 +239,7 @@ func TestTransportMissingCA(t *testing.T) {
 			switch client {
 			case "discovery":
 				f.settings.ReceiverURL = server.URL + "/stsAgent"
-			case "legacy":
+			case "promtail":
 				f.settings.PromtailURL = server.URL + "/stsAgent/logs/k8s"
 			case "native_http":
 				f.settings.OTELNativeURL = server.URL + "/otel"
@@ -260,7 +260,7 @@ func TestTransportMissingCA(t *testing.T) {
 				}
 			} else {
 				p.ready()
-				if client == "legacy" {
+				if client == "promtail" {
 					p.waitExport("permanent_rejection")
 				} else {
 					p.waitExport("retry_exhausted")
@@ -269,7 +269,7 @@ func TestTransportMissingCA(t *testing.T) {
 				p.wait(5*time.Second, true)
 				assertOrdinaryDrain(t, p, false)
 				reason := "certificate signed by unknown authority"
-				if client == "legacy" {
+				if client == "promtail" {
 					reason = "Promtail-compatible log export configuration"
 				}
 				if !strings.Contains(p.output.String(), reason) {
@@ -284,7 +284,7 @@ func TestTransportMissingCA(t *testing.T) {
 }
 
 func TestTransportHTTPExplicitProxy(t *testing.T) {
-	for _, mode := range []string{"legacy", "native"} {
+	for _, mode := range []string{"promtail", "native"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newFixture(t, mode)
 			target, err := url.Parse(f.backend.server.URL)
@@ -323,7 +323,7 @@ func TestTransportHTTPExplicitProxy(t *testing.T) {
 			mu.Lock()
 			defer mu.Unlock()
 			path := "/otel/v1/logs"
-			if mode == "legacy" {
+			if mode == "promtail" {
 				path = "/stsAgent/logs/k8s"
 			}
 			if paths["/stsAgent/features"] != f.backend.polls() || paths[path] != f.backend.attempts(mode) ||
