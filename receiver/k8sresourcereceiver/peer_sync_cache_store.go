@@ -242,6 +242,10 @@ func (p *peerSyncCacheStore) pullSnapshotWithRetry(ctx context.Context) (*PeerSy
 
 		select {
 		case <-ctx.Done():
+			if errors.Is(ctx.Err(), context.Canceled) {
+				p.logger.Debug("Bootstrap cancelled")
+				return nil, metrics.BootstrapCanceled
+			}
 			p.logger.Warn("Bootstrap ended before a snapshot was available, continuing with the local cache",
 				zap.Error(ctx.Err()),
 			)

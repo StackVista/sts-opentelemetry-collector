@@ -41,7 +41,11 @@ type k8sresourceReceiver struct {
 	mu              sync.Mutex
 	collector       *resourceCollector
 	shuttingDown    bool
-	bootstrapCancel context.CancelFunc
+	lifecycleCancel context.CancelFunc
+	collectorCancel context.CancelFunc
+	shutdownOnce    sync.Once
+	shutdownDone    chan struct{}
+	shutdownErr     error
 	bootstrapDone   chan struct{}
 }
 
@@ -131,23 +135,24 @@ func (r *k8sresourceReceiver) Start(ctx context.Context, host component.Host) er
 		return fmt.Errorf("failed to start peer sync cache store: %w", err)
 	}
 
+	lifetimeCtx, cancel := context.WithCancel(context.Background())
+	r.lifecycleCancel = cancel
+	r.bootstrapDone = make(chan struct{})
 	if r.config.PeerSyncDNS == "" {
-		return r.startCollection(ctx, elector)
+		defer close(r.bootstrapDone)
+		return r.startCollection(lifetimeCtx, elector)
 	}
 
 	// Cold peers can all be empty; do not hold up the service startup barrier.
-	bootstrapCtx, cancel := context.WithCancel(context.Background())
-	r.bootstrapCancel = cancel
-	r.bootstrapDone = make(chan struct{})
 	go func() {
 		defer close(r.bootstrapDone)
-		if err := r.peerStore.Bootstrap(bootstrapCtx); err != nil {
+		if err := r.peerStore.Bootstrap(lifetimeCtx); err != nil {
 			r.settings.Logger.Debug("Initial bootstrap returned error, continuing", zap.Error(err))
 		}
-		if bootstrapCtx.Err() != nil {
+		if lifetimeCtx.Err() != nil {
 			return
 		}
-		if err := r.startCollection(bootstrapCtx, elector); err != nil {
+		if err := r.startCollection(lifetimeCtx, elector); err != nil && lifetimeCtx.Err() == nil {
 			r.settings.Logger.Error("Failed to start resource collection after bootstrap", zap.Error(err))
 			componentstatus.ReportStatus(host, componentstatus.NewFatalErrorEvent(err))
 		}
@@ -157,11 +162,11 @@ func (r *k8sresourceReceiver) Start(ctx context.Context, host component.Host) er
 
 func (r *k8sresourceReceiver) startCollection(ctx context.Context, elector k8sleaderelector.LeaderElection) error {
 	if elector != nil {
-		r.startWithLeaderElection(elector)
+		r.startWithLeaderElection(ctx, elector)
 		return nil
 	}
 	r.peerStore.SetLeader(true)
-	return r.startCollector(ctx)
+	return r.startCollector(ctx, ctx)
 }
 
 func (r *k8sresourceReceiver) ensureDiscoveryClient() error {
@@ -179,7 +184,7 @@ func (r *k8sresourceReceiver) ensureDiscoveryClient() error {
 // startCollector creates and starts the collector (called directly or from leader election callback).
 // Idempotent: a duplicate onStartLeading callback (e.g., k8s lease re-acquisition firing twice)
 // is a no-op rather than spawning a second collector that would leak goroutines and informers.
-func (r *k8sresourceReceiver) startCollector(ctx context.Context) error {
+func (r *k8sresourceReceiver) startCollector(ctx, lifetimeCtx context.Context) error {
 	r.mu.Lock()
 	if r.shuttingDown || r.collector != nil {
 		r.mu.Unlock()
@@ -187,6 +192,16 @@ func (r *k8sresourceReceiver) startCollector(ctx context.Context) error {
 		return nil
 	}
 	r.mu.Unlock()
+
+	ctx, cancel := context.WithCancel(ctx)
+	stopLifetime := context.AfterFunc(lifetimeCtx, cancel)
+	cleanup := func() { stopLifetime(); cancel() }
+	adopted := false
+	defer func() {
+		if !adopted {
+			cleanup()
+		}
+	}()
 
 	ft := tracker.NewDefault()
 	informers := newResourceInformers(r.settings, r.config, r.dynamicClient, r.resolvedObjects, ft, r.metrics)
@@ -199,6 +214,10 @@ func (r *k8sresourceReceiver) startCollector(ctx context.Context) error {
 	)
 
 	if err := collector.Start(ctx); err != nil {
+		cleanup()
+		if shutdownErr := collector.Shutdown(ctx); shutdownErr != nil {
+			r.settings.Logger.Debug("Error cleaning up failed collector startup", zap.Error(shutdownErr))
+		}
 		return fmt.Errorf("failed to start resource collector: %w", err)
 	}
 
@@ -213,6 +232,8 @@ func (r *k8sresourceReceiver) startCollector(ctx context.Context) error {
 		return nil
 	}
 	r.collector = collector
+	r.collectorCancel = cleanup
+	adopted = true
 	r.mu.Unlock()
 
 	r.settings.Logger.Info("K8s Resource Receiver started",
@@ -230,9 +251,14 @@ func (r *k8sresourceReceiver) startCollector(ctx context.Context) error {
 func (r *k8sresourceReceiver) stopCollector(ctx context.Context) {
 	r.mu.Lock()
 	collector := r.collector
+	cancel := r.collectorCancel
+	r.collectorCancel = nil
 	r.collector = nil
 	r.mu.Unlock()
 
+	if cancel != nil {
+		cancel()
+	}
 	if collector != nil {
 		if err := collector.Shutdown(ctx); err != nil {
 			r.settings.Logger.Debug("Error shutting down collector", zap.Error(err))
@@ -242,7 +268,9 @@ func (r *k8sresourceReceiver) stopCollector(ctx context.Context) {
 
 // --- Leader election via k8sleaderelector extension ---
 
-func (r *k8sresourceReceiver) startWithLeaderElection(elector k8sleaderelector.LeaderElection) {
+func (r *k8sresourceReceiver) startWithLeaderElection(
+	lifetimeCtx context.Context, elector k8sleaderelector.LeaderElection,
+) {
 	r.settings.Logger.Info("Registering with leader election extension",
 		zap.String("extension", r.config.K8sLeaderElector.String()),
 	)
@@ -251,7 +279,7 @@ func (r *k8sresourceReceiver) startWithLeaderElection(elector k8sleaderelector.L
 		func(ctx context.Context) {
 			r.settings.Logger.Info("Became leader, starting resource collection")
 			r.peerStore.SetLeader(true)
-			if err := r.startCollector(ctx); err != nil {
+			if err := r.startCollector(ctx, lifetimeCtx); err != nil && ctx.Err() == nil && lifetimeCtx.Err() == nil {
 				r.settings.Logger.Error("Failed to start collector after acquiring leadership", zap.Error(err))
 			}
 		},
@@ -266,20 +294,33 @@ func (r *k8sresourceReceiver) startWithLeaderElection(elector k8sleaderelector.L
 // --- Shutdown ---
 
 func (r *k8sresourceReceiver) Shutdown(ctx context.Context) error {
-	r.settings.Logger.Info("Shutting down K8s Resource Receiver")
-	r.mu.Lock()
-	r.shuttingDown = true
-	r.mu.Unlock()
-	if r.bootstrapCancel != nil {
-		r.bootstrapCancel()
-		<-r.bootstrapDone
+	r.shutdownOnce.Do(func() {
+		r.settings.Logger.Info("Shutting down K8s Resource Receiver")
+		r.mu.Lock()
+		r.shuttingDown = true
+		r.mu.Unlock()
+		if r.lifecycleCancel != nil {
+			r.lifecycleCancel()
+		}
+		r.shutdownDone = make(chan struct{})
+		go func() {
+			defer close(r.shutdownDone)
+			if r.bootstrapDone != nil {
+				<-r.bootstrapDone
+			}
+			r.stopCollector(context.Background())
+			if r.peerStore != nil {
+				r.peerStore.Stop()
+			}
+			if r.resourceAttributeManager != nil {
+				r.shutdownErr = r.resourceAttributeManager.Shutdown(context.Background())
+			}
+		}()
+	})
+	select {
+	case <-r.shutdownDone:
+		return r.shutdownErr
+	case <-ctx.Done():
+		return fmt.Errorf("receiver shutdown did not finish: %w", ctx.Err())
 	}
-	r.stopCollector(ctx)
-	if r.peerStore != nil {
-		r.peerStore.Stop()
-	}
-	if r.resourceAttributeManager != nil {
-		return r.resourceAttributeManager.Shutdown(ctx)
-	}
-	return nil
 }

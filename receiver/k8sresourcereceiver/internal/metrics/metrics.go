@@ -123,7 +123,7 @@ func NewMetrics(typeName, clusterName string, settings component.TelemetrySettin
 	bootstrapTotal, _ := meter.Int64Counter(
 		name("bootstrap_total"),
 		metric.WithDescription(
-			"Bootstrap completion outcomes, labelled by outcome (applied|leader_empty|timed_out) "+
+			"Bootstrap completion outcomes, labelled by outcome (applied|leader_empty|timed_out|canceled) "+
 				"and source (leader|secondary|none — none for non-applied outcomes).",
 		),
 	)
