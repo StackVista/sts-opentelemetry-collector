@@ -9,6 +9,7 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/tracker"
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/component/componentstatus"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/receiver"
 	"go.uber.org/zap"
@@ -37,8 +38,11 @@ type k8sresourceReceiver struct {
 	resolvedResourceAttributes []resolvedResourceAttributeEnrichment
 
 	// Collector lifecycle — guarded by leader election when enabled.
-	mu        sync.Mutex
-	collector *resourceCollector
+	mu              sync.Mutex
+	collector       *resourceCollector
+	shuttingDown    bool
+	bootstrapCancel context.CancelFunc
+	bootstrapDone   chan struct{}
 }
 
 func newReceiver(
@@ -59,6 +63,18 @@ func newReceiver(
 }
 
 func (r *k8sresourceReceiver) Start(ctx context.Context, host component.Host) error {
+	var elector k8sleaderelector.LeaderElection
+	if r.config.K8sLeaderElector != nil {
+		ext, ok := host.GetExtensions()[*r.config.K8sLeaderElector]
+		if !ok {
+			return fmt.Errorf("k8s leader elector extension %q not found", r.config.K8sLeaderElector)
+		}
+		elector, ok = ext.(k8sleaderelector.LeaderElection)
+		if !ok {
+			return fmt.Errorf("extension %q does not implement k8sleaderelector.LeaderElection", r.config.K8sLeaderElector)
+		}
+	}
+
 	if r.config.DiscoveryMode == DiscoveryModeAll && r.config.CustomResourceAPIGroups != nil {
 		r.settings.Logger.Warn(
 			"cr_api_groups is configured but has no effect when discovery_mode is 'all'; " +
@@ -115,21 +131,35 @@ func (r *k8sresourceReceiver) Start(ctx context.Context, host component.Host) er
 		return fmt.Errorf("failed to start peer sync cache store: %w", err)
 	}
 
-	// Bootstrap on every replica — not just the leader. Secondaries need a warm
-	// cache too, otherwise their state only accumulates from received deltas
-	// (which are sparse on a stable cluster) and they can't serve a useful
-	// snapshot if a future leader has to bootstrap from them.
-	if err := r.peerStore.Bootstrap(ctx); err != nil {
-		r.settings.Logger.Debug("Initial bootstrap returned error, continuing", zap.Error(err))
+	if r.config.PeerSyncDNS == "" {
+		return r.startCollection(ctx, elector)
 	}
 
-	if r.config.K8sLeaderElector != nil {
-		return r.startWithLeaderElection(ctx, host)
-	}
+	// Cold peers can all be empty; do not hold up the service startup barrier.
+	bootstrapCtx, cancel := context.WithCancel(context.Background())
+	r.bootstrapCancel = cancel
+	r.bootstrapDone = make(chan struct{})
+	go func() {
+		defer close(r.bootstrapDone)
+		if err := r.peerStore.Bootstrap(bootstrapCtx); err != nil {
+			r.settings.Logger.Debug("Initial bootstrap returned error, continuing", zap.Error(err))
+		}
+		if bootstrapCtx.Err() != nil {
+			return
+		}
+		if err := r.startCollection(bootstrapCtx, elector); err != nil {
+			r.settings.Logger.Error("Failed to start resource collection after bootstrap", zap.Error(err))
+			componentstatus.ReportStatus(host, componentstatus.NewFatalErrorEvent(err))
+		}
+	}()
+	return nil
+}
 
-	// Single-replica deploy: this instance is effectively always the leader.
-	// Marking it as such tags its served snapshots with Source=leader so any
-	// future bootstrapping peer treats them as authoritative.
+func (r *k8sresourceReceiver) startCollection(ctx context.Context, elector k8sleaderelector.LeaderElection) error {
+	if elector != nil {
+		r.startWithLeaderElection(elector)
+		return nil
+	}
 	r.peerStore.SetLeader(true)
 	return r.startCollector(ctx)
 }
@@ -151,9 +181,9 @@ func (r *k8sresourceReceiver) ensureDiscoveryClient() error {
 // is a no-op rather than spawning a second collector that would leak goroutines and informers.
 func (r *k8sresourceReceiver) startCollector(ctx context.Context) error {
 	r.mu.Lock()
-	if r.collector != nil {
+	if r.shuttingDown || r.collector != nil {
 		r.mu.Unlock()
-		r.settings.Logger.Warn("startCollector called while collector already running; ignoring")
+		r.settings.Logger.Warn("Resource collection is already running or shutting down; ignoring start")
 		return nil
 	}
 	r.mu.Unlock()
@@ -173,11 +203,10 @@ func (r *k8sresourceReceiver) startCollector(ctx context.Context) error {
 	}
 
 	r.mu.Lock()
-	if r.collector != nil {
-		// A concurrent startCollector won the race between the check above and now.
-		// Shut down the collector we just started; the other one is the survivor.
+	if r.shuttingDown || r.collector != nil {
+		// Shutdown or another start won the race while informers were starting.
 		r.mu.Unlock()
-		r.settings.Logger.Warn("startCollector raced with itself; shutting down duplicate collector")
+		r.settings.Logger.Warn("Discarding resource collector after concurrent start or shutdown")
 		if err := collector.Shutdown(ctx); err != nil {
 			r.settings.Logger.Debug("Error shutting down duplicate collector", zap.Error(err))
 		}
@@ -213,17 +242,7 @@ func (r *k8sresourceReceiver) stopCollector(ctx context.Context) {
 
 // --- Leader election via k8sleaderelector extension ---
 
-func (r *k8sresourceReceiver) startWithLeaderElection(_ context.Context, host component.Host) error {
-	ext, ok := host.GetExtensions()[*r.config.K8sLeaderElector]
-	if !ok {
-		return fmt.Errorf("k8s leader elector extension %q not found", r.config.K8sLeaderElector)
-	}
-
-	elector, ok := ext.(k8sleaderelector.LeaderElection)
-	if !ok {
-		return fmt.Errorf("extension %q does not implement k8sleaderelector.LeaderElection", r.config.K8sLeaderElector)
-	}
-
+func (r *k8sresourceReceiver) startWithLeaderElection(elector k8sleaderelector.LeaderElection) {
 	r.settings.Logger.Info("Registering with leader election extension",
 		zap.String("extension", r.config.K8sLeaderElector.String()),
 	)
@@ -242,14 +261,19 @@ func (r *k8sresourceReceiver) startWithLeaderElection(_ context.Context, host co
 			r.stopCollector(context.Background())
 		},
 	)
-
-	return nil
 }
 
 // --- Shutdown ---
 
 func (r *k8sresourceReceiver) Shutdown(ctx context.Context) error {
 	r.settings.Logger.Info("Shutting down K8s Resource Receiver")
+	r.mu.Lock()
+	r.shuttingDown = true
+	r.mu.Unlock()
+	if r.bootstrapCancel != nil {
+		r.bootstrapCancel()
+		<-r.bootstrapDone
+	}
 	r.stopCollector(ctx)
 	if r.peerStore != nil {
 		r.peerStore.Stop()

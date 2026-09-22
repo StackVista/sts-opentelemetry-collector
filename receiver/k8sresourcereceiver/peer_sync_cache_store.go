@@ -226,7 +226,8 @@ func (p *peerSyncCacheStore) Bootstrap(ctx context.Context) error {
 // Each terminal outcome is logged at the call site so future readers can correlate
 // the log with the decision that produced it.
 func (p *peerSyncCacheStore) pullSnapshotWithRetry(ctx context.Context) (*PeerSyncSnapshot, metrics.BootstrapOutcome) {
-	deadline := time.Now().Add(bootstrapMaxDuration)
+	ctx, cancel := context.WithTimeout(ctx, bootstrapMaxDuration)
+	defer cancel()
 	backoff := bootstrapBaseBackoff
 
 	for {
@@ -239,16 +240,9 @@ func (p *peerSyncCacheStore) pullSnapshotWithRetry(ctx context.Context) (*PeerSy
 			return nil, metrics.BootstrapLeaderEmpty
 		}
 
-		if time.Now().After(deadline) {
-			p.logger.Warn("Bootstrap timed out, secondary cache may be incomplete until next snapshot",
-				zap.Duration("max_duration", bootstrapMaxDuration),
-			)
-			return nil, metrics.BootstrapTimedOut
-		}
-
 		select {
 		case <-ctx.Done():
-			p.logger.Warn("Bootstrap cancelled, secondary cache may be incomplete until next snapshot",
+			p.logger.Warn("Bootstrap ended before a snapshot was available, continuing with the local cache",
 				zap.Error(ctx.Err()),
 			)
 			return nil, metrics.BootstrapTimedOut
@@ -553,7 +547,7 @@ func (p *peerSyncCacheStore) broadcastToPeers(ctx context.Context, delta *PeerSy
 		return
 	}
 
-	ips, err := net.LookupHost(p.peerDNS)
+	ips, err := net.DefaultResolver.LookupHost(ctx, p.peerDNS)
 	if err != nil {
 		p.logger.Debug("Failed to resolve peer DNS for broadcast",
 			zap.String("dns", p.peerDNS),
@@ -784,7 +778,7 @@ func (p *peerSyncCacheStore) pullSnapshotFromPeers(
 		return nil, false
 	}
 
-	ips, err := net.LookupHost(p.peerDNS)
+	ips, err := net.DefaultResolver.LookupHost(ctx, p.peerDNS)
 	if err != nil {
 		p.logger.Debug("Failed to resolve peer DNS for pull",
 			zap.String("dns", p.peerDNS),
