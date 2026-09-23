@@ -60,17 +60,15 @@ func TestAuthoredFixtureRejectsOmittedBounds(t *testing.T) {
 		{"receivers", "filelog/pods", "retry_on_failure", "enabled"},
 		{"extensions", "file_storage/logs", "recreate"},
 	}...)
-	for _, exporter := range []string{"stsk8slogs/promtail"} {
-		for _, field := range [][]string{
-			{"timeout"},
-			{"retry_on_failure", "enabled"},
-			{"retry_on_failure", "initial_interval"},
-			{"retry_on_failure", "max_interval"},
-			{"retry_on_failure", "max_elapsed_time"},
-			{"sending_queue", "enabled"},
-		} {
-			paths = append(paths, append([]string{"exporters", exporter}, field...))
-		}
+	for _, field := range [][]string{
+		{"timeout"},
+		{"retry_on_failure", "enabled"},
+		{"retry_on_failure", "initial_interval"},
+		{"retry_on_failure", "max_interval"},
+		{"retry_on_failure", "max_elapsed_time"},
+		{"sending_queue", "enabled"},
+	} {
+		paths = append(paths, append([]string{"exporters", "stsk8slogs/promtail"}, field...))
 	}
 	for _, path := range paths {
 		t.Run(strings.Join(path, "/"), func(t *testing.T) {
@@ -86,32 +84,30 @@ func TestAuthoredFixtureRejectsOmittedBounds(t *testing.T) {
 }
 
 func TestAuthoredFixtureRejectsInvalidBounds(t *testing.T) {
-	for _, exporter := range []string{"stsk8slogs/promtail"} {
-		for _, tc := range []struct {
-			name   string
-			reason string
-			mutate func(map[string]any)
-		}{
-			{"enabled_queue", "enabled", func(e map[string]any) { section(e, "sending_queue")["enabled"] = true }},
-			{"longer_retry", "export_lifetime", func(e map[string]any) {
-				section(e, "retry_on_failure")["max_elapsed_time"] = "10s"
-			}},
-			{"unlimited_retry", "max_elapsed_time", func(e map[string]any) {
-				section(e, "retry_on_failure")["max_elapsed_time"] = "0s"
-			}},
-			{"queue_batching", "sending_queue", func(e map[string]any) {
-				section(e, "sending_queue")["batch"] = map[string]any{}
-			}},
-		} {
-			t.Run(exporter+"/"+tc.name, func(t *testing.T) {
-				c := renderConfig(t, defaultSettings())
-				tc.mutate(section(c, "exporters", exporter))
-				_, err := logsagent.ValidatePipelineConfig(confmap.NewFromStringMap(c))
-				if err == nil || !strings.Contains(err.Error(), tc.reason) {
-					t.Fatalf("expected %s rejection, got %v", tc.reason, err)
-				}
-			})
-		}
+	for _, tc := range []struct {
+		name   string
+		reason string
+		mutate func(map[string]any)
+	}{
+		{"enabled_queue", "enabled", func(e map[string]any) { section(e, "sending_queue")["enabled"] = true }},
+		{"longer_retry", "export_lifetime", func(e map[string]any) {
+			section(e, "retry_on_failure")["max_elapsed_time"] = "10s"
+		}},
+		{"unlimited_retry", "max_elapsed_time", func(e map[string]any) {
+			section(e, "retry_on_failure")["max_elapsed_time"] = "0s"
+		}},
+		{"queue_batching", "sending_queue", func(e map[string]any) {
+			section(e, "sending_queue")["batch"] = map[string]any{}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := renderConfig(t, defaultSettings())
+			tc.mutate(section(c, "exporters", "stsk8slogs/promtail"))
+			_, err := logsagent.ValidatePipelineConfig(confmap.NewFromStringMap(c))
+			if err == nil || !strings.Contains(err.Error(), tc.reason) {
+				t.Fatalf("expected %s rejection, got %v", tc.reason, err)
+			}
+		})
 	}
 }
 

@@ -260,7 +260,7 @@ func TestValidatePipelineConfigRejectsGraphChanges(t *testing.T) {
 		value any
 		want  string
 	}{
-		{"connector graph", "connectors", map[string]any{"stslogsroute/logs": nil}, "must not configure connectors"},
+		{"connector graph", "connectors", map[string]any{"forward/logs": nil}, "must not configure connectors"},
 		{"malformed connectors", "connectors", "invalid", "must not configure connectors"},
 		{"wrong signal", "service::pipelines", map[string]any{"traces/input": nil}, "logs input pipeline"},
 		{"wrong controller", "exporters::stsk8slogs/promtail::delivery::controller_extension", "health_check", "stslogsagent"},
@@ -272,7 +272,7 @@ func TestValidatePipelineConfigRejectsGraphChanges(t *testing.T) {
 			"receivers": []string{"filelog/pods"}, "exporters": []string{"stsk8slogs/promtail"},
 		}, "exactly one"},
 		{"uninspected signal graph", "service::pipelines::metrics/extra", nil, "exactly one"},
-		{"input fanout", "service::pipelines::logs/input::exporters", []string{"stslogsroute/logs", "stsk8slogs/promtail"}, "only to"},
+		{"input fanout", "service::pipelines::logs/input::exporters", []string{"debug/extra", "stsk8slogs/promtail"}, "only to"},
 		{"input bypass", "service::pipelines::logs/input::exporters", []string{"debug"}, "only to"},
 		{"second file reader", "service::pipelines::logs/input::receivers", []string{"filelog/pods", "filelog/other"}, "exactly one filelog"},
 		{"wrong input", "service::pipelines::logs/input::receivers", []string{"otlp"}, "exactly one filelog"},

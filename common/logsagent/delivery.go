@@ -22,8 +22,7 @@ type Delivery struct {
 
 	mu         sync.Mutex
 	controller Controller
-	selected   consumer.Logs
-	mode       Mode
+	next       consumer.Logs
 	retryBound time.Duration
 	stopping   bool
 	slots      chan struct{}
@@ -47,21 +46,17 @@ func NewDelivery(cfg DeliveryConfig, meter metric.MeterProvider, logger *zap.Log
 	}, nil
 }
 
-func (c *Delivery) Start(controller Controller, selected consumer.Logs) error {
+func (c *Delivery) Start(controller Controller, next consumer.Logs) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.selected != nil || c.stopping {
-		return errors.New("logs route already started or stopped")
+	if c.next != nil || c.stopping {
+		return errors.New("logs delivery already started or stopped")
 	}
 	if controller == nil {
 		return errors.New("controller_extension does not provide a logs agent controller")
 	}
-	if selected == nil {
-		return errors.New("logs delivery requires a selected consumer")
-	}
-	mode := controller.SelectedMode()
-	if mode != PromtailMode {
-		return errors.New("controller_extension has no valid selected mode")
+	if next == nil {
+		return errors.New("logs delivery requires a consumer")
 	}
 	bound := controller.RetryBound()
 	if bound <= 0 || bound > c.cfg.ExportLifetime {
@@ -70,7 +65,7 @@ func (c *Delivery) Start(controller Controller, selected consumer.Logs) error {
 	if err := controller.RegisterExportObserver(&c.account); err != nil {
 		return err
 	}
-	c.controller, c.selected, c.mode, c.retryBound = controller, selected, mode, bound
+	c.controller, c.next, c.retryBound = controller, next, bound
 	return nil
 }
 
@@ -80,11 +75,11 @@ func (*Delivery) Capabilities() consumer.Capabilities {
 
 func (c *Delivery) ConsumeLogs(ctx context.Context, data plog.Logs) error {
 	c.mu.Lock()
-	if c.selected == nil || c.stopping {
+	if c.next == nil || c.stopping {
 		c.mu.Unlock()
 		return c.reject(ctx, data.LogRecordCount(), "not_running", false)
 	}
-	selected, controller, mode := c.selected, c.controller, c.mode
+	next, controller := c.next, c.controller
 	c.mu.Unlock()
 
 	records := data.LogRecordCount()
@@ -92,7 +87,7 @@ func (c *Delivery) ConsumeLogs(ctx context.Context, data plog.Logs) error {
 		return c.reject(ctx, records, "request_too_large", true)
 	}
 	if oversized := oversizedRecords(data, c.cfg.MaxRecordBytes); oversized != 0 {
-		c.telemetry.oversized.Add(ctx, int64(oversized), modeAttributes(mode))
+		c.telemetry.oversized.Add(ctx, int64(oversized))
 		return c.reject(ctx, records, "record_too_large", true)
 	}
 
@@ -122,21 +117,21 @@ func (c *Delivery) ConsumeLogs(ctx context.Context, data plog.Logs) error {
 
 	exportCtx, cancel := context.WithDeadline(context.WithoutCancel(ctx), deadline)
 	defer cancel()
-	c.telemetry.outstanding.Add(exportCtx, 1, modeAttributes(mode))
-	if selected.Capabilities().MutatesData {
+	c.telemetry.outstanding.Add(exportCtx, 1)
+	if next.Capabilities().MutatesData {
 		copyData := plog.NewLogs()
 		data.CopyTo(copyData)
 		data = copyData
 	}
-	err := selected.ConsumeLogs(exportCtx, data)
+	err := next.ConsumeLogs(exportCtx, data)
 	outcome := classifyOutcome(exportCtx, err)
 	if outcome == outcomeDeadline && err == nil {
 		err = context.DeadlineExceeded
 	}
 	draining := !controller.DrainDeadline().IsZero()
-	c.telemetry.complete(exportCtx, mode, outcome, draining)
+	c.telemetry.complete(exportCtx, outcome, draining)
 	c.logger.Debug("Logs export completed",
-		zap.String("outcome", outcome), zap.String("mode", metricMode(mode)),
+		zap.String("outcome", outcome),
 		zap.Bool("draining", draining), zap.Int("log_records", records))
 	c.mu.Lock()
 	c.account.Finish(outcome)
@@ -150,17 +145,16 @@ func (c *Delivery) ConsumeLogs(ctx context.Context, data plog.Logs) error {
 
 func (c *Delivery) reject(ctx context.Context, records int, reason string, permanent bool) error {
 	c.mu.Lock()
-	mode := c.mode
 	draining := c.controller != nil && !c.controller.DrainDeadline().IsZero()
 	if draining {
 		c.account.RejectDrain()
 	}
 	c.mu.Unlock()
-	c.telemetry.reject(ctx, mode, reason, records)
+	c.telemetry.reject(ctx, reason, records)
 	c.logger.Debug("Logs export rejected",
-		zap.String("outcome", reason), zap.String("mode", metricMode(mode)),
+		zap.String("outcome", reason),
 		zap.Bool("draining", draining), zap.Int("log_records", records))
-	err := errors.New("logs route pre-export rejection: " + reason)
+	err := errors.New("logs delivery pre-export rejection: " + reason)
 	if permanent {
 		return consumererror.NewPermanent(err)
 	}

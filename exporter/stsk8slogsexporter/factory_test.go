@@ -2,12 +2,10 @@ package stsk8slogsexporter //nolint:testpackage // Exercises the factory's queue
 
 import (
 	"context"
-	"encoding/pem"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -85,7 +83,6 @@ func TestFactoryDefaultsAndConfiguration(t *testing.T) {
 			name: "full",
 			data: map[string]any{
 				"tls": map[string]any{
-					"ca_file":              "/etc/ssl/promtail-ca.pem",
 					"insecure_skip_verify": true,
 				},
 				"proxy_url": "http://proxy.example:8080",
@@ -98,6 +95,11 @@ func TestFactoryDefaultsAndConfiguration(t *testing.T) {
 				queueKey: map[string]any{enabledKey: false},
 			},
 			valid: true,
+		},
+		{
+			name:        "unsupported_ca_file",
+			decodeFails: true,
+			data:        map[string]any{"tls": map[string]any{"ca_file": "/etc/ssl/promtail-ca.pem"}},
 		},
 		{
 			name: "batch",
@@ -149,7 +151,7 @@ func TestFactoryDefaultsAndConfiguration(t *testing.T) {
 				t.Fatal(err)
 			}
 			if tc.decodeFails {
-				t.Fatal("accepted a disabled queue")
+				t.Fatal("accepted an unsupported configuration")
 			}
 			err := xconfmap.Validate(cfg)
 			if tc.valid {
@@ -161,7 +163,7 @@ func TestFactoryDefaultsAndConfiguration(t *testing.T) {
 					t.Fatal("unexpected config type")
 				}
 				if tc.name == "full" && (decoded.TimeoutSettings.Timeout != 7*time.Second || decoded.ProxyURL != "http://proxy.example:8080" ||
-					decoded.TLS.CAFile != "/etc/ssl/promtail-ca.pem" || !decoded.TLS.InsecureSkipVerify ||
+					!decoded.TLS.InsecureSkipVerify ||
 					decoded.QueueSettings.HasValue()) {
 					t.Fatal("configuration did not decode into the factory config")
 				}
@@ -289,16 +291,13 @@ func TestFactoryTLSProxyAndRedactedConfigurationErrors(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer tlsServer.Close()
-	caFile := t.TempDir() + "/receiver-ca.pem"
-	if err := os.WriteFile(caFile, pem.EncodeToMemory(&pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: tlsServer.Certificate().Raw,
-	}), 0o600); err != nil {
-		t.Fatal(err)
-	}
 	cfg := factoryConfig(t, tlsServer.URL+"/stsAgent/logs/k8s")
-	cfg.TLS.CAFile = caFile
 	exp := newStartedLogsExporter(t, cfg)
+	if err := exp.ConsumeLogs(context.Background(), testLogs()); err == nil {
+		t.Fatal("accepted an untrusted server certificate")
+	}
+	cfg.TLS.InsecureSkipVerify = true
+	exp = newStartedLogsExporter(t, cfg)
 	if err := exp.ConsumeLogs(context.Background(), testLogs()); err != nil {
 		t.Fatal(err)
 	}

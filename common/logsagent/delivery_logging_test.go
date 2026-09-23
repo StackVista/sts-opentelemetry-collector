@@ -26,7 +26,7 @@ func TestExportDiagnosticsAreBoundedAndDebugOnly(t *testing.T) {
 			next := logsConsumer(t, func(context.Context, plog.Logs) error { return downstreamErr })
 			c, err := logsagent.NewDelivery(*cfg, set.MeterProvider, set.Logger)
 			require.NoError(t, err)
-			ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Second}
+			ctrl := &controllerStub{bound: time.Second}
 			require.NoError(t, c.Start(ctrl, next))
 			t.Cleanup(func() { require.NoError(t, c.Shutdown(context.Background())) })
 
@@ -57,7 +57,7 @@ func TestExportDiagnosticsAreBoundedAndDebugOnly(t *testing.T) {
 				require.Equal(t, zap.DebugLevel, entries[i].Level)
 				require.Equal(t, expected.message, entries[i].Message)
 				require.Equal(t, map[string]any{
-					"outcome": expected.outcome, "mode": "promtail", "draining": expected.draining, "log_records": int64(1),
+					"outcome": expected.outcome, "draining": expected.draining, "log_records": int64(1),
 				}, entries[i].ContextMap())
 			}
 		})

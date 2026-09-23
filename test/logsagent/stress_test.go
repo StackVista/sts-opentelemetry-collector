@@ -88,9 +88,9 @@ func stressFinal(t *testing.T, p *process, failed, deadlines, rejected int) {
 	}
 }
 
-func stressPending(t *testing.T, f *fixture, mode string, partials []string) {
+func stressPending(t *testing.T, f *fixture, partials []string) {
 	t.Helper()
-	counts := f.backend.bodies(mode, false)
+	counts := f.backend.bodies(false)
 	for _, body := range partials {
 		if counts[body] != 0 {
 			t.Fatal("partial source flushed before the shutdown scenario began")
@@ -100,57 +100,52 @@ func stressPending(t *testing.T, f *fixture, mode string, partials []string) {
 
 func TestStressSequentialPartialDrain(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"promtail"} {
-		t.Run(mode, func(t *testing.T) {
-			t.Parallel()
-			f := newFixture(t, mode)
-			const sources = 16
-			partials, markers := stressPartials(t, f, sources)
-			p := f.start(stressValidated(t, nil), true)
-			p.ready()
-			f.backend.waitBodies(mode, markers, true)
-			stressPending(t, f, mode, partials)
-			f.backend.setPlan(mode, responsePlan{status: http.StatusServiceUnavailable})
-			started := time.Now()
-			p.signal()
-			assertDraining(t, p)
-			p.wait(f.settings.Lifetime+3*time.Second, true)
-			elapsed := time.Since(started)
+	f := newFixture(t)
+	const sources = 16
+	partials, markers := stressPartials(t, f, sources)
+	p := f.start(stressValidated(t, nil), true)
+	p.ready()
+	f.backend.waitBodies(markers, true)
+	stressPending(t, f, partials)
+	f.backend.setPlan(responsePlan{status: http.StatusServiceUnavailable})
+	started := time.Now()
+	p.signal()
+	assertDraining(t, p)
+	p.wait(f.settings.Lifetime+3*time.Second, true)
+	elapsed := time.Since(started)
 
-			exhausted := stressEvents(p, "Logs export completed", "retry_exhausted")
-			rejected := stressEvents(p, "Logs export rejected", "drain_budget_insufficient")
-			if len(exhausted) < 2 || len(rejected) == 0 || len(exhausted)+len(rejected) != sources {
-				t.Fatalf("sequential partials: retry_exhausted=%d drain_budget_insufficient=%d sources=%d",
-					len(exhausted), len(rejected), sources)
-			}
-			for _, event := range append(exhausted, rejected...) {
-				if event["draining"] != true || event["log_records"] != float64(1) || event["mode"] != mode {
-					t.Fatalf("partial flush did not preserve one-source synchronous drain: %+v", event)
-				}
-			}
-			stressFinal(t, p, len(exhausted), 0, len(rejected))
-			counts := f.backend.bodies(mode, false)
-			attempted := 0
-			for _, body := range partials {
-				if counts[body] > 0 {
-					attempted++
-					if counts[body] < 2 {
-						t.Fatal("an exhausted partial source did not retry")
-					}
-				}
-				if f.backend.bodies(mode, true)[body] != 0 {
-					t.Fatal("outage acknowledged a partial source")
-				}
-			}
-			if attempted != len(exhausted) {
-				t.Fatalf("backend saw %d partial sources, terminal results cover %d", attempted, len(exhausted))
-			}
-			f.backend.assertOnly(mode)
-			f.backend.assertIdentity()
-			t.Logf("%d partials exhausted retries, %d rejected before export; absolute drain finished in %s",
-				len(exhausted), len(rejected), elapsed.Round(time.Millisecond))
-		})
+	exhausted := stressEvents(p, "Logs export completed", "retry_exhausted")
+	rejected := stressEvents(p, "Logs export rejected", "drain_budget_insufficient")
+	if len(exhausted) < 2 || len(rejected) == 0 || len(exhausted)+len(rejected) != sources {
+		t.Fatalf("sequential partials: retry_exhausted=%d drain_budget_insufficient=%d sources=%d",
+			len(exhausted), len(rejected), sources)
 	}
+	for _, event := range append(exhausted, rejected...) {
+		if event["draining"] != true || event["log_records"] != float64(1) {
+			t.Fatalf("partial flush did not preserve one-source synchronous drain: %+v", event)
+		}
+	}
+	stressFinal(t, p, len(exhausted), 0, len(rejected))
+	counts := f.backend.bodies(false)
+	attempted := 0
+	for _, body := range partials {
+		if counts[body] > 0 {
+			attempted++
+			if counts[body] < 2 {
+				t.Fatal("an exhausted partial source did not retry")
+			}
+		}
+		if f.backend.bodies(true)[body] != 0 {
+			t.Fatal("outage acknowledged a partial source")
+		}
+	}
+	if attempted != len(exhausted) {
+		t.Fatalf("backend saw %d partial sources, terminal results cover %d", attempted, len(exhausted))
+	}
+	f.backend.assertOnly()
+	f.backend.assertIdentity()
+	t.Logf("%d partials exhausted retries, %d rejected before export; absolute drain finished in %s",
+		len(exhausted), len(rejected), elapsed.Round(time.Millisecond))
 }
 
 func stressStopped(t *testing.T, p *process) {
@@ -171,91 +166,86 @@ func stressStopped(t *testing.T, p *process) {
 
 func TestStressTimerFlushDeadlineAfterSchedulingStall(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"promtail"} {
-		t.Run(mode, func(t *testing.T) {
-			t.Parallel()
-			f := newFixture(t, mode)
-			const sources = 4
-			partials, markers := stressPartials(t, f, sources)
-			p := f.start(stressValidated(t, nil), true)
-			p.ready()
-			f.backend.waitBodies(mode, markers, true)
-			stressPending(t, f, mode, partials)
-			f.backend.setPlan(mode, responsePlan{status: http.StatusServiceUnavailable})
-			eventually(t, 8*time.Second, "partial timer flush holding the recombiner lock during retries", func() bool {
-				counts := f.backend.bodies(mode, false)
-				for _, body := range partials {
-					if counts[body] >= 2 {
-						return true
-					}
-				}
-				return false
-			})
-			if len(stressEvents(p, "Logs export completed", "retry_exhausted")) != 0 {
-				t.Fatal("timer export already completed before the contention scenario")
+	f := newFixture(t)
+	const sources = 4
+	partials, markers := stressPartials(t, f, sources)
+	p := f.start(stressValidated(t, nil), true)
+	p.ready()
+	f.backend.waitBodies(markers, true)
+	stressPending(t, f, partials)
+	f.backend.setPlan(responsePlan{status: http.StatusServiceUnavailable})
+	eventually(t, 8*time.Second, "partial timer flush holding the recombiner lock during retries", func() bool {
+		counts := f.backend.bodies(false)
+		for _, body := range partials {
+			if counts[body] >= 2 {
+				return true
 			}
-			p.signal()
-			assertDraining(t, p)
-			if err := p.cmd.Process.Signal(syscall.SIGSTOP); err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() { _ = p.cmd.Process.Signal(syscall.SIGCONT) })
-			stressStopped(t, p)
-			for _, event := range stressEvents(p, "Logs export completed", "") {
-				if event["outcome"] != "acknowledged" {
-					t.Fatalf("scheduling-stall setup lost the timer export before SIGSTOP: outcome=%v", event["outcome"])
-				}
-			}
-			if len(stressEvents(p, "Logs export rejected", "")) != 0 {
-				t.Fatal("scheduling-stall setup reached late drain rejections before SIGSTOP")
-			}
-			stoppedBodies := f.backend.bodies(mode, false)
-			stoppedSources := 0
-			for _, body := range partials {
-				if stoppedBodies[body] > 0 {
-					stoppedSources++
-					if stoppedBodies[body] < 2 {
-						t.Fatal("scheduling-stall setup stopped a partial source before its retry")
-					}
-				}
-			}
-			if stoppedSources != 1 {
-				t.Fatalf("scheduling-stall setup reached %d partial sources before SIGSTOP, want 1", stoppedSources)
-			}
-			// Exceed the validated lifetime without changing Collector or exporter timing invariants.
-			timer := time.NewTimer(f.settings.Lifetime + time.Second)
-			defer timer.Stop()
-			<-timer.C
-			stressStopped(t, p)
-			attempts := f.backend.attempts(mode)
-			if err := p.cmd.Process.Signal(syscall.SIGCONT); err != nil {
-				t.Fatal(err)
-			}
-			p.wait(5*time.Second, true)
-			if len(stressEvents(p, "Logs export completed", "deadline_expired")) != 1 ||
-				len(stressEvents(p, "Logs export completed", "retry_exhausted")) != 0 ||
-				len(stressEvents(p, "Logs export rejected", "drain_budget_insufficient")) != sources-1 {
-				t.Fatal("resumed timer flush did not distinguish the expired call from late drain rejections")
-			}
-			stressFinal(t, p, 1, 1, sources-1)
-			if f.backend.attempts(mode) != attempts {
-				t.Fatal("expired export or late partials made new backend requests after resume")
-			}
-			attempted := 0
-			for _, body := range partials {
-				if f.backend.bodies(mode, false)[body] > 0 {
-					attempted++
-				}
-				if f.backend.bodies(mode, true)[body] != 0 {
-					t.Fatal("outage acknowledged a partial source")
-				}
-			}
-			if attempted != 1 {
-				t.Fatalf("backend saw %d partial sources, want only the original timer flush", attempted)
-			}
-			f.backend.assertOnly(mode)
-		})
+		}
+		return false
+	})
+	if len(stressEvents(p, "Logs export completed", "retry_exhausted")) != 0 {
+		t.Fatal("timer export already completed before the contention scenario")
 	}
+	p.signal()
+	assertDraining(t, p)
+	if err := p.cmd.Process.Signal(syscall.SIGSTOP); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = p.cmd.Process.Signal(syscall.SIGCONT) })
+	stressStopped(t, p)
+	for _, event := range stressEvents(p, "Logs export completed", "") {
+		if event["outcome"] != "acknowledged" {
+			t.Fatalf("scheduling-stall setup lost the timer export before SIGSTOP: outcome=%v", event["outcome"])
+		}
+	}
+	if len(stressEvents(p, "Logs export rejected", "")) != 0 {
+		t.Fatal("scheduling-stall setup reached late drain rejections before SIGSTOP")
+	}
+	stoppedBodies := f.backend.bodies(false)
+	stoppedSources := 0
+	for _, body := range partials {
+		if stoppedBodies[body] > 0 {
+			stoppedSources++
+			if stoppedBodies[body] < 2 {
+				t.Fatal("scheduling-stall setup stopped a partial source before its retry")
+			}
+		}
+	}
+	if stoppedSources != 1 {
+		t.Fatalf("scheduling-stall setup reached %d partial sources before SIGSTOP, want 1", stoppedSources)
+	}
+	// Exceed the validated lifetime without changing Collector or exporter timing invariants.
+	timer := time.NewTimer(f.settings.Lifetime + time.Second)
+	defer timer.Stop()
+	<-timer.C
+	stressStopped(t, p)
+	attempts := f.backend.attempts()
+	if err := p.cmd.Process.Signal(syscall.SIGCONT); err != nil {
+		t.Fatal(err)
+	}
+	p.wait(5*time.Second, true)
+	if len(stressEvents(p, "Logs export completed", "deadline_expired")) != 1 ||
+		len(stressEvents(p, "Logs export completed", "retry_exhausted")) != 0 ||
+		len(stressEvents(p, "Logs export rejected", "drain_budget_insufficient")) != sources-1 {
+		t.Fatal("resumed timer flush did not distinguish the expired call from late drain rejections")
+	}
+	stressFinal(t, p, 1, 1, sources-1)
+	if f.backend.attempts() != attempts {
+		t.Fatal("expired export or late partials made new backend requests after resume")
+	}
+	attempted := 0
+	for _, body := range partials {
+		if f.backend.bodies(false)[body] > 0 {
+			attempted++
+		}
+		if f.backend.bodies(true)[body] != 0 {
+			t.Fatal("outage acknowledged a partial source")
+		}
+	}
+	if attempted != 1 {
+		t.Fatalf("backend saw %d partial sources, want only the original timer flush", attempted)
+	}
+	f.backend.assertOnly()
 }
 
 func stressMetrics(t *testing.T) (int, string) {
@@ -317,55 +307,53 @@ func stressMetric(p *process, endpoint, metric, reason string) float64 {
 
 func TestStressSourceSizeRejections(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"promtail"} {
-		for _, scenario := range []struct {
-			reason string
-			count  int
-			bytes  int
-		}{
-			{"record_too_large", 1, 262144},
-			{"request_too_large", 5, 220000},
-		} {
-			t.Run(mode+"/"+scenario.reason, func(t *testing.T) {
-				f := newFixture(t, mode)
-				var input strings.Builder
-				for i := range scenario.count {
-					fmt.Fprintf(&input, "2026-09-10T12:00:00.123456789Z stdout F %s\n",
-						strings.Repeat(string(rune('a'+i)), scenario.bytes))
+	for _, scenario := range []struct {
+		reason string
+		count  int
+		bytes  int
+	}{
+		{"record_too_large", 1, 262144},
+		{"request_too_large", 5, 220000},
+	} {
+		t.Run(scenario.reason, func(t *testing.T) {
+			f := newFixture(t)
+			var input strings.Builder
+			for i := range scenario.count {
+				fmt.Fprintf(&input, "2026-09-10T12:00:00.123456789Z stdout F %s\n",
+					strings.Repeat(string(rune('a'+i)), scenario.bytes))
+			}
+			stressSource(t, f, 0, input.String())
+			port, endpoint := stressMetrics(t)
+			p := f.start(stressValidated(t, func(config map[string]any) {
+				section(config, "receivers", "filelog/pods")["max_log_size"] = "512KiB"
+				section(config, "service", "telemetry")["metrics"] = map[string]any{
+					"level": "detailed",
+					"readers": []any{map[string]any{"pull": map[string]any{"exporter": map[string]any{
+						"prometheus": map[string]any{"host": "127.0.0.1", "port": port},
+					}}}},
 				}
-				stressSource(t, f, 0, input.String())
-				port, endpoint := stressMetrics(t)
-				p := f.start(stressValidated(t, func(config map[string]any) {
-					section(config, "receivers", "filelog/pods")["max_log_size"] = "512KiB"
-					section(config, "service", "telemetry")["metrics"] = map[string]any{
-						"level": "detailed",
-						"readers": []any{map[string]any{"pull": map[string]any{"exporter": map[string]any{
-							"prometheus": map[string]any{"host": "127.0.0.1", "port": port},
-						}}}},
-					}
-				}), true)
-				p.ready()
-				eventually(t, 5*time.Second, "specific source size rejection", func() bool {
-					return p.event("Logs export rejected", map[string]any{
-						"outcome": scenario.reason, "mode": mode, "log_records": float64(scenario.count), "draining": false,
-					})
+			}), true)
+			p.ready()
+			eventually(t, 5*time.Second, "specific source size rejection", func() bool {
+				return p.event("Logs export rejected", map[string]any{
+					"outcome": scenario.reason, "log_records": float64(scenario.count), "draining": false,
 				})
-				eventually(t, 3*time.Second, "exact rejected request and record counters", func() bool {
-					return stressMetric(p, endpoint, "stslogsroute_pre_export_rejected_requests", scenario.reason) == 1 &&
-						stressMetric(p, endpoint, "stslogsroute_pre_export_rejected_records", scenario.reason) == float64(scenario.count)
-				})
-				if len(f.backend.snapshot()) != 0 {
-					t.Fatal("oversized source data reached an exporter")
-				}
-				valid := f.appendRecords(1, 0, 1)
-				f.backend.waitBodies(mode, valid, true)
-				p.waitExport("acknowledged")
-				p.signal()
-				p.wait(5*time.Second, true)
-				assertOrdinaryDrain(t, p, true)
-				f.backend.assertRecords(mode, valid, true)
-				f.backend.assertOnly(mode)
 			})
-		}
+			eventually(t, 3*time.Second, "exact rejected request and record counters", func() bool {
+				return stressMetric(p, endpoint, "stslogsagent_pre_export_rejected_requests", scenario.reason) == 1 &&
+					stressMetric(p, endpoint, "stslogsagent_pre_export_rejected_records", scenario.reason) == float64(scenario.count)
+			})
+			if len(f.backend.snapshot()) != 0 {
+				t.Fatal("oversized source data reached an exporter")
+			}
+			valid := f.appendRecords(1, 0, 1)
+			f.backend.waitBodies(valid, true)
+			p.waitExport("acknowledged")
+			p.signal()
+			p.wait(5*time.Second, true)
+			assertOrdinaryDrain(t, p, true)
+			f.backend.assertRecords(valid, true)
+			f.backend.assertOnly()
+		})
 	}
 }

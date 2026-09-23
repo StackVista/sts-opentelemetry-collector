@@ -67,7 +67,7 @@ func TestRecordSizeMatchesProtobufEnvelopes(t *testing.T) {
 							expectedOversized++
 						}
 					}
-					ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Second}
+					ctrl := &controllerStub{bound: time.Second}
 					calls := 0
 					next := logsConsumer(t, func(context.Context, plog.Logs) error { calls++; return nil })
 					c, reader := newDelivery(t, cfg, ctrl, next)
@@ -80,7 +80,7 @@ func TestRecordSizeMatchesProtobufEnvelopes(t *testing.T) {
 						require.True(t, consumererror.IsPermanent(err))
 						require.Zero(t, calls)
 					}
-					require.EqualValues(t, expectedOversized, metricSum(t, reader, "stslogsroute.oversized_records"))
+					require.EqualValues(t, expectedOversized, metricSum(t, reader, "stslogsagent.oversized_records"))
 				}
 			}
 			after, err := plogotlp.NewExportRequestFromLogs(data).MarshalProto()
@@ -114,7 +114,7 @@ func TestManyRecordsWithSharedMetadata(t *testing.T) {
 	wire, err := plogotlp.NewExportRequestFromLogs(data).MarshalProto()
 	require.NoError(t, err)
 	require.LessOrEqual(t, len(wire), cfg.MaxRequestBytes)
-	ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Second}
+	ctrl := &controllerStub{bound: time.Second}
 	next := logsConsumer(t, func(_ context.Context, received plog.Logs) error {
 		require.Equal(t, 80000, received.LogRecordCount())
 		return nil
@@ -137,7 +137,7 @@ func BenchmarkSharedMetadataSizing(b *testing.B) {
 				set := deliveryTelemetry(nil)
 				c, err := logsagent.NewDelivery(*cfg, set.MeterProvider, set.Logger)
 				require.NoError(b, err)
-				ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Second}
+				ctrl := &controllerStub{bound: time.Second}
 				require.NoError(b, c.Start(ctrl, next))
 				b.Cleanup(func() { require.NoError(b, c.Shutdown(context.Background())) })
 				b.ReportAllocs()

@@ -31,7 +31,6 @@ type controller struct {
 	cfg    Config
 	set    extension.Settings
 	mu     sync.Mutex
-	mode   logsagent.Mode
 	bounds logsagent.PipelineConfig
 
 	initialized    bool
@@ -65,7 +64,6 @@ func (c *controller) Start(ctx context.Context, _ component.Host) error {
 		return err
 	}
 	c.mu.Lock()
-	c.mode = logsagent.PromtailMode
 	c.initialized = true
 	c.mu.Unlock()
 	return nil
@@ -93,12 +91,6 @@ func (c *controller) NotifyConfig(_ context.Context, conf *confmap.Conf) error {
 	c.bounds = bounds
 	c.configured = true
 	return nil
-}
-
-func (c *controller) SelectedMode() logsagent.Mode {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.mode
 }
 
 func (c *controller) RegisterExportObserver(observer logsagent.ExportObserver) error {

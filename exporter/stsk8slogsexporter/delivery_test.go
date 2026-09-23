@@ -22,9 +22,8 @@ type deliveryController struct {
 	observer logsagent.ExportObserver
 }
 
-func (*deliveryController) SelectedMode() logsagent.Mode { return logsagent.PromtailMode }
-func (*deliveryController) DrainDeadline() time.Time     { return time.Time{} }
-func (*deliveryController) RetryBound() time.Duration    { return time.Second }
+func (*deliveryController) DrainDeadline() time.Time  { return time.Time{} }
+func (*deliveryController) RetryBound() time.Duration { return time.Second }
 
 func (c *deliveryController) RegisterExportObserver(observer logsagent.ExportObserver) error {
 	if c.observer != nil {

@@ -5,24 +5,8 @@ import (
 	"time"
 )
 
-type Mode string
-
-const (
-	PromtailMode Mode = "promtail"
-)
-
-func (m Mode) String() string {
-	switch m {
-	case PromtailMode:
-		return "PromtailMode"
-	default:
-		return string(m)
-	}
-}
-
-// Controller shares the selected mode and absolute drain deadline.
+// Controller shares delivery accounting and the absolute drain deadline.
 type Controller interface {
-	SelectedMode() Mode
 	RegisterExportObserver(ExportObserver) error
 	DrainDeadline() time.Time
 	RetryBound() time.Duration

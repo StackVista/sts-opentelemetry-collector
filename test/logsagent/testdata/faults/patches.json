@@ -29,7 +29,7 @@
   },
   {
     "file": "common/logsagent/delivery.go",
-    "old": "err := selected.ConsumeLogs(exportCtx, data)",
-    "new": "finish := FaultCall()\n\terr := selected.ConsumeLogs(exportCtx, data)\n\tFaultPause(\"completion\")\n\tfinish()"
+    "old": "err := next.ConsumeLogs(exportCtx, data)",
+    "new": "finish := FaultCall()\n\terr := next.ConsumeLogs(exportCtx, data)\n\tFaultPause(\"completion\")\n\tfinish()"
   }
 ]

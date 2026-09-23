@@ -75,7 +75,7 @@ func TestActualHelperTerminalClassifications(t *testing.T) {
 				exporterhelper.WithRetry(retry))
 			cfg := deliveryDefaults(t)
 			cfg.ExportLifetime = tc.lifetime
-			ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Millisecond}
+			ctrl := &controllerStub{bound: time.Millisecond}
 			c, reader := newDelivery(t, cfg, ctrl, exp)
 			before := time.Now()
 			err := c.ConsumeLogs(context.Background(), logsData())
@@ -87,7 +87,7 @@ func TestActualHelperTerminalClassifications(t *testing.T) {
 			} else {
 				require.Zero(t, ctrl.observer.Snapshot().DeadlineExpired)
 			}
-			require.EqualValues(t, 1, metricSum(t, reader, "stslogsroute.export_requests",
+			require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.export_requests",
 				attribute.String("outcome", tc.outcome)))
 		})
 	}
@@ -104,11 +104,11 @@ func TestHelperLifetimeExpiryDuringAttempt(t *testing.T) {
 	}, exporterhelper.WithRetry(retry))
 	cfg := deliveryDefaults(t)
 	cfg.ExportLifetime = 20 * time.Millisecond
-	ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Millisecond}
+	ctrl := &controllerStub{bound: time.Millisecond}
 	c, reader := newDelivery(t, cfg, ctrl, exp)
 	require.Error(t, c.ConsumeLogs(context.Background(), logsData()))
 	require.EqualValues(t, 1, ctrl.observer.Snapshot().DeadlineExpired)
-	require.EqualValues(t, 1, metricSum(t, reader, "stslogsroute.export_requests",
+	require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.export_requests",
 		attribute.String("outcome", "deadline_expired")))
 }
 
@@ -124,11 +124,11 @@ func TestHelperRetryRecovery(t *testing.T) {
 		}
 		return nil
 	}, exporterhelper.WithRetry(retry))
-	ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Second}
+	ctrl := &controllerStub{bound: time.Second}
 	c, reader := newDelivery(t, deliveryDefaults(t), ctrl, exp)
 	require.NoError(t, c.ConsumeLogs(context.Background(), logsData()))
 	require.Equal(t, 3, attempts)
-	require.EqualValues(t, 1, metricSum(t, reader, "stslogsroute.export_requests",
+	require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.export_requests",
 		attribute.String("outcome", "acknowledged")))
 }
 
@@ -150,7 +150,7 @@ func TestQueueWaiterCompletionDoesNotMeanWorkerCompletion(t *testing.T) {
 	cfg := deliveryDefaults(t)
 	cfg.MaxConcurrentCalls = 1
 	cfg.ExportLifetime = 50 * time.Millisecond
-	ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Millisecond}
+	ctrl := &controllerStub{bound: time.Millisecond}
 	c, reader := newDelivery(t, cfg, ctrl, exp)
 	result := make(chan error, 1)
 	go func() { result <- c.ConsumeLogs(context.Background(), logsData()) }()
@@ -168,7 +168,7 @@ func TestQueueWaiterCompletionDoesNotMeanWorkerCompletion(t *testing.T) {
 		t.Fatal("worker should still be active after delivery shutdown")
 	default:
 	}
-	require.EqualValues(t, 1, metricSum(t, reader, "stslogsroute.export_requests",
+	require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.export_requests",
 		attribute.String("outcome", "deadline_expired"), attribute.Bool("draining", true)))
 	releaseOnce.Do(func() { close(release) })
 	<-workerDone

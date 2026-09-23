@@ -38,10 +38,9 @@ func testController(t *testing.T) *controller {
 	return c
 }
 
-func makeReady(c *controller, mode logsagent.Mode) {
+func makeReady(c *controller) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.mode = mode
 	c.initialized, c.configured, c.ready = true, true, true
 	c.observer = &logsagent.Accounting{}
 	c.bounds.ExportLifetime = 90 * time.Second
@@ -60,7 +59,7 @@ func checkHealth(t *testing.T, c *controller, path string, status int) {
 
 func TestDrainDeadlineAndExporterCompletion(t *testing.T) {
 	c := testController(t)
-	makeReady(c, logsagent.PromtailMode)
+	makeReady(c)
 	now := time.Now()
 	c.now = func() time.Time { return now }
 	_ = c.NotReady()
@@ -86,7 +85,7 @@ func TestDrainDeadlineAndExporterCompletion(t *testing.T) {
 
 func TestConcurrentStatusAndShutdown(t *testing.T) {
 	c := testController(t)
-	makeReady(c, logsagent.PromtailMode)
+	makeReady(c)
 	exporter := componentstatus.NewInstanceID(component.MustNewIDWithName("stsk8slogs", "promtail"),
 		component.KindExporter)
 	var workers sync.WaitGroup
@@ -106,7 +105,7 @@ func TestConcurrentStatusAndShutdown(t *testing.T) {
 
 func TestConcurrentShutdownFinalizesOnce(t *testing.T) {
 	c := testController(t)
-	makeReady(c, logsagent.PromtailMode)
+	makeReady(c)
 	core, entries := observer.New(zap.InfoLevel)
 	c.set.Logger = zap.New(core)
 	exporter := componentstatus.NewInstanceID(component.MustNewIDWithName("stsk8slogs", "promtail"),
@@ -134,20 +133,17 @@ func TestFixedLifecycle(t *testing.T) {
 		t.Fatal("uninitialized agent became ready")
 	}
 	if err := c.RegisterExportObserver(&logsagent.Accounting{}); err == nil {
-		t.Fatal("uninitialized agent accepted route")
+		t.Fatal("uninitialized agent accepted observer")
 	}
 	if err := c.Start(context.Background(), nil); err != nil {
 		t.Fatal(err)
-	}
-	if c.SelectedMode() != logsagent.PromtailMode {
-		t.Fatal("wrong fixed route")
 	}
 	checkHealth(t, c, "/live", http.StatusOK)
 	checkHealth(t, c, "/ready", http.StatusServiceUnavailable)
 	c.bounds = logsagent.PipelineConfig{ExportLifetime: time.Minute, RetryBound: time.Second}
 	c.configured = true
 	if err := c.Ready(); err == nil {
-		t.Fatal("agent without route became ready")
+		t.Fatal("agent without delivery became ready")
 	}
 	if err := c.RegisterExportObserver(nil); err == nil {
 		t.Fatal("accepted nil observer")
@@ -156,7 +152,7 @@ func TestFixedLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := c.RegisterExportObserver(&logsagent.Accounting{}); err == nil {
-		t.Fatal("accepted a second route")
+		t.Fatal("accepted a second observer")
 	}
 	if err := c.Ready(); err != nil {
 		t.Fatal(err)

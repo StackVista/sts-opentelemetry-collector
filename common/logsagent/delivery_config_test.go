@@ -56,25 +56,24 @@ func TestDeliveryCreationAndStartupFailures(t *testing.T) {
 	_, err := logsagent.NewDelivery(invalid, set.MeterProvider, set.Logger)
 	require.Error(t, err)
 	for _, tc := range []struct {
-		name     string
-		ctrl     logsagent.Controller
-		selected consumer.Logs
+		name string
+		ctrl logsagent.Controller
+		next consumer.Logs
 	}{
 		{"missing controller", nil, next},
-		{"missing consumer", &controllerStub{mode: logsagent.PromtailMode, bound: time.Second}, nil},
-		{"unknown mode", &controllerStub{mode: "unknown", bound: time.Second}, next},
-		{"zero bound", &controllerStub{mode: logsagent.PromtailMode}, next},
-		{"bound exceeds lifetime", &controllerStub{mode: logsagent.PromtailMode, bound: time.Hour}, next},
-		{"registration fails", &controllerStub{mode: logsagent.PromtailMode, bound: time.Second, err: errors.New("failed")}, next},
+		{"missing consumer", &controllerStub{bound: time.Second}, nil},
+		{"zero bound", &controllerStub{}, next},
+		{"bound exceeds lifetime", &controllerStub{bound: time.Hour}, next},
+		{"registration fails", &controllerStub{bound: time.Second, err: errors.New("failed")}, next},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c, err := logsagent.NewDelivery(*cfg, set.MeterProvider, set.Logger)
 			require.NoError(t, err)
-			require.Error(t, c.Start(tc.ctrl, tc.selected))
+			require.Error(t, c.Start(tc.ctrl, tc.next))
 			require.ErrorContains(t, c.ConsumeLogs(context.Background(), logsData()), "not_running")
 			require.NoError(t, c.Shutdown(context.Background()))
 			require.NoError(t, c.Shutdown(context.Background()))
-			ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Second}
+			ctrl := &controllerStub{bound: time.Second}
 			require.ErrorContains(t, c.Start(ctrl, next), "already started or stopped")
 			require.Nil(t, ctrl.observer)
 		})

@@ -35,27 +35,25 @@ func TestStartupRejectsInvalidBounds(t *testing.T) {
 			section(c, "receivers", "filelog/pods")["max_concurrent_files"] = 7
 		}},
 	}...)
-	for _, exporter := range []string{"stsk8slogs/promtail"} {
-		for _, item := range []struct {
-			name   string
-			reason string
-			edit   func(map[string]any)
-		}{
-			{"enabled_queue", "sending_queue", func(e map[string]any) { e["sending_queue"] = map[string]any{"enabled": true} }},
-			{"unlimited_retry", "retry", func(e map[string]any) { section(e, "retry_on_failure")["max_elapsed_time"] = "0s" }},
-			{"long_retry", "export_lifetime", func(e map[string]any) { section(e, "retry_on_failure")["max_elapsed_time"] = "10s" }},
-			{"missing_timeout", "export_lifetime", func(e map[string]any) { delete(e, "timeout") }},
-			{"missing_retry_budget", "export_lifetime", func(e map[string]any) { delete(section(e, "retry_on_failure"), "max_elapsed_time") }},
-		} {
-			reason := item.reason
-			tests = append(tests, boundCase{
-				exporter + "/" + item.name, reason, func(c map[string]any) { item.edit(section(c, "exporters", exporter)) },
-			})
-		}
+	for _, item := range []struct {
+		name   string
+		reason string
+		edit   func(map[string]any)
+	}{
+		{"enabled_queue", "sending_queue", func(e map[string]any) { e["sending_queue"] = map[string]any{"enabled": true} }},
+		{"unlimited_retry", "retry", func(e map[string]any) { section(e, "retry_on_failure")["max_elapsed_time"] = "0s" }},
+		{"long_retry", "export_lifetime", func(e map[string]any) { section(e, "retry_on_failure")["max_elapsed_time"] = "10s" }},
+		{"missing_timeout", "export_lifetime", func(e map[string]any) { delete(e, "timeout") }},
+		{"missing_retry_budget", "export_lifetime", func(e map[string]any) { delete(section(e, "retry_on_failure"), "max_elapsed_time") }},
+	} {
+		reason := item.reason
+		tests = append(tests, boundCase{
+			item.name, reason, func(c map[string]any) { item.edit(section(c, "exporters", "stsk8slogs/promtail")) },
+		})
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			f := newFixture(t, "promtail")
+			f := newFixture(t)
 			f.appendRecords(0, 0, 1)
 			p := f.start(tc.mutate, true)
 			p.wait(8*time.Second, false)
@@ -69,37 +67,37 @@ func TestStartupRejectsInvalidBounds(t *testing.T) {
 
 func TestStartupAcceptsSafeEffectiveDefaults(t *testing.T) {
 	for _, tc := range []struct {
-		name, mode, exporter string
-		omit                 []string
-		retry, timeout       time.Duration
+		name           string
+		omit           []string
+		retry, timeout time.Duration
 	}{
-		{"promtail_timeout", "promtail", "stsk8slogs/promtail", []string{"timeout"}, 2 * time.Second, 5 * time.Second},
-		{"promtail_retry", "promtail", "stsk8slogs/promtail", []string{"retry_on_failure", "max_elapsed_time"}, 30 * time.Second, 200 * time.Millisecond},
+		{"promtail_timeout", []string{"timeout"}, 2 * time.Second, 5 * time.Second},
+		{"promtail_retry", []string{"retry_on_failure", "max_elapsed_time"}, 30 * time.Second, 200 * time.Millisecond},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			f := newFixture(t, tc.mode)
+			f := newFixture(t)
 			effective := f.settings
 			effective.RetryBudget, effective.AttemptTimeout = tc.retry, tc.timeout
 			f.settings.Lifetime = effective.minimumLifetime()
 			p := f.start(func(c map[string]any) {
-				exporter := section(c, "exporters", tc.exporter)
+				exporter := section(c, "exporters", "stsk8slogs/promtail")
 				delete(section(exporter, tc.omit[:len(tc.omit)-1]...), tc.omit[len(tc.omit)-1])
 			}, true)
 			p.ready()
 			expected := f.appendRecords(0, 0, 1)
-			f.backend.waitBodies(tc.mode, expected, true)
+			f.backend.waitBodies(expected, true)
 			p.waitExport("acknowledged")
 			p.signal()
 			p.wait(5*time.Second, true)
 			p.assertDrain("completed")
-			f.backend.assertOnly(tc.mode)
-			f.backend.assertRecords(tc.mode, expected, true)
+			f.backend.assertOnly()
+			f.backend.assertRecords(expected, true)
 		})
 	}
 }
 
 func TestStartupRequiresSynchronousGate(t *testing.T) {
-	f := newFixture(t, "promtail")
+	f := newFixture(t)
 	f.appendRecords(0, 0, 1)
 	p := f.start(nil, false)
 	p.wait(8*time.Second, false)
@@ -120,11 +118,11 @@ func (p *process) assertStartupReason(reason string) {
 }
 
 func TestCorruptFileStorageFailsStartup(t *testing.T) {
-	f := newFixture(t, "promtail")
+	f := newFixture(t)
 	p := f.start(nil, true)
 	p.ready()
 	expected := f.appendRecords(0, 0, 1)
-	f.backend.waitBodies("promtail", expected, true)
+	f.backend.waitBodies(expected, true)
 	p.signal()
 	p.wait(5*time.Second, true)
 	entries, err := os.ReadDir(f.settings.Checkpoints)
@@ -160,7 +158,7 @@ func TestCorruptFileStorageFailsStartup(t *testing.T) {
 }
 
 func TestPromtailInvalidSibling(t *testing.T) {
-	f := newFixture(t, "promtail")
+	f := newFixture(t)
 	p := f.start(func(c map[string]any) {
 		transform := section(c, "processors", "transform/identity")
 		statements, ok := transform["log_statements"].([]any)
@@ -175,10 +173,10 @@ func TestPromtailInvalidSibling(t *testing.T) {
 	p.ready()
 	bodies := f.appendRecords(0, 0, 3)
 	valid := []string{bodies[0], bodies[2]}
-	f.backend.waitBodies("promtail", valid, true)
+	f.backend.waitBodies(valid, true)
 	p.waitExport("acknowledged")
 	p.signal()
 	p.wait(5*time.Second, true)
-	f.backend.assertOnly("promtail")
-	f.backend.assertRecords("promtail", valid, false)
+	f.backend.assertOnly()
+	f.backend.assertRecords(valid, false)
 }

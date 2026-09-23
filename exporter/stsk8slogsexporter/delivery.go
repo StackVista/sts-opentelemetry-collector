@@ -31,9 +31,6 @@ func (e *deliveryExporter) Start(ctx context.Context, host component.Host) error
 	if !ok {
 		return errors.New("delivery.controller_extension does not provide a logs agent controller")
 	}
-	if controller.SelectedMode() != logsagent.PromtailMode {
-		return errors.New("direct Promtail delivery requires Promtail mode")
-	}
 	if err := e.Logs.Start(ctx, host); err != nil {
 		return err
 	}

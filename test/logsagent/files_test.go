@@ -19,149 +19,140 @@ func (f *fixture) sourcePath(file int) string {
 
 func TestLostResponseDuplicatesStoredRecords(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"promtail"} {
-		t.Run(mode, func(t *testing.T) {
-			t.Parallel()
-			f := newFixture(t, mode)
-			f.backend.setPlan(mode, responsePlan{status: http.StatusOK, lostResponses: 1})
-			p := f.start(nil, true)
-			p.ready()
-			before := f.appendRecords(0, 0, 3)
-			p.waitExport("acknowledged")
-			p.signal()
-			p.wait(5*time.Second, true)
-			assertOrdinaryDrain(t, p, true)
-			if attempts := f.backend.attempts(mode); attempts != 2 {
-				t.Fatalf("lost response made %d attempts, want 2", attempts)
-			}
-			assertBodyCopies(t, f.backend, mode, before, 2)
-			p2 := f.start(nil, true)
-			p2.ready()
-			after := f.appendRecords(0, 3, 1)
-			f.backend.waitBodies(mode, after, true)
-			p2.signal()
-			p2.wait(5*time.Second, true)
-			assertOrdinaryDrain(t, p2, true)
-			assertBodyCopies(t, f.backend, mode, before, 2)
-			assertBodyCopies(t, f.backend, mode, after, 1)
-			f.backend.assertOnly(mode)
-			f.backend.assertIdentity()
-		})
+	f := newFixture(t)
+	f.backend.setPlan(responsePlan{status: http.StatusOK, lostResponses: 1})
+	p := f.start(nil, true)
+	p.ready()
+	before := f.appendRecords(0, 0, 3)
+	p.waitExport("acknowledged")
+	p.signal()
+	p.wait(5*time.Second, true)
+	assertOrdinaryDrain(t, p, true)
+	if attempts := f.backend.attempts(); attempts != 2 {
+		t.Fatalf("lost response made %d attempts, want 2", attempts)
 	}
+	assertBodyCopies(t, f.backend, before, 2)
+	p2 := f.start(nil, true)
+	p2.ready()
+	after := f.appendRecords(0, 3, 1)
+	f.backend.waitBodies(after, true)
+	p2.signal()
+	p2.wait(5*time.Second, true)
+	assertOrdinaryDrain(t, p2, true)
+	assertBodyCopies(t, f.backend, before, 2)
+	assertBodyCopies(t, f.backend, after, 1)
+	f.backend.assertOnly()
+	f.backend.assertIdentity()
 }
 
 func TestSourceRotationAndTruncation(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"promtail"} {
-		for _, operation := range []string{"rename", "copytruncate"} {
-			for _, offline := range []bool{false, true} {
-				timing := "running"
+	for _, operation := range []string{"rename", "copytruncate"} {
+		for _, offline := range []bool{false, true} {
+			timing := "running"
+			if offline {
+				timing = "stopped"
+			}
+			t.Run(operation+"/"+timing, func(t *testing.T) {
+				t.Parallel()
+				f := newFixture(t)
+				before := f.appendTimedRecords(0, 10)
+				defaultFingerprint := stressValidated(t, func(config map[string]any) {
+					delete(section(config, "receivers", "filelog/pods"), "fingerprint_size")
+				})
+				p := f.start(defaultFingerprint, true)
+				p.ready()
+				f.backend.waitBodies(recordBodies(before), true)
 				if offline {
-					timing = "stopped"
-				}
-				t.Run(mode+"/"+operation+"/"+timing, func(t *testing.T) {
-					t.Parallel()
-					f := newFixture(t, mode)
-					before := f.appendTimedRecords(0, 10)
-					defaultFingerprint := stressValidated(t, func(config map[string]any) {
-						delete(section(config, "receivers", "filelog/pods"), "fingerprint_size")
-					})
-					p := f.start(defaultFingerprint, true)
-					p.ready()
-					f.backend.waitBodies(mode, recordBodies(before), true)
-					if offline {
-						p.signal()
-						p.wait(5*time.Second, true)
-						assertOrdinaryDrain(t, p, true)
-					}
-					path := f.sourcePath(0)
-					oldContents := readSource(t, path)
-					rotateSource(t, path, operation, oldContents)
-					after := f.appendTimedRecords(10, 2)
-					newContents := readSource(t, path)
-					if len(oldContents) < 1000 || len(newContents) >= 1000 ||
-						bytes.HasPrefix(oldContents, newContents) || bytes.Equal(oldContents[:32], newContents[:32]) {
-						t.Fatal("fixture must replace a full fingerprint with a distinct, shorter timestamped source")
-					}
-					if !bytes.Equal(readSource(t, path+".1"), oldContents) {
-						t.Fatal("rotation did not retain the original file contents")
-					}
-					if offline {
-						p = f.start(defaultFingerprint, true)
-						p.ready()
-					}
-					f.backend.waitBodies(mode, recordBodies(after), true)
-					grown := f.appendTimedRecords(12, 12)
-					if len(readSource(t, path)) <= len(oldContents) {
-						t.Fatal("replacement file did not grow beyond the old offset")
-					}
-					f.backend.waitBodies(mode, recordBodies(grown), true)
 					p.signal()
 					p.wait(5*time.Second, true)
 					assertOrdinaryDrain(t, p, true)
+				}
+				path := f.sourcePath(0)
+				oldContents := readSource(t, path)
+				rotateSource(t, path, operation, oldContents)
+				after := f.appendTimedRecords(10, 2)
+				newContents := readSource(t, path)
+				if len(oldContents) < 1000 || len(newContents) >= 1000 ||
+					bytes.HasPrefix(oldContents, newContents) || bytes.Equal(oldContents[:32], newContents[:32]) {
+					t.Fatal("fixture must replace a full fingerprint with a distinct, shorter timestamped source")
+				}
+				if !bytes.Equal(readSource(t, path+".1"), oldContents) {
+					t.Fatal("rotation did not retain the original file contents")
+				}
+				if offline {
+					p = f.start(defaultFingerprint, true)
+					p.ready()
+				}
+				f.backend.waitBodies(recordBodies(after), true)
+				grown := f.appendTimedRecords(12, 12)
+				if len(readSource(t, path)) <= len(oldContents) {
+					t.Fatal("replacement file did not grow beyond the old offset")
+				}
+				f.backend.waitBodies(recordBodies(grown), true)
+				p.signal()
+				p.wait(5*time.Second, true)
+				assertOrdinaryDrain(t, p, true)
 
-					p2 := f.start(defaultFingerprint, true)
-					p2.ready()
-					restarted := f.appendTimedRecords(24, 1)
-					f.backend.waitBodies(mode, recordBodies(restarted), true)
-					p2.signal()
-					p2.wait(5*time.Second, true)
-					assertOrdinaryDrain(t, p2, true)
-					expected := append(append(append(before, after...), grown...), restarted...)
-					f.backend.assertRecords(mode, recordBodies(expected), true)
-					assertWireRecords(t, f.backend, expected)
-					f.backend.assertOnly(mode)
-				})
-			}
+				p2 := f.start(defaultFingerprint, true)
+				p2.ready()
+				restarted := f.appendTimedRecords(24, 1)
+				f.backend.waitBodies(recordBodies(restarted), true)
+				p2.signal()
+				p2.wait(5*time.Second, true)
+				assertOrdinaryDrain(t, p2, true)
+				expected := append(append(append(before, after...), grown...), restarted...)
+				f.backend.assertRecords(recordBodies(expected), true)
+				assertWireRecords(t, f.backend, expected)
+				f.backend.assertOnly()
+			})
 		}
 	}
 }
 
 func TestRepeatedFingerprintAfterTruncation(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"promtail"} {
-		for _, behavior := range []string{"default", "read_whole_file"} {
-			t.Run(mode+"/"+behavior, func(t *testing.T) {
-				t.Parallel()
-				f := newFixture(t, mode)
-				before := f.appendRecords(0, 0, 10)
-				p := f.start(stressValidated(t, func(config map[string]any) {
-					filelog := section(config, "receivers", "filelog/pods")
-					filelog["fingerprint_size"] = 32
-					if behavior != "default" {
-						filelog["on_truncate"] = behavior
-					}
-				}), true)
-				p.ready()
-				f.backend.waitBodies(mode, before, true)
-				path := f.sourcePath(0)
-				oldContents := readSource(t, path)
-				rotateSource(t, path, "copytruncate", oldContents)
-				after := f.appendRecords(0, 10, 2)
-				newContents := readSource(t, path)
-				if !bytes.Equal(oldContents[:32], newContents[:32]) {
-					t.Fatal("edge fixture did not preserve its fingerprint")
-				}
-				if behavior == "default" {
-					eventually(t, 2*time.Second, "debug-only retained-offset reporting", func() bool {
-						return p.event("Stored offset exceeds current file size. Keeping original offset", map[string]any{
-							"level": "debug", "stored_offset": float64(len(oldContents)), "current_file_size": float64(len(newContents)),
-						})
-					})
-				} else {
-					f.backend.waitBodies(mode, after, true)
-				}
-				p.signal()
-				p.wait(5*time.Second, true)
-				assertOrdinaryDrain(t, p, true)
-				expected := before
+	for _, behavior := range []string{"default", "read_whole_file"} {
+		t.Run(behavior, func(t *testing.T) {
+			t.Parallel()
+			f := newFixture(t)
+			before := f.appendRecords(0, 0, 10)
+			p := f.start(stressValidated(t, func(config map[string]any) {
+				filelog := section(config, "receivers", "filelog/pods")
+				filelog["fingerprint_size"] = 32
 				if behavior != "default" {
-					expected = append(expected, after...)
+					filelog["on_truncate"] = behavior
 				}
-				f.backend.assertRecords(mode, expected, true)
-				f.backend.assertOnly(mode)
-			})
-		}
+			}), true)
+			p.ready()
+			f.backend.waitBodies(before, true)
+			path := f.sourcePath(0)
+			oldContents := readSource(t, path)
+			rotateSource(t, path, "copytruncate", oldContents)
+			after := f.appendRecords(0, 10, 2)
+			newContents := readSource(t, path)
+			if !bytes.Equal(oldContents[:32], newContents[:32]) {
+				t.Fatal("edge fixture did not preserve its fingerprint")
+			}
+			if behavior == "default" {
+				eventually(t, 2*time.Second, "debug-only retained-offset reporting", func() bool {
+					return p.event("Stored offset exceeds current file size. Keeping original offset", map[string]any{
+						"level": "debug", "stored_offset": float64(len(oldContents)), "current_file_size": float64(len(newContents)),
+					})
+				})
+			} else {
+				f.backend.waitBodies(after, true)
+			}
+			p.signal()
+			p.wait(5*time.Second, true)
+			assertOrdinaryDrain(t, p, true)
+			expected := before
+			if behavior != "default" {
+				expected = append(expected, after...)
+			}
+			f.backend.assertRecords(expected, true)
+			f.backend.assertOnly()
+		})
 	}
 }
 
@@ -242,9 +233,9 @@ func assertWireRecords(t *testing.T, b *backend, records []wireRecord) {
 	}
 }
 
-func assertBodyCopies(t *testing.T, b *backend, mode string, bodies []string, copies int) {
+func assertBodyCopies(t *testing.T, b *backend, bodies []string, copies int) {
 	t.Helper()
-	counts := b.bodies(mode, true)
+	counts := b.bodies(true)
 	for _, body := range bodies {
 		if counts[body] != copies {
 			t.Fatalf("stored record %q appeared %d times, want %d", body, counts[body], copies)

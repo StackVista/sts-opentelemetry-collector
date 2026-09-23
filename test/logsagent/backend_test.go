@@ -40,7 +40,6 @@ type wireRecord struct {
 }
 
 type request struct {
-	mode    string
 	status  int
 	records []wireRecord
 }
@@ -56,7 +55,7 @@ type backend struct {
 	server             *httptest.Server
 	mu                 sync.Mutex
 	featureCalls       int
-	plans              map[string]responsePlan
+	plan               responsePlan
 	requests           []request
 	responseDelay      time.Duration
 	active             int
@@ -64,13 +63,11 @@ type backend struct {
 	promtailDescriptor protoreflect.MessageDescriptor
 }
 
-func newBackend(t *testing.T, _ string) *backend {
+func newBackend(t *testing.T) *backend {
 	t.Helper()
 	b := &backend{
-		t: t,
-		plans: map[string]responsePlan{
-			"promtail": {status: http.StatusOK},
-		},
+		t:                  t,
+		plan:               responsePlan{status: http.StatusOK},
 		promtailDescriptor: receiverDescriptor(t),
 	}
 	b.server = httptest.NewServer(http.HandlerFunc(b.serveHTTP))
@@ -91,10 +88,10 @@ func receiverDescriptor(t *testing.T) protoreflect.MessageDescriptor {
 	return file.Messages().ByName("PushRequest")
 }
 
-func (b *backend) setPlan(mode string, plan responsePlan) {
+func (b *backend) setPlan(plan responsePlan) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.plans[mode] = plan
+	b.plan = plan
 }
 
 func (b *backend) snapshot() []request {
@@ -109,14 +106,8 @@ func (b *backend) polls() int {
 	return b.featureCalls
 }
 
-func (b *backend) attempts(mode string) int {
-	count := 0
-	for _, req := range b.snapshot() {
-		if req.mode == mode {
-			count++
-		}
-	}
-	return count
+func (b *backend) attempts() int {
+	return len(b.snapshot())
 }
 
 func (b *backend) enter(ctx context.Context) func() {
@@ -140,10 +131,10 @@ func (b *backend) enter(ctx context.Context) func() {
 	}
 }
 
-func (b *backend) record(mode string, records []wireRecord) (int, bool) {
+func (b *backend) record(records []wireRecord) (int, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	plan := b.plans[mode]
+	plan := b.plan
 	status := plan.status
 	if plan.failures > 0 {
 		status = http.StatusServiceUnavailable
@@ -153,8 +144,8 @@ func (b *backend) record(mode string, records []wireRecord) (int, bool) {
 	if loseResponse {
 		plan.lostResponses--
 	}
-	b.plans[mode] = plan
-	b.requests = append(b.requests, request{mode: mode, status: status, records: records})
+	b.plan = plan
+	b.requests = append(b.requests, request{status: status, records: records})
 	return status, loseResponse
 }
 
@@ -170,15 +161,12 @@ func (b *backend) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	var mode string
 	switch r.URL.Path {
 	case "/stsAgent/logs/k8s":
-		mode = "promtail"
 		if r.Header.Get("sts-api-key") != syntheticKey {
 			b.t.Error("incorrect synthetic promtail authorization")
 		}
 	case "/otel/v1/logs":
-		b.record("native", nil)
 		b.t.Error("fixed agent delivered native logs")
 		http.NotFound(w, r)
 		return
@@ -210,11 +198,11 @@ func (b *backend) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	records, err := decodePromtail(b.promtailDescriptor, payload)
 	if err != nil {
-		b.t.Errorf("decode %s export: %v", mode, err)
+		b.t.Errorf("decode promtail export: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	status, loseResponse := b.record(mode, records)
+	status, loseResponse := b.record(records)
 	if loseResponse {
 		hijacker, ok := w.(http.Hijacker)
 		if !ok {
@@ -277,10 +265,10 @@ func decodePromtail(descriptor protoreflect.MessageDescriptor, payload []byte) (
 	return records, nil
 }
 
-func (b *backend) bodies(mode string, acceptedOnly bool) map[string]int {
+func (b *backend) bodies(acceptedOnly bool) map[string]int {
 	counts := make(map[string]int)
 	for _, req := range b.snapshot() {
-		if req.mode != mode || (acceptedOnly && req.status/100 != 2) {
+		if acceptedOnly && req.status/100 != 2 {
 			continue
 		}
 		for _, record := range req.records {
@@ -290,10 +278,10 @@ func (b *backend) bodies(mode string, acceptedOnly bool) map[string]int {
 	return counts
 }
 
-func (b *backend) waitBodies(mode string, bodies []string, acceptedOnly bool) {
+func (b *backend) waitBodies(bodies []string, acceptedOnly bool) {
 	b.t.Helper()
-	eventually(b.t, 10*time.Second, "wire records on "+mode, func() bool {
-		counts := b.bodies(mode, acceptedOnly)
+	eventually(b.t, 10*time.Second, "wire records", func() bool {
+		counts := b.bodies(acceptedOnly)
 		for _, body := range bodies {
 			if counts[body] == 0 {
 				return false
@@ -303,27 +291,22 @@ func (b *backend) waitBodies(mode string, bodies []string, acceptedOnly bool) {
 	})
 }
 
-func (b *backend) assertOnly(mode string) {
+func (b *backend) assertOnly() {
 	b.t.Helper()
 	if b.polls() != 0 {
 		b.t.Fatal("fixed agent requested features")
 	}
-	for _, req := range b.snapshot() {
-		if req.mode != mode {
-			b.t.Fatalf("fixed %s route sent a request to %s", mode, req.mode)
-		}
-	}
 }
 
-func (b *backend) assertRecords(mode string, expected []string, acceptedOnly bool) {
+func (b *backend) assertRecords(expected []string, acceptedOnly bool) {
 	b.t.Helper()
-	counts := b.bodies(mode, acceptedOnly)
+	counts := b.bodies(acceptedOnly)
 	if len(counts) != len(expected) {
-		b.t.Fatalf("%s saw %d distinct records; want %d", mode, len(counts), len(expected))
+		b.t.Fatalf("promtail saw %d distinct records; want %d", len(counts), len(expected))
 	}
 	for _, body := range expected {
 		if counts[body] != 1 {
-			b.t.Errorf("%s record %q appeared %d times; want once", mode, strings.TrimSpace(body), counts[body])
+			b.t.Errorf("promtail record %q appeared %d times; want once", strings.TrimSpace(body), counts[body])
 		}
 	}
 }
@@ -335,7 +318,7 @@ func (b *backend) assertIdentity() {
 			if record.cluster != "fixture-cluster" || record.podUID != "12345678-1234-1234-1234-123456789abc" ||
 				record.podName != "fixture-0" || record.container != "app" || record.stream != "stdout" ||
 				record.timestamp != uint64(time.Date(2026, 9, 10, 12, 0, 0, 123456789, time.UTC).UnixNano()) {
-				b.t.Errorf("incorrect identity, timestamp or stream on %s: %+v", req.mode, record)
+				b.t.Errorf("incorrect identity, timestamp or stream: %+v", record)
 			}
 		}
 	}
