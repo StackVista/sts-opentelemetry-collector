@@ -37,7 +37,7 @@ func (c *Delivery) ConsumeLogs(ctx context.Context, data plog.Logs) error {
 	}
 	FaultMark("admission_full")
 	err := c.consumeLogs(ctx, data)
-	if err == nil || err.Error() != "logs delivery pre-export rejection: admission_saturated" {
+	if err == nil || err.Error() != "logs route pre-export rejection: admission_saturated" {
 		panic("excess call did not return an admission rejection")
 	}
 	FaultMark("admission_rejected")

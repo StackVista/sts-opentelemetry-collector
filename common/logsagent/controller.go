@@ -5,8 +5,27 @@ import (
 	"time"
 )
 
-// Controller shares delivery accounting and the absolute drain deadline.
+type Mode string
+
+const (
+	PromtailMode   Mode = "promtail"
+	OTELNativeMode Mode = "native"
+)
+
+func (m Mode) String() string {
+	switch m {
+	case PromtailMode:
+		return "PromtailMode"
+	case OTELNativeMode:
+		return "OTELNativeMode"
+	default:
+		return string(m)
+	}
+}
+
+// Controller shares the selected mode and absolute drain deadline.
 type Controller interface {
+	SelectedMode() Mode
 	RegisterExportObserver(ExportObserver) error
 	DrainDeadline() time.Time
 	RetryBound() time.Duration

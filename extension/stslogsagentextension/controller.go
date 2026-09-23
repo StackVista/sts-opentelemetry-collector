@@ -3,11 +3,15 @@ package stslogsagentextension
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
+	"github.com/StackVista/stackstate-receiver-go-client/pkg/openapiclient"
+	"github.com/StackVista/stackstate-receiver-go-client/pkg/openapiclient/features"
 	"github.com/stackvista/sts-opentelemetry-collector/common/logsagent"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componentstatus"
@@ -27,32 +31,58 @@ var (
 	_ componentstatus.Watcher               = (*controller)(nil)
 )
 
+const (
+	restartMarker  = "marker"
+	restartMessage = "message"
+	restartSignal  = "signal"
+)
+
 type controller struct {
 	cfg    Config
 	set    extension.Settings
 	mu     sync.Mutex
+	mode   logsagent.Mode
+	state  restartState
 	bounds logsagent.PipelineConfig
 
 	initialized    bool
 	configured     bool
 	ready          bool
+	authFailed     bool
 	stopping       bool
+	restartPending bool
+	candidate      logsagent.Mode
+	observations   int
 	drainDeadline  time.Time
 	observer       logsagent.ExportObserver
 	exporterStatus componentstatus.Status
 	exporterFailed bool
 
-	now          func() time.Time
-	server       *http.Server
-	serverDone   chan struct{}
-	shutdownOnce sync.Once
+	now            func() time.Time
+	requestRestart func() error
+	writeState     func(string, restartState) error
+	writeMessage   func(string, []byte) error
+	startPolling   func() (*features.Poller, error)
+	poller         *features.Poller
+	pollDone       chan struct{}
+	server         *http.Server
+	serverDone     chan struct{}
+	closeIdle      func()
+	shutdownOnce   sync.Once
+	shutdownErr    error
 
+	queries       metric.Int64Counter
+	restarts      metric.Int64Counter
 	drains        metric.Int64Counter
 	drainDuration metric.Float64Histogram
+	registration  metric.Registration
 }
 
-func newController(cfg Config, set extension.Settings) (*controller, error) {
-	c := &controller{cfg: cfg, set: set, now: time.Now}
+func newController(cfg Config, set extension.Settings, restart func() error) (*controller, error) {
+	c := &controller{
+		cfg: cfg, set: set, now: time.Now, requestRestart: restart, writeState: saveState,
+		writeMessage: func(path string, data []byte) error { return os.WriteFile(path, data, 0o600) },
+	}
 	if err := c.initTelemetry(); err != nil {
 		return nil, err
 	}
@@ -60,13 +90,93 @@ func newController(cfg Config, set extension.Settings) (*controller, error) {
 }
 
 func (c *controller) Start(ctx context.Context, _ component.Host) error {
-	if err := c.startHealth(ctx); err != nil {
+	if !c.cfg.DiscoveryEnabled {
+		if err := c.startHealth(ctx); err != nil {
+			return err
+		}
+		c.mu.Lock()
+		c.mode, c.initialized = logsagent.PromtailMode, true
+		c.mu.Unlock()
+		return nil
+	}
+	state, err := loadState(c.cfg.StateDirectory)
+	if err != nil {
 		return err
 	}
+	opts := openapiclient.ConnectionOptions{
+		ReceiverURL: c.cfg.ReceiverURL, APIKey: string(c.cfg.APIKey), ProxyURL: string(c.cfg.ProxyURL),
+		InsecureSkipVerify: c.cfg.TLS.InsecureSkipVerify, RequestTimeout: c.cfg.AttemptTimeout,
+		UserAgent: c.set.BuildInfo.Command + "/" + c.set.BuildInfo.Version,
+	}
+	api, authCtx, err := openapiclient.NewOpenAPIClientWithOptions(ctx, opts)
+	if err != nil {
+		return err
+	}
+	c.closeIdle = api.GetConfig().HTTPClient.CloseIdleConnections
+	client, err := features.NewClient(api.FeaturesAPI, features.QueryOptions{
+		Timeout: c.cfg.QueryTimeout, AttemptTimeout: c.cfg.AttemptTimeout, MaxAttempts: c.cfg.MaxAttempts,
+		InitialBackoff: c.cfg.InitialBackoff, MaxBackoff: c.cfg.MaxBackoff,
+		BooleanCapabilities: []string{"otel-logs"},
+	})
+	if err != nil {
+		c.closeIdle()
+		return err
+	}
+	if err := c.startHealth(ctx); err != nil {
+		c.closeIdle()
+		return err
+	}
+	result := client.FetchFeatures(authCtx)
+	c.recordQuery(result)
+	mode, err := startupMode(result)
+	if err != nil {
+		c.server.Close()
+		<-c.serverDone
+		c.closeIdle()
+		return err
+	}
+	if state.PendingIntent {
+		c.set.Logger.Info("Logs capability restart intent observed",
+			zap.String("old_mode", string(state.OldMode)), zap.String("requested_mode", string(state.NewMode)),
+			zap.Bool("selected_requested_mode", mode == state.NewMode))
+		state.PendingIntent = false
+		if err := c.writeState(c.cfg.StateDirectory, state); err != nil {
+			c.server.Close()
+			<-c.serverDone
+			c.closeIdle()
+			return err
+		}
+	}
 	c.mu.Lock()
+	c.state = state
+	c.mode = mode
 	c.initialized = true
+	c.startPolling = func() (*features.Poller, error) {
+		return client.StartPolling(context.WithoutCancel(authCtx),
+			features.PollOptions{Interval: c.cfg.PollInterval, Jitter: c.cfg.Jitter})
+	}
 	c.mu.Unlock()
+	c.set.Logger.Info("Logs capability selected", zap.String("mode", string(mode)),
+		zap.String("query_outcome", string(result.Class)))
 	return nil
+}
+
+func startupMode(result features.Result) (logsagent.Mode, error) {
+	switch result.Class {
+	case features.Valid:
+		return observedMode(result), nil
+	case features.Unsupported, features.Transient, features.Timeout, features.Malformed:
+		return logsagent.PromtailMode, nil
+	default:
+		return "", fmt.Errorf("logs capability startup failed: %s", result.Class)
+	}
+}
+
+func observedMode(result features.Result) logsagent.Mode {
+	if enabled, _ := result.Features["otel-logs"].(bool); enabled {
+		return logsagent.OTELNativeMode
+	}
+	return logsagent.PromtailMode
 }
 
 func (c *controller) NotifyConfig(_ context.Context, conf *confmap.Conf) error {
@@ -91,6 +201,12 @@ func (c *controller) NotifyConfig(_ context.Context, conf *confmap.Conf) error {
 	c.bounds = bounds
 	c.configured = true
 	return nil
+}
+
+func (c *controller) SelectedMode() logsagent.Mode {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.mode
 }
 
 func (c *controller) RegisterExportObserver(observer logsagent.ExportObserver) error {
@@ -121,7 +237,30 @@ func (c *controller) Ready() error {
 	if !c.initialized || !c.configured || c.observer == nil || c.stopping {
 		return errors.New("logs agent cannot become ready before delivery is initialized")
 	}
+	if !c.cfg.DiscoveryEnabled {
+		c.ready = true
+		return nil
+	}
+	if c.poller != nil {
+		return nil
+	}
+	poller, err := c.startPolling()
+	if err != nil {
+		return err
+	}
+	c.poller = poller
+	c.pollDone = make(chan struct{})
 	c.ready = true
+	go func() {
+		defer close(c.pollDone)
+		for result := range poller.Results() {
+			if c.observe(result) {
+				// Shutdown joins this loop; a callback that calls Shutdown must run separately.
+				go c.signalRestart()
+			}
+		}
+		<-poller.Done()
+	}()
 	return nil
 }
 
@@ -133,7 +272,89 @@ func (c *controller) NotReady() error {
 	if c.drainDeadline.IsZero() {
 		c.drainDeadline = c.now().Add(c.bounds.ExportLifetime)
 	}
+	if c.poller != nil {
+		c.poller.Stop()
+	}
 	return nil
+}
+
+func (c *controller) observe(result features.Result) bool {
+	c.recordQuery(result)
+	c.mu.Lock()
+	if c.stopping || c.restartPending {
+		c.mu.Unlock()
+		return false
+	}
+	if result.Class == features.Authentication {
+		c.authFailed = true
+	}
+	if result.Class == features.Valid {
+		c.authFailed = false
+	}
+	mode := observedMode(result)
+	now := c.now()
+	if result.Class != features.Valid || mode == c.mode || now.Before(c.state.LastAttemptAt.Add(c.cfg.RestartCooldown)) {
+		c.candidate, c.observations = "", 0
+		c.mu.Unlock()
+		return false
+	}
+	if c.candidate != mode {
+		c.candidate, c.observations = mode, 0
+	}
+	c.observations++
+	if c.observations < c.cfg.StableObservations {
+		c.mu.Unlock()
+		return false
+	}
+	c.restartPending = true
+	c.state = restartState{
+		SchemaVersion: 1, LastAttemptAt: now, OldMode: c.mode, NewMode: mode, PendingIntent: true,
+	}
+	state := c.state
+	c.mu.Unlock()
+
+	stage := restartMarker
+	err := c.writeState(c.cfg.StateDirectory, state)
+	if err == nil {
+		stage = restartMessage
+		message := fmt.Sprintf("Logs capability changed from %s to %s; requesting graceful restart.\n",
+			state.OldMode, state.NewMode)
+		err = c.writeMessage(c.cfg.TerminationMessagePath, []byte(message))
+	}
+	if err != nil {
+		c.restartFailed(stage)
+		return false
+	}
+	return true
+}
+
+func (c *controller) signalRestart() {
+	c.mu.Lock()
+	if c.stopping {
+		c.restartPending = false
+		c.mu.Unlock()
+		c.set.Logger.Info("Logs capability restart superseded by shutdown")
+		return
+	}
+	state := c.state
+	// Dispatch wins this race with shutdown; the callback may synchronously re-enter it.
+	c.mu.Unlock()
+	if err := c.requestRestart(); err != nil {
+		c.restartFailed(restartSignal)
+		return
+	}
+	c.restarts.Add(context.Background(), 1, metric.WithAttributes(attribute.String("outcome", "requested")))
+	c.set.Logger.Info("Logs capability restart requested",
+		zap.String("old_mode", string(state.OldMode)), zap.String("new_mode", string(state.NewMode)))
+}
+
+func (c *controller) restartFailed(stage string) {
+	c.mu.Lock()
+	c.restartPending = false
+	c.candidate, c.observations = "", 0
+	c.mu.Unlock()
+	c.restarts.Add(context.Background(), 1, metric.WithAttributes(attribute.String("outcome", stage+"_failed")))
+	c.set.Logger.Error("Logs capability restart request failed", zap.String("stage", stage))
 }
 
 func (c *controller) ComponentStatusChanged(source *componentstatus.InstanceID, event *componentstatus.Event) {
@@ -143,6 +364,9 @@ func (c *controller) ComponentStatusChanged(source *componentstatus.InstanceID, 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	id := c.bounds.PromtailExporterID
+	if c.mode == logsagent.OTELNativeMode {
+		id = c.bounds.OTELNativeExporterID
+	}
 	if source.ComponentID().String() != id {
 		return
 	}
@@ -153,14 +377,19 @@ func (c *controller) ComponentStatusChanged(source *componentstatus.InstanceID, 
 }
 
 func (c *controller) Shutdown(_ context.Context) error {
-	c.shutdownOnce.Do(c.shutdown)
-	return nil
+	c.shutdownOnce.Do(func() { c.shutdownErr = c.shutdown() })
+	return c.shutdownErr
 }
 
-func (c *controller) shutdown() {
+func (c *controller) shutdown() error {
 	_ = c.NotReady()
 	c.mu.Lock()
-	observer := c.observer
+	done, observer := c.pollDone, c.observer
+	c.mu.Unlock()
+	if done != nil {
+		<-done
+	}
+	c.mu.Lock()
 	status, failed := c.exporterStatus, c.exporterFailed
 	duration := max(0, c.now().Sub(c.drainDeadline.Add(-c.bounds.ExportLifetime)).Seconds())
 	c.initialized = false
@@ -187,18 +416,25 @@ func (c *controller) shutdown() {
 		c.server.Close()
 		<-c.serverDone
 	}
+	if c.closeIdle != nil {
+		c.closeIdle()
+	}
+	if c.registration != nil {
+		return c.registration.Unregister()
+	}
+	return nil
 }
 
 func (c *controller) startHealth(ctx context.Context) error {
 	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", c.cfg.HealthEndpoint)
 	if err != nil {
-		return errors.New("cannot bind logs agent health endpoint")
+		return errors.New("cannot bind logs capability health endpoint")
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/live", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 	mux.HandleFunc("/ready", func(w http.ResponseWriter, _ *http.Request) {
 		c.mu.Lock()
-		ready := c.initialized && c.configured && c.ready && !c.stopping
+		ready := c.initialized && c.configured && c.ready && !c.authFailed && !c.stopping && !c.restartPending
 		c.mu.Unlock()
 		if !ready {
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -214,15 +450,38 @@ func (c *controller) startHealth(ctx context.Context) error {
 			c.mu.Lock()
 			c.initialized = false
 			c.mu.Unlock()
-			c.set.Logger.Error("Logs agent health listener failed")
+			c.set.Logger.Error("Logs capability health listener failed")
 		}
 	}()
 	return nil
 }
 
+func (c *controller) recordQuery(result features.Result) {
+	c.queries.Add(context.Background(), 1,
+		metric.WithAttributes(attribute.String("outcome", string(result.Class))))
+	if result.Class == features.Authentication || result.Class == features.Configuration ||
+		result.Class == features.Rejected {
+		c.set.Logger.Error("Logs capability query rejected", zap.String("outcome", string(result.Class)),
+			zap.Int("attempts", result.Attempts))
+		return
+	}
+	c.set.Logger.Debug("Logs capability query completed", zap.String("outcome", string(result.Class)),
+		zap.Int("attempts", result.Attempts))
+}
+
 func (c *controller) initTelemetry() error {
 	meter := c.set.MeterProvider.Meter("github.com/stackvista/sts-opentelemetry-collector/logsagent")
 	var err error
+	if c.cfg.DiscoveryEnabled {
+		c.queries, err = meter.Int64Counter("sts_logs_capability_queries")
+		if err != nil {
+			return err
+		}
+		c.restarts, err = meter.Int64Counter("sts_logs_capability_restarts")
+		if err != nil {
+			return err
+		}
+	}
 	c.drains, err = meter.Int64Counter("sts_logs_export_drains")
 	if err != nil {
 		return err
@@ -231,5 +490,21 @@ func (c *controller) initTelemetry() error {
 	if err != nil {
 		return err
 	}
-	return nil
+	if !c.cfg.DiscoveryEnabled {
+		return nil
+	}
+	state, err := meter.Int64ObservableGauge("sts_logs_capability_state")
+	if err != nil {
+		return err
+	}
+	c.registration, err = meter.RegisterCallback(func(_ context.Context, observer metric.Observer) error {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		observer.ObserveInt64(state, int64(c.observations),
+			metric.WithAttributes(attribute.String("mode", string(c.mode)), attribute.String("field", "candidate_count")))
+		observer.ObserveInt64(state, int64(max(0, c.state.LastAttemptAt.Add(c.cfg.RestartCooldown).Sub(c.now()).Seconds())),
+			metric.WithAttributes(attribute.String("mode", string(c.mode)), attribute.String("field", "cooldown_seconds")))
+		return nil
+	}, state)
+	return err
 }

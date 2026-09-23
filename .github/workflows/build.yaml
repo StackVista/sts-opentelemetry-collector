@@ -400,7 +400,7 @@ jobs:
           cache: false
       - name: Build agent with test-only source overlays and race detection
         run: go run ./test/logsagent/cmd/faultagent -output /tmp/otel-agent-faults
-      - name: Test admission and delayed synchronous completion
+      - name: Test admission, worker shutdown and signal failures
         env:
           OTEL_AGENT_FAULT_BINARY: /tmp/otel-agent-faults
         run: go test -race -count=1 -timeout=180s -run '^TestInjected' ./test/logsagent -require-fault-agent
@@ -439,7 +439,7 @@ jobs:
       - name: Validate agent config fixtures
         run: |
           set -euo pipefail
-          for cfg in scraper.yaml k8s-resource.yaml telemetry-gateway.yaml promtail-logs-exporter.yaml logs-agent.yaml; do
+          for cfg in scraper.yaml k8s-resource.yaml telemetry-gateway.yaml promtail-logs-exporter.yaml promtail-logs-agent.yaml logs-agent.yaml; do
             echo "::group::validate ${cfg}"
             docker run --rm -v "$PWD/test/validate/configs:/cfg" \
               sts-otel-agent:validate validate --config "/cfg/${cfg}"

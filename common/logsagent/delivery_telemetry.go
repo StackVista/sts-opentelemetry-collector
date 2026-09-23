@@ -28,17 +28,31 @@ func newTelemetry(provider metric.MeterProvider) (telemetry, error) {
 	return t, errors.Join(errs[:]...)
 }
 
-func (t telemetry) reject(ctx context.Context, reason string, records int) {
-	attrs := metric.WithAttributes(attribute.String("reason", reason))
+func modeAttributes(mode Mode) metric.MeasurementOption {
+	return metric.WithAttributes(attribute.String("mode", metricMode(mode)))
+}
+
+func metricMode(mode Mode) string {
+	switch mode {
+	case PromtailMode, OTELNativeMode:
+		return string(mode)
+	default:
+		return "unselected"
+	}
+}
+
+func (t telemetry) reject(ctx context.Context, mode Mode, reason string, records int) {
+	attrs := metric.WithAttributes(attribute.String("mode", metricMode(mode)), attribute.String("reason", reason))
 	t.rejectedRequests.Add(ctx, 1, attrs)
 	t.rejectedRecords.Add(ctx, int64(records), attrs)
 }
 
-func (t telemetry) complete(ctx context.Context, outcome string, draining bool) {
+func (t telemetry) complete(ctx context.Context, mode Mode, outcome string, draining bool) {
 	attrs := metric.WithAttributes(
+		attribute.String("mode", metricMode(mode)),
 		attribute.String("outcome", outcome),
 		attribute.Bool("draining", draining),
 	)
 	t.outcomes.Add(ctx, 1, attrs)
-	t.outstanding.Add(ctx, -1)
+	t.outstanding.Add(ctx, -1, modeAttributes(mode))
 }

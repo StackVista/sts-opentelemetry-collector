@@ -15,6 +15,8 @@ dist:
 # sts-otel-builder.yaml and are intentionally absent here.
 
 connectors:
+  - gomod: github.com/stackvista/sts-opentelemetry-collector/connector/stslogsrouteconnector v0.0.0
+    path: ./connector/stslogsrouteconnector
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/spanmetricsconnector v0.153.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/routingconnector v0.153.0
 

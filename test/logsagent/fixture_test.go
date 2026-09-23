@@ -11,7 +11,7 @@ import (
 	"github.com/golang/snappy"
 	"github.com/stackvista/sts-opentelemetry-collector/common/logsagent"
 	"go.opentelemetry.io/collector/confmap"
-
+	"go.opentelemetry.io/collector/pdata/plog/plogotlp"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/dynamicpb"
@@ -30,9 +30,9 @@ func TestFixtureBounds(t *testing.T) {
 	if bounds.ExportLifetime != s.Lifetime || bounds.RetryBound != s.minimumLifetime()-20*time.Second {
 		t.Fatalf("shared validator returned unexpected fixture bounds: %+v", bounds)
 	}
-	delivery := section(c, "exporters", "stsk8slogs/promtail", "delivery")
-	files := section(c, "receivers", "filelog/pods")
-	if delivery["max_concurrent_calls"] != s.Concurrency || files["max_concurrent_files"] != s.Files ||
+	route := section(c, "connectors", "stslogsroute/logs")
+	files := section(c, "receivers", "file_log/pods")
+	if route["max_concurrent_calls"] != s.Concurrency || files["max_concurrent_files"] != s.Files ||
 		s.Concurrency < s.Files+2 {
 		t.Fatal("fixture lacks admission headroom for recombination")
 	}
@@ -40,35 +40,44 @@ func TestFixtureBounds(t *testing.T) {
 		section(c, "extensions", "file_storage/logs")["recreate"] != false {
 		t.Fatal("fixture enabled receiver retry or checkpoint recreation")
 	}
-	q := section(c, "exporters", "stsk8slogs/promtail", "sending_queue")
-	if len(q) != 1 || q["enabled"] != false {
-		t.Fatal("fixture must disable exporter queues")
-	}
-	if len(section(c, "service", "pipelines")) != 1 || c["connectors"] != nil {
-		t.Fatal("fixture must use one direct pipeline without connectors")
+	for _, mode := range []string{"promtail", "native"} {
+		exporter := "stsk8slogs/promtail"
+		if mode == "native" {
+			exporter = "otlp_http/otel_native"
+		}
+		e := section(c, "exporters", exporter)
+		q := section(e, "sending_queue")
+		if len(q) != 1 || q["enabled"] != false {
+			t.Fatal("fixture must disable exporter queues")
+		}
+		if _, exists := section(c, "service", "pipelines", map[string]string{"promtail": "logs/promtail", "native": "logs/otel_native"}[mode])["processors"]; exists {
+			t.Fatal("terminal fixture pipeline contains processors")
+		}
 	}
 }
 
 func TestAuthoredFixtureRejectsOmittedBounds(t *testing.T) {
 	paths := make([][]string, 0, 29)
 	paths = append(paths, [][]string{
-		{"exporters", "stsk8slogs/promtail", "delivery", "export_lifetime"},
-		{"exporters", "stsk8slogs/promtail", "delivery", "max_concurrent_calls"},
-		{"exporters", "stsk8slogs/promtail", "delivery", "max_record_bytes"},
-		{"exporters", "stsk8slogs/promtail", "delivery", "max_request_bytes"},
-		{"receivers", "filelog/pods", "max_concurrent_files"},
-		{"receivers", "filelog/pods", "retry_on_failure", "enabled"},
+		{"connectors", "stslogsroute/logs", "export_lifetime"},
+		{"connectors", "stslogsroute/logs", "max_concurrent_calls"},
+		{"connectors", "stslogsroute/logs", "max_record_bytes"},
+		{"connectors", "stslogsroute/logs", "max_request_bytes"},
+		{"receivers", "file_log/pods", "max_concurrent_files"},
+		{"receivers", "file_log/pods", "retry_on_failure", "enabled"},
 		{"extensions", "file_storage/logs", "recreate"},
 	}...)
-	for _, field := range [][]string{
-		{"timeout"},
-		{"retry_on_failure", "enabled"},
-		{"retry_on_failure", "initial_interval"},
-		{"retry_on_failure", "max_interval"},
-		{"retry_on_failure", "max_elapsed_time"},
-		{"sending_queue", "enabled"},
-	} {
-		paths = append(paths, append([]string{"exporters", "stsk8slogs/promtail"}, field...))
+	for _, exporter := range []string{"stsk8slogs/promtail", "otlp_http/otel_native"} {
+		for _, field := range [][]string{
+			{"timeout"},
+			{"retry_on_failure", "enabled"},
+			{"retry_on_failure", "initial_interval"},
+			{"retry_on_failure", "max_interval"},
+			{"retry_on_failure", "max_elapsed_time"},
+			{"sending_queue", "enabled"},
+		} {
+			paths = append(paths, append([]string{"exporters", exporter}, field...))
+		}
 	}
 	for _, path := range paths {
 		t.Run(strings.Join(path, "/"), func(t *testing.T) {
@@ -84,30 +93,32 @@ func TestAuthoredFixtureRejectsOmittedBounds(t *testing.T) {
 }
 
 func TestAuthoredFixtureRejectsInvalidBounds(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		reason string
-		mutate func(map[string]any)
-	}{
-		{"enabled_queue", "enabled", func(e map[string]any) { section(e, "sending_queue")["enabled"] = true }},
-		{"longer_retry", "export_lifetime", func(e map[string]any) {
-			section(e, "retry_on_failure")["max_elapsed_time"] = "10s"
-		}},
-		{"unlimited_retry", "max_elapsed_time", func(e map[string]any) {
-			section(e, "retry_on_failure")["max_elapsed_time"] = "0s"
-		}},
-		{"queue_batching", "sending_queue", func(e map[string]any) {
-			section(e, "sending_queue")["batch"] = map[string]any{}
-		}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			c := renderConfig(t, defaultSettings())
-			tc.mutate(section(c, "exporters", "stsk8slogs/promtail"))
-			_, err := logsagent.ValidatePipelineConfig(confmap.NewFromStringMap(c))
-			if err == nil || !strings.Contains(err.Error(), tc.reason) {
-				t.Fatalf("expected %s rejection, got %v", tc.reason, err)
-			}
-		})
+	for _, exporter := range []string{"stsk8slogs/promtail", "otlp_http/otel_native"} {
+		for _, tc := range []struct {
+			name   string
+			reason string
+			mutate func(map[string]any)
+		}{
+			{"enabled_queue", "enabled", func(e map[string]any) { section(e, "sending_queue")["enabled"] = true }},
+			{"longer_retry", "export_lifetime", func(e map[string]any) {
+				section(e, "retry_on_failure")["max_elapsed_time"] = "10s"
+			}},
+			{"unlimited_retry", "max_elapsed_time", func(e map[string]any) {
+				section(e, "retry_on_failure")["max_elapsed_time"] = "0s"
+			}},
+			{"queue_batching", "sending_queue", func(e map[string]any) {
+				section(e, "sending_queue")["batch"] = map[string]any{}
+			}},
+		} {
+			t.Run(exporter+"/"+tc.name, func(t *testing.T) {
+				c := renderConfig(t, defaultSettings())
+				tc.mutate(section(c, "exporters", exporter))
+				_, err := logsagent.ValidatePipelineConfig(confmap.NewFromStringMap(c))
+				if err == nil || !strings.Contains(err.Error(), tc.reason) {
+					t.Fatalf("expected %s rejection, got %v", tc.reason, err)
+				}
+			})
+		}
 	}
 }
 
@@ -146,12 +157,31 @@ func TestWireDecoders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	nativeRequest := plogotlp.NewExportRequest()
+	err = nativeRequest.UnmarshalJSON([]byte(`{"resourceLogs":[{"resource":{"attributes":[
+		{"key":"k8s.cluster.name","value":{"stringValue":"fixture-cluster"}},
+		{"key":"k8s.pod.uid","value":{"stringValue":"12345678-1234-1234-1234-123456789abc"}},
+		{"key":"k8s.pod.name","value":{"stringValue":"fixture-0"}},
+		{"key":"k8s.container.name","value":{"stringValue":"app"}}
+	]},"scopeLogs":[{"logRecords":[{"timeUnixNano":"42123456789","body":{"stringValue":"synthetic text"},
+		"attributes":[{"key":"log.iostream","value":{"stringValue":"stdout"}}]}]}]}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err = nativeRequest.MarshalProto()
+	if err != nil {
+		t.Fatal(err)
+	}
+	native, err := decodeNative(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
 	expected := []wireRecord{{
 		body: "synthetic text", timestamp: 42123456789,
 		cluster: "fixture-cluster", podUID: "12345678-1234-1234-1234-123456789abc",
 		podName: "fixture-0", container: "app", stream: "stdout",
 	}}
-	if !reflect.DeepEqual(promtail, expected) {
-		t.Fatalf("wire decoder disagrees with fixture: promtail=%+v", promtail)
+	if !reflect.DeepEqual(promtail, expected) || !reflect.DeepEqual(native, expected) {
+		t.Fatalf("wire decoders disagree with fixture: promtail=%+v native=%+v", promtail, native)
 	}
 }

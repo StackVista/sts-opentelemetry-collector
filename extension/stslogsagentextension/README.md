@@ -1,23 +1,59 @@
-# Logs agent lifecycle extension
+# Logs agent extension
 
-`stslogsagent` owns health probes, effective configuration validation and final
-export-drain accounting. Its only setting is `health_endpoint` (default
-`0.0.0.0:13133`). It makes no Receiver feature requests.
+`stslogsagent` defaults to fixed Promtail export with health probes and bounded
+shutdown. This mode needs no discovery credentials, state files or native pipeline,
+and makes no feature queries.
 
-`/live` succeeds while the listener runs. `/ready` succeeds after configuration,
-pipelines and the single delivery observer are initialized. Shutdown marks the agent
-unready and fixes one absolute drain deadline. The exporter joins admitted calls;
-the extension reports the final outcome after exporter shutdown. Failed exports,
-late rejection and incomplete shutdown remain visible in counters and logs.
+Fixed mode accepts one Filelog pipeline exporting directly to `stsk8slogs` with
+its `delivery` settings, or two pipelines joined by `stslogsroute`. Discovery
+requires three routed pipelines. Routed terminal exporters leave `delivery`
+unset; the connector registers the shared delivery observer. A pipeline must
+have one delivery owner, never both route and exporter wrappers.
 
-The graph requires one Filelog pipeline exporting directly to `stsk8slogs`.
-The exporter's `delivery.controller_extension` points here. Enable
-`--feature-gates=stanza.synchronousLogEmitter`. The shared
-[logs-agent delivery contract](../../common/logsagent/README.md) documents the
-validated pipeline invariants, admission limits, deadlines, retries and drain
-semantics.
+Set `discovery_enabled: true` and configure `native_pipeline` on the route to
+enable capability selection. Discovery settings remain on this extension. It
+selects one logs destination at startup using the shared
+Receiver client's authenticated feature query. A valid `otel-logs: true`
+selects OTELNativeMode (OTLP export). A valid response without that capability
+or with it set to false selects PromtailMode (Promtail-compatible export).
+HTTP 404, malformed responses and temporary failures remaining after the bounded
+query budget also select PromtailMode at startup. Authentication, configuration
+and unexpected rejection errors fail startup.
 
-`common/logsagent` provides shared validation and accounting. Authored fixtures
-require explicit bounds; runtime validation handles Collector serialization of
-disabled queues and omitted false storage recreation. Neither validation nor
-readiness proves Receiver storage or product acceptance.
+Only `otel-logs` requires a boolean value; unrelated capabilities do not affect
+selection. Configure the final Receiver URL: redirects are rejected, including
+same-host redirects. Receiver proxying uses the explicit `proxy_url` setting.
+
+The selected destination remains fixed. Polling starts after pipeline readiness.
+A stable change requests SIGTERM after writing restart intent and the termination
+message. Failed writes or signaling reset the observation sequence and impose
+the same cooldown. The marker records intent, not successful shutdown. Kubernetes
+restarts the container inside the same Pod, preserving the emptyDir checkpoint and
+cooldown files. The restarted process queries the Receiver independently. Pod
+replacement loses emptyDir state, so checkpoints and cooldown start fresh.
+Missing state starts fresh; malformed or unreadable state fails startup.
+
+`/live` stays successful during draining. `/ready` requires initialized pipelines
+and no authentication failure or pending shutdown. Valid discovery restores
+readiness after an authentication failure without changing the route.
+
+Before receivers start, `NotifyConfig` validates both exporters' effective
+retry/timeout bounds, disabled queues and the synchronous pipeline graph. Collector defaulting and
+marshaling remove authored-value provenance; configuration fixtures separately
+require explicit bounds. Filelog also requires `stanza.synchronousLogEmitter`.
+
+Shutdown sets one absolute drain deadline without canceling admitted exports.
+Final reporting combines synchronous delivery outcomes with the selected exporter's
+stopped status. It reports export completion only; it does not verify Filelog
+checkpoint persistence. Admitted synchronous calls must finish before successful
+shutdown. The controller stores no credentials or log payloads in its state.
+
+Restart callbacks run outside the controller lock and polling goroutine. Shutdown
+joins polling and intent writes, but cannot join the callback because it may call
+Shutdown itself. Shutdown before callback dispatch suppresses the signal; once
+dispatched, a callback can finish concurrently with shutdown. A failed callback
+resets observations without clearing shutdown or changing the selected route.
+
+Go modes are named `PromtailMode` and `OTELNativeMode`. State, structured mode
+fields and telemetry use `promtail` and `native`. Configuration uses
+`promtail_pipeline` and `native_pipeline`; fixture IDs are `promtail`/`otel_native`.

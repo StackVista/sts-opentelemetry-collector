@@ -16,7 +16,7 @@ keeping their concurrency, input size and execution time bounded.
   metadata. These limits bound admitted inputs, not total process memory.
 - **Receiver cancellation does not abandon admitted work.** Delivery preserves
   context values but replaces the caller's cancellation and deadline with its
-  own deadline. A receiver stopping during an HTTP request therefore does not
+  own deadline. A receiver stopping during an export request therefore does not
   cancel that export before it can finish within its delivery budget.
 - **Retries have one owner and a finite budget.** Exporter-helper owns retries;
   delivery does not retry the call again. The validated retry window, attempt
@@ -35,17 +35,23 @@ keeping their concurrency, input size and execution time bounded.
 
 ## Required pipeline and configuration
 
-The direct agent pipeline is:
+The fixed Promtail pipeline is:
 
 ```text
-Filelog → synchronous processors → Delivery → exporter-helper → HTTP sender
+Filelog → synchronous processors → Delivery → exporter-helper → protocol sender
 ```
+
+Capability-routed configuration inserts `stslogsroute` after the synchronous
+processors. It owns the shared delivery and selects one Promtail or native OTLP
+terminal exporter. Direct configuration gives delivery to `stsk8slogs`; a
+pipeline must never use both delivery wrappers.
 
 Filelog retries, exporter queues and asynchronous processors are disabled so
 that this completion accounting covers the complete export. Checkpoint storage
 must not silently recreate corrupt state. `max_concurrent_calls` must cover
-Filelog concurrency plus two additional calls. The validated
-[agent fixture](../../test/validate/configs/logs-agent.yaml) shows the required
+Filelog concurrency plus two additional calls. The
+[fixed fixture](../../test/validate/configs/promtail-logs-agent.yaml) and
+[routed fixture](../../test/validate/configs/logs-agent.yaml) show the required
 shape and explicit bounds.
 
 | Field | Meaning |

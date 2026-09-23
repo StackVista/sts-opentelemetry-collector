@@ -29,7 +29,17 @@
   },
   {
     "file": "common/logsagent/delivery.go",
-    "old": "err := next.ConsumeLogs(exportCtx, data)",
-    "new": "finish := FaultCall()\n\terr := next.ConsumeLogs(exportCtx, data)\n\tFaultPause(\"completion\")\n\tfinish()"
+    "old": "err := selected.ConsumeLogs(exportCtx, data)",
+    "new": "finish := FaultCall()\n\terr := selected.ConsumeLogs(exportCtx, data)\n\tFaultPause(\"completion\")\n\tfinish()"
+  },
+  {
+    "file": "extension/stslogsagentextension/factory.go",
+    "old": "import (",
+    "new": "import (\n\t\"github.com/stackvista/sts-opentelemetry-collector/common/logsagent\""
+  },
+  {
+    "file": "extension/stslogsagentextension/factory.go",
+    "old": "return newController(*cfg, set, requestRestart)",
+    "new": "return newController(*cfg, set, func() error {\n\t\tlogsagent.FaultMark(\"signal_attempt\")\n\t\tif logsagent.FaultEnabled(\"signal\") {\n\t\t\treturn errors.New(\"synthetic restart signal failure\")\n\t\t}\n\t\treturn requestRestart()\n\t})"
   }
 ]

@@ -1,0 +1,66 @@
+# Logs route connector
+
+`stslogsroute` sends logs to the one pipeline selected by the configured
+`logsagent.Controller` extension at startup. When discovery is enabled, both destination pipelines belong
+to the Collector lifecycle. The connector does not switch destinations or retry
+exports.
+
+Admission, detached deadlines, completion accounting and telemetry live in
+`common/logsagent.Delivery`. Routed terminal exporters must leave `delivery`
+unset so that each call passes through one delivery guard.
+
+| Configuration key | Default |
+| --- | --- |
+| `controller_extension` | `stslogsagent/logs` |
+| `promtail_pipeline` | `logs/promtail` |
+| `native_pipeline` | omitted (fixed Promtail mode) |
+| `max_concurrent_calls` | `8` |
+| `max_record_bytes` | `262144` |
+| `max_request_bytes` | `1048576` |
+| `export_lifetime` | `90s` |
+
+Size limits use uncompressed OTLP protobuf sizes. Each record is sized as its
+own request including resource, scope and schema metadata. An oversized request
+or any oversized record permanently rejects the entire request before export.
+Other record validation belongs to the Promtail-compatible exporter, which can retain valid
+siblings.
+
+Resource and scope envelope sizes are computed once per group. Individual
+record sizes include their protobuf field and enclosing length prefixes without
+revisiting shared metadata.
+
+Admission is nonblocking. Admitted calls retain caller context values but have
+an independent export lifetime. During drain, new calls must fit the controller's
+validated retry/timeout bound before its absolute deadline. Existing call
+deadlines stay unchanged. Cross-pipeline validation belongs to the controller.
+
+Metrics use only bounded `mode`, `reason`, `outcome` and `draining` attributes:
+
+- `stslogsagent.pre_export_rejected_requests` and
+  `stslogsagent.pre_export_rejected_records`: size, admission, drain or lifecycle
+rejection, separated by reason.
+- `stslogsagent.oversized_records`: individual oversized records in requests
+  that fit the request limit.
+- `stslogsagent.export_requests`: acknowledged, permanent rejection, exhausted
+  retry budget, expired export deadline or unclassified terminal error.
+- `stslogsagent.outstanding_requests`: synchronous connector calls.
+
+Acknowledgement counts requests, including successful partial responses; it
+does not assert that every record was stored. Exporter-helper runs retries
+synchronously with queues disabled; admission bounds concurrent calls.
+The connector joins admitted calls, and the controller finalizes draining after
+exporter shutdown. The per-call bound is the greater of each exporter's
+retry budget plus attempt timeout, with 20 seconds of overhead in the lifetime.
+CRI recombination can serialize calls before admission; later flushes are rejected
+when they cannot fit the remaining absolute drain budget.
+
+Every pre-export rejection observed during drain is included in the controller's
+`DrainRejected` count. DEBUG messages `Logs export completed` and
+`Logs export rejected` expose only outcome, mode, drain state and record count.
+They contain no payload or downstream error text.
+
+Run from this directory:
+
+```sh
+GOWORK=off GOCACHE=/tmp/otel-logs-go-cache go test -race -count=1 -timeout=180s ./...
+```
