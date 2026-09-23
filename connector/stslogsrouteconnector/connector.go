@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/consumer/consumererror"
 	"go.opentelemetry.io/collector/pdata/plog"
+	"go.opentelemetry.io/collector/pipeline"
 	"go.uber.org/zap"
 )
 
@@ -39,18 +40,21 @@ func (c *logsConnector) Start(_ context.Context, host component.Host) error {
 	if c.selected != nil || c.stopping {
 		return errors.New("logs route already started or stopped")
 	}
-	controller, ok := host.GetExtensions()[c.cfg.CapabilityExtension].(logsagent.Controller)
+	controller, ok := host.GetExtensions()[c.cfg.ControllerExtension].(logsagent.Controller)
 	if !ok {
-		return errors.New("capability_extension does not provide a logs agent controller")
+		return errors.New("controller_extension does not provide a logs agent controller")
 	}
 	mode := controller.SelectedMode()
 	selectedID := c.cfg.PromtailPipeline
 	switch mode {
 	case logsagent.PromtailMode:
 	case logsagent.OTELNativeMode:
+		if c.cfg.OTELNativePipeline.Signal() != pipeline.SignalLogs {
+			return errors.New("native mode requires native_pipeline")
+		}
 		selectedID = c.cfg.OTELNativePipeline
 	default:
-		return errors.New("capability_extension has no valid selected mode")
+		return errors.New("controller_extension has no valid selected mode")
 	}
 	bound := controller.RetryBound()
 	if bound <= 0 || bound > c.cfg.ExportLifetime {

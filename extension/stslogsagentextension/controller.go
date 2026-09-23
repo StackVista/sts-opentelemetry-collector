@@ -1,4 +1,4 @@
-package stslogscapabilityextension
+package stslogsagentextension
 
 import (
 	"context"
@@ -90,6 +90,15 @@ func newController(cfg Config, set extension.Settings, restart func() error) (*c
 }
 
 func (c *controller) Start(ctx context.Context, _ component.Host) error {
+	if !c.cfg.DiscoveryEnabled {
+		if err := c.startHealth(ctx); err != nil {
+			return err
+		}
+		c.mu.Lock()
+		c.mode, c.initialized = logsagent.PromtailMode, true
+		c.mu.Unlock()
+		return nil
+	}
 	state, err := loadState(c.cfg.StateDirectory)
 	if err != nil {
 		return err
@@ -106,7 +115,7 @@ func (c *controller) Start(ctx context.Context, _ component.Host) error {
 		}
 		opts.CABundlePEM = pem
 	}
-	api, authCtx, err := openapiclient.NewOpenAPIClient(ctx, opts)
+	api, authCtx, err := openapiclient.NewOpenAPIClientWithOptions(ctx, opts)
 	if err != nil {
 		return err
 	}
@@ -183,7 +192,7 @@ func (c *controller) NotifyConfig(_ context.Context, conf *confmap.Conf) error {
 		return err
 	}
 	if bounds.ExtensionID != c.set.ID.String() {
-		return errors.New("logs route must reference this capability extension")
+		return errors.New("logs route must reference this controller extension")
 	}
 	enabled := false
 	featuregate.GlobalRegistry().VisitAll(func(g *featuregate.Gate) {
@@ -234,6 +243,10 @@ func (c *controller) Ready() error {
 	defer c.mu.Unlock()
 	if !c.initialized || !c.configured || c.observer == nil || c.stopping {
 		return errors.New("logs capability cannot become ready before the route is initialized")
+	}
+	if !c.cfg.DiscoveryEnabled {
+		c.ready = true
+		return nil
 	}
 	if c.poller != nil {
 		return nil
@@ -466,13 +479,15 @@ func (c *controller) recordQuery(result features.Result) {
 func (c *controller) initTelemetry() error {
 	meter := c.set.MeterProvider.Meter("github.com/stackvista/sts-opentelemetry-collector/logsagent")
 	var err error
-	c.queries, err = meter.Int64Counter("sts_logs_capability_queries")
-	if err != nil {
-		return err
-	}
-	c.restarts, err = meter.Int64Counter("sts_logs_capability_restarts")
-	if err != nil {
-		return err
+	if c.cfg.DiscoveryEnabled {
+		c.queries, err = meter.Int64Counter("sts_logs_capability_queries")
+		if err != nil {
+			return err
+		}
+		c.restarts, err = meter.Int64Counter("sts_logs_capability_restarts")
+		if err != nil {
+			return err
+		}
 	}
 	c.drains, err = meter.Int64Counter("sts_logs_export_drains")
 	if err != nil {
@@ -481,6 +496,9 @@ func (c *controller) initTelemetry() error {
 	c.drainDuration, err = meter.Float64Histogram("sts_logs_export_drain_duration", metric.WithUnit("s"))
 	if err != nil {
 		return err
+	}
+	if !c.cfg.DiscoveryEnabled {
+		return nil
 	}
 	state, err := meter.Int64ObservableGauge("sts_logs_capability_state")
 	if err != nil {

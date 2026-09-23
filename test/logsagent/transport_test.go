@@ -209,7 +209,7 @@ func TestTransportCustomCAHTTP(t *testing.T) {
 			f.settings.OTELNativeURL = server.URL + "/otel"
 			p := f.start(func(config map[string]any) {
 				for _, component := range []map[string]any{
-					section(config, "extensions", "stslogscapability/logs"),
+					section(config, "extensions", "stslogsagent/logs"),
 					section(config, "exporters", "stsk8slogs/promtail"),
 				} {
 					component["tls"] = map[string]any{"ca_file": ca}
@@ -312,7 +312,7 @@ func TestTransportHTTPExplicitProxy(t *testing.T) {
 			f.childEnv = []string{"NO_PROXY=*"}
 			p := f.start(func(config map[string]any) {
 				for _, component := range []map[string]any{
-					section(config, "extensions", "stslogscapability/logs"),
+					section(config, "extensions", "stslogsagent/logs"),
 					section(config, "exporters", "stsk8slogs/promtail"),
 					section(config, "exporters", "otlp_http/otel_native"),
 				} {

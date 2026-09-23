@@ -17,7 +17,7 @@ func scriptedFeatures(f *fixture, initialMode string) {
 }
 
 func scriptedConfig(config map[string]any) {
-	capability := section(config, "extensions", "stslogscapability/logs")
+	capability := section(config, "extensions", "stslogsagent/logs")
 	capability["max_attempts"] = 1
 	capability["query_timeout"] = "5s"
 	capability["attempt_timeout"] = "5s"
@@ -123,7 +123,7 @@ func TestRestartWriteFailureRecoversAfterCooldown(t *testing.T) {
 				const cooldown = 2 * time.Second
 				p := f.start(stressValidated(t, func(config map[string]any) {
 					scriptedConfig(config)
-					section(config, "extensions", "stslogscapability/logs")["restart_cooldown"] = cooldown.String()
+					section(config, "extensions", "stslogsagent/logs")["restart_cooldown"] = cooldown.String()
 				}), true)
 				p.ready()
 				path := f.settings.Termination

@@ -10,7 +10,7 @@ use (
 	./exporter/stsk8slogsexporter
 	./exporter/ststopologyexporter
 	./extension/servicetokenauthextension
-	./extension/stslogscapabilityextension
+	./extension/stslogsagentextension
 	./extension/settingsproviderextension
 	./processor/stsusageprocessor
 	./receiver/k8sresourcereceiver

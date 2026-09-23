@@ -183,7 +183,7 @@ func TestInjectedSignalFailureRecoversAfterCooldown(t *testing.T) {
 			const cooldown = 2 * time.Second
 			p := f.start(stressValidated(t, func(config map[string]any) {
 				scriptedConfig(config)
-				section(config, "extensions", "stslogscapability/logs")["restart_cooldown"] = cooldown.String()
+				section(config, "extensions", "stslogsagent/logs")["restart_cooldown"] = cooldown.String()
 			}), true)
 			p.ready()
 			target := featureReply{mode: otherMode(mode), status: http.StatusOK}

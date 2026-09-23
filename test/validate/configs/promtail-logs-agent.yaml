@@ -4,24 +4,7 @@ extensions:
     create_directory: true
     recreate: false
   stslogsagent/logs:
-    discovery_enabled: true
-    receiver_url: http://127.0.0.1:18080/stsAgent
-    api_key: synthetic-fixture-key
-    state_directory: /var/lib/otelcol/controller
     health_endpoint: 0.0.0.0:13133
-    termination_message_path: /dev/termination-log
-    query_timeout: 20s
-    attempt_timeout: 5s
-    max_attempts: 3
-    initial_backoff: 500ms
-    max_backoff: 2s
-    poll_interval: 60s
-    jitter: 0.2
-    stable_observations: 3
-    restart_cooldown: 10m
-  bearertokenauth/otel_native:
-    scheme: SUSEObservability
-    token: synthetic-fixture-key
 receivers:
   filelog/pods:
     include: [/var/log/pods/*/*/*.log]
@@ -88,7 +71,6 @@ connectors:
   stslogsroute/logs:
     controller_extension: stslogsagent/logs
     promtail_pipeline: logs/promtail
-    native_pipeline: logs/otel_native
     max_concurrent_calls: 8
     max_record_bytes: 262144
     max_request_bytes: 1048576
@@ -106,18 +88,6 @@ exporters:
       max_elapsed_time: 30s
     sending_queue:
       enabled: false
-  otlp_http/otel_native:
-    endpoint: http://127.0.0.1:4318
-    auth:
-      authenticator: bearertokenauth/otel_native
-    timeout: 5s
-    retry_on_failure:
-      enabled: true
-      initial_interval: 1s
-      max_interval: 5s
-      max_elapsed_time: 30s
-    sending_queue:
-      enabled: false
 service:
   telemetry:
     metrics:
@@ -127,7 +97,7 @@ service:
               prometheus:
                 host: 0.0.0.0
                 port: 8888
-  extensions: [file_storage/logs, stslogsagent/logs, bearertokenauth/otel_native]
+  extensions: [file_storage/logs, stslogsagent/logs]
   pipelines:
     logs/input:
       receivers: [filelog/pods]
@@ -136,6 +106,3 @@ service:
     logs/promtail:
       receivers: [stslogsroute/logs]
       exporters: [stsk8slogs/promtail]
-    logs/otel_native:
-      receivers: [stslogsroute/logs]
-      exporters: [otlp_http/otel_native]

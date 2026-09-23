@@ -41,11 +41,11 @@ func ValidatePipelineConfig(conf *confmap.Conf) (PipelineConfig, error) {
 	}
 	route := connectors.namedObject(routeID, "route connector")
 	cfg := PipelineConfig{
-		ExtensionID:    route.text("capability_extension"),
+		ExtensionID:    route.text("controller_extension"),
 		ExportLifetime: route.duration("export_lifetime"),
 	}
 	promtailID := route.text("promtail_pipeline")
-	nativeID := route.text("native_pipeline")
+	nativeID, _ := route.values["native_pipeline"].(string)
 	calls := route.positiveInt("max_concurrent_calls")
 	recordBytes := route.positiveInt("max_record_bytes")
 	requestBytes := route.positiveInt("max_request_bytes")
@@ -55,23 +55,32 @@ func ValidatePipelineConfig(conf *confmap.Conf) (PipelineConfig, error) {
 	if recordBytes > requestBytes {
 		return PipelineConfig{}, errors.New("route max_record_bytes must not exceed max_request_bytes")
 	}
-	if !componentType(cfg.ExtensionID, "stslogscapability") {
-		return PipelineConfig{}, errors.New("route capability_extension must reference stslogscapability")
+	if !componentType(cfg.ExtensionID, "stslogsagent") {
+		return PipelineConfig{}, errors.New("route controller_extension must reference stslogsagent")
 	}
-	if promtailID == nativeID || !componentType(promtailID, "logs") || !componentType(nativeID, "logs") {
+	if !componentType(promtailID, "logs") ||
+		(nativeID != "" && (promtailID == nativeID || !componentType(nativeID, "logs"))) {
 		return PipelineConfig{}, errors.New("route must reference two distinct logs pipelines")
 	}
 
 	service := root.object("service")
 	enabledExtensions := service.strings("extensions", false)
 	extensions := root.object("extensions")
-	extensions.namedObject(cfg.ExtensionID, "capability extension")
+	controller := extensions.namedObject(cfg.ExtensionID, "controller extension")
+	discovery, _ := controller.values["discovery_enabled"].(bool)
+	if discovery != (nativeID != "") {
+		return PipelineConfig{}, errors.New("native_pipeline must be configured exactly when discovery_enabled is true")
+	}
 	if !slices.Contains(enabledExtensions, cfg.ExtensionID) {
-		return PipelineConfig{}, errors.New("capability extension must be enabled in service.extensions")
+		return PipelineConfig{}, errors.New("controller extension must be enabled in service.extensions")
 	}
 	pipelines := service.object("pipelines")
-	if len(pipelines.values) != 3 {
-		return PipelineConfig{}, errors.New("logs agent requires exactly three pipelines")
+	pipelineCount, countName := 2, "two"
+	if discovery {
+		pipelineCount, countName = 3, "three"
+	}
+	if len(pipelines.values) != pipelineCount {
+		return PipelineConfig{}, fmt.Errorf("logs agent requires exactly %s pipelines", countName)
 	}
 	var inputID string
 	for id := range pipelines.values {
@@ -83,17 +92,18 @@ func ValidatePipelineConfig(conf *confmap.Conf) (PipelineConfig, error) {
 		}
 	}
 	promtail := pipelines.namedObject(promtailID, "Promtail pipeline")
-	native := pipelines.namedObject(nativeID, "OTELNative pipeline")
 	input := pipelines.namedObject(inputID, "input pipeline")
 	cfg.PromtailExporterID = terminalExporter(promtail, routeID)
-	cfg.OTELNativeExporterID = terminalExporter(native, routeID)
+	if discovery {
+		cfg.OTELNativeExporterID = terminalExporter(pipelines.namedObject(nativeID, "OTELNative pipeline"), routeID)
+	}
 	if err != nil {
 		return PipelineConfig{}, err
 	}
 	if !componentType(cfg.PromtailExporterID, "stsk8slogs") {
 		return PipelineConfig{}, errors.New("the Promtail pipeline must export to stsk8slogs")
 	}
-	if !componentType(cfg.OTELNativeExporterID, "otlp_http", "otlphttp", "otlp_grpc", "otlp") {
+	if discovery && !componentType(cfg.OTELNativeExporterID, "otlp_http", "otlphttp", "otlp_grpc", "otlp") {
 		return PipelineConfig{}, errors.New("OTELNative pipeline requires an OTLP exporter")
 	}
 	if outputs := input.strings("exporters", false); len(outputs) != 1 || outputs[0] != routeID {
@@ -137,7 +147,10 @@ func ValidatePipelineConfig(conf *confmap.Conf) (PipelineConfig, error) {
 	}
 
 	promtailBound := exporterBound(exporters.namedObject(cfg.PromtailExporterID, "Promtail-compatible exporter"))
-	nativeBound := exporterBound(exporters.namedObject(cfg.OTELNativeExporterID, "OTELNative exporter"))
+	var nativeBound time.Duration
+	if discovery {
+		nativeBound = exporterBound(exporters.namedObject(cfg.OTELNativeExporterID, "OTELNative exporter"))
+	}
 	if err != nil {
 		return PipelineConfig{}, err
 	}

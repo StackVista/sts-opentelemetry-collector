@@ -60,7 +60,7 @@ func createLogsExporter(ctx context.Context, set exporter.Settings, config compo
 		}
 		opts.CABundlePEM = pem
 	}
-	api, _, err := openapiclient.NewOpenAPIClient(ctx, opts)
+	api, _, err := openapiclient.NewOpenAPIClientWithOptions(ctx, opts)
 	if err != nil {
 		return nil, err
 	}

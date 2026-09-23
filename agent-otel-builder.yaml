@@ -35,8 +35,8 @@ receivers:
     path: ./receiver/k8sresourcereceiver
 
 extensions:
-  - gomod: github.com/stackvista/sts-opentelemetry-collector/extension/stslogscapabilityextension v0.0.0
-    path: ./extension/stslogscapabilityextension
+  - gomod: github.com/stackvista/sts-opentelemetry-collector/extension/stslogsagentextension v0.0.0
+    path: ./extension/stslogsagentextension
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage/filestorage v0.153.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.153.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/bearertokenauthextension v0.153.0

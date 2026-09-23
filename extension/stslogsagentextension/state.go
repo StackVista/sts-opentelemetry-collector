@@ -1,4 +1,4 @@
-package stslogscapabilityextension
+package stslogsagentextension
 
 import (
 	"bytes"

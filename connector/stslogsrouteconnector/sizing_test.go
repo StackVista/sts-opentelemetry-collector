@@ -145,7 +145,7 @@ func BenchmarkSharedMetadataSizing(b *testing.B) {
 				c, err := factory.CreateLogsToLogs(context.Background(), settings(nil), cfg, router)
 				require.NoError(b, err)
 				ctrl := &controllerStub{mode: logsagent.OTELNativeMode, bound: time.Second}
-				require.NoError(b, c.Start(context.Background(), hostStub{cfg.CapabilityExtension: ctrl}))
+				require.NoError(b, c.Start(context.Background(), hostStub{cfg.ControllerExtension: ctrl}))
 				b.Cleanup(func() { require.NoError(b, c.Shutdown(context.Background())) })
 				b.ReportAllocs()
 				b.SetBytes(int64(size))

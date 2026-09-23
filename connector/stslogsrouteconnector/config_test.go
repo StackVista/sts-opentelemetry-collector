@@ -26,7 +26,7 @@ func TestConfiguration(t *testing.T) {
 	require.Equal(t, 90*time.Second, cfg.ExportLifetime)
 	var decoded route.Config
 	require.NoError(t, confmap.NewFromStringMap(map[string]any{
-		"capability_extension": "stslogscapability/logs",
+		"controller_extension": "stslogsagent/logs",
 		"promtail_pipeline":    "logs/promtail",
 		"native_pipeline":      "logs/otel_native",
 		"max_concurrent_calls": 8,
@@ -40,7 +40,7 @@ func TestConfiguration(t *testing.T) {
 		name   string
 		change func(*route.Config)
 	}{
-		{"missing extension", func(c *route.Config) { c.CapabilityExtension = component.ID{} }},
+		{"missing extension", func(c *route.Config) { c.ControllerExtension = component.ID{} }},
 		{"missing promtail", func(c *route.Config) { c.PromtailPipeline = pipeline.ID{} }},
 		{"wrong signal", func(c *route.Config) { c.OTELNativePipeline = pipeline.NewID(pipeline.SignalTraces) }},
 		{"same pipeline", func(c *route.Config) { c.OTELNativePipeline = c.PromtailPipeline }},
@@ -91,7 +91,7 @@ func TestFactoryAndStartupFailures(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			c, err := factory.CreateLogsToLogs(context.Background(), settings(nil), cfg, router)
 			require.NoError(t, err)
-			require.Error(t, c.Start(context.Background(), hostStub{cfg.CapabilityExtension: tc.ctrl}))
+			require.Error(t, c.Start(context.Background(), hostStub{cfg.ControllerExtension: tc.ctrl}))
 			require.ErrorContains(t, c.ConsumeLogs(context.Background(), logsData()), "not_running")
 			require.NoError(t, c.Shutdown(context.Background()))
 			require.NoError(t, c.Shutdown(context.Background()))

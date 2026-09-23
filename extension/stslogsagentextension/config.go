@@ -1,4 +1,4 @@
-package stslogscapabilityextension
+package stslogsagentextension
 
 import (
 	"errors"
@@ -12,6 +12,7 @@ import (
 )
 
 type Config struct {
+	DiscoveryEnabled       bool                `mapstructure:"discovery_enabled"`
 	ReceiverURL            string              `mapstructure:"receiver_url"`
 	APIKey                 configopaque.String `mapstructure:"api_key"`
 	ProxyURL               configopaque.String `mapstructure:"proxy_url"`
@@ -36,6 +37,12 @@ type TLSConfig struct {
 }
 
 func (c *Config) Validate() error {
+	if _, _, err := net.SplitHostPort(c.HealthEndpoint); err != nil {
+		return errors.New("health_endpoint must be host:port")
+	}
+	if !c.DiscoveryEnabled {
+		return nil
+	}
 	if !strings.HasSuffix(strings.TrimRight(c.ReceiverURL, "/"), "/stsAgent") {
 		return errors.New("receiver_url must identify the ingest endpoint ending in /stsAgent")
 	}
@@ -44,9 +51,6 @@ func (c *Config) Validate() error {
 	}
 	if !filepath.IsAbs(c.StateDirectory) || !filepath.IsAbs(c.TerminationMessagePath) {
 		return errors.New("state_directory and termination_message_path must be absolute paths")
-	}
-	if _, _, err := net.SplitHostPort(c.HealthEndpoint); err != nil {
-		return errors.New("health_endpoint must be host:port")
 	}
 	if c.QueryTimeout <= 0 || c.AttemptTimeout <= 0 || c.AttemptTimeout > c.QueryTimeout ||
 		c.MaxAttempts < 1 || c.InitialBackoff <= 0 || c.MaxBackoff < c.InitialBackoff {

@@ -9,7 +9,7 @@ import (
 )
 
 type Config struct {
-	CapabilityExtension component.ID  `mapstructure:"capability_extension"`
+	ControllerExtension component.ID  `mapstructure:"controller_extension"`
 	PromtailPipeline    pipeline.ID   `mapstructure:"promtail_pipeline"`
 	OTELNativePipeline  pipeline.ID   `mapstructure:"native_pipeline"`
 	MaxConcurrentCalls  int           `mapstructure:"max_concurrent_calls"`
@@ -19,10 +19,11 @@ type Config struct {
 }
 
 func (c *Config) Validate() error {
-	if c.CapabilityExtension.Type().String() == "" {
-		return errors.New("capability_extension is required")
+	if c.ControllerExtension.Type().String() == "" {
+		return errors.New("controller_extension is required")
 	}
-	if c.PromtailPipeline.Signal() != pipeline.SignalLogs || c.OTELNativePipeline.Signal() != pipeline.SignalLogs {
+	if c.PromtailPipeline.Signal() != pipeline.SignalLogs ||
+		(c.OTELNativePipeline != (pipeline.ID{}) && c.OTELNativePipeline.Signal() != pipeline.SignalLogs) {
 		return errors.New("promtail_pipeline and native_pipeline must be logs pipelines")
 	}
 	if c.PromtailPipeline == c.OTELNativePipeline {

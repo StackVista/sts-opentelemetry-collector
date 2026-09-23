@@ -1,6 +1,12 @@
-# Logs capability extension
+# Logs agent extension
 
-`stslogscapability` selects one logs destination at startup using the shared
+`stslogsagent` defaults to fixed Promtail export with health probes and bounded
+shutdown. This mode needs no discovery credentials, state files or native pipeline,
+and makes no feature queries.
+
+Set `discovery_enabled: true` and configure `native_pipeline` on the route to
+enable capability selection. Discovery settings remain on this extension. It
+selects one logs destination at startup using the shared
 Receiver client's authenticated feature query. A valid `otel-logs: true`
 selects OTELNativeMode (OTLP export). A valid response without that capability
 or with it set to false selects PromtailMode (Promtail-compatible export).

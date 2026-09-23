@@ -1,15 +1,15 @@
 # Logs route connector
 
 `stslogsroute` sends logs to the one pipeline selected by the configured
-`logsagent.Controller` extension at startup. Both destination pipelines belong
+`logsagent.Controller` extension at startup. When discovery is enabled, both destination pipelines belong
 to the Collector lifecycle. The connector does not switch destinations or retry
 exports.
 
 | Configuration key | Default |
 | --- | --- |
-| `capability_extension` | `stslogscapability/logs` |
+| `controller_extension` | `stslogsagent/logs` |
 | `promtail_pipeline` | `logs/promtail` |
-| `native_pipeline` | `logs/otel_native` |
+| `native_pipeline` | omitted (fixed Promtail mode) |
 | `max_concurrent_calls` | `8` |
 | `max_record_bytes` | `262144` |
 | `max_request_bytes` | `1048576` |

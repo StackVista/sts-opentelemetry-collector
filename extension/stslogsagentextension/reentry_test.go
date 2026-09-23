@@ -1,5 +1,5 @@
 //nolint:testpackage // Exercises callbacks on the controller's real polling loop.
-package stslogscapabilityextension
+package stslogsagentextension
 
 import (
 	"context"

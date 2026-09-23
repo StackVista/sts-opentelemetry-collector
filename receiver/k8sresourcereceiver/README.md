@@ -135,7 +135,7 @@ Watch these metrics for protocol health:
 - `peer_broadcasts_total{outcome=success|failed}` — per-cycle broadcast result.
 - `peer_push_attempts_total{outcome=...}` — per-peer push attempts (under broadcasts).
 - `peer_push_duration_seconds`, `peer_push_bytes` — push latency and payload size.
-- `bootstrap_total{outcome=applied|leader_empty|timed_out, source=...}` — replica startup.
+- `bootstrap_total{outcome=applied|leader_empty|timed_out|canceled, source=...}` — replica startup.
 - `cached_resources{kind=crd|object}` — cache occupancy on every replica.
 
 The store also tracks consecutive broadcast failures internally and escalates

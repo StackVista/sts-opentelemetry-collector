@@ -4,24 +4,7 @@ extensions:
     create_directory: true
     recreate: false
   stslogsagent/logs:
-    discovery_enabled: true
-    receiver_url: {{printf "%q" .ReceiverURL}}
-    api_key: ${env:STS_API_KEY}
-    state_directory: {{printf "%q" .Controller}}
     health_endpoint: {{printf "%q" .Health}}
-    termination_message_path: {{printf "%q" .Termination}}
-    query_timeout: 500ms
-    attempt_timeout: 200ms
-    max_attempts: 2
-    initial_backoff: 20ms
-    max_backoff: 40ms
-    poll_interval: 100ms
-    jitter: 0
-    stable_observations: 3
-    restart_cooldown: 30s
-  bearertokenauth/otel_native:
-    scheme: SUSEObservability
-    token: ${env:STS_API_KEY}
 receivers:
   filelog/pods:
     include: [{{printf "%q" .Include}}]
@@ -56,7 +39,6 @@ connectors:
   stslogsroute/logs:
     controller_extension: stslogsagent/logs
     promtail_pipeline: logs/promtail
-    native_pipeline: logs/otel_native
     max_concurrent_calls: {{.Concurrency}}
     max_record_bytes: 262144
     max_request_bytes: 1048576
@@ -74,18 +56,6 @@ exporters:
       max_elapsed_time: {{.RetryBudget}}
     sending_queue:
       enabled: false
-  otlp_http/otel_native:
-    endpoint: {{printf "%q" .OTELNativeURL}}
-    auth:
-      authenticator: bearertokenauth/otel_native
-    timeout: {{.AttemptTimeout}}
-    retry_on_failure:
-      enabled: true
-      initial_interval: 100ms
-      max_interval: 200ms
-      max_elapsed_time: {{.RetryBudget}}
-    sending_queue:
-      enabled: false
 service:
   telemetry:
     logs:
@@ -93,7 +63,7 @@ service:
       level: debug
     metrics:
       level: none
-  extensions: [file_storage/logs, stslogsagent/logs, bearertokenauth/otel_native]
+  extensions: [file_storage/logs, stslogsagent/logs]
   pipelines:
     logs/input:
       receivers: [filelog/pods]
@@ -102,6 +72,3 @@ service:
     logs/promtail:
       receivers: [stslogsroute/logs]
       exporters: [stsk8slogs/promtail]
-    logs/otel_native:
-      receivers: [stslogsroute/logs]
-      exporters: [otlp_http/otel_native]

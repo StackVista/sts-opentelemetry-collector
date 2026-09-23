@@ -16,7 +16,8 @@ A missing or misnamed component in the BOM makes `validate` fail, breaking the b
 
 - `configs/promtail-logs-exporter.yaml` — Promtail-compatible Kubernetes logs exporter registration
   and synchronous retry configuration, using a synthetic credential and loopback endpoint.
-- `configs/logs-agent.yaml` — Filelog, checkpoint storage, capability selection and both export paths.
+- `configs/promtail-logs-agent.yaml` — the foundation's fixed Promtail Filelog graph, without discovery.
+- `configs/logs-agent.yaml` — Filelog, checkpoint storage, explicit discovery and both export paths.
 - `configs/scraper.yaml` — de-templated copy of the Prometheus-scraper collector config from
   `helm-charts-internal/stable/suse-observability-agent/templates/otel/scraper/configmap.yaml`
   (mTLS branch enabled to cover the superset of components).

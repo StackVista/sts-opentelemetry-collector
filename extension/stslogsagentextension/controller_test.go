@@ -1,5 +1,5 @@
 //nolint:testpackage // Exercises restart failure injection and concurrent lifecycle callbacks.
-package stslogscapabilityextension
+package stslogsagentextension
 
 import (
 	"context"
@@ -31,16 +31,17 @@ func testController(t *testing.T, restart func() error) *controller {
 	if !ok {
 		t.Fatal("wrong default config")
 	}
+	cfg.DiscoveryEnabled = true
 	cfg.ReceiverURL = "http://127.0.0.1:1/stsAgent"
 	cfg.APIKey = configopaque.String("synthetic-logs-test")
 	cfg.StateDirectory = t.TempDir()
 	cfg.TerminationMessagePath = filepath.Join(t.TempDir(), "termination")
-	cfg.HealthEndpoint = "127.0.0.1:0"
+	cfg.HealthEndpoint = testHealthEndpoint
 	cfg.PollInterval = time.Hour
 	cfg.AttemptTimeout = 100 * time.Millisecond
 	cfg.QueryTimeout = 200 * time.Millisecond
 	cfg.MaxAttempts = 1
-	set := extensiontest.NewNopSettings(component.MustNewType("stslogscapability"))
+	set := extensiontest.NewNopSettings(component.MustNewType("stslogsagent"))
 	c, err := newController(*cfg, set, restart)
 	if err != nil {
 		t.Fatal(err)
@@ -276,7 +277,7 @@ func TestDrainDeadlineAndExporterCompletion(t *testing.T) {
 		t.Fatal(err)
 	}
 	entry := logs.FilterMessage("Logs export drain finished").All()[0]
-	if entry.ContextMap()["outcome"] != "incomplete" {
+	if entry.ContextMap()["outcome"] != testDrainIncomplete {
 		t.Fatal("zero calls was treated as completed exporter work")
 	}
 }

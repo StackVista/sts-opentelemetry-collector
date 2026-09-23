@@ -19,7 +19,8 @@ extensions:
     directory: /tmp/logs-checkpoints
     create_directory: true
     recreate: false
-  stslogscapability/logs:
+  stslogsagent/logs:
+    discovery_enabled: true
     receiver_url: http://127.0.0.1:18080
     state_directory: /tmp/logs-controller
     health_endpoint: 127.0.0.1:13133
@@ -65,7 +66,7 @@ processors:
         statements: ['set(attributes["k8s.cluster.name"], "fixture")']
 connectors:
   stslogsroute/logs:
-    capability_extension: stslogscapability/logs
+    controller_extension: stslogsagent/logs
     promtail_pipeline: logs/promtail
     native_pipeline: logs/otel_native
     max_concurrent_calls: 8
@@ -95,7 +96,7 @@ exporters:
     sending_queue:
       enabled: false
 service:
-  extensions: [file_storage/logs, stslogscapability/logs]
+  extensions: [file_storage/logs, stslogsagent/logs]
   pipelines:
     logs/input:
       receivers: [filelog/pods]
@@ -146,7 +147,7 @@ func fixtureDelete(t *testing.T, values map[string]any, path string) {
 
 func TestValidatePipelineConfig(t *testing.T) {
 	base := logsagent.PipelineConfig{
-		ExtensionID:          "stslogscapability/logs",
+		ExtensionID:          "stslogsagent/logs",
 		PromtailExporterID:   "stsk8slogs/promtail",
 		OTELNativeExporterID: "otlp_http/otel_native",
 		ExportLifetime:       55 * time.Second,
@@ -162,7 +163,7 @@ func TestValidatePipelineConfig(t *testing.T) {
 		{
 			name: "grpc and configurable component and pipeline IDs",
 			fixture: strings.NewReplacer(
-				"stslogscapability/logs", "stslogscapability/custom",
+				"stslogsagent/logs", "stslogsagent/custom",
 				"stslogsroute/logs", "stslogsroute/custom",
 				"logs/promtail", "logs/old",
 				"logs/otel_native", "logs/new",
@@ -173,7 +174,7 @@ func TestValidatePipelineConfig(t *testing.T) {
 				"otlp_http/otel_native", "otlp/custom",
 			).Replace(pipelineFixture),
 			want: logsagent.PipelineConfig{
-				ExtensionID: "stslogscapability/custom", PromtailExporterID: "stsk8slogs/custom",
+				ExtensionID: "stslogsagent/custom", PromtailExporterID: "stsk8slogs/custom",
 				OTELNativeExporterID: "otlp/custom", ExportLifetime: base.ExportLifetime,
 				RetryBound: base.RetryBound,
 			},
@@ -295,11 +296,11 @@ func TestValidatePipelineConfigRejectsGraphChanges(t *testing.T) {
 		{"same destinations", "connectors::stslogsroute/logs::native_pipeline", "logs/promtail", "distinct logs"},
 		{"missing destination", "connectors::stslogsroute/logs::native_pipeline", "logs/missing", "one logs input"},
 		{"wrong signal", "connectors::stslogsroute/logs::native_pipeline", "traces/otel_native", "distinct logs"},
-		{"wrong capability", "connectors::stslogsroute/logs::capability_extension", "health_check", "stslogscapability"},
-		{"missing capability", "connectors::stslogsroute/logs::capability_extension", "stslogscapability/absent", "enabled"},
+		{"wrong capability", "connectors::stslogsroute/logs::controller_extension", "health_check", "stslogsagent"},
+		{"missing capability", "connectors::stslogsroute/logs::controller_extension", "stslogsagent/absent", "enabled"},
 		{"disabled capability", "service::extensions", []any{"file_storage/logs"}, "enabled"},
-		{"disabled storage", "service::extensions", []any{"stslogscapability/logs"}, "enabled file_storage"},
-		{"duplicate extension", "service::extensions", []string{"file_storage/logs", "stslogscapability/logs", "file_storage/logs"}, "distinct"},
+		{"disabled storage", "service::extensions", []any{"stslogsagent/logs"}, "enabled file_storage"},
+		{"duplicate extension", "service::extensions", []string{"file_storage/logs", "stslogsagent/logs", "file_storage/logs"}, "distinct"},
 		{"extra logs bypass", "service::pipelines::logs/bypass", map[string]any{
 			"receivers": []string{"filelog/pods"}, "exporters": []string{"stsk8slogs/promtail"},
 		}, "exactly three"},
@@ -345,7 +346,7 @@ func TestValidatePipelineConfigRejectsGraphChanges(t *testing.T) {
 	}
 	for _, path := range []string{
 		"connectors", "service", "service::pipelines::logs/otel_native", "receivers::filelog/pods",
-		"extensions::stslogscapability/logs", "extensions::file_storage/logs",
+		"extensions::stslogsagent/logs", "extensions::file_storage/logs",
 		"extensions::file_storage/logs::recreate", "receivers::filelog/pods::storage",
 		"receivers::filelog/pods::retry_on_failure", "receivers::filelog/pods::max_concurrent_files",
 		"connectors::stslogsroute/logs::max_concurrent_calls",
@@ -407,7 +408,7 @@ func TestValidatePipelineConfigErrorsDoNotEchoValues(t *testing.T) {
 	const marker = "untrusted-configuration-value"
 	for _, path := range []string{
 		"connectors::stslogsroute/logs::export_lifetime",
-		"connectors::stslogsroute/logs::capability_extension",
+		"connectors::stslogsroute/logs::controller_extension",
 		"exporters::stsk8slogs/promtail::sending_queue",
 		"exporters::otlp_http/otel_native::retry_on_failure::multiplier",
 		"receivers::filelog/pods::storage",

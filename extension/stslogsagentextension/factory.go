@@ -1,4 +1,4 @@
-package stslogscapabilityextension
+package stslogsagentextension
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 )
 
 func NewFactory() extension.Factory {
-	return extension.NewFactory(component.MustNewType("stslogscapability"), createDefaultConfig,
+	return extension.NewFactory(component.MustNewType("stslogsagent"), createDefaultConfig,
 		createExtension, component.StabilityLevelDevelopment)
 }
 

@@ -69,6 +69,7 @@ func defaults(t *testing.T) *route.Config {
 	t.Helper()
 	cfg, ok := route.NewFactory().CreateDefaultConfig().(*route.Config)
 	require.True(t, ok)
+	cfg.OTELNativePipeline = pipeline.NewIDWithName(pipeline.SignalLogs, "otel_native")
 	return cfg
 }
 
@@ -94,7 +95,7 @@ func newRoute(
 	})
 	c, err := route.NewFactory().CreateLogsToLogs(context.Background(), settings(provider), cfg, router)
 	require.NoError(t, err)
-	require.NoError(t, c.Start(context.Background(), hostStub{cfg.CapabilityExtension: ctrl}))
+	require.NoError(t, c.Start(context.Background(), hostStub{cfg.ControllerExtension: ctrl}))
 	t.Cleanup(func() { require.NoError(t, c.Shutdown(context.Background())) })
 	return c, reader
 }

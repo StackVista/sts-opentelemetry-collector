@@ -17,9 +17,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/metrics"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 )
@@ -778,4 +781,42 @@ func TestPeerSyncCacheStore_HandleSnapshot_ServesNDJSONStream(t *testing.T) {
 	assert.Equal(t, 1, metaCount, "exactly one meta frame")
 	assert.Equal(t, 1, crdCount)
 	assert.Equal(t, 1, crCount)
+}
+
+type bootstrapOutcomeRecorder struct {
+	metrics.NoopRecorder
+	outcome metrics.BootstrapOutcome
+}
+
+func (r *bootstrapOutcomeRecorder) RecordBootstrap(_ context.Context, outcome metrics.BootstrapOutcome, _ metrics.BootstrapSource) {
+	r.outcome = outcome
+}
+
+func TestPeerSyncCacheStore_BootstrapCancellationAndDeadline(t *testing.T) {
+	for _, canceled := range []bool{true, false} {
+		name := "deadline"
+		if canceled {
+			name = "cancellation"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+			if canceled {
+				cancel()
+				ctx, cancel = context.WithCancel(context.Background())
+				cancel()
+			}
+			defer cancel()
+			core, logs := observer.New(zap.DebugLevel)
+			rec := &bootstrapOutcomeRecorder{}
+			store := newPeerSyncCacheStore(zap.New(core), 0, "127.0.0.1", rec)
+			require.NoError(t, store.Bootstrap(ctx))
+			if canceled {
+				require.Equal(t, metrics.BootstrapCanceled, rec.outcome)
+				require.Zero(t, logs.FilterLevelExact(zap.WarnLevel).Len())
+			} else {
+				require.Equal(t, metrics.BootstrapTimedOut, rec.outcome)
+				require.Equal(t, 1, logs.FilterLevelExact(zap.WarnLevel).Len())
+			}
+		})
+	}
 }

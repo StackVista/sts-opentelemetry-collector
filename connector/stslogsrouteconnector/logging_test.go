@@ -34,7 +34,7 @@ func TestExportDiagnosticsAreBoundedAndDebugOnly(t *testing.T) {
 			c, err := route.NewFactory().CreateLogsToLogs(context.Background(), set, cfg, router)
 			require.NoError(t, err)
 			ctrl := &controllerStub{mode: logsagent.OTELNativeMode, bound: time.Second}
-			require.NoError(t, c.Start(context.Background(), hostStub{cfg.CapabilityExtension: ctrl}))
+			require.NoError(t, c.Start(context.Background(), hostStub{cfg.ControllerExtension: ctrl}))
 			t.Cleanup(func() { require.NoError(t, c.Shutdown(context.Background())) })
 
 			data := logsData()
