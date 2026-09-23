@@ -24,13 +24,13 @@ container.memory.inactive_anon,container_memory_inactive_anon,container,gauge,mi
 container.memory.inactive_file,container_memory_inactive_file,container,gauge,mixed,none,undecided,,,unknown,scanned,default for anything not classified above
 container.memory.kernel,container_memory_kernel,container,gauge,mixed,none,undecided,,,unknown,scanned,default for anything not classified above
 container.memory.limit,container_memory_limit,container,gauge,bytes,prometheus:container_spec_memory_limit_bytes,rename,,,unknown,scanned,cadvisor endpoint
-container.memory.major_page_faults,container_memory_major_page_faults,container,unknown,count,kubeletstats:container.memory.major_page_faults,rename,,,unknown,scanned,
+container.memory.major_page_faults,container_memory_major_page_faults,container,monotonic_count,count,kubeletstats:container.memory.major_page_faults,rename,,,unknown,scanned,
 container.memory.oom_events,container_memory_oom_events,container,gauge,count per second,prometheus:container_oom_events_total,rename+rate,,,unknown,scanned,cadvisor endpoint
-container.memory.page_faults,container_memory_page_faults,container,unknown,count,kubeletstats:container.memory.page_faults,rename,,,unknown,scanned,
+container.memory.page_faults,container_memory_page_faults,container,monotonic_count,count,kubeletstats:container.memory.page_faults,rename,,,unknown,scanned,
 container.memory.page_tables,container_memory_page_tables,container,gauge,mixed,none,undecided,,,unknown,scanned,default for anything not classified above
 container.memory.partial_stall,container_memory_partial_stall,container,rate,seconds,none,no-source,,,unknown,scanned,PSI; no OTel source
-container.memory.refault_anon,container_memory_refault_anon,container,unknown,count,none,no-source,,,unknown,scanned,cgroup v2 refault counters
-container.memory.refault_file,container_memory_refault_file,container,unknown,count,none,no-source,,,unknown,scanned,cgroup v2 refault counters
+container.memory.refault_anon,container_memory_refault_anon,container,monotonic_count,count,none,no-source,,,unknown,scanned,cgroup v2 refault counters
+container.memory.refault_file,container_memory_refault_file,container,monotonic_count,count,none,no-source,,,unknown,scanned,cgroup v2 refault counters
 container.memory.rss,container_memory_rss,container,gauge,bytes,kubeletstats:container.memory.rss,rename,,,unknown,scanned,
 container.memory.shmem,container_memory_shmem,container,gauge,mixed,none,undecided,,,unknown,scanned,default for anything not classified above
 container.memory.soft_limit,container_memory_soft_limit,container,gauge,mixed,none,undecided,,,unknown,scanned,default for anything not classified above
@@ -39,10 +39,10 @@ container.memory.unevictable,container_memory_unevictable,container,gauge,mixed,
 container.memory.usage,container_memory_usage,container,gauge,bytes,kubeletstats:container.memory.usage,rename,,,unknown,scanned,duplicates kubernetes.memory.usage
 container.memory.usage.peak,container_memory_usage_peak,container,gauge,mixed,none,undecided,,,unknown,scanned,default for anything not classified above
 container.memory.working_set,container_memory_working_set,container,gauge,bytes,kubeletstats:container.memory.working_set,rename,,,unknown,scanned,
-container.net.rcvd,container_net_rcvd,container,unknown,mixed,kubeletstats:k8s.pod.network.*,split-attribute,,,unknown,scanned,pod level only; not per container
-container.net.rcvd.packets,container_net_rcvd_packets,container,unknown,mixed,kubeletstats:k8s.pod.network.*,split-attribute,,,unknown,scanned,pod level only; not per container
-container.net.sent,container_net_sent,container,unknown,mixed,kubeletstats:k8s.pod.network.*,split-attribute,,,unknown,scanned,pod level only; not per container
-container.net.sent.packets,container_net_sent_packets,container,unknown,mixed,kubeletstats:k8s.pod.network.*,split-attribute,,,unknown,scanned,pod level only; not per container
+container.net.rcvd,container_net_rcvd,container,rate,mixed,kubeletstats:k8s.pod.network.*,split+rate,,,unknown,scanned,pod level only rather than per container; cumulative sum needs rating
+container.net.rcvd.packets,container_net_rcvd_packets,container,rate,mixed,kubeletstats:k8s.pod.network.*,split+rate,,,unknown,scanned,pod level only rather than per container; cumulative sum needs rating
+container.net.sent,container_net_sent,container,rate,mixed,kubeletstats:k8s.pod.network.*,split+rate,,,unknown,scanned,pod level only rather than per container; cumulative sum needs rating
+container.net.sent.packets,container_net_sent_packets,container,rate,mixed,kubeletstats:k8s.pod.network.*,split+rate,,,unknown,scanned,pod level only rather than per container; cumulative sum needs rating
 container.pid.open_files,container_pid_open_files,container,gauge,count,none,no-source,,,unknown,scanned,thread and fd counts are not exposed by kubeletstats
 container.pid.thread_count,container_pid_thread_count,container,gauge,count,none,no-source,,,unknown,scanned,thread and fd counts are not exposed by kubeletstats
 container.pid.thread_limit,container_pid_thread_limit,container,gauge,count,none,no-source,,,unknown,scanned,thread and fd counts are not exposed by kubeletstats
@@ -61,7 +61,7 @@ kubernetes.containers.invalidimagename.waiting,kubernetes_containers_invalidimag
 kubernetes.containers.oomkilled.terminated,kubernetes_containers_oomkilled_terminated,kubelet,gauge,count,none,undecided,,,unknown,supplemental,reason fan-out; see NA-8
 kubernetes.containers.restarts,kubernetes_containers_restarts,kubelet,gauge,count,none,undecided,,,unknown,scanned,pod spec derived; see doc section 7.4 and NA-8
 kubernetes.containers.running,kubernetes_containers_running,kubelet,gauge,count,none,undecided,,,unknown,scanned,derive server side or from the pod-spec reader
-kubernetes.cpu.capacity,kubernetes_cpu_capacity,kubelet,gauge,cores,kubeletstats:k8s.node.cpu.usage,undecided,,,unknown,scanned,node capacity is not a kubeletstats metric; may need the pod-spec reader
+kubernetes.cpu.capacity,kubernetes_cpu_capacity,kubelet,gauge,cores,none,undecided,,,unknown,scanned,node capacity is not a kubeletstats metric; may need the pod-spec reader
 kubernetes.cpu.cfs.periods,kubernetes_cpu_cfs_periods,kubelet,rate,count per second,prometheus:container_cpu_cfs_periods_total,rename+rate,,,unknown,scanned,cadvisor endpoint
 kubernetes.cpu.cfs.throttled.periods,kubernetes_cpu_cfs_throttled_periods,kubelet,rate,count per second,prometheus:container_cpu_cfs_throttled_periods_total,rename+rate,,,unknown,scanned,cadvisor endpoint
 kubernetes.cpu.cfs.throttled.seconds,kubernetes_cpu_cfs_throttled_seconds,kubelet,rate,seconds per second,prometheus:container_cpu_cfs_throttled_seconds_total,rename+rate,,,unknown,scanned,cadvisor endpoint
@@ -75,7 +75,7 @@ kubernetes.ephemeral-storage.limits,kubernetes_ephemeral_storage_limits,kubelet,
 kubernetes.ephemeral-storage.requests,kubernetes_ephemeral_storage_requests,kubelet,gauge,bytes,none,undecided,,,unknown,supplemental,pod spec derived; see NA-8
 kubernetes.ephemeral_storage.usage,kubernetes_ephemeral_storage_usage,kubelet,gauge,bytes,kubeletstats:k8s.container.ephemeral_storage.usage,rename,,,unknown,scanned,
 kubernetes.filesystem.usage,kubernetes_filesystem_usage,kubelet,unknown,bytes,kubeletstats:container.filesystem.usage,rename,,,unknown,scanned,
-kubernetes.filesystem.usage_pct,kubernetes_filesystem_usage_pct,kubelet,unknown,percent,none,derive,,,unknown,scanned,usage over capacity from kubeletstats
+kubernetes.filesystem.usage_pct,kubernetes_filesystem_usage_pct,kubelet,unknown,fraction,kubeletstats:container.filesystem.usage,derive,,,unknown,scanned,usage over capacity as a 0 to 1 fraction
 kubernetes.io.read_bytes,kubernetes_io_read_bytes,kubelet,rate,bytes per second,prometheus:container_fs_reads_bytes_total,rename+rate,,,unknown,scanned,keep the device label
 kubernetes.io.write_bytes,kubernetes_io_write_bytes,kubelet,rate,bytes per second,prometheus:container_fs_writes_bytes_total,rename+rate,,,unknown,scanned,keep the device label
 kubernetes.kubelet.check,kubernetes_kubelet_check,kubelet,unknown,service check,none,no-source,,,unknown,scanned,no OTLP equivalent; see doc section 7.3 and NA-9
@@ -91,43 +91,53 @@ kubernetes.kubelet.docker.operations.duration,kubernetes_kubelet_docker_operatio
 kubernetes.kubelet.evictions,kubernetes_kubelet_evictions,kubelet,unknown,count,prometheus:kubelet_evictions,rename,,,unknown,scanned,kubelet /metrics endpoint
 kubernetes.kubelet.memory.rss,kubernetes_kubelet_memory_rss,kubelet,gauge,bytes,kubeletstats:k8s.node.system_container.memory.*,rename,,,unknown,supplemental,system container metric group
 kubernetes.kubelet.memory.usage,kubernetes_kubelet_memory_usage,kubelet,gauge,bytes,kubeletstats:k8s.node.system_container.memory.*,rename,,,unknown,supplemental,system container metric group
-kubernetes.kubelet.network_plugin.latency,kubernetes_kubelet_network_plugin_latency,kubelet,unknown,seconds,prometheus:kubelet_network_plugin_operations_duration_seconds,rename,,,unknown,scanned,kubelet /metrics endpoint
+kubernetes.kubelet.network_plugin.latency,kubernetes_kubelet_network_plugin_latency,kubelet,unknown,mixed,prometheus:kubelet_network_plugin_operations_duration_seconds,rename,,,unknown,scanned,kubelet /metrics endpoint; histogram variants are listed separately above
+kubernetes.kubelet.network_plugin.latency.count,kubernetes_kubelet_network_plugin_latency_count,kubelet,unknown,count,prometheus:kubelet_network_plugin_operations_duration_seconds_count,rename,,,unknown,scanned,histogram count
+kubernetes.kubelet.network_plugin.latency.sum,kubernetes_kubelet_network_plugin_latency_sum,kubelet,unknown,microseconds,prometheus:kubelet_network_plugin_operations_duration_seconds_sum,rename+scale,,,unknown,scanned,histogram sum converted from seconds to microseconds
 kubernetes.kubelet.pleg.discard_events,kubernetes_kubelet_pleg_discard_events,kubelet,unknown,mixed,prometheus:kubelet_pleg_*,rename,,,unknown,scanned,kubelet /metrics endpoint
 kubernetes.kubelet.pleg.last_seen,kubernetes_kubelet_pleg_last_seen,kubelet,unknown,mixed,prometheus:kubelet_pleg_*,rename,,,unknown,scanned,kubelet /metrics endpoint
 kubernetes.kubelet.pleg.relist_duration,kubernetes_kubelet_pleg_relist_duration,kubelet,unknown,mixed,prometheus:kubelet_pleg_*,rename,,,unknown,scanned,kubelet /metrics endpoint
 kubernetes.kubelet.pleg.relist_interval,kubernetes_kubelet_pleg_relist_interval,kubelet,unknown,mixed,prometheus:kubelet_pleg_*,rename,,,unknown,scanned,kubelet /metrics endpoint
-kubernetes.kubelet.pod.start.duration,kubernetes_kubelet_pod_start_duration,kubelet,unknown,seconds,prometheus:kubelet_pod_*_duration_seconds,rename,,,unknown,scanned,kubelet /metrics endpoint
-kubernetes.kubelet.pod.worker.duration,kubernetes_kubelet_pod_worker_duration,kubelet,unknown,seconds,prometheus:kubelet_pod_*_duration_seconds,rename,,,unknown,scanned,kubelet /metrics endpoint
-kubernetes.kubelet.pod.worker.start.duration,kubernetes_kubelet_pod_worker_start_duration,kubelet,unknown,seconds,prometheus:kubelet_pod_*_duration_seconds,rename,,,unknown,scanned,kubelet /metrics endpoint
+kubernetes.kubelet.pod.start.duration,kubernetes_kubelet_pod_start_duration,kubelet,unknown,mixed,prometheus:kubelet_pod_*,rename,,,unknown,scanned,kubelet /metrics endpoint; histogram variants are listed separately above
+kubernetes.kubelet.pod.start.duration.count,kubernetes_kubelet_pod_start_duration_count,kubelet,unknown,count,prometheus:kubelet_pod_start_duration_seconds_count,rename,,,unknown,scanned,histogram count
+kubernetes.kubelet.pod.start.duration.sum,kubernetes_kubelet_pod_start_duration_sum,kubelet,unknown,microseconds,prometheus:kubelet_pod_start_duration_seconds_sum,rename+scale,,,unknown,scanned,histogram sum converted from seconds to microseconds
+kubernetes.kubelet.pod.worker.duration,kubernetes_kubelet_pod_worker_duration,kubelet,unknown,mixed,prometheus:kubelet_pod_*,rename,,,unknown,scanned,kubelet /metrics endpoint; histogram variants are listed separately above
+kubernetes.kubelet.pod.worker.duration.count,kubernetes_kubelet_pod_worker_duration_count,kubelet,unknown,count,prometheus:kubelet_pod_worker_duration_seconds_count,rename,,,unknown,scanned,histogram count
+kubernetes.kubelet.pod.worker.duration.sum,kubernetes_kubelet_pod_worker_duration_sum,kubelet,unknown,microseconds,prometheus:kubelet_pod_worker_duration_seconds_sum,rename+scale,,,unknown,scanned,histogram sum converted from seconds to microseconds
+kubernetes.kubelet.pod.worker.start.duration,kubernetes_kubelet_pod_worker_start_duration,kubelet,unknown,mixed,prometheus:kubelet_pod_*,rename,,,unknown,scanned,kubelet /metrics endpoint; histogram variants are listed separately above
+kubernetes.kubelet.pod.worker.start.duration.count,kubernetes_kubelet_pod_worker_start_duration_count,kubelet,unknown,count,prometheus:kubelet_pod_worker_start_duration_seconds_count,rename,,,unknown,scanned,histogram count
+kubernetes.kubelet.pod.worker.start.duration.sum,kubernetes_kubelet_pod_worker_start_duration_sum,kubelet,unknown,microseconds,prometheus:kubelet_pod_worker_start_duration_seconds_sum,rename+scale,,,unknown,scanned,histogram sum converted from seconds to microseconds
 kubernetes.kubelet.runtime.errors,kubernetes_kubelet_runtime_errors,kubelet,unknown,mixed,prometheus:kubelet_runtime_operations*,rename,,,unknown,scanned,kubelet /metrics endpoint
 kubernetes.kubelet.runtime.operations,kubernetes_kubelet_runtime_operations,kubelet,unknown,mixed,prometheus:kubelet_runtime_operations*,rename,,,unknown,scanned,kubelet /metrics endpoint
 kubernetes.kubelet.runtime.operations.duration,kubernetes_kubelet_runtime_operations_duration,kubelet,unknown,mixed,prometheus:kubelet_runtime_operations*,rename,,,unknown,scanned,kubelet /metrics endpoint
+kubernetes.kubelet.runtime.operations.duration.count,kubernetes_kubelet_runtime_operations_duration_count,kubelet,unknown,count,prometheus:kubelet_runtime_operations_duration_seconds_count,rename,,,unknown,scanned,histogram count
+kubernetes.kubelet.runtime.operations.duration.sum,kubernetes_kubelet_runtime_operations_duration_sum,kubelet,unknown,microseconds,prometheus:kubelet_runtime_operations_duration_seconds_sum,rename+scale,,,unknown,scanned,histogram sum converted from seconds to microseconds
 kubernetes.kubelet.volume.stats.available_bytes,kubernetes_kubelet_volume_stats_available_bytes,kubelet,unknown,mixed,prometheus:kubelet_volume_stats_*,rename,,,unknown,scanned,kubelet /metrics endpoint
 kubernetes.kubelet.volume.stats.capacity_bytes,kubernetes_kubelet_volume_stats_capacity_bytes,kubelet,unknown,mixed,prometheus:kubelet_volume_stats_*,rename,,,unknown,scanned,kubelet /metrics endpoint
 kubernetes.kubelet.volume.stats.inodes,kubernetes_kubelet_volume_stats_inodes,kubelet,unknown,mixed,prometheus:kubelet_volume_stats_*,rename,,,unknown,scanned,kubelet /metrics endpoint
 kubernetes.kubelet.volume.stats.inodes_free,kubernetes_kubelet_volume_stats_inodes_free,kubelet,unknown,mixed,prometheus:kubelet_volume_stats_*,rename,,,unknown,scanned,kubelet /metrics endpoint
 kubernetes.kubelet.volume.stats.inodes_used,kubernetes_kubelet_volume_stats_inodes_used,kubelet,unknown,mixed,prometheus:kubelet_volume_stats_*,rename,,,unknown,scanned,kubelet /metrics endpoint
 kubernetes.kubelet.volume.stats.used_bytes,kubernetes_kubelet_volume_stats_used_bytes,kubelet,unknown,mixed,prometheus:kubelet_volume_stats_*,rename,,,unknown,scanned,kubelet /metrics endpoint
-kubernetes.liveness_probe.failure.total,kubernetes_liveness_probe_failure_total,kubelet,gauge,count,prometheus:prober_probe_total,split-attribute,,,unknown,supplemental,probe type and result become separate names
-kubernetes.liveness_probe.success.total,kubernetes_liveness_probe_success_total,kubelet,gauge,count,prometheus:prober_probe_total,split-attribute,,,unknown,supplemental,probe type and result become separate names
-kubernetes.liveness_probe.unknown.total,kubernetes_liveness_probe_unknown_total,kubelet,gauge,count,prometheus:prober_probe_total,split-attribute,,,unknown,supplemental,probe type and result become separate names
+kubernetes.liveness_probe.failure.total,kubernetes_liveness_probe_failure_total,kubelet,gauge,count,prometheus:prober_probe_total,split,,,unknown,supplemental,probe type and result become separate names
+kubernetes.liveness_probe.success.total,kubernetes_liveness_probe_success_total,kubelet,gauge,count,prometheus:prober_probe_total,split,,,unknown,supplemental,probe type and result become separate names
+kubernetes.liveness_probe.unknown.total,kubernetes_liveness_probe_unknown_total,kubelet,gauge,count,prometheus:prober_probe_total,split,,,unknown,supplemental,probe type and result become separate names
 kubernetes.memory.cache,kubernetes_memory_cache,kubelet,gauge,bytes,prometheus:container_memory_cache,rename,,,unknown,scanned,cadvisor endpoint
 kubernetes.memory.capacity,kubernetes_memory_capacity,kubelet,gauge,bytes,none,undecided,,,unknown,scanned,same as cpu.capacity
 kubernetes.memory.limits,kubernetes_memory_limits,kubelet,unknown,bytes,prometheus:container_spec_memory_limit_bytes,rename,,,unknown,scanned,cadvisor endpoint
 kubernetes.memory.requests,kubernetes_memory_requests,kubelet,gauge,bytes,none,undecided,,,unknown,supplemental,pod spec derived; see NA-8
 kubernetes.memory.rss,kubernetes_memory_rss,kubelet,unknown,bytes,kubeletstats:container.memory.rss,rename,,,unknown,scanned,
 kubernetes.memory.swap,kubernetes_memory_swap,kubelet,unknown,bytes,prometheus:container_memory_swap,rename,,,unknown,scanned,cadvisor endpoint
-kubernetes.memory.sw_in_use,kubernetes_memory_sw_in_use,kubelet,unknown,percent,none,derive,,,unknown,scanned,swap usage over swap limit
+kubernetes.memory.sw_in_use,kubernetes_memory_sw_in_use,kubelet,unknown,fraction,prometheus:container_memory_swap,derive,,,unknown,scanned,swap usage over swap limit as a 0 to 1 fraction
 kubernetes.memory.sw_limit,kubernetes_memory_sw_limit,kubelet,unknown,bytes,prometheus:container_spec_memory_swap_limit_bytes,rename,,,unknown,scanned,cadvisor endpoint
 kubernetes.memory.usage,kubernetes_memory_usage,kubelet,gauge,bytes,kubeletstats:container.memory.usage,rename,,,unknown,scanned,
-kubernetes.memory.usage_pct,kubernetes_memory_usage_pct,kubelet,unknown,percent,kubeletstats:k8s.container.memory_limit_utilization,rename+scale,,,unknown,scanned,ratio to percent; confirm what the charts expect
+kubernetes.memory.usage_pct,kubernetes_memory_usage_pct,kubelet,unknown,fraction,kubeletstats:k8s.container.memory_limit_utilization,rename,,,unknown,scanned,usage over limit as a 0 to 1 fraction in both
 kubernetes.memory.working_set,kubernetes_memory_working_set,kubelet,gauge,bytes,kubeletstats:container.memory.working_set,rename,,,unknown,scanned,
-kubernetes.network.rx_bytes,kubernetes_network_rx_bytes,kubelet,unknown,bytes per second,kubeletstats:k8s.pod.network.io,split-attribute,,,unknown,scanned,direction receive
+kubernetes.network.rx_bytes,kubernetes_network_rx_bytes,kubelet,unknown,bytes per second,kubeletstats:k8s.pod.network.io,split+rate,,,unknown,scanned,direction receive; kubeletstats ships a cumulative sum
 kubernetes.network.rx_dropped,kubernetes_network_rx_dropped,kubelet,unknown,count per second,prometheus:container_network_receive_packets_dropped_total,rename+rate,,,unknown,scanned,cadvisor endpoint
-kubernetes.network.rx_errors,kubernetes_network_rx_errors,kubelet,unknown,count per second,kubeletstats:k8s.pod.network.errors,split-attribute,,,unknown,scanned,direction receive
-kubernetes.network.tx_bytes,kubernetes_network_tx_bytes,kubelet,unknown,bytes per second,kubeletstats:k8s.pod.network.io,split-attribute,,,unknown,scanned,direction transmit
+kubernetes.network.rx_errors,kubernetes_network_rx_errors,kubelet,unknown,count per second,kubeletstats:k8s.pod.network.errors,split+rate,,,unknown,scanned,direction receive; kubeletstats ships a cumulative sum
+kubernetes.network.tx_bytes,kubernetes_network_tx_bytes,kubelet,unknown,bytes per second,kubeletstats:k8s.pod.network.io,split+rate,,,unknown,scanned,direction transmit; kubeletstats ships a cumulative sum
 kubernetes.network.tx_dropped,kubernetes_network_tx_dropped,kubelet,unknown,count per second,prometheus:container_network_transmit_packets_dropped_total,rename+rate,,,unknown,scanned,cadvisor endpoint
-kubernetes.network.tx_errors,kubernetes_network_tx_errors,kubelet,unknown,count per second,kubeletstats:k8s.pod.network.errors,split-attribute,,,unknown,scanned,direction transmit
+kubernetes.network.tx_errors,kubernetes_network_tx_errors,kubelet,unknown,count per second,kubeletstats:k8s.pod.network.errors,split+rate,,,unknown,scanned,direction transmit; kubeletstats ships a cumulative sum
 kubernetes.node.filesystem.usage,kubernetes_node_filesystem_usage,kubelet,gauge,bytes,kubeletstats:k8s.node.filesystem.usage,derive,,,unknown,supplemental,node level; percentage variant needs capacity
 kubernetes.node.filesystem.usage_pct,kubernetes_node_filesystem_usage_pct,kubelet,gauge,bytes,kubeletstats:k8s.node.filesystem.usage,derive,,,unknown,supplemental,node level; percentage variant needs capacity
 kubernetes.node.image.filesystem.usage,kubernetes_node_image_filesystem_usage,kubelet,gauge,bytes,none,no-source,,,unknown,supplemental,image filesystem is not exposed by kubeletstats
@@ -136,9 +146,9 @@ kubernetes.pod.resize.pending,kubernetes_pod_resize_pending,kubelet,gauge,count,
 kubernetes.pods.expired,kubernetes_pods_expired,kubelet,gauge,count,none,no-source,,,unknown,scanned,kubelet cache bookkeeping with no OTel equivalent
 kubernetes.pods.running,kubernetes_pods_running,kubelet,gauge,count,none,undecided,,,unknown,scanned,derive server side or from the pod-spec reader
 kubernetes.pod.terminating.duration,kubernetes_pod_terminating_duration,kubelet,gauge,seconds,none,undecided,,,unknown,scanned,pod status derived
-kubernetes.readiness_probe.failure.total,kubernetes_readiness_probe_failure_total,kubelet,gauge,count,prometheus:prober_probe_total,split-attribute,,,unknown,supplemental,probe type and result become separate names
-kubernetes.readiness_probe.success.total,kubernetes_readiness_probe_success_total,kubelet,gauge,count,prometheus:prober_probe_total,split-attribute,,,unknown,supplemental,probe type and result become separate names
-kubernetes.readiness_probe.unknown.total,kubernetes_readiness_probe_unknown_total,kubelet,gauge,count,prometheus:prober_probe_total,split-attribute,,,unknown,supplemental,probe type and result become separate names
+kubernetes.readiness_probe.failure.total,kubernetes_readiness_probe_failure_total,kubelet,gauge,count,prometheus:prober_probe_total,split,,,unknown,supplemental,probe type and result become separate names
+kubernetes.readiness_probe.success.total,kubernetes_readiness_probe_success_total,kubelet,gauge,count,prometheus:prober_probe_total,split,,,unknown,supplemental,probe type and result become separate names
+kubernetes.readiness_probe.unknown.total,kubernetes_readiness_probe_unknown_total,kubelet,gauge,count,prometheus:prober_probe_total,split,,,unknown,supplemental,probe type and result become separate names
 kubernetes.rest.client.latency,kubernetes_rest_client_latency,kubelet,unknown,mixed,prometheus:rest_client_*,rename,,,unknown,scanned,kubelet /metrics endpoint
 kubernetes.rest.client.requests,kubernetes_rest_client_requests,kubelet,unknown,mixed,prometheus:rest_client_*,rename,,,unknown,scanned,kubelet /metrics endpoint
 kubernetes.runtime.cpu.usage,kubernetes_runtime_cpu_usage,kubelet,gauge,mixed,kubeletstats:k8s.node.system_container.*,rename,,,unknown,supplemental,system container metric group must be enabled
@@ -146,47 +156,47 @@ kubernetes.runtime.memory.rss,kubernetes_runtime_memory_rss,kubelet,gauge,mixed,
 kubernetes.runtime.memory.usage,kubernetes_runtime_memory_usage,kubelet,gauge,mixed,kubeletstats:k8s.node.system_container.*,rename,,,unknown,supplemental,system container metric group must be enabled
 kubernetes.slis.kubernetes_healthcheck,kubernetes_slis_kubernetes_healthcheck,kubelet,gauge,mixed,prometheus:kubernetes_healthcheck*,rename,,,unknown,supplemental,kubelet /metrics/slis endpoint
 kubernetes.slis.kubernetes_healthchecks_total,kubernetes_slis_kubernetes_healthchecks_total,kubelet,count,mixed,prometheus:kubernetes_healthcheck*,rename,,,unknown,supplemental,kubelet /metrics/slis endpoint
-kubernetes.startup_probe.failure.total,kubernetes_startup_probe_failure_total,kubelet,gauge,count,prometheus:prober_probe_total,split-attribute,,,unknown,supplemental,probe type and result become separate names
-kubernetes.startup_probe.success.total,kubernetes_startup_probe_success_total,kubelet,gauge,count,prometheus:prober_probe_total,split-attribute,,,unknown,supplemental,probe type and result become separate names
-kubernetes.startup_probe.unknown.total,kubernetes_startup_probe_unknown_total,kubelet,gauge,count,prometheus:prober_probe_total,split-attribute,,,unknown,supplemental,probe type and result become separate names
+kubernetes.startup_probe.failure.total,kubernetes_startup_probe_failure_total,kubelet,gauge,count,prometheus:prober_probe_total,split,,,unknown,supplemental,probe type and result become separate names
+kubernetes.startup_probe.success.total,kubernetes_startup_probe_success_total,kubelet,gauge,count,prometheus:prober_probe_total,split,,,unknown,supplemental,probe type and result become separate names
+kubernetes.startup_probe.unknown.total,kubernetes_startup_probe_unknown_total,kubelet,gauge,count,prometheus:prober_probe_total,split,,,unknown,supplemental,probe type and result become separate names
 system.cpu.context_switches,system_cpu_context_switches,system,monotonic_count,count,none,no-source,,,unknown,scanned,load.MiscStat.Ctxt; see doc section 7.9
 system.cpu.guest,system_cpu_guest,system,gauge,percent,none,no-source,,,unknown,scanned,gopsutil has Guest; the scraper drops it; see doc section 7.9
-system.cpu.guestnice.total,system_cpu_guestnice_total,system,gauge,seconds,none,no-source,,,unknown,scanned,see doc section 7.9
-system.cpu.guest.total,system_cpu_guest_total,system,gauge,seconds,none,no-source,,,unknown,scanned,see doc section 7.9
+system.cpu.guestnice.total,system_cpu_guestnice_total,system,gauge,jiffies,none,no-source,,,unknown,scanned,see doc section 7.9
+system.cpu.guest.total,system_cpu_guest_total,system,gauge,jiffies,none,no-source,,,unknown,scanned,see doc section 7.9
 system.cpu.idle,system_cpu_idle,system,gauge,percent,hostmetrics:system.cpu.utilization,derive,,,unknown,scanned,ratio to percent per state
-system.cpu.idle.total,system_cpu_idle_total,system,gauge,seconds,hostmetrics:system.cpu.time,split-attribute,,,unknown,scanned,state attribute; irq maps to interrupt and iowait maps to wait
+system.cpu.idle.total,system_cpu_idle_total,system,gauge,jiffies,hostmetrics:system.cpu.time,split,,,unknown,scanned,state attribute; irq maps to interrupt and iowait maps to wait
 system.cpu.interrupt,system_cpu_interrupt,system,gauge,percent,hostmetrics:system.cpu.utilization,derive,,,unknown,scanned,ratio to percent per state
 system.cpu.iowait,system_cpu_iowait,system,gauge,percent,hostmetrics:system.cpu.utilization,derive,,,unknown,scanned,ratio to percent per state
-system.cpu.iowait.total,system_cpu_iowait_total,system,gauge,seconds,hostmetrics:system.cpu.time,split-attribute,,,unknown,scanned,state attribute; irq maps to interrupt and iowait maps to wait
-system.cpu.irq.total,system_cpu_irq_total,system,gauge,seconds,hostmetrics:system.cpu.time,split-attribute,,,unknown,scanned,state attribute; irq maps to interrupt and iowait maps to wait
-system.cpu.nice.total,system_cpu_nice_total,system,gauge,seconds,hostmetrics:system.cpu.time,split-attribute,,,unknown,scanned,state attribute; irq maps to interrupt and iowait maps to wait
+system.cpu.iowait.total,system_cpu_iowait_total,system,gauge,jiffies,hostmetrics:system.cpu.time,split,,,unknown,scanned,state attribute; irq maps to interrupt and iowait maps to wait
+system.cpu.irq.total,system_cpu_irq_total,system,gauge,jiffies,hostmetrics:system.cpu.time,split,,,unknown,scanned,state attribute; irq maps to interrupt and iowait maps to wait
+system.cpu.nice.total,system_cpu_nice_total,system,gauge,jiffies,hostmetrics:system.cpu.time,split,,,unknown,scanned,state attribute; irq maps to interrupt and iowait maps to wait
 system.cpu.num_cores,system_cpu_num_cores,system,gauge,count,hostmetrics:system.cpu.logical.count,rename,,,unknown,scanned,
-system.cpu.softirq.total,system_cpu_softirq_total,system,gauge,seconds,hostmetrics:system.cpu.time,split-attribute,,,unknown,scanned,state attribute; irq maps to interrupt and iowait maps to wait
-system.cpu.steal.total,system_cpu_steal_total,system,gauge,seconds,hostmetrics:system.cpu.time,split-attribute,,,unknown,scanned,state attribute; irq maps to interrupt and iowait maps to wait
+system.cpu.softirq.total,system_cpu_softirq_total,system,gauge,jiffies,hostmetrics:system.cpu.time,split,,,unknown,scanned,state attribute; irq maps to interrupt and iowait maps to wait
+system.cpu.steal.total,system_cpu_steal_total,system,gauge,jiffies,hostmetrics:system.cpu.time,split,,,unknown,scanned,state attribute; irq maps to interrupt and iowait maps to wait
 system.cpu.stolen,system_cpu_stolen,system,gauge,percent,hostmetrics:system.cpu.utilization,derive,,,unknown,scanned,ratio to percent per state
 system.cpu.system,system_cpu_system,system,gauge,percent,hostmetrics:system.cpu.utilization,derive,,,unknown,scanned,ratio to percent per state
-system.cpu.system.total,system_cpu_system_total,system,gauge,seconds,hostmetrics:system.cpu.time,split-attribute,,,unknown,scanned,state attribute; irq maps to interrupt and iowait maps to wait
+system.cpu.system.total,system_cpu_system_total,system,gauge,jiffies,hostmetrics:system.cpu.time,split,,,unknown,scanned,state attribute; irq maps to interrupt and iowait maps to wait
 system.cpu.user,system_cpu_user,system,gauge,percent,hostmetrics:system.cpu.utilization,derive,,,unknown,scanned,ratio to percent per state
-system.cpu.user.total,system_cpu_user_total,system,gauge,seconds,hostmetrics:system.cpu.time,split-attribute,,,unknown,scanned,state attribute; irq maps to interrupt and iowait maps to wait
-system.disk.free,system_disk_free,system,gauge,bytes,hostmetrics:system.filesystem.usage,split-attribute,,,unknown,scanned,state attribute for free and used
-system.disk.in_use,system_disk_in_use,system,gauge,ratio,hostmetrics:system.filesystem.utilization,derive,,,unknown,scanned,
-system.disk.read_time,system_disk_read_time,system,monotonic_count,milliseconds,hostmetrics:system.disk.operation_time,split-attribute,,,unknown,scanned,direction read; unit differs
-system.disk.read_time_pct,system_disk_read_time_pct,system,rate,percent,hostmetrics:system.disk.operation_time,derive,,,unknown,scanned,rate of operation_time
-system.disk.total,system_disk_total,system,gauge,bytes,hostmetrics:system.filesystem.usage,split-attribute,,,unknown,scanned,state attribute for free and used
-system.disk.used,system_disk_used,system,gauge,bytes,hostmetrics:system.filesystem.usage,split-attribute,,,unknown,scanned,state attribute for free and used
-system.disk.utilized,system_disk_utilized,system,gauge,percent,hostmetrics:system.filesystem.utilization,rename+scale,,,unknown,scanned,
-system.disk.write_time,system_disk_write_time,system,monotonic_count,milliseconds,hostmetrics:system.disk.operation_time,split-attribute,,,unknown,scanned,direction write; unit differs
-system.disk.write_time_pct,system_disk_write_time_pct,system,rate,percent,hostmetrics:system.disk.operation_time,derive,,,unknown,scanned,rate of operation_time
+system.cpu.user.total,system_cpu_user_total,system,gauge,jiffies,hostmetrics:system.cpu.time,split,,,unknown,scanned,state attribute; irq maps to interrupt and iowait maps to wait
+system.disk.free,system_disk_free,system,gauge,KiB,hostmetrics:system.filesystem.usage,split+scale,,,unknown,scanned,state free
+system.disk.in_use,system_disk_in_use,system,gauge,fraction,hostmetrics:system.filesystem.usage,derive,,,unknown,scanned,used over total as a 0 to 1 fraction
+system.disk.read_time,system_disk_read_time,system,monotonic_count,milliseconds,hostmetrics:system.disk.operation_time,split+scale,,,unknown,scanned,direction read; cumulative seconds to milliseconds; submitted as a monotonic count
+system.disk.read_time_pct,system_disk_read_time_pct,system,rate,percent,hostmetrics:system.disk.operation_time,derive,,,unknown,scanned,rate of read time scaled to a percentage
+system.disk.total,system_disk_total,system,gauge,KiB,hostmetrics:system.filesystem.usage,split+scale,,,unknown,scanned,state; agent divides bytes by 1024
+system.disk.used,system_disk_used,system,gauge,KiB,hostmetrics:system.filesystem.usage,split+scale,,,unknown,scanned,state used
+system.disk.utilized,system_disk_utilized,system,gauge,percent,hostmetrics:system.filesystem.utilization,rename+scale,,,unknown,scanned,ratio to percent
+system.disk.write_time,system_disk_write_time,system,monotonic_count,milliseconds,hostmetrics:system.disk.operation_time,split+scale,,,unknown,scanned,direction write; cumulative seconds to milliseconds; submitted as a monotonic count
+system.disk.write_time_pct,system_disk_write_time_pct,system,rate,percent,hostmetrics:system.disk.operation_time,derive,,,unknown,scanned,rate of write time scaled to a percentage
 system.fs.file_handles.allocated,system_fs_file_handles_allocated,system,gauge,count,none,no-source,,,unknown,scanned,/proc/sys/fs/file-nr; see doc section 7.9
 system.fs.file_handles.allocated_unused,system_fs_file_handles_allocated_unused,system,gauge,count,none,no-source,,,unknown,scanned,/proc/sys/fs/file-nr; see doc section 7.9
 system.fs.file_handles.in_use,system_fs_file_handles_in_use,system,gauge,count,none,no-source,,,unknown,scanned,/proc/sys/fs/file-nr; see doc section 7.9
 system.fs.file_handles.max,system_fs_file_handles_max,system,gauge,count,none,no-source,,,unknown,scanned,/proc/sys/fs/file-nr; see doc section 7.9
 system.fs.file_handles.used,system_fs_file_handles_used,system,gauge,count,none,no-source,,,unknown,scanned,/proc/sys/fs/file-nr; see doc section 7.9
-system.fs.inodes.free,system_fs_inodes_free,system,gauge,count,hostmetrics:system.filesystem.inodes.usage,split-attribute,,,unknown,scanned,state attribute for free and used
-system.fs.inodes.in_use,system_fs_inodes_in_use,system,gauge,count,hostmetrics:system.filesystem.inodes.usage,split-attribute,,,unknown,scanned,state attribute for free and used
-system.fs.inodes.total,system_fs_inodes_total,system,gauge,count,hostmetrics:system.filesystem.inodes.usage,split-attribute,,,unknown,scanned,state attribute for free and used
-system.fs.inodes.used,system_fs_inodes_used,system,gauge,count,hostmetrics:system.filesystem.inodes.usage,split-attribute,,,unknown,scanned,state attribute for free and used
-system.fs.inodes.utilized,system_fs_inodes_utilized,system,gauge,count,hostmetrics:system.filesystem.inodes.usage,split-attribute,,,unknown,scanned,state attribute for free and used
+system.fs.inodes.free,system_fs_inodes_free,system,gauge,count,hostmetrics:system.filesystem.inodes.usage,split,,,unknown,scanned,state free
+system.fs.inodes.in_use,system_fs_inodes_in_use,system,gauge,fraction,hostmetrics:system.filesystem.inodes.usage,derive,,,unknown,scanned,used over total as a 0 to 1 fraction
+system.fs.inodes.total,system_fs_inodes_total,system,gauge,count,hostmetrics:system.filesystem.inodes.usage,split,,,unknown,scanned,state; inode counts rather than bytes
+system.fs.inodes.used,system_fs_inodes_used,system,gauge,count,hostmetrics:system.filesystem.inodes.usage,split,,,unknown,scanned,state used
+system.fs.inodes.utilized,system_fs_inodes_utilized,system,gauge,percent,hostmetrics:system.filesystem.inodes.usage,derive,,,unknown,scanned,used over total as a percentage
 system.io.avg_q_sz,system_io_avg_q_sz,system,gauge,count,hostmetrics:system.disk.weighted_io_time,derive,,,unknown,scanned,rate of weighted_io_time
 system.io.avg_rq_sz,system_io_avg_rq_sz,system,gauge,sectors,hostmetrics:system.disk.io,derive,,,unknown,scanned,delta io over delta operations
 system.io.await,system_io_await,system,gauge,milliseconds,hostmetrics:system.disk.operation_time,derive,,,unknown,scanned,delta operation_time over delta operations
@@ -208,111 +218,167 @@ system.load.5,system_load_5,system,gauge,count,hostmetrics:system.cpu.load_avera
 system.load.norm.1,system_load_norm_1,system,gauge,count,hostmetrics:system.cpu.load_average.*,derive,,,unknown,scanned,divide by system.cpu.logical.count
 system.load.norm.15,system_load_norm_15,system,gauge,count,hostmetrics:system.cpu.load_average.*,derive,,,unknown,scanned,divide by system.cpu.logical.count
 system.load.norm.5,system_load_norm_5,system,gauge,count,hostmetrics:system.cpu.load_average.*,derive,,,unknown,scanned,divide by system.cpu.logical.count
-system.mem.allocstall,system_mem_allocstall,system,monotonic_count,count,none,no-source,,,unknown,scanned,/proc/vmstat; see doc section 7.9
-system.mem.buffered,system_mem_buffered,system,gauge,bytes,hostmetrics:system.memory.usage,split-attribute,,,unknown,scanned,state attribute for free; used; cached; buffered
-system.mem.cached,system_mem_cached,system,gauge,bytes,hostmetrics:system.memory.usage,split-attribute,,,unknown,scanned,state attribute for free; used; cached; buffered
-system.mem.commit_limit,system_mem_commit_limit,system,gauge,bytes,none,no-source,,,unknown,scanned,see doc section 7.9
-system.mem.committed,system_mem_committed,system,unknown,bytes,none,no-source,,,unknown,scanned,see doc section 7.9
-system.mem.committed_as,system_mem_committed_as,system,gauge,bytes,none,no-source,,,unknown,scanned,see doc section 7.9
-system.mem.free,system_mem_free,system,gauge,bytes,hostmetrics:system.memory.usage,split-attribute,,,unknown,scanned,state attribute for free; used; cached; buffered
-system.mem.nonpaged,system_mem_nonpaged,system,unknown,bytes,none,no-source,,,unknown,scanned,Windows only
-system.mem.paged,system_mem_paged,system,unknown,bytes,none,no-source,,,unknown,scanned,Windows only
-system.mem.pagefile.free,system_mem_pagefile_free,system,gauge,bytes,none,no-source,,,unknown,scanned,Windows only
-system.mem.pagefile.pct_free,system_mem_pagefile_pct_free,system,gauge,bytes,none,no-source,,,unknown,scanned,Windows only
-system.mem.pagefile.total,system_mem_pagefile_total,system,gauge,bytes,none,no-source,,,unknown,scanned,Windows only
-system.mem.pagefile.used,system_mem_pagefile_used,system,gauge,bytes,none,no-source,,,unknown,scanned,Windows only
-system.mem.page_tables,system_mem_page_tables,system,gauge,bytes,none,no-source,,,unknown,scanned,mem.VirtualMemoryStat.PageTables; see doc section 7.9
-system.mem.pct_usable,system_mem_pct_usable,system,gauge,percent,hostmetrics:system.memory.utilization,derive,,,unknown,scanned,available over limit
-system.mem.pgscan_direct,system_mem_pgscan_direct,system,monotonic_count,count,none,no-source,,,unknown,scanned,/proc/vmstat; see doc section 7.9
-system.mem.pgscan_kswapd,system_mem_pgscan_kswapd,system,monotonic_count,count,none,no-source,,,unknown,scanned,/proc/vmstat; see doc section 7.9
-system.mem.pgsteal_direct,system_mem_pgsteal_direct,system,monotonic_count,count,none,no-source,,,unknown,scanned,/proc/vmstat; see doc section 7.9
-system.mem.pgsteal_kswapd,system_mem_pgsteal_kswapd,system,monotonic_count,count,none,no-source,,,unknown,scanned,/proc/vmstat; see doc section 7.9
-system.mem.shared,system_mem_shared,system,gauge,bytes,hostmetrics:system.memory.linux.shared,rename,,,unknown,scanned,optional metric
-system.mem.slab,system_mem_slab,system,gauge,bytes,hostmetrics:system.memory.usage,derive,,,unknown,scanned,sum of slab_reclaimable and slab_unreclaimable
-system.mem.slab_reclaimable,system_mem_slab_reclaimable,system,gauge,bytes,hostmetrics:system.memory.usage,split-attribute,,,unknown,scanned,state slab_reclaimable
-system.mem.total,system_mem_total,system,gauge,bytes,hostmetrics:system.memory.limit,rename,,,unknown,scanned,
-system.mem.usable,system_mem_usable,system,gauge,bytes,hostmetrics:system.linux.memory.available,rename,,,unknown,scanned,
-system.mem.used,system_mem_used,system,gauge,bytes,hostmetrics:system.memory.usage,split-attribute,,,unknown,scanned,state attribute for free; used; cached; buffered
-system.net.bytes_rcvd,system_net_bytes_rcvd,system,rate,bytes per second,hostmetrics:system.network.io,split-attribute,,,unknown,scanned,direction receive
-system.net.bytes_sent,system_net_bytes_sent,system,rate,bytes per second,hostmetrics:system.network.io,split-attribute,,,unknown,scanned,direction transmit
+system.mem.allocstall,system_mem_allocstall,system,monotonic_count,count,none,no-source,,,unknown,scanned,/proc/vmstat; submitted as a monotonic count
+system.mem.buffered,system_mem_buffered,system,gauge,MiB,hostmetrics:system.memory.usage,split+scale,,,unknown,scanned,state buffered
+system.mem.cached,system_mem_cached,system,gauge,MiB,hostmetrics:system.memory.usage,split+scale,,,unknown,scanned,state cached
+system.mem.commit_limit,system_mem_commit_limit,system,gauge,MiB,none,no-source,,,unknown,scanned,see doc section 7.9
+system.mem.committed,system_mem_committed,system,unknown,MiB,none,no-source,,,unknown,scanned,Windows only
+system.mem.committed_as,system_mem_committed_as,system,gauge,MiB,none,no-source,,,unknown,scanned,see doc section 7.9
+system.mem.free,system_mem_free,system,gauge,MiB,hostmetrics:system.memory.usage,split+scale,,,unknown,scanned,state free
+system.mem.nonpaged,system_mem_nonpaged,system,unknown,MiB,none,no-source,,,unknown,scanned,Windows only
+system.mem.paged,system_mem_paged,system,unknown,MiB,none,no-source,,,unknown,scanned,Windows only
+system.mem.pagefile.free,system_mem_pagefile_free,system,gauge,MiB,none,no-source,,,unknown,scanned,Windows only
+system.mem.pagefile.pct_free,system_mem_pagefile_pct_free,system,gauge,fraction,none,no-source,,,unknown,scanned,Windows only; 0 to 1 fraction
+system.mem.pagefile.total,system_mem_pagefile_total,system,gauge,MiB,none,no-source,,,unknown,scanned,Windows only
+system.mem.pagefile.used,system_mem_pagefile_used,system,gauge,MiB,none,no-source,,,unknown,scanned,Windows only
+system.mem.page_tables,system_mem_page_tables,system,gauge,MiB,none,no-source,,,unknown,scanned,mem.VirtualMemoryStat.PageTables; see doc section 7.9
+system.mem.pct_usable,system_mem_pct_usable,system,gauge,fraction,hostmetrics:system.linux.memory.available,derive,,,unknown,scanned,available over limit as a 0 to 1 fraction
+system.mem.pgscan_direct,system_mem_pgscan_direct,system,monotonic_count,count,none,no-source,,,unknown,scanned,/proc/vmstat; submitted as a monotonic count
+system.mem.pgscan_kswapd,system_mem_pgscan_kswapd,system,monotonic_count,count,none,no-source,,,unknown,scanned,/proc/vmstat; submitted as a monotonic count
+system.mem.pgsteal_direct,system_mem_pgsteal_direct,system,monotonic_count,count,none,no-source,,,unknown,scanned,/proc/vmstat; submitted as a monotonic count
+system.mem.pgsteal_kswapd,system_mem_pgsteal_kswapd,system,monotonic_count,count,none,no-source,,,unknown,scanned,/proc/vmstat; submitted as a monotonic count
+system.mem.shared,system_mem_shared,system,gauge,MiB,hostmetrics:system.memory.linux.shared,rename+scale,,,unknown,scanned,optional metric; agent divides bytes by 1024^2
+system.mem.slab,system_mem_slab,system,gauge,MiB,hostmetrics:system.memory.usage,derive,,,unknown,scanned,sum of slab_reclaimable and slab_unreclaimable then divide by 1024^2
+system.mem.slab_reclaimable,system_mem_slab_reclaimable,system,gauge,MiB,hostmetrics:system.memory.usage,split+scale,,,unknown,scanned,state slab_reclaimable
+system.mem.total,system_mem_total,system,gauge,MiB,hostmetrics:system.memory.limit,rename+scale,,,unknown,scanned,agent divides bytes by 1024^2
+system.mem.usable,system_mem_usable,system,gauge,MiB,hostmetrics:system.linux.memory.available,rename+scale,,,unknown,scanned,agent divides bytes by 1024^2
+system.mem.used,system_mem_used,system,gauge,MiB,hostmetrics:system.memory.usage,split+scale,,,unknown,scanned,state used
+system.net.bytes_rcvd,system_net_bytes_rcvd,system,rate,bytes per second,hostmetrics:system.network.io,split+rate,,,unknown,scanned,direction receive
+system.net.bytes_sent,system_net_bytes_sent,system,rate,bytes per second,hostmetrics:system.network.io,split+rate,,,unknown,scanned,direction transmit
 system.net.iface.num_rx_queues,system_net_iface_num_rx_queues,system,gauge,count,none,no-source,,,unknown,scanned,sysfs queue counts
 system.net.iface.num_tx_queues,system_net_iface_num_tx_queues,system,gauge,count,none,no-source,,,unknown,scanned,sysfs queue counts
-system.net.ip.forwarded_datagrams,system_net_ip_forwarded_datagrams,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.ip.fragmentation_creates,system_net_ip_fragmentation_creates,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.ip.fragmentation_fails,system_net_ip_fragmentation_fails,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.ip.fragmentation_oks,system_net_ip_fragmentation_oks,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.ip.in_addr_errors,system_net_ip_in_addr_errors,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.ip.in_csum_errors,system_net_ip_in_csum_errors,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.ip.in_delivers,system_net_ip_in_delivers,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.ip.in_discards,system_net_ip_in_discards,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.ip.in_header_errors,system_net_ip_in_header_errors,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.ip.in_no_routes,system_net_ip_in_no_routes,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.ip.in_receives,system_net_ip_in_receives,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.ip.in_truncated_pkts,system_net_ip_in_truncated_pkts,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.ip.in_unknown_protos,system_net_ip_in_unknown_protos,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.ip.out_discards,system_net_ip_out_discards,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.ip.out_no_routes,system_net_ip_out_no_routes,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.ip.out_requests,system_net_ip_out_requests,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.ip.reassembly_fails,system_net_ip_reassembly_fails,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.ip.reassembly_oks,system_net_ip_reassembly_oks,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.ip.reassembly_overlaps,system_net_ip_reassembly_overlaps,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.ip.reassembly_requests,system_net_ip_reassembly_requests,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.ip.reassembly_timeouts,system_net_ip_reassembly_timeouts,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.ip.reverse_path_filter,system_net_ip_reverse_path_filter,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.packets_in.count,system_net_packets_in_count,system,rate,count per second,hostmetrics:system.network.packets,split-attribute,,,unknown,scanned,direction receive
-system.net.packets_in.drop,system_net_packets_in_drop,system,rate,count per second,hostmetrics:system.network.dropped,split-attribute,,,unknown,scanned,direction receive
-system.net.packets_in.error,system_net_packets_in_error,system,rate,count per second,hostmetrics:system.network.errors,split-attribute,,,unknown,scanned,direction receive
-system.net.packets_out.count,system_net_packets_out_count,system,rate,count per second,hostmetrics:system.network.packets,split-attribute,,,unknown,scanned,direction transmit
-system.net.packets_out.drop,system_net_packets_out_drop,system,rate,count per second,hostmetrics:system.network.dropped,split-attribute,,,unknown,scanned,direction transmit
-system.net.packets_out.error,system_net_packets_out_error,system,rate,count per second,hostmetrics:system.network.errors,split-attribute,,,unknown,scanned,direction transmit
-system.net.tcp.abort_on_timeout,system_net_tcp_abort_on_timeout,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.active_opens,system_net_tcp_active_opens,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.attempt_fails,system_net_tcp_attempt_fails,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.backlog_drops,system_net_tcp_backlog_drops,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.current_established,system_net_tcp_current_established,system,gauge,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.established_resets,system_net_tcp_established_resets,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.failed_retransmits,system_net_tcp_failed_retransmits,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.from_zero_window,system_net_tcp_from_zero_window,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.in_csum_errors,system_net_tcp_in_csum_errors,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.in_errors,system_net_tcp_in_errors,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.in_segs,system_net_tcp_in_segs,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.listen_drops,system_net_tcp_listen_drops,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.listen_overflows,system_net_tcp_listen_overflows,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.out_resets,system_net_tcp_out_resets,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.out_segs,system_net_tcp_out_segs,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.passive_opens,system_net_tcp_passive_opens,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.paws_connection_drops,system_net_tcp_paws_connection_drops,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.paws_established_drops,system_net_tcp_paws_established_drops,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.prune_called,system_net_tcp_prune_called,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.prune_ofo_called,system_net_tcp_prune_ofo_called,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.prune_rcv_drops,system_net_tcp_prune_rcv_drops,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.recv_q,system_net_tcp_recv_q,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.retrans_segs,system_net_tcp_retrans_segs,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.send_q,system_net_tcp_send_q,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.syn_cookies_failed,system_net_tcp_syn_cookies_failed,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.syn_cookies_recv,system_net_tcp_syn_cookies_recv,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.syn_cookies_sent,system_net_tcp_syn_cookies_sent,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.syn_retrans,system_net_tcp_syn_retrans,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.to_zero_window,system_net_tcp_to_zero_window,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.tcp.tw_reused,system_net_tcp_tw_reused,system,unknown,mixed,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.udp.in_csum_errors,system_net_udp_in_csum_errors,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.udp.in_datagrams,system_net_udp_in_datagrams,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.udp.in_errors,system_net_udp_in_errors,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.udp.no_ports,system_net_udp_no_ports,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.udp.out_datagrams,system_net_udp_out_datagrams,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.udp.rcv_buf_errors,system_net_udp_rcv_buf_errors,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.net.udp.snd_buf_errors,system_net_udp_snd_buf_errors,system,unknown,count,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
-system.paging.free,system_paging_free,system,gauge,bytes,hostmetrics:system.paging.usage,split-attribute,,,unknown,scanned,Windows naming for swap
-system.paging.pct_free,system_paging_pct_free,system,gauge,percent,hostmetrics:system.paging.utilization,derive,,,unknown,scanned,Windows naming for swap
-system.paging.total,system_paging_total,system,gauge,bytes,hostmetrics:system.paging.usage,split-attribute,,,unknown,scanned,Windows naming for swap
-system.paging.used,system_paging_used,system,gauge,bytes,hostmetrics:system.paging.usage,split-attribute,,,unknown,scanned,Windows naming for swap
+system.net.ip.forwarded_datagrams,system_net_ip_forwarded_datagrams,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.ip.forwarded_datagrams.count,system_net_ip_forwarded_datagrams_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.ip.fragmentation_creates,system_net_ip_fragmentation_creates,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.ip.fragmentation_creates.count,system_net_ip_fragmentation_creates_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.ip.fragmentation_fails,system_net_ip_fragmentation_fails,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.ip.fragmentation_fails.count,system_net_ip_fragmentation_fails_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.ip.fragmentation_oks,system_net_ip_fragmentation_oks,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.ip.fragmentation_oks.count,system_net_ip_fragmentation_oks_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.ip.in_addr_errors,system_net_ip_in_addr_errors,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.ip.in_addr_errors.count,system_net_ip_in_addr_errors_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.ip.in_csum_errors,system_net_ip_in_csum_errors,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.ip.in_csum_errors.count,system_net_ip_in_csum_errors_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.ip.in_delivers,system_net_ip_in_delivers,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.ip.in_delivers.count,system_net_ip_in_delivers_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.ip.in_discards,system_net_ip_in_discards,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.ip.in_discards.count,system_net_ip_in_discards_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.ip.in_header_errors,system_net_ip_in_header_errors,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.ip.in_header_errors.count,system_net_ip_in_header_errors_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.ip.in_no_routes,system_net_ip_in_no_routes,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.ip.in_no_routes.count,system_net_ip_in_no_routes_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.ip.in_receives,system_net_ip_in_receives,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.ip.in_receives.count,system_net_ip_in_receives_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.ip.in_truncated_pkts,system_net_ip_in_truncated_pkts,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.ip.in_truncated_pkts.count,system_net_ip_in_truncated_pkts_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.ip.in_unknown_protos,system_net_ip_in_unknown_protos,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.ip.in_unknown_protos.count,system_net_ip_in_unknown_protos_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.ip.out_discards,system_net_ip_out_discards,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.ip.out_discards.count,system_net_ip_out_discards_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.ip.out_no_routes,system_net_ip_out_no_routes,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.ip.out_no_routes.count,system_net_ip_out_no_routes_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.ip.out_requests,system_net_ip_out_requests,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.ip.out_requests.count,system_net_ip_out_requests_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.ip.reassembly_fails,system_net_ip_reassembly_fails,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.ip.reassembly_fails.count,system_net_ip_reassembly_fails_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.ip.reassembly_oks,system_net_ip_reassembly_oks,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.ip.reassembly_oks.count,system_net_ip_reassembly_oks_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.ip.reassembly_overlaps,system_net_ip_reassembly_overlaps,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.ip.reassembly_overlaps.count,system_net_ip_reassembly_overlaps_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.ip.reassembly_requests,system_net_ip_reassembly_requests,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.ip.reassembly_requests.count,system_net_ip_reassembly_requests_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.ip.reassembly_timeouts,system_net_ip_reassembly_timeouts,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.ip.reassembly_timeouts.count,system_net_ip_reassembly_timeouts_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.ip.reverse_path_filter,system_net_ip_reverse_path_filter,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.ip.reverse_path_filter.count,system_net_ip_reverse_path_filter_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.packets_in.count,system_net_packets_in_count,system,rate,count per second,hostmetrics:system.network.packets,split+rate,,,unknown,scanned,direction receive
+system.net.packets_in.drop,system_net_packets_in_drop,system,rate,count per second,hostmetrics:system.network.dropped,split+rate,,,unknown,scanned,direction receive
+system.net.packets_in.error,system_net_packets_in_error,system,rate,count per second,hostmetrics:system.network.errors,split+rate,,,unknown,scanned,direction receive
+system.net.packets_out.count,system_net_packets_out_count,system,rate,count per second,hostmetrics:system.network.packets,split+rate,,,unknown,scanned,direction transmit
+system.net.packets_out.drop,system_net_packets_out_drop,system,rate,count per second,hostmetrics:system.network.dropped,split+rate,,,unknown,scanned,direction transmit
+system.net.packets_out.error,system_net_packets_out_error,system,rate,count per second,hostmetrics:system.network.errors,split+rate,,,unknown,scanned,direction transmit
+system.net.tcp.abort_on_timeout,system_net_tcp_abort_on_timeout,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.abort_on_timeout.count,system_net_tcp_abort_on_timeout_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.active_opens,system_net_tcp_active_opens,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.active_opens.count,system_net_tcp_active_opens_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.attempt_fails,system_net_tcp_attempt_fails,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.attempt_fails.count,system_net_tcp_attempt_fails_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.backlog_drops,system_net_tcp_backlog_drops,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.backlog_drops.count,system_net_tcp_backlog_drops_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.current_established,system_net_tcp_current_established,system,gauge,count,none,no-source,,,unknown,scanned,connection state counters come from ss or netstat rather than procfs
+system.net.tcp.established_resets,system_net_tcp_established_resets,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.established_resets.count,system_net_tcp_established_resets_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.failed_retransmits,system_net_tcp_failed_retransmits,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.failed_retransmits.count,system_net_tcp_failed_retransmits_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.from_zero_window,system_net_tcp_from_zero_window,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.from_zero_window.count,system_net_tcp_from_zero_window_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.in_csum_errors,system_net_tcp_in_csum_errors,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.in_csum_errors.count,system_net_tcp_in_csum_errors_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.in_errors,system_net_tcp_in_errors,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.in_errors.count,system_net_tcp_in_errors_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.in_segs,system_net_tcp_in_segs,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.in_segs.count,system_net_tcp_in_segs_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.listen_drops,system_net_tcp_listen_drops,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.listen_drops.count,system_net_tcp_listen_drops_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.listen_overflows,system_net_tcp_listen_overflows,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.listen_overflows.count,system_net_tcp_listen_overflows_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.out_resets,system_net_tcp_out_resets,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.out_resets.count,system_net_tcp_out_resets_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.out_segs,system_net_tcp_out_segs,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.out_segs.count,system_net_tcp_out_segs_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.passive_opens,system_net_tcp_passive_opens,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.passive_opens.count,system_net_tcp_passive_opens_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.paws_connection_drops,system_net_tcp_paws_connection_drops,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.paws_connection_drops.count,system_net_tcp_paws_connection_drops_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.paws_established_drops,system_net_tcp_paws_established_drops,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.paws_established_drops.count,system_net_tcp_paws_established_drops_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.prune_called,system_net_tcp_prune_called,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.prune_called.count,system_net_tcp_prune_called_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.prune_ofo_called,system_net_tcp_prune_ofo_called,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.prune_ofo_called.count,system_net_tcp_prune_ofo_called_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.prune_rcv_drops,system_net_tcp_prune_rcv_drops,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.prune_rcv_drops.count,system_net_tcp_prune_rcv_drops_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.recv_q,system_net_tcp_recv_q,system,unknown,mixed,none,no-source,,,unknown,scanned,submitted through the client side histogram so the aggregate suffixes depend on histogram_aggregates
+system.net.tcp.retrans_segs,system_net_tcp_retrans_segs,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.retrans_segs.count,system_net_tcp_retrans_segs_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.send_q,system_net_tcp_send_q,system,unknown,mixed,none,no-source,,,unknown,scanned,submitted through the client side histogram so the aggregate suffixes depend on histogram_aggregates
+system.net.tcp.syn_cookies_failed,system_net_tcp_syn_cookies_failed,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.syn_cookies_failed.count,system_net_tcp_syn_cookies_failed_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.syn_cookies_recv,system_net_tcp_syn_cookies_recv,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.syn_cookies_recv.count,system_net_tcp_syn_cookies_recv_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.syn_cookies_sent,system_net_tcp_syn_cookies_sent,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.syn_cookies_sent.count,system_net_tcp_syn_cookies_sent_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.syn_retrans,system_net_tcp_syn_retrans,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.syn_retrans.count,system_net_tcp_syn_retrans_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.to_zero_window,system_net_tcp_to_zero_window,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.to_zero_window.count,system_net_tcp_to_zero_window_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.tcp.tw_reused,system_net_tcp_tw_reused,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.tcp.tw_reused.count,system_net_tcp_tw_reused_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.udp.in_csum_errors,system_net_udp_in_csum_errors,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.udp.in_csum_errors.count,system_net_udp_in_csum_errors_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.udp.in_datagrams,system_net_udp_in_datagrams,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.udp.in_datagrams.count,system_net_udp_in_datagrams_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.udp.in_errors,system_net_udp_in_errors,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.udp.in_errors.count,system_net_udp_in_errors_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.udp.no_ports,system_net_udp_no_ports,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.udp.no_ports.count,system_net_udp_no_ports_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.udp.out_datagrams,system_net_udp_out_datagrams,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.udp.out_datagrams.count,system_net_udp_out_datagrams_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.udp.rcv_buf_errors,system_net_udp_rcv_buf_errors,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.udp.rcv_buf_errors.count,system_net_udp_rcv_buf_errors_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.net.udp.snd_buf_errors,system_net_udp_snd_buf_errors,system,unknown,count per second,none,no-source,,,unknown,scanned,/proc/net/snmp via net.ProtoCounters; see doc section 7.9
+system.net.udp.snd_buf_errors.count,system_net_udp_snd_buf_errors_count,system,monotonic_count,count,none,no-source,,,unknown,scanned,protocol counters also submitted as a monotonic count; gated by collect_count_metrics on the v2 check
+system.paging.free,system_paging_free,system,gauge,MiB,hostmetrics:system.paging.usage,split+scale,,,unknown,scanned,Windows naming for swap
+system.paging.pct_free,system_paging_pct_free,system,gauge,fraction,hostmetrics:system.paging.utilization,derive,,,unknown,scanned,Windows naming for swap; 0 to 1 fraction
+system.paging.total,system_paging_total,system,gauge,MiB,hostmetrics:system.paging.usage,split+scale,,,unknown,scanned,Windows naming for swap
+system.paging.used,system_paging_used,system,gauge,MiB,hostmetrics:system.paging.usage,split+scale,,,unknown,scanned,Windows naming for swap
 system.proc.count,system_proc_count,system,unknown,count,hostmetrics:system.processes.count,rename,,,unknown,scanned,
 system.proc.queue_length,system_proc_queue_length,system,unknown,count,none,no-source,,,unknown,scanned,load.MiscStat.ProcsBlocked; see doc section 7.9
-system.swap.cached,system_swap_cached,system,gauge,bytes,none,no-source,,,unknown,scanned,mem.VirtualMemoryStat.SwapCached; see doc section 7.9
-system.swap.free,system_swap_free,system,gauge,bytes,hostmetrics:system.paging.usage,split-attribute,,,unknown,scanned,state attribute for free and used
-system.swap.pct_free,system_swap_pct_free,system,gauge,percent,hostmetrics:system.paging.utilization,derive,,,unknown,scanned,
-system.swap.swap_in,system_swap_swap_in,system,rate,count per second,hostmetrics:system.paging.operations,split-attribute,,,unknown,scanned,direction page_in
-system.swap.swap_out,system_swap_swap_out,system,rate,count per second,hostmetrics:system.paging.operations,split-attribute,,,unknown,scanned,direction page_out
-system.swap.total,system_swap_total,system,gauge,bytes,hostmetrics:system.paging.usage,split-attribute,,,unknown,scanned,state attribute for free and used
-system.swap.used,system_swap_used,system,gauge,bytes,hostmetrics:system.paging.usage,split-attribute,,,unknown,scanned,state attribute for free and used
+system.swap.cached,system_swap_cached,system,gauge,MiB,none,no-source,,,unknown,scanned,mem.VirtualMemoryStat.SwapCached; see doc section 7.9
+system.swap.free,system_swap_free,system,gauge,MiB,hostmetrics:system.paging.usage,split+scale,,,unknown,scanned,state free
+system.swap.pct_free,system_swap_pct_free,system,gauge,fraction,hostmetrics:system.paging.utilization,derive,,,unknown,scanned,0 to 1 fraction
+system.swap.swap_in,system_swap_swap_in,system,rate,MiB per second,hostmetrics:system.paging.operations,split+rate+scale,,,unknown,scanned,direction page_in; cumulative counter and agent divides by 1024^2
+system.swap.swap_out,system_swap_swap_out,system,rate,MiB per second,hostmetrics:system.paging.operations,split+rate+scale,,,unknown,scanned,direction page_out; cumulative counter and agent divides by 1024^2
+system.swap.total,system_swap_total,system,gauge,MiB,hostmetrics:system.paging.usage,split+scale,,,unknown,scanned,state; agent divides bytes by 1024^2
+system.swap.used,system_swap_used,system,gauge,MiB,hostmetrics:system.paging.usage,split+scale,,,unknown,scanned,state used
 system.uptime,system_uptime,system,gauge,seconds,hostmetrics:system.uptime,rename,,,unknown,scanned,

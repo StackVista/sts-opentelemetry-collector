@@ -20,28 +20,35 @@ One row per metric name the Agent V2 node-agent can emit.
 | `kind` | `gauge`, `rate`, `count`, `monotonic_count`, `service_check`, `unknown` |
 | `unit` | unit of the Agent V2 series, so the harness can compare like with like |
 | `otel_source` | receiver and metric that can carry the data, or `none` |
-| `compat_action` | what the collector pipeline has to do, see below |
+| `compat_action` | the operations the collector pipeline has to apply, see below |
 | `labels` | label keys actually present on the stored series, from a live dump |
-| `consumers` | artifacts that reference the metric, from installed settings |
-| `priority` | `P1` when something references it, `P3` when nothing does, `unknown` before a live dump |
+| `consumers` | artifacts that reference the metric, by identifier or local file path |
+| `priority` | `P1` when something references it, `P3` when consumer extraction completed and found nothing, `unknown` while that evidence is missing |
 | `origin` | `scanned` from agent source, or `supplemental` because the name is built at runtime |
 | `notes` | anything a reviewer needs in order to disagree with the row |
 
-`compat_action` values:
+`compat_action` is a `+` joined list of operations, because several metrics need more than
+one. The primitives:
 
-| value | meaning |
-| ----- | ------- |
-| `rename` | same value, different name |
-| `rename+scale` | same quantity, different unit or factor, for example cores to nanocores |
-| `rename+rate` | OTel ships a cumulative counter, Agent V2 ships a per-second rate |
-| `split-attribute` | one OTel metric with an attribute becomes several Agent V2 names |
+| operation | meaning |
+| --------- | ------- |
+| `rename` | the name changes |
+| `split` | one OTel metric with an attribute becomes several Agent V2 names |
+| `scale` | a numeric factor or unit conversion, for example cores to nanocores |
+| `rate` | OTel ships a cumulative counter, Agent V2 ships a per-second rate |
 | `derive` | arithmetic over one or more OTel metrics |
 | `no-source` | nothing in the chosen receivers produces it |
 | `undecided` | needs a decision, usually one recorded in the migration document |
 
+So `split+rate` means split by attribute and convert a cumulative counter to a rate, and
+`rename+scale` means rename and apply a factor. Units in the `unit` column are the Agent V2
+units as submitted, which are not always the natural OTel unit: the memory and swap checks
+divide bytes by 1024^2, and the disk checks divide by 1024, so those series are MiB and KiB
+rather than bytes.
+
 ## Producing it
 
-Two of the four inputs are offline and always work. Two need an instance.
+Five inputs feed the builder: three offline that always work, and two that need an instance.
 
 ```shell
 # offline: inventory from an agent checkout, then the contract
@@ -55,9 +62,18 @@ STS_URL=https://your-instance STS_API_TOKEN=... ./scripts/dump-live-series.sh
 ```
 
 `scripts/extract-agent-metrics.sh` scans a `stackstate-agent` checkout for metric name
-literals in the kubelet, container and host checks. It resolves the three shapes the agent
-uses: whole literals, concatenation onto a prefix constant such as `KubeletMetricsPrefix`,
-and `fmt.Sprintf` against a format constant such as `diskMetric = "system.disk.%s"`.
+literals in the kubelet, container and host checks. It resolves the shapes the agent uses:
+whole literals, concatenation onto a prefix constant such as `KubeletMetricsPrefix`,
+`fmt.Sprintf` against a format constant such as `diskMetric = "system.disk.%s"`, and bare
+suffixes handed to a submission helper or sitting in a metric name map. A bare suffix is only
+prefixed when one of those contexts applies, so unrelated dotted strings in the tree do not
+become metrics.
+
+Two families append a suffix at submission time and cannot be seen as literals: the protocol
+counters that also emit a `.count` series, and the histogram-derived kubelet durations that
+emit `.sum` and `.count`. Both are expanded from the map holding the base names, so the
+expansion follows the source when names are added or removed.
+
 `mapping/supplemental-metrics.csv` adds the names the agent assembles at runtime, which no
 scanner can see: the container state reason fan-out, the per-resource requests and limits,
 the probe and SLI names, the node filesystem prefixes and the system container prefixes.
@@ -67,26 +83,39 @@ where the data can come from and what the pipeline has to do to it.
 `scripts/build-contract.sh` joins all of that and prints a summary. Rerunning it is safe and
 idempotent; `generated/` is not committed because the live half is instance-specific.
 
+The two instance-derived scripts differ in how their absence is treated. `dump-live-series.sh`
+queries the public metrics API at `/api/metrics/series` by default, overridable with
+`STS_METRICS_PATH`, and takes `LOOKBACK` as a duration such as `30m` or `2d`.
+`extract-stackpack-queries.sh` reads setting bodies with `sts settings describe` rather than
+`sts settings list`, which only returns a summary table, and it includes `MetricBinding`
+because the Kubernetes metrics tab queries live there. It writes `generated/queries.status`
+only when every setting was exported successfully, and the builder uses that to decide
+whether an empty `consumers` value means "no consumers" or "not looked at yet".
+
 ## What the current contract says
 
-From the offline inputs alone, 317 metrics:
+From the offline inputs alone, 383 metrics:
 
 | compat action | count |
 | ------------- | ----- |
-| `no-source` | 105 |
-| `rename` | 63 |
-| `split-attribute` | 56 |
+| `no-source` | 161 |
+| `rename` | 66 |
 | `undecided` | 42 |
-| `derive` | 33 |
+| `derive` | 35 |
+| `split` | 20 |
+| `split+scale` | 16 |
+| `split+rate` | 16 |
 | `rename+rate` | 14 |
-| `rename+scale` | 4 |
+| `rename+scale` | 11 |
+| `split+rate+scale` | 2 |
 
-By family: 167 `system.*`, 101 `kubernetes.*`, 49 `container.*`.
+By family: 223 `system.*`, 111 `kubernetes.*`, 49 `container.*`.
 
-So about two thirds of the surface is mechanical, and the difficulty is concentrated in two
-places: the 105 with no source, nearly all of them `system.net.*` protocol counters and the
-`/proc` details listed in section 7.9 of the migration document, and the 42 undecided, nearly
-all of them pod-spec derived and waiting on NA-8.
+The difficulty is concentrated in two places: the 161 with no source, nearly all of them
+`system.net.*` protocol counters, their `.count` siblings, and the `/proc` details listed in
+section 7.9 of the migration document, and the 42 undecided, nearly all of them pod-spec
+derived and waiting on NA-8. Everything else is mechanical, and the most common mechanical
+combination is a split by attribute followed by a rate conversion.
 
 ## Two things this cannot answer yet
 
@@ -98,9 +127,11 @@ the cluster-agent migrations depend on the answer, so it belongs on the epic, no
 this file.
 
 **What drop-in replacement means.** The `consumers` column decides whether a metric with no
-consumer still has to be reproduced. Until it is populated, `priority` stays `unknown` and
-the compatibility work has no defensible stopping point. This is open question 9 in the
-migration document.
+consumer still has to be reproduced. It is only trustworthy once
+`extract-stackpack-queries.sh` has run to completion against an instance, which is why the
+builder reports `priority` as `unknown` rather than `P3` until then, and why seeing live
+series is not treated as evidence of anything. This is open question 9 in the migration
+document.
 
 ## Caveats worth knowing before trusting a row
 

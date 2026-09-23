@@ -4,14 +4,17 @@
 # if a metric disappears. Without this column the contract is a list of names; with it, it
 # is a priority order.
 #
-# Sources, in the order they are searched:
-#   1. StackPack settings exported with the sts CLI (presentation metrics, monitors)
-#   2. any local StackPack directories passed with -d, useful before a StackPack is installed
+# Settings bodies come from `sts settings describe`. `sts settings list` only returns a
+# summary table, so it is used to enumerate identifiers and nothing else. MetricBinding is
+# included because the Kubernetes metrics tab queries live there rather than in
+# ComponentPresentation.
 #
 # Usage:
-#   sts-configured  extract-stackpack-queries.sh [-o OUTPUT_CSV] [-d STACKPACK_DIR]...
+#   extract-stackpack-queries.sh [-o OUTPUT_CSV] [-d STACKPACK_DIR]...
 #
 # Output: stored_name,artifact  with one row per (metric, referencing artifact) pair.
+# Also writes generated/queries.status, which records whether the extraction completed, so
+# the contract can tell a confirmed absence of consumers from missing evidence.
 #
 # The extraction is deliberately greedy: it takes every identifier that looks like a stored
 # metric name out of every PromQL string it can find. Over-reporting a consumer is harmless,
@@ -23,10 +26,12 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 COMPAT_DIR="$(dirname -- "${SCRIPT_DIR}")"
 
 OUTPUT="${COMPAT_DIR}/generated/queries.csv"
+STATUS="${COMPAT_DIR}/generated/queries.status"
 DIRS=()
+TYPES=(ComponentPresentation MetricBinding Monitor Dashboard)
 
 usage() {
-  sed -n '3,19p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '3,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 while getopts ':o:d:h' opt; do
@@ -41,31 +46,56 @@ done
 mkdir -p "$(dirname -- "${OUTPUT}")"
 WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT
+mkdir -p "${WORK}/bodies"
 
-# Pull every setting the CLI can export. Types vary by server version, so unknown ones are
-# skipped rather than treated as an error.
+failures=0
+cli_used=0
+
+# sts settings list prints a table of type, ID, identifier, name, owner and timestamp.
+# Only the identifier column is needed here; the bodies come from describe.
+identifiers_for_type() {
+  local type="$1"
+  sts settings list --type "${type}" 2>/dev/null |
+    awk -F'|' 'NR > 2 { gsub(/^[ \t]+|[ \t]+$/, "", $3); if ($3 != "" && $3 != "IDENTIFIER") print $3 }'
+}
+
 if command -v sts >/dev/null; then
-  for type in ComponentPresentation Monitor Dashboard; do
-    if sts settings list --type "${type}" >"${WORK}/${type}.txt" 2>"${WORK}/${type}.err"; then
-      printf 'exported %s settings\n' "${type}" >&2
-    else
-      printf 'skipping %s settings (%s)\n' "${type}" "$(head -1 "${WORK}/${type}.err" 2>/dev/null)" >&2
-      rm -f "${WORK}/${type}.txt"
-    fi
+  cli_used=1
+  for type in "${TYPES[@]}"; do
+    while IFS= read -r identifier; do
+      [[ -z "${identifier}" ]] && continue
+      safe="$(printf '%s' "${identifier}" | tr -c 'A-Za-z0-9._-' '_')"
+      if sts settings describe --type "${type}" --identifier "${identifier}" \
+        >"${WORK}/bodies/${type}__${safe}.yaml" 2>"${WORK}/describe.err"; then
+        printf '%s\n' "${identifier}" >"${WORK}/bodies/${type}__${safe}.artifact"
+      else
+        failures=$((failures + 1))
+        rm -f "${WORK}/bodies/${type}__${safe}.yaml"
+        printf 'failed to describe %s %s: %s\n' "${type}" "${identifier}" \
+          "$(head -n 1 "${WORK}/describe.err" 2>/dev/null)" >&2
+      fi
+    done < <(identifiers_for_type "${type}")
+    printf 'described %s settings\n' "${type}" >&2
   done
 else
   printf 'sts CLI not on PATH, skipping installed StackPacks\n' >&2
 fi
 
-# Local StackPack directories, if any were passed.
+# Local StackPack directories, if any were passed. Each file keeps its own identity.
 for dir in "${DIRS[@]+"${DIRS[@]}"}"; do
-  if [[ -d "${dir}" ]]; then
-    find "${dir}" -type f \( -name '*.sty' -o -name '*.yaml' -o -name '*.yml' \) \
-      -exec cp --backup=numbered {} "${WORK}/" \; 2>/dev/null || true
-    printf 'included local directory %s\n' "${dir}" >&2
-  else
+  if [[ ! -d "${dir}" ]]; then
     printf 'not a directory: %s\n' "${dir}" >&2
+    continue
   fi
+  dir_count=0
+  while IFS= read -r file; do
+    rel="${file#"${dir}"/}"
+    safe="$(printf '%s' "${rel}" | tr -c 'A-Za-z0-9._-' '_')"
+    cp "${file}" "${WORK}/bodies/local__${safe}.yaml"
+    printf '%s\n' "${rel}" >"${WORK}/bodies/local__${safe}.artifact"
+    dir_count=$((dir_count + 1))
+  done < <(find "${dir}" -type f \( -name '*.sty' -o -name '*.yaml' -o -name '*.yml' \) 2>/dev/null | sort)
+  printf 'included %d files from %s\n' "${dir_count}" "${dir}" >&2
 done
 
 # Metric names in PromQL look like bare identifiers followed by {, [, ( or whitespace. The
@@ -73,20 +103,32 @@ done
 # the contract.
 {
   printf 'stored_name,artifact\n'
-  if compgen -G "${WORK}/*" >/dev/null; then
-    grep -rhoE '\b(kubernetes|container|system)_[a-z0-9_]+' "${WORK}" 2>/dev/null |
-      sort | uniq -c |
-      awk '{ printf "%s,%s\n", $2, "installed-settings" }'
-  fi
+  for body in "${WORK}"/bodies/*.yaml; do
+    [[ -e "${body}" ]] || continue
+    artifact_file="${body%.yaml}.artifact"
+    [[ -f "${artifact_file}" ]] || continue
+    artifact="$(cat "${artifact_file}")"
+    grep -ohE '\b(kubernetes|container|system)_[a-z0-9_]+' "${body}" 2>/dev/null |
+      sort -u |
+      while IFS= read -r metric; do
+        [[ -z "${metric}" ]] && continue
+        printf '%s,%s\n' "${metric}" "${artifact}"
+      done
+  done
 } >"${OUTPUT}"
 
 total=$(($(wc -l <"${OUTPUT}") - 1))
 printf 'wrote %s (%d metric references)\n' "${OUTPUT}" "${total}"
-if [[ "${total}" -eq 0 ]]; then
+
+if [[ "${cli_used}" == "1" && "${failures}" -eq 0 ]]; then
+  printf 'complete\n' >"${STATUS}"
+  printf 'consumer extraction completed\n' >&2
+else
+  rm -f "${STATUS}"
   cat >&2 <<'EOF'
 
-No references found. That is expected when the sts CLI is not configured for an instance.
-Until this file has content the contract cannot say which metrics have consumers, and open
-question 9 in the node-agent document (what drop-in replacement means) stays open.
+Consumer extraction did not complete, so the contract cannot tell a metric with no
+consumers from one whose consumers were not looked at. priority stays unknown until this
+runs to completion against an instance.
 EOF
 fi

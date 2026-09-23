@@ -7,7 +7,9 @@
 #   mapping/supplemental-metrics.csv   names the agent assembles at runtime
 #   mapping/otel-sources.csv           where each metric can come from in an OTel pipeline
 #   generated/live-series.csv          real label sets, when a live dump is available
-#   generated/queries.csv              which artifacts reference which metric, when available
+#   generated/queries.csv              which artifacts reference which metric
+#   generated/queries.status           whether that extraction completed, so a confirmed
+#                                      absence of consumers can be told from missing evidence
 #
 # The first three are offline and always present, so this script produces a useful contract
 # without instance access. The last two fill the labels and consumers columns, and until they
@@ -64,7 +66,14 @@ else
   : >"${WORK}/queries.csv"
 fi
 
-awk -F, -v OFS=, '
+# Consumer evidence is only usable if the extraction ran to completion. Seeing live series
+# is not enough, and neither is an empty queries.csv on its own.
+consumers_complete=0
+if [[ -f "${GEN}/queries.status" ]] && [[ "$(head -n 1 "${GEN}/queries.status")" == "complete" ]]; then
+  consumers_complete=1
+fi
+
+awk -F, -v OFS=, -v consumers_complete="${consumers_complete}" '
   function stored(name,   s) { s = name; gsub(/[.-]/, "_", s); return s }
 
   function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
@@ -118,7 +127,7 @@ awk -F, -v OFS=, '
     cons = (st in consumers ? consumers[st] : "")
 
     if (cons != "") priority = "P1"
-    else if (nlive > 0) priority = "P3"
+    else if (consumers_complete == 1) priority = "P3"
     else priority = "unknown"
 
     print metric, st, check, kind, unit, otel, action, lbl, cons, priority, origin, note
@@ -148,3 +157,11 @@ missing_consumers=$(awk -F, 'NR > 1 && $9 == ""' "${OUTPUT}" | wc -l)
 printf '\nincomplete columns\n'
 printf '  %-16s %4d (run dump-live-series.sh against an instance)\n' "labels" "${missing_labels}"
 printf '  %-16s %4d (run extract-stackpack-queries.sh)\n' "consumers" "${missing_consumers}"
+
+printf '\npriority\n'
+awk -F, 'NR > 1 { c[$10]++ } END { for (p in c) printf "  %-16s %4d\n", p, c[p] }' "${OUTPUT}" | sort
+
+if [[ "${consumers_complete}" == "0" ]]; then
+  printf '\nconsumer evidence is missing, so no metric can be classified P3.\n'
+  printf 'priority stays unknown until extract-stackpack-queries.sh completes.\n'
+fi
