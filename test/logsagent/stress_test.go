@@ -351,8 +351,8 @@ func TestStressSourceSizeRejections(t *testing.T) {
 					})
 				})
 				eventually(t, 3*time.Second, "exact rejected request and record counters", func() bool {
-					return stressMetric(p, endpoint, "stslogsroute_pre_export_rejected_requests", scenario.reason) == 1 &&
-						stressMetric(p, endpoint, "stslogsroute_pre_export_rejected_records", scenario.reason) == float64(scenario.count)
+					return stressMetric(p, endpoint, "stslogsagent_pre_export_rejected_requests", scenario.reason) == 1 &&
+						stressMetric(p, endpoint, "stslogsagent_pre_export_rejected_records", scenario.reason) == float64(scenario.count)
 				})
 				if len(f.backend.snapshot()) != 0 {
 					t.Fatal("oversized source data reached an exporter")

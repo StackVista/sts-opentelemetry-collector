@@ -7,7 +7,8 @@ and makes no feature queries.
 Fixed mode accepts one Filelog pipeline exporting directly to `stsk8slogs` with
 its `delivery` settings, or two pipelines joined by `stslogsroute`. Discovery
 requires three routed pipelines. Routed terminal exporters leave `delivery`
-unset; the connector registers the shared delivery observer.
+unset; the connector registers the shared delivery observer. A pipeline must
+have one delivery owner, never both route and exporter wrappers.
 
 Set `discovery_enabled: true` and configure `native_pipeline` on the route to
 enable capability selection. Discovery settings remain on this extension. It

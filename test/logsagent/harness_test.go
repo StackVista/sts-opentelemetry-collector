@@ -70,12 +70,12 @@ type fixture struct {
 	configure func(map[string]any)
 }
 
-func newFixture(t *testing.T, mode string) *fixture {
+func newFixture(t *testing.T) *fixture {
 	t.Helper()
-	return newBinaryFixture(t, mode, "OTEL_AGENT_BINARY")
+	return newBinaryFixture(t, "OTEL_AGENT_BINARY")
 }
 
-func newBinaryFixture(t *testing.T, mode, variable string) *fixture {
+func newBinaryFixture(t *testing.T, variable string) *fixture {
 	t.Helper()
 	binary := os.Getenv(variable)
 	if binary == "" {
@@ -90,7 +90,7 @@ func newBinaryFixture(t *testing.T, mode, variable string) *fixture {
 		t.Fatalf("%s must name an executable file: %s", variable, absolute)
 	}
 	root := t.TempDir()
-	b := newBackend(t, mode)
+	b := newBackend(t)
 	s := defaultSettings()
 	s.Checkpoints = filepath.Join(root, "checkpoints")
 	s.Controller = filepath.Join(root, "controller")

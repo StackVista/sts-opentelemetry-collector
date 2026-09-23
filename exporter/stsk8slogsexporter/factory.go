@@ -3,7 +3,6 @@ package stsk8slogsexporter
 import (
 	"context"
 	"errors"
-	"os"
 	"strings"
 	"time"
 
@@ -49,16 +48,6 @@ func createLogsExporter(ctx context.Context, set exporter.Settings, config compo
 		InsecureSkipVerify: cfg.TLS.InsecureSkipVerify,
 		RequestTimeout:     cfg.TimeoutSettings.Timeout,
 		UserAgent:          set.BuildInfo.Command + "/" + set.BuildInfo.Version,
-	}
-	if cfg.TLS.CAFile != "" {
-		pem, err := os.ReadFile(cfg.TLS.CAFile)
-		if err != nil {
-			return nil, errors.New("cannot read Promtail-compatible logs CA bundle")
-		}
-		if len(pem) == 0 {
-			return nil, errors.New("the Promtail-compatible logs CA bundle is empty")
-		}
-		opts.CABundlePEM = pem
 	}
 	api, _, err := openapiclient.NewOpenAPIClientWithOptions(ctx, opts)
 	if err != nil {

@@ -27,10 +27,9 @@ type Config struct {
 	Delivery        *logsagent.DeliveryConfig                                `mapstructure:"delivery"`
 }
 
-// TLSConfig adds custom certificates to system trust.
+// TLSConfig controls server certificate verification.
 type TLSConfig struct {
-	CAFile             string `mapstructure:"ca_file"`
-	InsecureSkipVerify bool   `mapstructure:"insecure_skip_verify"`
+	InsecureSkipVerify bool `mapstructure:"insecure_skip_verify"`
 }
 
 // Validate rejects configurations that lose completion tracking or retry bounds.

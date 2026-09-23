@@ -83,6 +83,34 @@ func transportTLS(f *fixture) (*httptest.Server, string) {
 	return server, path
 }
 
+func systemTrustEnv(f *fixture, caFile, source string) []string {
+	f.t.Helper()
+	switch source {
+	case "file":
+		emptyDir := filepath.Join(f.root, "empty-trust")
+		if err := os.Mkdir(emptyDir, 0700); err != nil {
+			f.t.Fatal(err)
+		}
+		return []string{"SSL_CERT_FILE=" + caFile, "SSL_CERT_DIR=" + emptyDir}
+	case "directory":
+		trustDir := filepath.Join(f.root, "trust")
+		if err := os.Mkdir(trustDir, 0700); err != nil {
+			f.t.Fatal(err)
+		}
+		data, err := os.ReadFile(caFile)
+		if err != nil {
+			f.t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(trustDir, "ca.pem"), data, 0600); err != nil {
+			f.t.Fatal(err)
+		}
+		return []string{"SSL_CERT_FILE=" + filepath.Join(f.root, "missing-ca.pem"), "SSL_CERT_DIR=" + trustDir}
+	default:
+		f.t.Fatalf("unknown trust source %q", source)
+		return nil
+	}
+}
+
 func grpcTransport(f *fixture, cert tls.Certificate, host string, partial bool) string {
 	f.t.Helper()
 	listener, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
@@ -199,30 +227,27 @@ func TestTransportNativeGRPC(t *testing.T) {
 	}
 }
 
-func TestTransportCustomCAHTTP(t *testing.T) {
-	for _, mode := range []string{"promtail", "native"} {
-		t.Run(mode, func(t *testing.T) {
-			f := newFixture(t, mode)
-			server, ca := transportTLS(f)
-			f.settings.ReceiverURL = server.URL + "/stsAgent"
-			f.settings.PromtailURL = server.URL + "/stsAgent/logs/k8s"
-			f.settings.OTELNativeURL = server.URL + "/otel"
-			p := f.start(func(config map[string]any) {
-				for _, component := range []map[string]any{
-					section(config, "extensions", "stslogsagent/logs"),
-					section(config, "exporters", "stsk8slogs/promtail"),
-				} {
-					component["tls"] = map[string]any{"ca_file": ca}
+func TestTransportSystemTrust(t *testing.T) {
+	for _, source := range []string{"file", "directory"} {
+		for _, mode := range []string{"promtail", "native"} {
+			t.Run(source+"/"+mode, func(t *testing.T) {
+				f := newFixture(t, mode)
+				server, ca := transportTLS(f)
+				f.settings.ReceiverURL = server.URL + "/stsAgent"
+				f.settings.PromtailURL = server.URL + "/stsAgent/logs/k8s"
+				f.settings.OTELNativeURL = server.URL + "/otel"
+				f.childEnv = systemTrustEnv(f, ca, source)
+				p := f.start(func(config map[string]any) {
+					section(config, "exporters", "otlp_http/otel_native")["tls"] = map[string]any{
+						"ca_file": ca, "include_system_ca_certs_pool": true,
+					}
+				}, true)
+				assertTransportDelivery(f, p, mode)
+				if f.backend.polls() == 0 {
+					t.Fatal("custom CA discovery was not queried")
 				}
-				section(config, "exporters", "otlp_http/otel_native")["tls"] = map[string]any{
-					"ca_file": ca, "include_system_ca_certs_pool": true,
-				}
-			}, true)
-			assertTransportDelivery(f, p, mode)
-			if f.backend.polls() == 0 {
-				t.Fatal("custom CA discovery was not queried")
-			}
-		})
+			})
+		}
 	}
 }
 

@@ -89,7 +89,7 @@ func TestActualHelperTerminalClassifications(t *testing.T) {
 					} else {
 						require.Zero(t, ctrl.observer.Snapshot().DeadlineExpired)
 					}
-					require.EqualValues(t, 1, metricSum(t, reader, "stslogsroute.export_requests",
+					require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.export_requests",
 						attribute.String("outcome", tc.outcome)))
 				})
 			}
@@ -114,7 +114,7 @@ func TestHelperLifetimeExpiryDuringAttempt(t *testing.T) {
 			c, reader := newDelivery(t, cfg, ctrl, exp)
 			require.Error(t, c.ConsumeLogs(context.Background(), logsData()))
 			require.EqualValues(t, 1, ctrl.observer.Snapshot().DeadlineExpired)
-			require.EqualValues(t, 1, metricSum(t, reader, "stslogsroute.export_requests",
+			require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.export_requests",
 				attribute.String("outcome", "deadline_expired")))
 		})
 	}
@@ -138,7 +138,7 @@ func TestHelperRetryRecovery(t *testing.T) {
 			c, reader := newDelivery(t, deliveryDefaults(t), ctrl, exp)
 			require.NoError(t, c.ConsumeLogs(context.Background(), logsData()))
 			require.Equal(t, 3, attempts)
-			require.EqualValues(t, 1, metricSum(t, reader, "stslogsroute.export_requests",
+			require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.export_requests",
 				attribute.String("outcome", "acknowledged")))
 		})
 	}
@@ -182,7 +182,7 @@ func TestQueueWaiterCompletionDoesNotMeanWorkerCompletion(t *testing.T) {
 				t.Fatal("worker should still be active after delivery shutdown")
 			default:
 			}
-			require.EqualValues(t, 1, metricSum(t, reader, "stslogsroute.export_requests",
+			require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.export_requests",
 				attribute.String("outcome", "deadline_expired"), attribute.Bool("draining", true)))
 			releaseOnce.Do(func() { close(release) })
 			<-workerDone

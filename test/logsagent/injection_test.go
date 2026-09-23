@@ -94,8 +94,8 @@ func TestInjectedAdmissionSaturation(t *testing.T) {
 			control.wait(stage+"_entered", concurrent)
 			control.wait("admission_rejected", 1)
 			eventually(t, 3*time.Second, "exact saturation counters", func() bool {
-				return stressMetric(p, endpoint, "stslogsroute_pre_export_rejected_requests", "admission_saturated") == 1 &&
-					stressMetric(p, endpoint, "stslogsroute_pre_export_rejected_records", "admission_saturated") == 1
+				return stressMetric(p, endpoint, "stslogsagent_pre_export_rejected_requests", "admission_saturated") == 1 &&
+					stressMetric(p, endpoint, "stslogsagent_pre_export_rejected_records", "admission_saturated") == 1
 			})
 			if len(stressEvents(p, "Logs export completed", "")) != 0 {
 				t.Fatal("admission was not saturated with outstanding result waiters")

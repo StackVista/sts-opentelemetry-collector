@@ -108,13 +108,6 @@ func (c *controller) Start(ctx context.Context, _ component.Host) error {
 		InsecureSkipVerify: c.cfg.TLS.InsecureSkipVerify, RequestTimeout: c.cfg.AttemptTimeout,
 		UserAgent: c.set.BuildInfo.Command + "/" + c.set.BuildInfo.Version,
 	}
-	if c.cfg.TLS.CAFile != "" {
-		pem, readErr := os.ReadFile(c.cfg.TLS.CAFile)
-		if readErr != nil || len(pem) == 0 {
-			return errors.New("cannot read logs capability CA bundle")
-		}
-		opts.CABundlePEM = pem
-	}
 	api, authCtx, err := openapiclient.NewOpenAPIClientWithOptions(ctx, opts)
 	if err != nil {
 		return err

@@ -17,14 +17,14 @@ type telemetry struct {
 }
 
 func newTelemetry(provider metric.MeterProvider) (telemetry, error) {
-	meter := provider.Meter("github.com/stackvista/sts-opentelemetry-collector/connector/stslogsrouteconnector")
+	meter := provider.Meter("github.com/stackvista/sts-opentelemetry-collector/common/logsagent")
 	var t telemetry
 	var errs [5]error
-	t.rejectedRequests, errs[0] = meter.Int64Counter("stslogsroute.pre_export_rejected_requests")
-	t.rejectedRecords, errs[1] = meter.Int64Counter("stslogsroute.pre_export_rejected_records")
-	t.oversized, errs[2] = meter.Int64Counter("stslogsroute.oversized_records")
-	t.outcomes, errs[3] = meter.Int64Counter("stslogsroute.export_requests")
-	t.outstanding, errs[4] = meter.Int64UpDownCounter("stslogsroute.outstanding_requests")
+	t.rejectedRequests, errs[0] = meter.Int64Counter("stslogsagent.pre_export_rejected_requests")
+	t.rejectedRecords, errs[1] = meter.Int64Counter("stslogsagent.pre_export_rejected_records")
+	t.oversized, errs[2] = meter.Int64Counter("stslogsagent.oversized_records")
+	t.outcomes, errs[3] = meter.Int64Counter("stslogsagent.export_requests")
+	t.outstanding, errs[4] = meter.Int64UpDownCounter("stslogsagent.outstanding_requests")
 	return t, errors.Join(errs[:]...)
 }
 

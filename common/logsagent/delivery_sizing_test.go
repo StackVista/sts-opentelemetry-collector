@@ -82,7 +82,7 @@ func TestRecordSizeMatchesProtobufEnvelopes(t *testing.T) {
 								require.True(t, consumererror.IsPermanent(err))
 								require.Zero(t, calls)
 							}
-							require.EqualValues(t, expectedOversized, metricSum(t, reader, "stslogsroute.oversized_records"))
+							require.EqualValues(t, expectedOversized, metricSum(t, reader, "stslogsagent.oversized_records"))
 						}
 					}
 					after, err := plogotlp.NewExportRequestFromLogs(data).MarshalProto()

@@ -155,7 +155,7 @@ func TestDeliveryKeepsSelectedConsumerAndMode(t *testing.T) {
 			require.NoError(t, c.ConsumeLogs(context.Background(), logsData()))
 			require.EqualValues(t, 2, calls.Load())
 			require.Equal(t, logsagent.ExportSnapshot{Acknowledged: 2}, ctrl.observer.Snapshot())
-			require.EqualValues(t, 2, metricSum(t, reader, "stslogsroute.export_requests",
+			require.EqualValues(t, 2, metricSum(t, reader, "stslogsagent.export_requests",
 				attribute.String("mode", string(mode)), attribute.String("outcome", "acknowledged")))
 		})
 	}
@@ -246,14 +246,14 @@ func TestAdmissionSaturation(t *testing.T) {
 			require.False(t, consumererror.IsPermanent(err))
 			require.Less(t, time.Since(start), time.Second)
 			require.EqualValues(t, cfg.MaxConcurrentCalls, ctrl.observer.Snapshot().Outstanding)
-			require.EqualValues(t, 1, metricSum(t, reader, "stslogsroute.pre_export_rejected_requests",
+			require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.pre_export_rejected_requests",
 				attribute.String("reason", "admission_saturated")))
 			releaseOnce.Do(func() { close(release) })
 			for range cfg.MaxConcurrentCalls {
 				require.NoError(t, <-results)
 			}
 			require.Zero(t, ctrl.observer.Snapshot().Outstanding)
-			require.Zero(t, metricSum(t, reader, "stslogsroute.outstanding_requests"))
+			require.Zero(t, metricSum(t, reader, "stslogsagent.outstanding_requests"))
 		})
 	}
 }
@@ -304,7 +304,7 @@ func TestDrainRejectionsInFinalSnapshot(t *testing.T) {
 			require.NoError(t, c.Shutdown(context.Background()))
 			require.ErrorContains(t, c.ConsumeLogs(context.Background(), logsData()), "not_running")
 			require.Equal(t, logsagent.ExportSnapshot{Acknowledged: 1, DrainRejected: 5}, ctrl.observer.Snapshot())
-			require.EqualValues(t, 6, metricSum(t, reader, "stslogsroute.pre_export_rejected_requests"))
+			require.EqualValues(t, 6, metricSum(t, reader, "stslogsagent.pre_export_rejected_requests"))
 		})
 	}
 }
@@ -363,7 +363,7 @@ func TestAbsoluteDrainBudget(t *testing.T) {
 			require.ErrorContains(t, c.ConsumeLogs(context.Background(), logsData()), "drain_budget_insufficient")
 			require.Len(t, received, 3)
 			require.EqualValues(t, 2, ctrl.observer.Snapshot().DrainRejected)
-			require.EqualValues(t, 2, metricSum(t, reader, "stslogsroute.pre_export_rejected_records",
+			require.EqualValues(t, 2, metricSum(t, reader, "stslogsagent.pre_export_rejected_records",
 				attribute.String("reason", "drain_budget_insufficient")))
 		})
 	}
@@ -384,7 +384,7 @@ func TestDrainingPreservesAdmittedDeadline(t *testing.T) {
 			})
 			c, reader := newDelivery(t, cfg, ctrl, next)
 			require.NoError(t, c.ConsumeLogs(context.Background(), logsData()))
-			require.EqualValues(t, 1, metricSum(t, reader, "stslogsroute.export_requests", attribute.Bool("draining", true)))
+			require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.export_requests", attribute.Bool("draining", true)))
 		})
 	}
 }
@@ -422,7 +422,7 @@ func TestRecordAndRequestSizeBounds(t *testing.T) {
 				require.ErrorContains(t, err, "record_too_large")
 				require.True(t, consumererror.IsPermanent(err))
 				require.Zero(t, calls)
-				require.EqualValues(t, 1, metricSum(t, reader, "stslogsroute.oversized_records"))
+				require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.oversized_records"))
 				after, err := plogotlp.NewExportRequestFromLogs(data).MarshalProto()
 				require.NoError(t, err)
 				require.Equal(t, original, after)
@@ -446,7 +446,7 @@ func TestRecordAndRequestSizeBounds(t *testing.T) {
 			} else {
 				require.ErrorContains(t, err, "request_too_large")
 				require.True(t, consumererror.IsPermanent(err))
-				require.EqualValues(t, 1, metricSum(t, reader, "stslogsroute.pre_export_rejected_records",
+				require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.pre_export_rejected_records",
 					attribute.String("reason", "request_too_large")))
 			}
 		}
@@ -461,7 +461,7 @@ func TestUnknownAttemptDeadlineIsNotLifetimeExpiry(t *testing.T) {
 			c, reader := newDelivery(t, deliveryDefaults(t), ctrl, next)
 			require.ErrorIs(t, c.ConsumeLogs(context.Background(), logsData()), context.DeadlineExceeded)
 			require.Zero(t, ctrl.observer.Snapshot().DeadlineExpired)
-			require.EqualValues(t, 1, metricSum(t, reader, "stslogsroute.export_requests",
+			require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.export_requests",
 				attribute.String("outcome", "terminal_export_error")))
 		})
 	}
@@ -485,10 +485,10 @@ func TestOversizeRejectsAllAffectedRecordsBeforeSend(t *testing.T) {
 					c, reader := newDelivery(t, cfg, ctrl, next)
 					require.True(t, consumererror.IsPermanent(c.ConsumeLogs(context.Background(), data)))
 					require.Zero(t, calls)
-					require.EqualValues(t, 2, metricSum(t, reader, "stslogsroute.pre_export_rejected_records"))
+					require.EqualValues(t, 2, metricSum(t, reader, "stslogsagent.pre_export_rejected_records"))
 					require.Equal(t, logsagent.ExportSnapshot{}, ctrl.observer.Snapshot())
 					if !requestLimit {
-						require.EqualValues(t, 1, metricSum(t, reader, "stslogsroute.oversized_records"))
+						require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.oversized_records"))
 					}
 				})
 			}
@@ -531,7 +531,7 @@ func TestOtherRecordValidationRemainsWithExporter(t *testing.T) {
 			})
 			c, reader := newDelivery(t, deliveryDefaults(t), ctrl, next)
 			require.NoError(t, c.ConsumeLogs(context.Background(), data))
-			require.Zero(t, metricSum(t, reader, "stslogsroute.pre_export_rejected_records"))
+			require.Zero(t, metricSum(t, reader, "stslogsagent.pre_export_rejected_records"))
 		})
 	}
 }
@@ -600,7 +600,7 @@ func TestUnknownErrorContainingHelperTextIsNotClassified(t *testing.T) {
 			})
 			c, reader := newDelivery(t, deliveryDefaults(t), ctrl, next)
 			require.Error(t, c.ConsumeLogs(context.Background(), logsData()))
-			require.EqualValues(t, 1, metricSum(t, reader, "stslogsroute.export_requests",
+			require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.export_requests",
 				attribute.String("outcome", "terminal_export_error")))
 		})
 	}

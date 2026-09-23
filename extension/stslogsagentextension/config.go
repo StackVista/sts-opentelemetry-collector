@@ -32,8 +32,7 @@ type Config struct {
 }
 
 type TLSConfig struct {
-	CAFile             string `mapstructure:"ca_file"`
-	InsecureSkipVerify bool   `mapstructure:"insecure_skip_verify"`
+	InsecureSkipVerify bool `mapstructure:"insecure_skip_verify"`
 }
 
 func (c *Config) Validate() error {
