@@ -101,6 +101,7 @@ func systemTrustEnv(f *fixture, caFile, source string) []string {
 		if err != nil {
 			f.t.Fatal(err)
 		}
+		// #nosec G703 -- Fixture root is created by t.TempDir.
 		if err := os.WriteFile(filepath.Join(trustDir, "ca.pem"), data, 0600); err != nil {
 			f.t.Fatal(err)
 		}
