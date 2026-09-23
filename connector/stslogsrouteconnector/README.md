@@ -36,14 +36,14 @@ deadlines stay unchanged. Cross-pipeline validation belongs to the controller.
 
 Metrics use only bounded `mode`, `reason`, `outcome` and `draining` attributes:
 
-- `stslogsroute.pre_export_rejected_requests` and
-  `stslogsroute.pre_export_rejected_records`: size, admission, drain or lifecycle
+- `stslogsagent.pre_export_rejected_requests` and
+  `stslogsagent.pre_export_rejected_records`: size, admission, drain or lifecycle
 rejection, separated by reason.
-- `stslogsroute.oversized_records`: individual oversized records in requests
+- `stslogsagent.oversized_records`: individual oversized records in requests
   that fit the request limit.
-- `stslogsroute.export_requests`: acknowledged, permanent rejection, exhausted
+- `stslogsagent.export_requests`: acknowledged, permanent rejection, exhausted
   retry budget, expired export deadline or unclassified terminal error.
-- `stslogsroute.outstanding_requests`: synchronous connector calls.
+- `stslogsagent.outstanding_requests`: synchronous connector calls.
 
 Acknowledgement counts requests, including successful partial responses; it
 does not assert that every record was stored. Exporter-helper runs retries

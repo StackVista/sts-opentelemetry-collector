@@ -163,7 +163,7 @@ func TestFixedRoute(t *testing.T) {
 			if mode == logsagent.OTELNativeMode {
 				label = "native"
 			}
-			require.EqualValues(t, 2, metricSum(t, reader, "stslogsroute.export_requests",
+			require.EqualValues(t, 2, metricSum(t, reader, "stslogsagent.export_requests",
 				attribute.String("mode", label), attribute.String("outcome", "acknowledged")))
 		})
 	}
