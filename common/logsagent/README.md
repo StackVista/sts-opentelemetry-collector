@@ -1,11 +1,52 @@
 # Logs agent delivery
 
-`logsagent` provides bounded synchronous delivery for the Filelog agent. It
-admits a complete export only when a call slot is available, applies record and
-request OTLP protobuf-size limits before export, and accounts for its final
-outcome. Resource and scope metadata contribute to each record's size. Any
-request or record exceeding its bound permanently rejects the entire call;
-saturation and drain-budget rejection remain retryable.
+Delivery controls admission and completion of synchronous Filelog exports.
+Its purpose is to let admitted exports finish during receiver shutdown while
+keeping their concurrency, input size and execution time bounded.
+
+## Properties
+
+- **Completion is synchronous.** An admitted call returns after the downstream
+  exporter finishes, including its retries. Returning success does not merely
+  mean that work was placed in a queue.
+- **Admitted work is bounded.** At most `max_concurrent_calls` exports run
+  concurrently. Saturation rejects a call immediately instead of building a
+  waiting queue. Request and record size checks reject the entire call before
+  export if either limit is exceeded. Record size includes resource and scope
+  metadata. These limits bound admitted inputs, not total process memory.
+- **Receiver cancellation does not abandon admitted work.** Delivery preserves
+  context values but replaces the caller's cancellation and deadline with its
+  own deadline. A receiver stopping during an HTTP request therefore does not
+  cancel that export before it can finish within its delivery budget.
+- **Retries have one owner and a finite budget.** Exporter-helper owns retries;
+  delivery does not retry the call again. The validated retry window, attempt
+  timeout and shutdown allowance must fit within `export_lifetime`. The
+  downstream exporter receives an absolute deadline and must honor it.
+- **Shutdown cannot keep extending the drain.** The `stslogsagent` extension
+  clears readiness and fixes one absolute drain deadline. Already admitted
+  calls retain their deadlines. Late calls are admitted only when the remaining
+  drain budget covers the retry bound, and their deadlines cannot exceed the
+  drain deadline. Delivery shutdown then closes admission and waits for
+  admitted calls before exporter-helper's retry sender is stopped.
+- **The final result remains visible.** Every admitted call is accounted for
+  until it returns; rejected calls are counted separately. The final drain
+  report considers failures, rejections, outstanding calls and exporter status.
+  Zero outstanding calls alone is insufficient to report a successful drain.
+
+## Required pipeline and configuration
+
+The direct agent pipeline is:
+
+```text
+Filelog → synchronous processors → Delivery → exporter-helper → HTTP sender
+```
+
+Filelog retries, exporter queues and asynchronous processors are disabled so
+that this completion accounting covers the complete export. Checkpoint storage
+must not silently recreate corrupt state. `max_concurrent_calls` must cover
+Filelog concurrency plus two additional calls. The validated
+[agent fixture](../../test/validate/configs/logs-agent.yaml) shows the required
+shape and explicit bounds.
 
 | Field | Meaning |
 | --- | --- |
@@ -15,27 +56,22 @@ saturation and drain-budget rejection remain retryable.
 | `max_request_bytes` | Maximum encoded OTLP size of the complete export request. |
 | `export_lifetime` | Maximum duration for one admitted export, including retries. |
 
-The pipeline has one Filelog input exporting directly to `stsk8slogs`. It uses
-checkpoint storage without recreation, disables Filelog retry and exporter
-queues, and permits only synchronous processors. `max_concurrent_calls` must
-cover Filelog concurrency plus two additional calls. The validated
-[agent fixture](../../test/validate/configs/logs-agent.yaml) shows the required
-shape and explicit bounds.
+## Limits of these properties
 
-Each admitted export receives a fresh deadline from `export_lifetime`, separate
-from cancellation of its caller. Exporter-helper owns bounded HTTP retries;
-`export_lifetime` must cover its retry window, attempt timeout, and shutdown
-allowance. The `stslogsagent` extension owns readiness, the absolute drain
-deadline, and final drain accounting. During shutdown, existing calls retain
-their deadline while new calls are rejected when there is insufficient time for
-the retry bound. The exporter joins admitted calls before stopping
-exporter-helper's retry sender. Detaching caller cancellation prevents receiver
-shutdown from canceling an admitted export before its bounded completion.
+`acknowledged` means that the synchronous exporter returned success within the
+delivery deadline. It does not establish durable Receiver storage or prove that
+every input record was accepted by the backend.
 
-Delivery records rejected inputs, oversized records, outstanding calls, and
-completed outcomes. Drain completion is reported as completed, failed, or
-incomplete. There is no durable payload queue: Filelog checkpoints track read
-progress, not backend acknowledgement. Bounded retries can therefore drop an
-export, and a failed response after a partial backend write can be retried and
-produce duplicates. Readiness or successful configuration validation does not
-prove Receiver storage or product acceptance.
+There is no durable payload queue or guarantee of loss-free delivery. Oversize
+inputs, exhausted retries and admission or drain rejection can lose records.
+Although saturation and drain rejection return retryable errors, the configured
+Filelog receiver does not retry them.
+
+There is no exactly-once guarantee. Retrying after a lost response or partial
+backend write can duplicate records. Filelog checkpoints track read progress,
+not backend acknowledgement, and replay can also duplicate records. A successful
+drain does not establish checkpoint persistence.
+
+[Delivery tests](delivery_test.go) exercise admission, cancellation, deadlines
+and shutdown; [exporter-helper tests](delivery_helper_test.go) exercise the retry
+outcomes observed by delivery.
