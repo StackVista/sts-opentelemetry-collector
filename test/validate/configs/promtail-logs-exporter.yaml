@@ -1,0 +1,25 @@
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 127.0.0.1:14318
+
+exporters:
+  stsk8slogs/promtail:
+    endpoint: http://127.0.0.1:18080/stsAgent/logs/k8s
+    api_key: synthetic-fixture-key
+    cluster_name: fixture-cluster
+    timeout: 5s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 5s
+      max_elapsed_time: 30s
+    sending_queue:
+      enabled: false
+
+service:
+  pipelines:
+    logs:
+      receivers: [otlp]
+      exporters: [stsk8slogs/promtail]

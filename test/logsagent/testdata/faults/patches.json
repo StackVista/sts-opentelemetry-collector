@@ -1,0 +1,35 @@
+[
+  {
+    "file": "extension/stslogsagentextension/controller.go",
+    "old": "c.set.Logger.Info(\"Logs export drain finished\",",
+    "new": "logsagent.FaultFinalDrain()\n\t\tc.set.Logger.Info(\"Logs export drain finished\","
+  },
+  {
+    "file": "common/logsagent/processfault.go",
+    "source": "control.go.txt"
+  },
+  {
+    "file": "connector/stslogsrouteconnector/processfault.go",
+    "source": "connector.go.txt"
+  },
+  {
+    "file": "connector/stslogsrouteconnector/connector.go",
+    "old": "func (c *logsConnector) ConsumeLogs(",
+    "new": "func (c *logsConnector) consumeLogs("
+  },
+  {
+    "file": "connector/stslogsrouteconnector/connector.go",
+    "old": "case <-c.done:\n\t\treturn nil",
+    "new": "case <-c.done:\n\t\tlogsagent.FaultMark(\"connector_stopped\")\n\t\treturn nil"
+  },
+  {
+    "file": "extension/stslogsagentextension/controller.go",
+    "old": "c.exporterStatus = event.Status()",
+    "new": "c.exporterStatus = event.Status()\n\tif event.Status() == componentstatus.StatusStopping {\n\t\tlogsagent.FaultMark(\"selected_exporter_stopping\")\n\t}"
+  },
+  {
+    "file": "connector/stslogsrouteconnector/connector.go",
+    "old": "err := selected.ConsumeLogs(exportCtx, data)",
+    "new": "finish := logsagent.FaultCall()\n\terr := selected.ConsumeLogs(exportCtx, data)\n\tlogsagent.FaultPause(\"completion\")\n\tfinish()"
+  }
+]

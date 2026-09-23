@@ -1,0 +1,165 @@
+//nolint:goconst // Keep authored keys and expected rejection fields together.
+package logsagent_test
+
+import (
+	"os"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/golang/snappy"
+	"github.com/stackvista/sts-opentelemetry-collector/common/logsagent"
+	"go.opentelemetry.io/collector/confmap"
+
+	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/dynamicpb"
+)
+
+func TestFixtureBounds(t *testing.T) {
+	s := defaultSettings()
+	if s.Lifetime < s.minimumLifetime() || s.minimumLifetime() <= 20*time.Second {
+		t.Fatalf("lifetime %s does not cover retry bound %s", s.Lifetime, s.minimumLifetime())
+	}
+	c := renderConfig(t, s)
+	bounds, err := logsagent.ValidatePipelineConfig(confmap.NewFromStringMap(c))
+	if err != nil {
+		t.Fatalf("shared validator rejected authored fixture: %v", err)
+	}
+	if bounds.ExportLifetime != s.Lifetime || bounds.RetryBound != s.minimumLifetime()-20*time.Second {
+		t.Fatalf("shared validator returned unexpected fixture bounds: %+v", bounds)
+	}
+	route := section(c, "connectors", "stslogsroute/logs")
+	files := section(c, "receivers", "filelog/pods")
+	if route["max_concurrent_calls"] != s.Concurrency || files["max_concurrent_files"] != s.Files ||
+		s.Concurrency < s.Files+2 {
+		t.Fatal("fixture lacks admission headroom for recombination")
+	}
+	if section(files, "retry_on_failure")["enabled"] != false ||
+		section(c, "extensions", "file_storage/logs")["recreate"] != false {
+		t.Fatal("fixture enabled receiver retry or checkpoint recreation")
+	}
+	for _, mode := range []string{"promtail"} {
+		exporter := "stsk8slogs/promtail"
+		e := section(c, "exporters", exporter)
+		q := section(e, "sending_queue")
+		if len(q) != 1 || q["enabled"] != false {
+			t.Fatal("fixture must disable exporter queues")
+		}
+		if _, exists := section(c, "service", "pipelines", "logs/"+mode)["processors"]; exists {
+			t.Fatal("terminal fixture pipeline contains processors")
+		}
+	}
+}
+
+func TestAuthoredFixtureRejectsOmittedBounds(t *testing.T) {
+	paths := make([][]string, 0, 29)
+	paths = append(paths, [][]string{
+		{"connectors", "stslogsroute/logs", "export_lifetime"},
+		{"connectors", "stslogsroute/logs", "max_concurrent_calls"},
+		{"connectors", "stslogsroute/logs", "max_record_bytes"},
+		{"connectors", "stslogsroute/logs", "max_request_bytes"},
+		{"receivers", "filelog/pods", "max_concurrent_files"},
+		{"receivers", "filelog/pods", "retry_on_failure", "enabled"},
+		{"extensions", "file_storage/logs", "recreate"},
+	}...)
+	for _, exporter := range []string{"stsk8slogs/promtail"} {
+		for _, field := range [][]string{
+			{"timeout"},
+			{"retry_on_failure", "enabled"},
+			{"retry_on_failure", "initial_interval"},
+			{"retry_on_failure", "max_interval"},
+			{"retry_on_failure", "max_elapsed_time"},
+			{"sending_queue", "enabled"},
+		} {
+			paths = append(paths, append([]string{"exporters", exporter}, field...))
+		}
+	}
+	for _, path := range paths {
+		t.Run(strings.Join(path, "/"), func(t *testing.T) {
+			c := renderConfig(t, defaultSettings())
+			key := path[len(path)-1]
+			delete(section(c, path[:len(path)-1]...), key)
+			_, err := logsagent.ValidatePipelineConfig(confmap.NewFromStringMap(c))
+			if err == nil || !strings.Contains(err.Error(), key) {
+				t.Fatalf("omitted %s: expected field-specific rejection, got %v", key, err)
+			}
+		})
+	}
+}
+
+func TestAuthoredFixtureRejectsInvalidBounds(t *testing.T) {
+	for _, exporter := range []string{"stsk8slogs/promtail"} {
+		for _, tc := range []struct {
+			name   string
+			reason string
+			mutate func(map[string]any)
+		}{
+			{"enabled_queue", "enabled", func(e map[string]any) { section(e, "sending_queue")["enabled"] = true }},
+			{"longer_retry", "export_lifetime", func(e map[string]any) {
+				section(e, "retry_on_failure")["max_elapsed_time"] = "10s"
+			}},
+			{"unlimited_retry", "max_elapsed_time", func(e map[string]any) {
+				section(e, "retry_on_failure")["max_elapsed_time"] = "0s"
+			}},
+			{"queue_batching", "sending_queue", func(e map[string]any) {
+				section(e, "sending_queue")["batch"] = map[string]any{}
+			}},
+		} {
+			t.Run(exporter+"/"+tc.name, func(t *testing.T) {
+				c := renderConfig(t, defaultSettings())
+				tc.mutate(section(c, "exporters", exporter))
+				_, err := logsagent.ValidatePipelineConfig(confmap.NewFromStringMap(c))
+				if err == nil || !strings.Contains(err.Error(), tc.reason) {
+					t.Fatalf("expected %s rejection, got %v", tc.reason, err)
+				}
+			})
+		}
+	}
+}
+
+func TestChildEnvironmentIsExplicit(t *testing.T) {
+	t.Setenv("AWS_SESSION_TOKEN", "synthetic-parent-sentinel")
+	t.Setenv("HTTPS_PROXY", "http://synthetic.invalid")
+	t.Setenv("STS_API_KEY", "synthetic-parent-sentinel")
+	root := t.TempDir()
+	actual := childEnvironment(root)
+	expected := []string{"HOME=" + root, "TMPDIR=" + root, "PATH=/usr/bin:/bin", "GOMAXPROCS=2", "STS_API_KEY=" + syntheticKey}
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatal("child environment differs from its explicit fixture allowlist")
+	}
+	for _, item := range actual {
+		if strings.Contains(item, os.Getenv("AWS_SESSION_TOKEN")) {
+			t.Fatal("parent environment leaked into child")
+		}
+	}
+}
+
+func TestWireDecoders(t *testing.T) {
+	descriptor := receiverDescriptor(t)
+	message := dynamicpb.NewMessage(descriptor)
+	err := prototext.Unmarshal([]byte(`streams: {
+		labels: "{sts_cluster_name=\"fixture-cluster\",pod_uid=\"12345678-1234-1234-1234-123456789abc\",pod_name=\"fixture-0\",container_name=\"app\",stream=\"stdout\"}"
+		entries: {timestamp: {seconds: 42 nanos: 123456789} line: "synthetic text"}
+	}`), message)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := proto.Marshal(message)
+	if err != nil {
+		t.Fatal(err)
+	}
+	promtail, err := decodePromtail(descriptor, snappy.Encode(nil, payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := []wireRecord{{
+		body: "synthetic text", timestamp: 42123456789,
+		cluster: "fixture-cluster", podUID: "12345678-1234-1234-1234-123456789abc",
+		podName: "fixture-0", container: "app", stream: "stdout",
+	}}
+	if !reflect.DeepEqual(promtail, expected) {
+		t.Fatalf("wire decoder disagrees with fixture: promtail=%+v", promtail)
+	}
+}

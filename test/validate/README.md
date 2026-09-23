@@ -14,6 +14,9 @@ A missing or misnamed component in the BOM makes `validate` fail, breaking the b
 
 ## Files
 
+- `configs/promtail-logs-exporter.yaml` — Promtail-compatible Kubernetes logs exporter registration
+  and synchronous retry configuration, using a synthetic credential and loopback endpoint.
+- `configs/logs-agent.yaml` — Filelog, checkpoint storage, fixed-route lifecycle and Promtail export.
 - `configs/scraper.yaml` — de-templated copy of the Prometheus-scraper collector config from
   `helm-charts-internal/stable/suse-observability-agent/templates/otel/scraper/configmap.yaml`
   (mTLS branch enabled to cover the superset of components).
