@@ -4,6 +4,11 @@
 shutdown. This mode needs no discovery credentials, state files or native pipeline,
 and makes no feature queries.
 
+Fixed mode accepts one Filelog pipeline exporting directly to `stsk8slogs` with
+its `delivery` settings, or two pipelines joined by `stslogsroute`. Discovery
+requires three routed pipelines. Routed terminal exporters leave `delivery`
+unset; the connector registers the shared delivery observer.
+
 Set `discovery_enabled: true` and configure `native_pipeline` on the route to
 enable capability selection. Discovery settings remain on this extension. It
 selects one logs destination at startup using the shared
@@ -37,7 +42,7 @@ marshaling remove authored-value provenance; configuration fixtures separately
 require explicit bounds. Filelog also requires `stanza.synchronousLogEmitter`.
 
 Shutdown sets one absolute drain deadline without canceling admitted exports.
-Final reporting combines connector-call outcomes with the selected exporter's
+Final reporting combines synchronous delivery outcomes with the selected exporter's
 stopped status. It reports export completion only; it does not verify Filelog
 checkpoint persistence. Admitted synchronous calls must finish before successful
 shutdown. The controller stores no credentials or log payloads in its state.

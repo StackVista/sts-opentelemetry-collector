@@ -6,7 +6,7 @@ extensions:
   stslogsagent/logs:
     health_endpoint: 0.0.0.0:13133
 receivers:
-  filelog/pods:
+  file_log/pods:
     include: [/var/log/pods/*/*/*.log]
     exclude:
       - /var/log/pods/fixture_logs-agent-fixture_*/logs-agent/*.log
@@ -32,7 +32,7 @@ processors:
       - context: resource
         statements:
           - delete_key(attributes, "k8s.pod.uid") where attributes["k8s.pod.uid"] != nil and not IsMatch(attributes["k8s.pod.uid"], "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-  k8sattributes:
+  k8s_attributes:
     auth_type: serviceAccount
     filter:
       node: fixture-node
@@ -67,16 +67,14 @@ processors:
       - context: resource
         statements:
           - set(attributes["k8s.cluster.name"], "fixture-cluster")
-connectors:
-  stslogsroute/logs:
-    controller_extension: stslogsagent/logs
-    promtail_pipeline: logs/promtail
-    max_concurrent_calls: 8
-    max_record_bytes: 262144
-    max_request_bytes: 1048576
-    export_lifetime: 90s
 exporters:
   stsk8slogs/promtail:
+    delivery:
+      controller_extension: stslogsagent/logs
+      max_concurrent_calls: 8
+      max_record_bytes: 262144
+      max_request_bytes: 1048576
+      export_lifetime: 90s
     endpoint: http://127.0.0.1:18080/stsAgent/logs/k8s
     api_key: synthetic-fixture-key
     cluster_name: fixture-cluster
@@ -100,9 +98,6 @@ service:
   extensions: [file_storage/logs, stslogsagent/logs]
   pipelines:
     logs/input:
-      receivers: [filelog/pods]
-      processors: [memory_limiter, transform/static_pod, k8sattributes, transform/cluster]
-      exporters: [stslogsroute/logs]
-    logs/promtail:
-      receivers: [stslogsroute/logs]
+      receivers: [file_log/pods]
+      processors: [memory_limiter, transform/static_pod, k8s_attributes, transform/cluster]
       exporters: [stsk8slogs/promtail]

@@ -23,7 +23,7 @@ extensions:
     scheme: SUSEObservability
     token: ${env:STS_API_KEY}
 receivers:
-  filelog/pods:
+  file_log/pods:
     include: [{{printf "%q" .Include}}]
     include_file_path: true
     start_at: beginning
@@ -96,7 +96,7 @@ service:
   extensions: [file_storage/logs, stslogsagent/logs, bearertokenauth/otel_native]
   pipelines:
     logs/input:
-      receivers: [filelog/pods]
+      receivers: [file_log/pods]
       processors: [memory_limiter, transform/identity]
       exporters: [stslogsroute/logs]
     logs/promtail:

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/common/logsagent"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/connector"
 	"go.opentelemetry.io/collector/consumer"
@@ -21,12 +22,14 @@ func NewFactory() connector.Factory {
 
 func createDefaultConfig() component.Config {
 	return &Config{
-		ControllerExtension: component.MustNewIDWithName("stslogsagent", "logs"),
-		PromtailPipeline:    pipeline.NewIDWithName(pipeline.SignalLogs, "promtail"),
-		MaxConcurrentCalls:  8,
-		MaxRecordBytes:      262144,
-		MaxRequestBytes:     1048576,
-		ExportLifetime:      90 * time.Second,
+		DeliveryConfig: logsagent.DeliveryConfig{
+			ControllerExtension: component.MustNewIDWithName("stslogsagent", "logs"),
+			MaxConcurrentCalls:  8,
+			MaxRecordBytes:      262144,
+			MaxRequestBytes:     1048576,
+			ExportLifetime:      90 * time.Second,
+		},
+		PromtailPipeline: pipeline.NewIDWithName(pipeline.SignalLogs, "promtail"),
 	}
 }
 
@@ -44,16 +47,13 @@ func createLogsToLogs(
 	if !ok {
 		return nil, errors.New("logs route requires a logs pipeline router")
 	}
-	telemetry, err := newTelemetry(set.MeterProvider)
+	delivery, err := logsagent.NewDelivery(cfg.DeliveryConfig, set.MeterProvider, set.Logger)
 	if err != nil {
 		return nil, err
 	}
 	return &logsConnector{
-		cfg:       *cfg,
-		router:    router,
-		slots:     make(chan struct{}, cfg.MaxConcurrentCalls),
-		done:      make(chan struct{}),
-		telemetry: telemetry,
-		logger:    set.Logger,
+		cfg:      *cfg,
+		router:   router,
+		Delivery: delivery,
 	}, nil
 }

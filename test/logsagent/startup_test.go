@@ -29,10 +29,10 @@ func TestStartupRejectsInvalidBounds(t *testing.T) {
 			section(c, "connectors", "stslogsroute/logs")["max_concurrent_calls"] = 5
 		}},
 		{"receiver_retry_enabled", "retry_on_failure", func(c map[string]any) {
-			section(c, "receivers", "filelog/pods", "retry_on_failure")["enabled"] = true
+			section(c, "receivers", "file_log/pods", "retry_on_failure")["enabled"] = true
 		}},
 		{"too_many_files", "max_concurrent_files", func(c map[string]any) {
-			section(c, "receivers", "filelog/pods")["max_concurrent_files"] = 7
+			section(c, "receivers", "file_log/pods")["max_concurrent_files"] = 7
 		}},
 	}...)
 	for _, exporter := range []string{"stsk8slogs/promtail", "otlp_http/otel_native"} {

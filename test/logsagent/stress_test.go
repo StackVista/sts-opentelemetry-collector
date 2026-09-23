@@ -336,7 +336,7 @@ func TestStressSourceSizeRejections(t *testing.T) {
 				stressSource(t, f, 0, input.String())
 				port, endpoint := stressMetrics(t)
 				p := f.start(stressValidated(t, func(config map[string]any) {
-					section(config, "receivers", "filelog/pods")["max_log_size"] = "512KiB"
+					section(config, "receivers", "file_log/pods")["max_log_size"] = "512KiB"
 					section(config, "service", "telemetry")["metrics"] = map[string]any{
 						"level": "detailed",
 						"readers": []any{map[string]any{"pull": map[string]any{"exporter": map[string]any{

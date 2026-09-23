@@ -192,7 +192,7 @@ func (c *controller) NotifyConfig(_ context.Context, conf *confmap.Conf) error {
 		return err
 	}
 	if bounds.ExtensionID != c.set.ID.String() {
-		return errors.New("logs route must reference this controller extension")
+		return errors.New("logs delivery must reference this controller extension")
 	}
 	enabled := false
 	featuregate.GlobalRegistry().VisitAll(func(g *featuregate.Gate) {
@@ -220,7 +220,7 @@ func (c *controller) RegisterExportObserver(observer logsagent.ExportObserver) e
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if !c.initialized || !c.configured || c.observer != nil || observer == nil {
-		return errors.New("logs capability must be initialized and configured with exactly one route")
+		return errors.New("logs agent must be initialized and configured with exactly one delivery observer")
 	}
 	c.observer = observer
 	return nil
@@ -242,7 +242,7 @@ func (c *controller) Ready() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if !c.initialized || !c.configured || c.observer == nil || c.stopping {
-		return errors.New("logs capability cannot become ready before the route is initialized")
+		return errors.New("logs agent cannot become ready before delivery is initialized")
 	}
 	if !c.cfg.DiscoveryEnabled {
 		c.ready = true

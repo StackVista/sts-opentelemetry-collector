@@ -31,7 +31,7 @@ func TestFixtureBounds(t *testing.T) {
 		t.Fatalf("shared validator returned unexpected fixture bounds: %+v", bounds)
 	}
 	route := section(c, "connectors", "stslogsroute/logs")
-	files := section(c, "receivers", "filelog/pods")
+	files := section(c, "receivers", "file_log/pods")
 	if route["max_concurrent_calls"] != s.Concurrency || files["max_concurrent_files"] != s.Files ||
 		s.Concurrency < s.Files+2 {
 		t.Fatal("fixture lacks admission headroom for recombination")
@@ -63,8 +63,8 @@ func TestAuthoredFixtureRejectsOmittedBounds(t *testing.T) {
 		{"connectors", "stslogsroute/logs", "max_concurrent_calls"},
 		{"connectors", "stslogsroute/logs", "max_record_bytes"},
 		{"connectors", "stslogsroute/logs", "max_request_bytes"},
-		{"receivers", "filelog/pods", "max_concurrent_files"},
-		{"receivers", "filelog/pods", "retry_on_failure", "enabled"},
+		{"receivers", "file_log/pods", "max_concurrent_files"},
+		{"receivers", "file_log/pods", "retry_on_failure", "enabled"},
 		{"extensions", "file_storage/logs", "recreate"},
 	}...)
 	for _, exporter := range []string{"stsk8slogs/promtail", "otlp_http/otel_native"} {

@@ -92,10 +92,10 @@ or Kubernetes acceptance.
 
 The overlays add file barriers controlled by the parent fixture. Admission
 testing fans one parsed Filelog record into eight numbered concurrent calls to
-the real connector, then submits the original as the excess call. This is forced
+the shared delivery runtime, then submits the original as the excess call. This is forced
 load, not evidence that ordinary Filelog exceeds its configured concurrency.
 Completion testing pauses an admitted synchronous call after export returns and
-before connector accounting finishes. It leaves the real context deadline,
+before delivery accounting finishes. It leaves the real context deadline,
 receiver and Collector shutdown running. Final reporting fails the test binary
 if any instrumented call has not finished. Signal testing substitutes the existing
 restart callback and allows its real SIGTERM implementation after fault removal.

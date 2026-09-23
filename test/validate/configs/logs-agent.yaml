@@ -23,7 +23,7 @@ extensions:
     scheme: SUSEObservability
     token: synthetic-fixture-key
 receivers:
-  filelog/pods:
+  file_log/pods:
     include: [/var/log/pods/*/*/*.log]
     exclude:
       - /var/log/pods/fixture_logs-agent-fixture_*/logs-agent/*.log
@@ -49,7 +49,7 @@ processors:
       - context: resource
         statements:
           - delete_key(attributes, "k8s.pod.uid") where attributes["k8s.pod.uid"] != nil and not IsMatch(attributes["k8s.pod.uid"], "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-  k8sattributes:
+  k8s_attributes:
     auth_type: serviceAccount
     filter:
       node: fixture-node
@@ -130,8 +130,8 @@ service:
   extensions: [file_storage/logs, stslogsagent/logs, bearertokenauth/otel_native]
   pipelines:
     logs/input:
-      receivers: [filelog/pods]
-      processors: [memory_limiter, transform/static_pod, k8sattributes, transform/cluster]
+      receivers: [file_log/pods]
+      processors: [memory_limiter, transform/static_pod, k8s_attributes, transform/cluster]
       exporters: [stslogsroute/logs]
     logs/promtail:
       receivers: [stslogsroute/logs]

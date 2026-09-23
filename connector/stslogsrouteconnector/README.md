@@ -5,6 +5,10 @@
 to the Collector lifecycle. The connector does not switch destinations or retry
 exports.
 
+Admission, detached deadlines, completion accounting and telemetry live in
+`common/logsagent.Delivery`. Routed terminal exporters must leave `delivery`
+unset so that each call passes through one delivery guard.
+
 | Configuration key | Default |
 | --- | --- |
 | `controller_extension` | `stslogsagent/logs` |

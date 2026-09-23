@@ -50,10 +50,14 @@ func newLogsExporter(ctx context.Context, set exporter.Settings, cfg *Config, se
 	if err != nil {
 		return nil, err
 	}
-	return &logsExporter{
+	exp := &logsExporter{
 		Logs: helper, encoder: encoder, invalid: invalid, logger: set.Logger,
 		id: attribute.String("exporter", set.ID.String()),
-	}, nil
+	}
+	if cfg.Delivery != nil {
+		return newDeliveryExporter(exp, *cfg.Delivery, set)
+	}
+	return exp, nil
 }
 
 func (e *logsExporter) Capabilities() consumer.Capabilities {

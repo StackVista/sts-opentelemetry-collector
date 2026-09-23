@@ -64,7 +64,7 @@ func TestSourceRotationAndTruncation(t *testing.T) {
 					f := newFixture(t, mode)
 					before := f.appendTimedRecords(0, 10)
 					defaultFingerprint := stressValidated(t, func(config map[string]any) {
-						delete(section(config, "receivers", "filelog/pods"), "fingerprint_size")
+						delete(section(config, "receivers", "file_log/pods"), "fingerprint_size")
 					})
 					p := f.start(defaultFingerprint, true)
 					p.ready()
@@ -126,7 +126,7 @@ func TestRepeatedFingerprintAfterTruncation(t *testing.T) {
 				f := newFixture(t, mode)
 				before := f.appendRecords(0, 0, 10)
 				p := f.start(stressValidated(t, func(config map[string]any) {
-					filelog := section(config, "receivers", "filelog/pods")
+					filelog := section(config, "receivers", "file_log/pods")
 					filelog["fingerprint_size"] = 32
 					if behavior != "default" {
 						filelog["on_truncate"] = behavior
