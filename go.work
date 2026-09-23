@@ -2,7 +2,6 @@ go 1.26.6
 
 use (
 	./common
-	./connector/stslogsrouteconnector
 	./connector/stsservicegraphconnector
 	./connector/topologyconnector
 	./exporter/clickhousestsexporter

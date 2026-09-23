@@ -1,4 +1,4 @@
-package stslogsrouteconnector
+package logsagent
 
 import (
 	"context"

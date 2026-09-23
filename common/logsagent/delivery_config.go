@@ -1,28 +1,23 @@
-package stslogsrouteconnector
+package logsagent
 
 import (
 	"errors"
 	"time"
 
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/pipeline"
 )
 
-type Config struct {
+type DeliveryConfig struct {
 	ControllerExtension component.ID  `mapstructure:"controller_extension"`
-	PromtailPipeline    pipeline.ID   `mapstructure:"promtail_pipeline"`
 	MaxConcurrentCalls  int           `mapstructure:"max_concurrent_calls"`
 	MaxRecordBytes      int           `mapstructure:"max_record_bytes"`
 	MaxRequestBytes     int           `mapstructure:"max_request_bytes"`
 	ExportLifetime      time.Duration `mapstructure:"export_lifetime"`
 }
 
-func (c *Config) Validate() error {
+func (c *DeliveryConfig) Validate() error {
 	if c.ControllerExtension.Type().String() == "" {
 		return errors.New("controller_extension is required")
-	}
-	if c.PromtailPipeline.Signal() != pipeline.SignalLogs {
-		return errors.New("promtail_pipeline must be a logs pipeline")
 	}
 	if c.MaxConcurrentCalls <= 0 {
 		return errors.New("max_concurrent_calls must be positive")

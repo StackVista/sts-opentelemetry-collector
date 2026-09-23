@@ -153,7 +153,7 @@ func TestInjectedDelayedSynchronousCompletion(t *testing.T) {
 			case <-p.done:
 				t.Fatal("collector exited with an admitted call held")
 			}
-			if len(stressEvents(p, "Logs export completed", "")) != 0 || control.count("connector_stopped") != 0 {
+			if len(stressEvents(p, "Logs export completed", "")) != 0 || control.count("delivery_stopped") != 0 {
 				t.Fatal("synchronous completion escaped the admission boundary")
 			}
 			assertNoFinalDrain(t, p)

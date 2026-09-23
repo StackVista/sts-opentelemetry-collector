@@ -27,92 +27,68 @@ func ValidatePipelineConfig(conf *confmap.Conf) (PipelineConfig, error) {
 	}
 	var err error
 	root := configFields{values: conf.ToStringMap(), path: "config", err: &err}
-	connectors := root.object("connectors")
-	if len(connectors.values) != 1 {
-		return PipelineConfig{}, errors.New("logs agent requires exactly one route connector")
+	if raw := root.values["connectors"]; raw != nil {
+		if connectors, ok := raw.(map[string]any); !ok || len(connectors) != 0 {
+			return PipelineConfig{}, errors.New("direct logs delivery must not configure connectors")
+		}
 	}
-	var routeID string
-	for id := range connectors.values {
-		routeID = id
+	service := root.object("service")
+	pipelines := service.object("pipelines")
+	if len(pipelines.values) != 1 {
+		return PipelineConfig{}, errors.New("logs agent requires exactly one pipeline")
 	}
-	if !componentType(routeID, "stslogsroute") {
-		return PipelineConfig{}, errors.New("logs agent connector must be stslogsroute")
+	var inputID string
+	for id := range pipelines.values {
+		inputID = id
 	}
-	route := connectors.namedObject(routeID, "route connector")
+	if !componentType(inputID, "logs") {
+		return PipelineConfig{}, errors.New("logs agent requires a logs input pipeline")
+	}
+	input := pipelines.namedObject(inputID, "input pipeline")
+	outputs := input.strings("exporters", false)
+	if len(outputs) != 1 || !componentType(outputs[0], "stsk8slogs") {
+		return PipelineConfig{}, errors.New("input pipeline must export only to one stsk8slogs exporter")
+	}
+	exporters := root.object("exporters")
+	promtail := exporters.namedObject(outputs[0], "Promtail-compatible exporter")
+	delivery := promtail.object("delivery")
 	cfg := PipelineConfig{
-		ExtensionID:    route.text("controller_extension"),
-		ExportLifetime: route.duration("export_lifetime"),
+		ExtensionID:        delivery.text("controller_extension"),
+		PromtailExporterID: outputs[0],
+		ExportLifetime:     delivery.duration("export_lifetime"),
 	}
-	promtailID := route.text("promtail_pipeline")
-	calls := route.positiveInt("max_concurrent_calls")
-	recordBytes := route.positiveInt("max_record_bytes")
-	requestBytes := route.positiveInt("max_request_bytes")
+	calls := delivery.positiveInt("max_concurrent_calls")
+	recordBytes := delivery.positiveInt("max_record_bytes")
+	requestBytes := delivery.positiveInt("max_request_bytes")
 	if err != nil {
 		return PipelineConfig{}, err
 	}
 	if recordBytes > requestBytes {
-		return PipelineConfig{}, errors.New("route max_record_bytes must not exceed max_request_bytes")
+		return PipelineConfig{}, errors.New("delivery max_record_bytes must not exceed max_request_bytes")
 	}
 	if !componentType(cfg.ExtensionID, "stslogsagent") {
-		return PipelineConfig{}, errors.New("route controller_extension must reference stslogsagent")
+		return PipelineConfig{}, errors.New("delivery controller_extension must reference stslogsagent")
 	}
-	if !componentType(promtailID, "logs") {
-		return PipelineConfig{}, errors.New("route must reference a logs pipeline")
-	}
-
-	service := root.object("service")
 	enabledExtensions := service.strings("extensions", false)
 	extensions := root.object("extensions")
 	extensions.namedObject(cfg.ExtensionID, "controller extension")
 	if !slices.Contains(enabledExtensions, cfg.ExtensionID) {
 		return PipelineConfig{}, errors.New("controller extension must be enabled in service.extensions")
 	}
-	pipelines := service.object("pipelines")
-	if len(pipelines.values) != 2 {
-		return PipelineConfig{}, errors.New("logs agent requires exactly two pipelines")
-	}
-	var inputID string
-	for id := range pipelines.values {
-		if id != promtailID {
-			if inputID != "" || !componentType(id, "logs") {
-				return PipelineConfig{}, errors.New("logs agent requires one logs input pipeline")
-			}
-			inputID = id
-		}
-	}
-	promtail := pipelines.namedObject(promtailID, "Promtail pipeline")
-	input := pipelines.namedObject(inputID, "input pipeline")
-	cfg.PromtailExporterID = terminalExporter(promtail, routeID)
-	if err != nil {
-		return PipelineConfig{}, err
-	}
-	if !componentType(cfg.PromtailExporterID, "stsk8slogs") {
-		return PipelineConfig{}, errors.New("the Promtail pipeline must export to stsk8slogs")
-	}
-	if outputs := input.strings("exporters", false); len(outputs) != 1 || outputs[0] != routeID {
-		return PipelineConfig{}, errors.New("input pipeline must export only to the route connector")
-	}
 	inputReceivers := input.strings("receivers", false)
-	if len(inputReceivers) != 1 || !componentType(inputReceivers[0], "filelog") {
+	if len(inputReceivers) != 1 || !componentType(inputReceivers[0], "filelog", "file_log") {
 		return PipelineConfig{}, errors.New("input pipeline must receive from exactly one filelog receiver")
 	}
 	processors := input.strings("processors", true)
 	for _, id := range processors {
 		// Unknown processors cannot be assumed to preserve synchronous completion.
-		if !componentType(id, "memory_limiter", "transform", "k8sattributes") {
+		if !componentType(id, "memory_limiter", "transform", "k8sattributes", "k8s_attributes") {
 			return PipelineConfig{}, errors.New("input pipeline contains an unsupported or asynchronous processor")
 		}
 		root.object("processors").namedObject(id, "input processor")
 	}
 
 	receivers := root.object("receivers")
-	exporters := root.object("exporters")
-	if _, exists := receivers.values[routeID]; exists {
-		return PipelineConfig{}, errors.New("route connector must not also be defined as a receiver")
-	}
-	if _, exists := exporters.values[routeID]; exists {
-		return PipelineConfig{}, errors.New("route connector must not also be defined as an exporter")
-	}
 	filelog := receivers.namedObject(inputReceivers[0], "filelog receiver")
 	files := filelog.positiveInt("max_concurrent_files")
 	filelog.boolean("preserve_trailing_whitespaces", true)
@@ -174,22 +150,6 @@ func ValidateEffectivePipelineConfig(conf *confmap.Conf) (PipelineConfig, error)
 		}
 	}
 	return ValidatePipelineConfig(confmap.NewFromStringMap(values))
-}
-
-func terminalExporter(pipeline configFields, routeID string) string {
-	receivers := pipeline.strings("receivers", false)
-	if len(receivers) != 1 || receivers[0] != routeID {
-		pipeline.fail("receivers", "must contain only the route connector")
-	}
-	if len(pipeline.strings("processors", true)) != 0 {
-		pipeline.fail("processors", "must be empty in terminal pipelines")
-	}
-	exporters := pipeline.strings("exporters", false)
-	if len(exporters) != 1 {
-		pipeline.fail("exporters", "must contain exactly one exporter")
-		return ""
-	}
-	return exporters[0]
 }
 
 func exporterBound(exporter configFields) time.Duration {

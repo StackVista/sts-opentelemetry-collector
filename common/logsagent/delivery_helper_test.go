@@ -1,4 +1,4 @@
-package stslogsrouteconnector_test
+package logsagent_test
 
 import (
 	"context"
@@ -73,10 +73,10 @@ func TestActualHelperTerminalClassifications(t *testing.T) {
 			retry.MaxElapsedTime = tc.retryLimit
 			exp := helperExporter(t, func(context.Context, plog.Logs) error { return tc.failure },
 				exporterhelper.WithRetry(retry))
-			cfg := defaults(t)
+			cfg := deliveryDefaults(t)
 			cfg.ExportLifetime = tc.lifetime
 			ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Millisecond}
-			c, reader := newRoute(t, cfg, ctrl, exp, exp)
+			c, reader := newDelivery(t, cfg, ctrl, exp)
 			before := time.Now()
 			err := c.ConsumeLogs(context.Background(), logsData())
 			require.Error(t, err)
@@ -102,10 +102,10 @@ func TestHelperLifetimeExpiryDuringAttempt(t *testing.T) {
 		<-ctx.Done()
 		return errors.New("unavailable")
 	}, exporterhelper.WithRetry(retry))
-	cfg := defaults(t)
+	cfg := deliveryDefaults(t)
 	cfg.ExportLifetime = 20 * time.Millisecond
 	ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Millisecond}
-	c, reader := newRoute(t, cfg, ctrl, exp, exp)
+	c, reader := newDelivery(t, cfg, ctrl, exp)
 	require.Error(t, c.ConsumeLogs(context.Background(), logsData()))
 	require.EqualValues(t, 1, ctrl.observer.Snapshot().DeadlineExpired)
 	require.EqualValues(t, 1, metricSum(t, reader, "stslogsroute.export_requests",
@@ -125,7 +125,7 @@ func TestHelperRetryRecovery(t *testing.T) {
 		return nil
 	}, exporterhelper.WithRetry(retry))
 	ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Second}
-	c, reader := newRoute(t, defaults(t), ctrl, exp, exp)
+	c, reader := newDelivery(t, deliveryDefaults(t), ctrl, exp)
 	require.NoError(t, c.ConsumeLogs(context.Background(), logsData()))
 	require.Equal(t, 3, attempts)
 	require.EqualValues(t, 1, metricSum(t, reader, "stslogsroute.export_requests",
@@ -147,11 +147,11 @@ func TestQueueWaiterCompletionDoesNotMeanWorkerCompletion(t *testing.T) {
 		close(workerDone)
 		return nil
 	}, exporterhelper.WithQueue(configoptional.Some(queue)))
-	cfg := defaults(t)
+	cfg := deliveryDefaults(t)
 	cfg.MaxConcurrentCalls = 1
 	cfg.ExportLifetime = 50 * time.Millisecond
 	ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Millisecond}
-	c, reader := newRoute(t, cfg, ctrl, exp, exp)
+	c, reader := newDelivery(t, cfg, ctrl, exp)
 	result := make(chan error, 1)
 	go func() { result <- c.ConsumeLogs(context.Background(), logsData()) }()
 	select {
@@ -165,7 +165,7 @@ func TestQueueWaiterCompletionDoesNotMeanWorkerCompletion(t *testing.T) {
 	require.NoError(t, c.Shutdown(context.Background()))
 	select {
 	case <-workerDone:
-		t.Fatal("worker should still be active after connector shutdown")
+		t.Fatal("worker should still be active after delivery shutdown")
 	default:
 	}
 	require.EqualValues(t, 1, metricSum(t, reader, "stslogsroute.export_requests",

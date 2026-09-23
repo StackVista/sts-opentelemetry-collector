@@ -1,16 +1,15 @@
-package stslogsrouteconnector
+package logsagent
 
 import (
 	"context"
 	"strconv"
 	"time"
 
-	"github.com/stackvista/sts-opentelemetry-collector/common/logsagent"
 	"go.opentelemetry.io/collector/pdata/plog"
 )
 
-func (c *logsConnector) ConsumeLogs(ctx context.Context, data plog.Logs) error {
-	if !logsagent.FaultEnabled("admission") {
+func (c *Delivery) ConsumeLogs(ctx context.Context, data plog.Logs) error {
+	if !FaultEnabled("admission") {
 		return c.consumeLogs(ctx, data)
 	}
 	done := make(chan error, c.cfg.MaxConcurrentCalls)
@@ -31,17 +30,17 @@ func (c *logsConnector) ConsumeLogs(ctx context.Context, data plog.Logs) error {
 	for c.account.Snapshot().Outstanding != int64(c.cfg.MaxConcurrentCalls) {
 		select {
 		case <-timeout.C:
-			panic("fault fixture did not fill connector admission")
+			panic("fault fixture did not fill delivery admission")
 		default:
 			time.Sleep(time.Millisecond)
 		}
 	}
-	logsagent.FaultMark("admission_full")
+	FaultMark("admission_full")
 	err := c.consumeLogs(ctx, data)
 	if err == nil || err.Error() != "logs route pre-export rejection: admission_saturated" {
 		panic("excess call did not return an admission rejection")
 	}
-	logsagent.FaultMark("admission_rejected")
+	FaultMark("admission_rejected")
 	for range c.cfg.MaxConcurrentCalls {
 		if callErr := <-done; callErr != nil {
 			panic(callErr)

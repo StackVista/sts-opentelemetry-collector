@@ -1,4 +1,4 @@
-package stslogsrouteconnector_test
+package logsagent_test
 
 import (
 	"context"
@@ -9,15 +9,12 @@ import (
 	"time"
 
 	"github.com/stackvista/sts-opentelemetry-collector/common/logsagent"
-	route "github.com/stackvista/sts-opentelemetry-collector/connector/stslogsrouteconnector"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/collector/connector"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/consumer/consumererror"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/plog/plogotlp"
-	"go.opentelemetry.io/collector/pipeline"
 )
 
 func TestRecordSizeMatchesProtobufEnvelopes(t *testing.T) {
@@ -61,7 +58,7 @@ func TestRecordSizeMatchesProtobufEnvelopes(t *testing.T) {
 			require.NoError(t, err)
 			for _, recordSize := range recordSizes {
 				for _, delta := range []int{-1, 0} {
-					cfg := defaults(t)
+					cfg := deliveryDefaults(t)
 					cfg.MaxRecordBytes = recordSize + delta
 					cfg.MaxRequestBytes = len(original)
 					expectedOversized := 0
@@ -73,7 +70,7 @@ func TestRecordSizeMatchesProtobufEnvelopes(t *testing.T) {
 					ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Second}
 					calls := 0
 					next := logsConsumer(t, func(context.Context, plog.Logs) error { calls++; return nil })
-					c, reader := newRoute(t, cfg, ctrl, next, next)
+					c, reader := newDelivery(t, cfg, ctrl, next)
 					err := c.ConsumeLogs(context.Background(), data)
 					if expectedOversized == 0 {
 						require.NoError(t, err)
@@ -112,7 +109,7 @@ func sharedMetadataLogs(records, attributes int) plog.Logs {
 }
 
 func TestManyRecordsWithSharedMetadata(t *testing.T) {
-	cfg := defaults(t)
+	cfg := deliveryDefaults(t)
 	data := sharedMetadataLogs(80000, 4000)
 	wire, err := plogotlp.NewExportRequestFromLogs(data).MarshalProto()
 	require.NoError(t, err)
@@ -122,7 +119,7 @@ func TestManyRecordsWithSharedMetadata(t *testing.T) {
 		require.Equal(t, 80000, received.LogRecordCount())
 		return nil
 	})
-	c, _ := newRoute(t, cfg, ctrl, next, next)
+	c, _ := newDelivery(t, cfg, ctrl, next)
 	require.NoError(t, c.ConsumeLogs(context.Background(), data))
 	require.Equal(t, logsagent.ExportSnapshot{Acknowledged: 1}, ctrl.observer.Snapshot())
 }
@@ -131,21 +128,17 @@ func BenchmarkSharedMetadataSizing(b *testing.B) {
 	for _, records := range []int{1000, 80000} {
 		for _, attributes := range []int{10, 4000} {
 			b.Run(fmt.Sprintf("records=%d/attributes=%d", records, attributes), func(b *testing.B) {
-				factory := route.NewFactory()
-				cfg, ok := factory.CreateDefaultConfig().(*route.Config)
-				require.True(b, ok)
+				cfg := deliveryDefaults(b)
 				data := sharedMetadataLogs(records, attributes)
 				size := (&plog.ProtoMarshaler{}).LogsSize(data)
 				require.LessOrEqual(b, size, cfg.MaxRequestBytes)
 				next, err := consumer.NewLogs(func(context.Context, plog.Logs) error { return nil })
 				require.NoError(b, err)
-				router := connector.NewLogsRouter(map[pipeline.ID]consumer.Logs{
-					cfg.PromtailPipeline: next,
-				})
-				c, err := factory.CreateLogsToLogs(context.Background(), settings(nil), cfg, router)
+				set := deliveryTelemetry(nil)
+				c, err := logsagent.NewDelivery(*cfg, set.MeterProvider, set.Logger)
 				require.NoError(b, err)
 				ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Second}
-				require.NoError(b, c.Start(context.Background(), hostStub{cfg.ControllerExtension: ctrl}))
+				require.NoError(b, c.Start(ctrl, next))
 				b.Cleanup(func() { require.NoError(b, c.Shutdown(context.Background())) })
 				b.ReportAllocs()
 				b.SetBytes(int64(size))

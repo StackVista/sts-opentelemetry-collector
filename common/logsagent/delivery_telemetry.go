@@ -1,10 +1,9 @@
-package stslogsrouteconnector
+package logsagent
 
 import (
 	"context"
 	"errors"
 
-	"github.com/stackvista/sts-opentelemetry-collector/common/logsagent"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
@@ -29,26 +28,26 @@ func newTelemetry(provider metric.MeterProvider) (telemetry, error) {
 	return t, errors.Join(errs[:]...)
 }
 
-func modeAttributes(mode logsagent.Mode) metric.MeasurementOption {
+func modeAttributes(mode Mode) metric.MeasurementOption {
 	return metric.WithAttributes(attribute.String("mode", metricMode(mode)))
 }
 
-func metricMode(mode logsagent.Mode) string {
+func metricMode(mode Mode) string {
 	switch mode {
-	case logsagent.PromtailMode:
+	case PromtailMode:
 		return string(mode)
 	default:
 		return "unselected"
 	}
 }
 
-func (t telemetry) reject(ctx context.Context, mode logsagent.Mode, reason string, records int) {
+func (t telemetry) reject(ctx context.Context, mode Mode, reason string, records int) {
 	attrs := metric.WithAttributes(attribute.String("mode", metricMode(mode)), attribute.String("reason", reason))
 	t.rejectedRequests.Add(ctx, 1, attrs)
 	t.rejectedRecords.Add(ctx, int64(records), attrs)
 }
 
-func (t telemetry) complete(ctx context.Context, mode logsagent.Mode, outcome string, draining bool) {
+func (t telemetry) complete(ctx context.Context, mode Mode, outcome string, draining bool) {
 	attrs := metric.WithAttributes(
 		attribute.String("mode", metricMode(mode)),
 		attribute.String("outcome", outcome),

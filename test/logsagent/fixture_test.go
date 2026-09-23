@@ -30,9 +30,9 @@ func TestFixtureBounds(t *testing.T) {
 	if bounds.ExportLifetime != s.Lifetime || bounds.RetryBound != s.minimumLifetime()-20*time.Second {
 		t.Fatalf("shared validator returned unexpected fixture bounds: %+v", bounds)
 	}
-	route := section(c, "connectors", "stslogsroute/logs")
+	delivery := section(c, "exporters", "stsk8slogs/promtail", "delivery")
 	files := section(c, "receivers", "filelog/pods")
-	if route["max_concurrent_calls"] != s.Concurrency || files["max_concurrent_files"] != s.Files ||
+	if delivery["max_concurrent_calls"] != s.Concurrency || files["max_concurrent_files"] != s.Files ||
 		s.Concurrency < s.Files+2 {
 		t.Fatal("fixture lacks admission headroom for recombination")
 	}
@@ -40,26 +40,22 @@ func TestFixtureBounds(t *testing.T) {
 		section(c, "extensions", "file_storage/logs")["recreate"] != false {
 		t.Fatal("fixture enabled receiver retry or checkpoint recreation")
 	}
-	for _, mode := range []string{"promtail"} {
-		exporter := "stsk8slogs/promtail"
-		e := section(c, "exporters", exporter)
-		q := section(e, "sending_queue")
-		if len(q) != 1 || q["enabled"] != false {
-			t.Fatal("fixture must disable exporter queues")
-		}
-		if _, exists := section(c, "service", "pipelines", "logs/"+mode)["processors"]; exists {
-			t.Fatal("terminal fixture pipeline contains processors")
-		}
+	q := section(c, "exporters", "stsk8slogs/promtail", "sending_queue")
+	if len(q) != 1 || q["enabled"] != false {
+		t.Fatal("fixture must disable exporter queues")
+	}
+	if len(section(c, "service", "pipelines")) != 1 || c["connectors"] != nil {
+		t.Fatal("fixture must use one direct pipeline without connectors")
 	}
 }
 
 func TestAuthoredFixtureRejectsOmittedBounds(t *testing.T) {
 	paths := make([][]string, 0, 29)
 	paths = append(paths, [][]string{
-		{"connectors", "stslogsroute/logs", "export_lifetime"},
-		{"connectors", "stslogsroute/logs", "max_concurrent_calls"},
-		{"connectors", "stslogsroute/logs", "max_record_bytes"},
-		{"connectors", "stslogsroute/logs", "max_request_bytes"},
+		{"exporters", "stsk8slogs/promtail", "delivery", "export_lifetime"},
+		{"exporters", "stsk8slogs/promtail", "delivery", "max_concurrent_calls"},
+		{"exporters", "stsk8slogs/promtail", "delivery", "max_record_bytes"},
+		{"exporters", "stsk8slogs/promtail", "delivery", "max_request_bytes"},
 		{"receivers", "filelog/pods", "max_concurrent_files"},
 		{"receivers", "filelog/pods", "retry_on_failure", "enabled"},
 		{"extensions", "file_storage/logs", "recreate"},

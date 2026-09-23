@@ -35,16 +35,14 @@ processors:
           - set(attributes["k8s.pod.uid"], "12345678-1234-1234-1234-123456789abc")
           - set(attributes["k8s.pod.name"], "fixture-0")
           - set(attributes["k8s.container.name"], "app")
-connectors:
-  stslogsroute/logs:
-    controller_extension: stslogsagent/logs
-    promtail_pipeline: logs/promtail
-    max_concurrent_calls: {{.Concurrency}}
-    max_record_bytes: 262144
-    max_request_bytes: 1048576
-    export_lifetime: {{.Lifetime}}
 exporters:
   stsk8slogs/promtail:
+    delivery:
+      controller_extension: stslogsagent/logs
+      max_concurrent_calls: {{.Concurrency}}
+      max_record_bytes: 262144
+      max_request_bytes: 1048576
+      export_lifetime: {{.Lifetime}}
     endpoint: {{printf "%q" .PromtailURL}}
     api_key: ${env:STS_API_KEY}
     cluster_name: fixture-cluster
@@ -68,7 +66,4 @@ service:
     logs/input:
       receivers: [filelog/pods]
       processors: [memory_limiter, transform/identity]
-      exporters: [stslogsroute/logs]
-    logs/promtail:
-      receivers: [stslogsroute/logs]
       exporters: [stsk8slogs/promtail]

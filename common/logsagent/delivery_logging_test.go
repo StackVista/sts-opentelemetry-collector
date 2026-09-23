@@ -1,4 +1,4 @@
-package stslogsrouteconnector_test
+package logsagent_test
 
 import (
 	"context"
@@ -8,12 +8,8 @@ import (
 	"time"
 
 	"github.com/stackvista/sts-opentelemetry-collector/common/logsagent"
-	route "github.com/stackvista/sts-opentelemetry-collector/connector/stslogsrouteconnector"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/collector/connector"
-	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/plog"
-	"go.opentelemetry.io/collector/pipeline"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 )
@@ -22,19 +18,16 @@ func TestExportDiagnosticsAreBoundedAndDebugOnly(t *testing.T) {
 	for _, level := range []zap.AtomicLevel{zap.NewAtomicLevelAt(zap.DebugLevel), zap.NewAtomicLevelAt(zap.InfoLevel)} {
 		t.Run(level.String(), func(t *testing.T) {
 			core, observed := observer.New(level)
-			set := settings(nil)
+			set := deliveryTelemetry(nil)
 			set.Logger = zap.New(core)
-			cfg := defaults(t)
+			cfg := deliveryDefaults(t)
 			cfg.MaxRecordBytes, cfg.MaxRequestBytes = 128, 512
 			var downstreamErr error
 			next := logsConsumer(t, func(context.Context, plog.Logs) error { return downstreamErr })
-			router := connector.NewLogsRouter(map[pipeline.ID]consumer.Logs{
-				cfg.PromtailPipeline: next,
-			})
-			c, err := route.NewFactory().CreateLogsToLogs(context.Background(), set, cfg, router)
+			c, err := logsagent.NewDelivery(*cfg, set.MeterProvider, set.Logger)
 			require.NoError(t, err)
 			ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Second}
-			require.NoError(t, c.Start(context.Background(), hostStub{cfg.ControllerExtension: ctrl}))
+			require.NoError(t, c.Start(ctrl, next))
 			t.Cleanup(func() { require.NoError(t, c.Shutdown(context.Background())) })
 
 			data := logsData()

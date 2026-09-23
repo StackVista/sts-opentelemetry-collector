@@ -20,13 +20,13 @@ func TestStartupRejectsInvalidBounds(t *testing.T) {
 	tests := make([]boundCase, 0, 27)
 	tests = append(tests, []boundCase{
 		{"deadline_below_required", "export_lifetime", func(c map[string]any) {
-			section(c, "connectors", "stslogsroute/logs")["export_lifetime"] = "22s"
+			section(c, "exporters", "stsk8slogs/promtail", "delivery")["export_lifetime"] = "22s"
 		}},
 		{"negative_deadline", "export_lifetime", func(c map[string]any) {
-			section(c, "connectors", "stslogsroute/logs")["export_lifetime"] = "-1s"
+			section(c, "exporters", "stsk8slogs/promtail", "delivery")["export_lifetime"] = "-1s"
 		}},
 		{"admission_below_files_plus_two", "max_concurrent_calls", func(c map[string]any) {
-			section(c, "connectors", "stslogsroute/logs")["max_concurrent_calls"] = 5
+			section(c, "exporters", "stsk8slogs/promtail", "delivery")["max_concurrent_calls"] = 5
 		}},
 		{"receiver_retry_enabled", "retry_on_failure", func(c map[string]any) {
 			section(c, "receivers", "filelog/pods", "retry_on_failure")["enabled"] = true

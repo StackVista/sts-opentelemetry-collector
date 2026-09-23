@@ -52,16 +52,14 @@ processors:
     log_statements:
       - context: resource
         statements: ['set(attributes["k8s.cluster.name"], "fixture")']
-connectors:
-  stslogsroute/logs:
-    controller_extension: stslogsagent/logs
-    promtail_pipeline: logs/promtail
-    max_concurrent_calls: 8
-    max_record_bytes: 262144
-    max_request_bytes: 1048576
-    export_lifetime: 55s
 exporters:
   stsk8slogs/promtail:
+    delivery:
+      controller_extension: stslogsagent/logs
+      max_concurrent_calls: 8
+      max_record_bytes: 262144
+      max_request_bytes: 1048576
+      export_lifetime: 55s
     endpoint: http://127.0.0.1:18080/stsAgent/logs/k8s
     cluster_name: fixture
     timeout: 5s
@@ -78,9 +76,6 @@ service:
     logs/input:
       receivers: [filelog/pods]
       processors: [memory_limiter, transform/static_pod, k8sattributes, transform/cluster]
-      exporters: [stslogsroute/logs]
-    logs/promtail:
-      receivers: [stslogsroute/logs]
       exporters: [stsk8slogs/promtail]
 `
 
@@ -134,11 +129,14 @@ func TestValidatePipelineConfig(t *testing.T) {
 	}{
 		{name: "spec graph", want: base},
 		{
+			name:    "canonical component IDs",
+			fixture: strings.NewReplacer("filelog/", "file_log/", "k8sattributes", "k8s_attributes").Replace(pipelineFixture),
+			want:    base,
+		},
+		{
 			name: "configurable component and pipeline IDs",
 			fixture: strings.NewReplacer(
 				"stslogsagent/logs", "stslogsagent/custom",
-				"stslogsroute/logs", "stslogsroute/custom",
-				"logs/promtail", "logs/old",
 
 				"logs/input", "logs/source",
 				"filelog/pods", "filelog/custom",
@@ -161,7 +159,7 @@ func TestValidatePipelineConfig(t *testing.T) {
 			name: "slower Promtail exporter determines bound",
 			changes: map[string]any{
 				"exporters::stsk8slogs/promtail::retry_on_failure::max_elapsed_time": "31s",
-				"connectors::stslogsroute/logs::export_lifetime":                     "92s",
+				"exporters::stsk8slogs/promtail::delivery::export_lifetime":          "92s",
 			},
 			want: logsagent.PipelineConfig{
 				ExtensionID: base.ExtensionID, PromtailExporterID: base.PromtailExporterID,
@@ -262,35 +260,29 @@ func TestValidatePipelineConfigRejectsGraphChanges(t *testing.T) {
 		value any
 		want  string
 	}{
-		{"second route", "connectors::stslogsroute/extra", nil, "exactly one route"},
-		{"missing destination", "connectors::stslogsroute/logs::promtail_pipeline", "logs/missing", "one logs input"},
-		{"wrong signal", "connectors::stslogsroute/logs::promtail_pipeline", "traces/promtail", "a logs pipeline"},
-		{"wrong controller", "connectors::stslogsroute/logs::controller_extension", "health_check", "stslogsagent"},
-		{"missing controller", "connectors::stslogsroute/logs::controller_extension", "stslogsagent/absent", "enabled"},
+		{"connector graph", "connectors", map[string]any{"stslogsroute/logs": nil}, "must not configure connectors"},
+		{"malformed connectors", "connectors", "invalid", "must not configure connectors"},
+		{"wrong signal", "service::pipelines", map[string]any{"traces/input": nil}, "logs input pipeline"},
+		{"wrong controller", "exporters::stsk8slogs/promtail::delivery::controller_extension", "health_check", "stslogsagent"},
+		{"missing controller", "exporters::stsk8slogs/promtail::delivery::controller_extension", "stslogsagent/absent", "enabled"},
 		{"disabled controller", "service::extensions", []any{"file_storage/logs"}, "enabled"},
 		{"disabled storage", "service::extensions", []any{"stslogsagent/logs"}, "enabled file_storage"},
 		{"duplicate extension", "service::extensions", []string{"file_storage/logs", "stslogsagent/logs", "file_storage/logs"}, "distinct"},
 		{"extra logs bypass", "service::pipelines::logs/bypass", map[string]any{
 			"receivers": []string{"filelog/pods"}, "exporters": []string{"stsk8slogs/promtail"},
-		}, "exactly two"},
-		{"uninspected signal graph", "service::pipelines::metrics/extra", nil, "exactly two"},
+		}, "exactly one"},
+		{"uninspected signal graph", "service::pipelines::metrics/extra", nil, "exactly one"},
 		{"input fanout", "service::pipelines::logs/input::exporters", []string{"stslogsroute/logs", "stsk8slogs/promtail"}, "only to"},
-		{"input bypass", "service::pipelines::logs/input::exporters", []string{"stsk8slogs/promtail"}, "only to"},
+		{"input bypass", "service::pipelines::logs/input::exporters", []string{"debug"}, "only to"},
 		{"second file reader", "service::pipelines::logs/input::receivers", []string{"filelog/pods", "filelog/other"}, "exactly one filelog"},
 		{"wrong input", "service::pipelines::logs/input::receivers", []string{"otlp"}, "exactly one filelog"},
 		{"receiver scalar", "service::pipelines::logs/input::receivers", "filelog/pods", "exactly one filelog"},
-		{"terminal fanout", "service::pipelines::logs/promtail::exporters", []string{"stsk8slogs/promtail", "debug"}, "exactly one exporter"},
-		{"terminal direct receiver", "service::pipelines::logs/promtail::receivers", []string{"filelog/pods"}, "only the route"},
-		{"wrong promtail", "service::pipelines::logs/promtail::exporters", []string{"debug"}, "stsk8slogs"},
-		{"missing exporter", "service::pipelines::logs/promtail::exporters", []string{"stsk8slogs/absent"}, "configured mapping"},
-		{"terminal processor", "service::pipelines::logs/promtail::processors", []string{"batch"}, "must be empty"},
+		{"missing exporter", "service::pipelines::logs/input::exporters", []string{"stsk8slogs/absent"}, "configured mapping"},
 		{"input batch", "service::pipelines::logs/input::processors", []string{"batch/logs"}, "asynchronous processor"},
 		{"unknown processor", "service::pipelines::logs/input::processors", []string{"custom/buffer"}, "asynchronous processor"},
 		{"missing processor", "service::pipelines::logs/input::processors", []string{"transform/missing"}, "configured mapping"},
 		{"duplicate processor", "service::pipelines::logs/input::processors", []string{"memory_limiter", "memory_limiter"}, "distinct"},
 		{"nonstring processor", "service::pipelines::logs/input::processors", []any{12}, "list of component IDs"},
-		{"receiver collision", "receivers::stslogsroute/logs", nil, "also be defined as a receiver"},
-		{"exporter collision", "exporters::stslogsroute/logs", nil, "also be defined as an exporter"},
 		{"receiver retries", "receivers::filelog/pods::retry_on_failure::enabled", true, "explicitly false"},
 		{"receiver default retries", "receivers::filelog/pods::retry_on_failure", nil, "explicitly false"},
 		{"storage recreation", "extensions::file_storage/logs::recreate", true, "explicitly false"},
@@ -299,10 +291,10 @@ func TestValidatePipelineConfigRejectsGraphChanges(t *testing.T) {
 		{"file concurrency", "receivers::filelog/pods::max_concurrent_files", 7, "max_concurrent_files + 2"},
 		{"concurrency overflow", "receivers::filelog/pods::max_concurrent_files", int64(math.MaxInt64), "max_concurrent_files + 2"},
 		{"zero concurrency", "receivers::filelog/pods::max_concurrent_files", 0, "positive integer"},
-		{"small admission", "connectors::stslogsroute/logs::max_concurrent_calls", 5, "max_concurrent_files + 2"},
-		{"zero record limit", "connectors::stslogsroute/logs::max_record_bytes", 0, "positive integer"},
-		{"small request limit", "connectors::stslogsroute/logs::max_request_bytes", 10, "must not exceed"},
-		{"short lifetime", "connectors::stslogsroute/logs::export_lifetime", "54.999999999s", "plus 20s"},
+		{"small admission", "exporters::stsk8slogs/promtail::delivery::max_concurrent_calls", 5, "max_concurrent_files + 2"},
+		{"zero record limit", "exporters::stsk8slogs/promtail::delivery::max_record_bytes", 0, "positive integer"},
+		{"small request limit", "exporters::stsk8slogs/promtail::delivery::max_request_bytes", 10, "must not exceed"},
+		{"short lifetime", "exporters::stsk8slogs/promtail::delivery::export_lifetime", "54.999999999s", "plus 20s"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -312,13 +304,13 @@ func TestValidatePipelineConfigRejectsGraphChanges(t *testing.T) {
 		})
 	}
 	for _, path := range []string{
-		"connectors", "service", "service::pipelines::logs/promtail", "receivers::filelog/pods",
+		"exporters::stsk8slogs/promtail::delivery", "service", "service::pipelines::logs/input", "receivers::filelog/pods",
 		"extensions::stslogsagent/logs", "extensions::file_storage/logs",
 		"extensions::file_storage/logs::recreate", "receivers::filelog/pods::storage",
 		"receivers::filelog/pods::retry_on_failure", "receivers::filelog/pods::max_concurrent_files",
-		"connectors::stslogsroute/logs::max_concurrent_calls",
-		"connectors::stslogsroute/logs::max_record_bytes", "connectors::stslogsroute/logs::max_request_bytes",
-		"connectors::stslogsroute/logs::export_lifetime",
+		"exporters::stsk8slogs/promtail::delivery::max_concurrent_calls",
+		"exporters::stsk8slogs/promtail::delivery::max_record_bytes", "exporters::stsk8slogs/promtail::delivery::max_request_bytes",
+		"exporters::stsk8slogs/promtail::delivery::export_lifetime",
 	} {
 		t.Run("missing/"+path, func(t *testing.T) {
 			values := fixtureMap(t, pipelineFixture)
@@ -330,7 +322,7 @@ func TestValidatePipelineConfigRejectsGraphChanges(t *testing.T) {
 
 func TestValidatePipelineConfigDurationScalars(t *testing.T) {
 	for _, path := range []string{
-		"connectors::stslogsroute/logs::export_lifetime",
+		"exporters::stsk8slogs/promtail::delivery::export_lifetime",
 		"exporters::stsk8slogs/promtail::timeout",
 		"exporters::stsk8slogs/promtail::retry_on_failure::initial_interval",
 		"exporters::stsk8slogs/promtail::retry_on_failure::max_interval",
@@ -363,7 +355,7 @@ func TestValidatePipelineConfigOverflow(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			values := fixtureMap(t, pipelineFixture)
-			fixtureSet(t, values, "connectors::stslogsroute/logs::export_lifetime", "9223372036854775807ns")
+			fixtureSet(t, values, "exporters::stsk8slogs/promtail::delivery::export_lifetime", "9223372036854775807ns")
 			fixtureSet(t, values, "exporters::stsk8slogs/promtail::timeout", tt.timeout)
 			fixtureSet(t, values, "exporters::stsk8slogs/promtail::retry_on_failure::max_elapsed_time", tt.elapsed)
 			assertPipelineRejected(t, values, tt.want)
@@ -374,8 +366,8 @@ func TestValidatePipelineConfigOverflow(t *testing.T) {
 func TestValidatePipelineConfigErrorsDoNotEchoValues(t *testing.T) {
 	const marker = "untrusted-configuration-value"
 	for _, path := range []string{
-		"connectors::stslogsroute/logs::export_lifetime",
-		"connectors::stslogsroute/logs::controller_extension",
+		"exporters::stsk8slogs/promtail::delivery::export_lifetime",
+		"exporters::stsk8slogs/promtail::delivery::controller_extension",
 		"exporters::stsk8slogs/promtail::sending_queue",
 		"exporters::stsk8slogs/promtail::retry_on_failure::multiplier",
 		"receivers::filelog/pods::storage",

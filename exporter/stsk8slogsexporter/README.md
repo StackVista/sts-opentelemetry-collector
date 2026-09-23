@@ -32,6 +32,14 @@ The upstream exporter sent/failed counters count valid records only. Exporter
 queues must be disabled. Disabled retries and unlimited retry durations are rejected.
 The sender bounds each HTTP attempt; the caller owns the overall export lifetime.
 
+For a complete Filelog agent, configure `delivery` with `controller_extension`,
+`max_concurrent_calls`, `max_record_bytes`, `max_request_bytes` and
+`export_lifetime`, as in the [agent fixture](../../test/validate/configs/logs-agent.yaml).
+This wraps the complete synchronous export with admission limits, independent
+cancellation, completion accounting and shutdown joining before retries stop.
+The `stslogsagent` extension supplies readiness and the absolute drain deadline.
+Standalone exporters omit `delivery` when their caller owns those guarantees.
+
 The Receiver client is pinned to a Go pseudo-version of its reviewed commit.
 No library tag or separate release is required.
 

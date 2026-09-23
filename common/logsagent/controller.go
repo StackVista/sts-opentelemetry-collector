@@ -20,7 +20,7 @@ func (m Mode) String() string {
 	}
 }
 
-// Controller fixes routing for one process and shares its absolute drain deadline.
+// Controller shares the selected mode and absolute drain deadline.
 type Controller interface {
 	SelectedMode() Mode
 	RegisterExportObserver(ExportObserver) error
@@ -28,7 +28,7 @@ type Controller interface {
 	RetryBound() time.Duration
 }
 
-// ExportObserver counts synchronous connector calls, not exporter workers.
+// ExportObserver counts synchronous delivery calls, not exporter workers.
 type ExportObserver interface {
 	Snapshot() ExportSnapshot
 }

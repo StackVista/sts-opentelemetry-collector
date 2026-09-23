@@ -1,4 +1,4 @@
-package stslogsrouteconnector
+package logsagent
 
 import (
 	"context"
@@ -7,54 +7,65 @@ import (
 	"sync"
 	"time"
 
-	"github.com/stackvista/sts-opentelemetry-collector/common/logsagent"
-	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/connector"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/consumer/consumererror"
 	"go.opentelemetry.io/collector/pdata/plog"
+	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 )
 
-type logsConnector struct {
-	cfg       Config
-	router    connector.LogsRouterAndConsumer
+type Delivery struct {
+	cfg       DeliveryConfig
 	telemetry telemetry
-	account   logsagent.Accounting
+	account   Accounting
 	logger    *zap.Logger
 
 	mu         sync.Mutex
-	controller logsagent.Controller
+	controller Controller
 	selected   consumer.Logs
-	mode       logsagent.Mode
+	mode       Mode
 	retryBound time.Duration
 	stopping   bool
 	slots      chan struct{}
 	done       chan struct{}
 }
 
-func (c *logsConnector) Start(_ context.Context, host component.Host) error {
+func NewDelivery(cfg DeliveryConfig, meter metric.MeterProvider, logger *zap.Logger) (*Delivery, error) {
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	telemetry, err := newTelemetry(meter)
+	if err != nil {
+		return nil, err
+	}
+	return &Delivery{
+		cfg:       cfg,
+		slots:     make(chan struct{}, cfg.MaxConcurrentCalls),
+		done:      make(chan struct{}),
+		telemetry: telemetry,
+		logger:    logger,
+	}, nil
+}
+
+func (c *Delivery) Start(controller Controller, selected consumer.Logs) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.selected != nil || c.stopping {
 		return errors.New("logs route already started or stopped")
 	}
-	controller, ok := host.GetExtensions()[c.cfg.ControllerExtension].(logsagent.Controller)
-	if !ok {
+	if controller == nil {
 		return errors.New("controller_extension does not provide a logs agent controller")
 	}
+	if selected == nil {
+		return errors.New("logs delivery requires a selected consumer")
+	}
 	mode := controller.SelectedMode()
-	selectedID := c.cfg.PromtailPipeline
-	if mode != logsagent.PromtailMode {
+	if mode != PromtailMode {
 		return errors.New("controller_extension has no valid selected mode")
 	}
 	bound := controller.RetryBound()
 	if bound <= 0 || bound > c.cfg.ExportLifetime {
 		return errors.New("validated retry bound must be positive and fit export_lifetime")
-	}
-	selected, err := c.router.Consumer(selectedID)
-	if err != nil {
-		return err
 	}
 	if err := controller.RegisterExportObserver(&c.account); err != nil {
 		return err
@@ -63,11 +74,11 @@ func (c *logsConnector) Start(_ context.Context, host component.Host) error {
 	return nil
 }
 
-func (*logsConnector) Capabilities() consumer.Capabilities {
+func (*Delivery) Capabilities() consumer.Capabilities {
 	return consumer.Capabilities{MutatesData: false}
 }
 
-func (c *logsConnector) ConsumeLogs(ctx context.Context, data plog.Logs) error {
+func (c *Delivery) ConsumeLogs(ctx context.Context, data plog.Logs) error {
 	c.mu.Lock()
 	if c.selected == nil || c.stopping {
 		c.mu.Unlock()
@@ -137,7 +148,7 @@ func (c *logsConnector) ConsumeLogs(ctx context.Context, data plog.Logs) error {
 	return err
 }
 
-func (c *logsConnector) reject(ctx context.Context, records int, reason string, permanent bool) error {
+func (c *Delivery) reject(ctx context.Context, records int, reason string, permanent bool) error {
 	c.mu.Lock()
 	mode := c.mode
 	draining := c.controller != nil && !c.controller.DrainDeadline().IsZero()
@@ -156,7 +167,7 @@ func (c *logsConnector) reject(ctx context.Context, records int, reason string, 
 	return err
 }
 
-func (c *logsConnector) Shutdown(ctx context.Context) error {
+func (c *Delivery) Shutdown(ctx context.Context) error {
 	c.mu.Lock()
 	if !c.stopping {
 		c.stopping = true
@@ -200,5 +211,5 @@ func oversizedRecords(data plog.Logs, limit int) int {
 
 // Resource, scope and record fields each use a one-byte protobuf tag.
 func messageSize(payloadBytes int) int {
-	return 1 + (bits.Len(uint(payloadBytes)|1)+6)/7 + payloadBytes
+	return 1 + (bits.Len(uint(payloadBytes)|1)+6)/7 + payloadBytes //nolint:gosec // Protobuf sizes are nonnegative.
 }

@@ -7,6 +7,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/stackvista/sts-opentelemetry-collector/common/logsagent"
 	"go.opentelemetry.io/collector/config/configopaque"
 	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/config/configretry"
@@ -23,6 +24,7 @@ type Config struct {
 	TimeoutSettings exporterhelper.TimeoutConfig                             `mapstructure:",squash"`
 	BackOffConfig   configretry.BackOffConfig                                `mapstructure:"retry_on_failure"`
 	QueueSettings   configoptional.Optional[exporterhelper.QueueBatchConfig] `mapstructure:"sending_queue"`
+	Delivery        *logsagent.DeliveryConfig                                `mapstructure:"delivery"`
 }
 
 // TLSConfig adds custom certificates to system trust.
@@ -57,6 +59,9 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.QueueSettings.HasValue() {
 		return errors.New("sending_queue must be disabled")
+	}
+	if cfg.Delivery != nil {
+		return cfg.Delivery.Validate()
 	}
 	return nil
 }

@@ -67,16 +67,14 @@ processors:
       - context: resource
         statements:
           - set(attributes["k8s.cluster.name"], "fixture-cluster")
-connectors:
-  stslogsroute/logs:
-    controller_extension: stslogsagent/logs
-    promtail_pipeline: logs/promtail
-    max_concurrent_calls: 8
-    max_record_bytes: 262144
-    max_request_bytes: 1048576
-    export_lifetime: 90s
 exporters:
   stsk8slogs/promtail:
+    delivery:
+      controller_extension: stslogsagent/logs
+      max_concurrent_calls: 8
+      max_record_bytes: 262144
+      max_request_bytes: 1048576
+      export_lifetime: 90s
     endpoint: http://127.0.0.1:18080/stsAgent/logs/k8s
     api_key: synthetic-fixture-key
     cluster_name: fixture-cluster
@@ -102,7 +100,4 @@ service:
     logs/input:
       receivers: [filelog/pods]
       processors: [memory_limiter, transform/static_pod, k8sattributes, transform/cluster]
-      exporters: [stslogsroute/logs]
-    logs/promtail:
-      receivers: [stslogsroute/logs]
       exporters: [stsk8slogs/promtail]

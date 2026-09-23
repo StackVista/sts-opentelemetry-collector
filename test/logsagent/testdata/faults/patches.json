@@ -9,18 +9,18 @@
     "source": "control.go.txt"
   },
   {
-    "file": "connector/stslogsrouteconnector/processfault.go",
-    "source": "connector.go.txt"
+    "file": "common/logsagent/deliveryfault.go",
+    "source": "delivery.go.txt"
   },
   {
-    "file": "connector/stslogsrouteconnector/connector.go",
-    "old": "func (c *logsConnector) ConsumeLogs(",
-    "new": "func (c *logsConnector) consumeLogs("
+    "file": "common/logsagent/delivery.go",
+    "old": "func (c *Delivery) ConsumeLogs(",
+    "new": "func (c *Delivery) consumeLogs("
   },
   {
-    "file": "connector/stslogsrouteconnector/connector.go",
+    "file": "common/logsagent/delivery.go",
     "old": "case <-c.done:\n\t\treturn nil",
-    "new": "case <-c.done:\n\t\tlogsagent.FaultMark(\"connector_stopped\")\n\t\treturn nil"
+    "new": "case <-c.done:\n\t\tFaultMark(\"delivery_stopped\")\n\t\treturn nil"
   },
   {
     "file": "extension/stslogsagentextension/controller.go",
@@ -28,8 +28,8 @@
     "new": "c.exporterStatus = event.Status()\n\tif event.Status() == componentstatus.StatusStopping {\n\t\tlogsagent.FaultMark(\"selected_exporter_stopping\")\n\t}"
   },
   {
-    "file": "connector/stslogsrouteconnector/connector.go",
+    "file": "common/logsagent/delivery.go",
     "old": "err := selected.ConsumeLogs(exportCtx, data)",
-    "new": "finish := logsagent.FaultCall()\n\terr := selected.ConsumeLogs(exportCtx, data)\n\tlogsagent.FaultPause(\"completion\")\n\tfinish()"
+    "new": "finish := FaultCall()\n\terr := selected.ConsumeLogs(exportCtx, data)\n\tFaultPause(\"completion\")\n\tfinish()"
   }
 ]
