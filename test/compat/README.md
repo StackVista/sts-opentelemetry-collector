@@ -117,6 +117,35 @@ section 7.9 of the migration document, and the 42 undecided, nearly all of them 
 derived and waiting on NA-8. Everything else is mechanical, and the most common mechanical
 combination is a split by attribute followed by a rate conversion.
 
+## Naming rules, settled
+
+`naming/` runs the remote write translator and the prometheus receiver against a matrix of
+input shapes and records the result in two golden files. That is NA-2, and it is a test rather
+than a note because the translation strategy is version dependent and the exporter is already
+moving from `add_metric_suffixes` to `translation_strategy`.
+
+What it establishes:
+
+| finding | consequence |
+| ------- | ----------- |
+| The default appends unit and type suffixes: `kubernetes.memory.usage` (`By`) becomes `kubernetes_memory_usage_bytes`, and `container.cpu.time` (`s`, monotonic sum) becomes `container_cpu_time_seconds_total` | The default cannot produce the Agent V2 names, so the agent would have to emit gauges with empty units purely to control naming |
+| `translation_strategy: UnderscoreEscapingWithoutSuffixes` escapes dots and dashes to underscores and appends nothing | This reproduces the Agent V2 shape from the natural names and units, so the agent can carry honest units and types |
+| An already underscored monotonic sum is passed through unchanged by every strategy | There is no double `_total` problem to work around |
+| The two UTF-8 strategies need remote write 2.0, which the platform does not run, and they preserve dots | They are not available, and if they were they would break the contract, because the store holds underscores |
+| A `metric_relabel_configs` rule can write a dotted `__name__` and it survives to OTLP | Renames can live in relabel rules rather than OTTL |
+| A dotted name cannot arrive through exposition, it is dropped before relabeling | Scrape targets must keep exposing underscored names, which they do |
+| Attribute keys are escaped the same way, so `k8s.pod.name` becomes the label `k8s_pod_name` | Label compatibility has to be done agent side, as section 3.1 of the migration document already says |
+
+The decision that follows: the agent emits dotted names with their real units and types, and
+the platform sets `translation_strategy: UnderscoreEscapingWithoutSuffixes` on the server side
+`prometheusremotewrite/victoria-metrics` exporter. This is why `stored_name` in `contract.csv`
+is a plain dots and dashes to underscores transform, with no suffix handling: that is the
+behaviour the naming test pins down.
+
+One thing this cannot check, because it is a different repository: that the deployed collector
+actually sets that strategy. Close that with a helm unittest in the chart repository asserting
+the rendered config contains it.
+
 ## Two things this cannot answer yet
 
 **Label spelling.** The `labels` column is empty until someone runs `dump-live-series.sh`

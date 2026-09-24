@@ -328,6 +328,15 @@ jobs:
             echo "::endgroup::"
           done
 
+      - name: Run metrics naming tests
+        run: |
+          set -euo pipefail
+          # Standalone module, built with the workspace disabled so it resolves the collector
+          # versions pinned in sts-otel-builder.yaml rather than the union of every module.
+          echo "::group::go test test/compat/naming"
+          (cd test/compat/naming && GOWORK=off go test ./...)
+          echo "::endgroup::"
+
   integration-test:
     runs-on: ubuntu-latest
     permissions:

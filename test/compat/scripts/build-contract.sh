@@ -6,6 +6,7 @@
 #   generated/agent-metrics.csv        metric inventory scanned from the agent source
 #   mapping/supplemental-metrics.csv   names the agent assembles at runtime
 #   mapping/otel-sources.csv           where each metric can come from in an OTel pipeline
+#   naming/testdata/naming.csv         the exporter naming rules, from the naming test
 #   generated/live-series.csv          real label sets, when a live dump is available
 #   generated/queries.csv              which artifacts reference which metric
 #   generated/queries.status           whether that extraction completed, so a confirmed
@@ -43,6 +44,62 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT
 
 strip_comments() { grep -vE '^[[:space:]]*(#|$)' "$1"; }
+
+# Verify the stored_name transform against the exporter rules recorded by the naming test,
+# so the two cannot drift. The contract assumes the exporter escapes dots and dashes to
+# underscores and appends nothing, which is what translation_strategy
+# UnderscoreEscapingWithoutSuffixes does. Histograms additionally get a bucket, count and sum
+# series, which is the only suffix expected.
+check_naming_rules() {
+  local golden="${COMPAT_DIR}/naming/testdata/naming.csv"
+  if [[ ! -f "${golden}" ]]; then
+    printf 'missing %s, run: (cd naming && GOWORK=off go test ./... -update)\n' "${golden}" >&2
+    return 1
+  fi
+
+  local failures=0 checked=0
+  while IFS=, read -r variant strategy prw metric_name unit kind series_name; do
+    [[ "${variant}" == "variant" || -z "${variant}" ]] && continue
+    [[ "${strategy}" == "UnderscoreEscapingWithoutSuffixes" ]] || continue
+
+    local expected
+    expected="$(printf '%s' "${metric_name}" | tr '.-' '__')"
+
+    case "${kind}" in
+      histogram)
+        case "${series_name}" in
+          "${expected}_bucket"|"${expected}_count"|"${expected}_sum") ;;
+          *)
+            printf 'naming rule mismatch for %s: %s is not %s plus a histogram suffix\n' \
+              "${variant}" "${series_name}" "${expected}" >&2
+            failures=$((failures + 1))
+            ;;
+        esac
+        ;;
+      *)
+        if [[ "${series_name}" != "${expected}" ]]; then
+          printf 'naming rule mismatch for %s: %s is not %s\n' \
+            "${variant}" "${series_name}" "${expected}" >&2
+          failures=$((failures + 1))
+        fi
+        ;;
+    esac
+    checked=$((checked + 1))
+  done <"${golden}"
+
+  if [[ "${checked}" -eq 0 ]]; then
+    printf 'no naming rules found in %s\n' "${golden}" >&2
+    return 1
+  fi
+  if [[ "${failures}" -gt 0 ]]; then
+    printf '%d of %d naming rules do not match the transform this builder applies\n' \
+      "${failures}" "${checked}" >&2
+    return 1
+  fi
+  printf 'naming rules match the exporter behaviour (%d checked)\n' "${checked}"
+}
+
+check_naming_rules || exit 1
 
 # Inventory: scanned rows plus supplemental rows, scanned wins on conflict since it carries
 # a file reference that a reviewer can check.
