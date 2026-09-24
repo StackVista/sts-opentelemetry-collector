@@ -3,6 +3,7 @@ package logsagent_test
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,8 +11,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -169,20 +172,36 @@ func TestStressTimerFlushDeadlineAfterSchedulingStall(t *testing.T) {
 	f := newFixture(t)
 	const sources = 4
 	partials, markers := stressPartials(t, f, sources)
+	type heldResponse struct {
+		request  request
+		canceled <-chan struct{}
+	}
+	retried := make(chan heldResponse, sources)
+	release := make(chan struct{})
+	releaseResponse := sync.OnceFunc(func() { close(release) })
+	t.Cleanup(releaseResponse)
+	f.backend.setBeforeResponse(func(ctx context.Context, req request) {
+		if len(req.records) != 1 || !slices.Contains(partials, req.records[0].body) {
+			return
+		}
+		if f.backend.bodies(false)[req.records[0].body] == 2 {
+			retried <- heldResponse{request: req, canceled: ctx.Done()}
+			<-release
+		}
+	})
 	p := f.start(stressValidated(t, nil), true)
 	p.ready()
 	f.backend.waitBodies(markers, true)
 	stressPending(t, f, partials)
 	f.backend.setPlan(responsePlan{status: http.StatusServiceUnavailable})
-	eventually(t, 8*time.Second, "partial timer flush holding the recombiner lock during retries", func() bool {
-		counts := f.backend.bodies(false)
-		for _, body := range partials {
-			if counts[body] >= 2 {
-				return true
-			}
-		}
-		return false
-	})
+	waitRetry := time.NewTimer(8 * time.Second)
+	defer waitRetry.Stop()
+	var held heldResponse
+	select {
+	case held = <-retried:
+	case <-waitRetry.C:
+		t.Fatal("timed out waiting for a partial timer retry at the backend response boundary")
+	}
 	if len(stressEvents(p, "Logs export completed", "retry_exhausted")) != 0 {
 		t.Fatal("timer export already completed before the contention scenario")
 	}
@@ -193,6 +212,11 @@ func TestStressTimerFlushDeadlineAfterSchedulingStall(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = p.cmd.Process.Signal(syscall.SIGCONT) })
 	stressStopped(t, p)
+	select {
+	case <-held.canceled:
+		t.Fatal("held partial retry ended before SIGSTOP")
+	default:
+	}
 	for _, event := range stressEvents(p, "Logs export completed", "") {
 		if event["outcome"] != "acknowledged" {
 			t.Fatalf("scheduling-stall setup lost the timer export before SIGSTOP: outcome=%v", event["outcome"])
@@ -206,31 +230,49 @@ func TestStressTimerFlushDeadlineAfterSchedulingStall(t *testing.T) {
 	for _, body := range partials {
 		if stoppedBodies[body] > 0 {
 			stoppedSources++
-			if stoppedBodies[body] < 2 {
-				t.Fatal("scheduling-stall setup stopped a partial source before its retry")
+			if stoppedBodies[body] != 2 || body != held.request.records[0].body {
+				t.Fatal("scheduling-stall setup did not stop the held second attempt")
 			}
 		}
 	}
 	if stoppedSources != 1 {
 		t.Fatalf("scheduling-stall setup reached %d partial sources before SIGSTOP, want 1", stoppedSources)
 	}
-	// Exceed the validated lifetime without changing Collector or exporter timing invariants.
-	timer := time.NewTimer(f.settings.Lifetime + time.Second)
-	defer timer.Stop()
-	<-timer.C
-	stressStopped(t, p)
 	attempts := f.backend.attempts()
+	// Exceed the validated lifetime without changing Collector or exporter timing invariants.
+	timer := time.NewTimer(f.settings.Lifetime)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case <-held.canceled:
+		t.Fatal("held partial retry ended while the collector was stopped")
+	}
+	stressStopped(t, p)
+	resumedAt := time.Now()
 	if err := p.cmd.Process.Signal(syscall.SIGCONT); err != nil {
 		t.Fatal(err)
 	}
 	p.wait(5*time.Second, true)
+	waitCancellation := time.NewTimer(5 * time.Second)
+	defer waitCancellation.Stop()
+	select {
+	case <-held.canceled:
+	case <-waitCancellation.C:
+		t.Fatal("collector exited without canceling the held partial retry")
+	}
+	releaseResponse()
+	f.backend.server.Close()
 	if len(stressEvents(p, "Logs export completed", "deadline_expired")) != 1 ||
 		len(stressEvents(p, "Logs export completed", "retry_exhausted")) != 0 ||
 		len(stressEvents(p, "Logs export rejected", "drain_budget_insufficient")) != sources-1 {
 		t.Fatal("resumed timer flush did not distinguish the expired call from late drain rejections")
 	}
 	stressFinal(t, p, 1, 1, sources-1)
-	if f.backend.attempts() != attempts {
+	if requests := f.backend.snapshot(); len(requests) != attempts {
+		for _, req := range requests[attempts:] {
+			t.Errorf("unexpected request observed %s relative to SIGCONT: %+v",
+				req.receivedAt.Sub(resumedAt), req.records)
+		}
 		t.Fatal("expired export or late partials made new backend requests after resume")
 	}
 	attempted := 0
@@ -246,6 +288,8 @@ func TestStressTimerFlushDeadlineAfterSchedulingStall(t *testing.T) {
 		t.Fatalf("backend saw %d partial sources, want only the original timer flush", attempted)
 	}
 	f.backend.assertOnly()
+	t.Logf("held second attempt observed %s before SIGCONT; one expired call, %d late partials rejected, no new requests",
+		resumedAt.Sub(held.request.receivedAt), sources-1)
 }
 
 func stressMetrics(t *testing.T) (int, string) {

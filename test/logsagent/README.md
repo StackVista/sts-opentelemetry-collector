@@ -22,6 +22,13 @@ late drain rejection, expired deadlines, custom CA trust and explicit proxy use.
 Lost-response tests expose possible duplicates after backend acceptance.
 Fresh checkpoint directories model state loss on Pod replacement.
 
+The scheduling-stall case holds the second request for one timer-flushed CRI
+partial at the backend response boundary, then uses SIGSTOP/SIGCONT to expire
+the active retry. The response stays held until the child cancels it. This
+synchronizes request accounting before the stall; a later backend observation
+alone does not establish when the child sent a request. The test requires exactly
+one expired call, rejection of every remaining partial, and no additional requests.
+
 Build and run the separate race-enabled fault agent:
 
 ```sh

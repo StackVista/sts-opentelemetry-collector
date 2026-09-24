@@ -40,8 +40,9 @@ type wireRecord struct {
 }
 
 type request struct {
-	status  int
-	records []wireRecord
+	status     int
+	records    []wireRecord
+	receivedAt time.Time
 }
 
 type responsePlan struct {
@@ -61,6 +62,7 @@ type backend struct {
 	active             int
 	maxActive          int
 	promtailDescriptor protoreflect.MessageDescriptor
+	beforeResponse     func(context.Context, request)
 }
 
 func newBackend(t *testing.T) *backend {
@@ -92,6 +94,12 @@ func (b *backend) setPlan(plan responsePlan) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.plan = plan
+}
+
+func (b *backend) setBeforeResponse(hook func(context.Context, request)) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.beforeResponse = hook
 }
 
 func (b *backend) snapshot() []request {
@@ -131,7 +139,7 @@ func (b *backend) enter(ctx context.Context) func() {
 	}
 }
 
-func (b *backend) record(records []wireRecord) (int, bool) {
+func (b *backend) record(records []wireRecord, receivedAt time.Time) (request, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	plan := b.plan
@@ -145,8 +153,9 @@ func (b *backend) record(records []wireRecord) (int, bool) {
 		plan.lostResponses--
 	}
 	b.plan = plan
-	b.requests = append(b.requests, request{status: status, records: records})
-	return status, loseResponse
+	req := request{status: status, records: records, receivedAt: receivedAt}
+	b.requests = append(b.requests, req)
+	return req, loseResponse
 }
 
 func (b *backend) serveHTTP(w http.ResponseWriter, r *http.Request) {
@@ -175,6 +184,7 @@ func (b *backend) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	receivedAt := time.Now()
 	defer b.enter(r.Context())()
 	if r.Method != http.MethodPost || r.Header.Get("Content-Type") != "application/x-protobuf" {
 		b.t.Error("export did not use POST application/x-protobuf")
@@ -202,7 +212,13 @@ func (b *backend) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	status, loseResponse := b.record(records)
+	req, loseResponse := b.record(records, receivedAt)
+	b.mu.Lock()
+	beforeResponse := b.beforeResponse
+	b.mu.Unlock()
+	if beforeResponse != nil {
+		beforeResponse(r.Context(), req)
+	}
 	if loseResponse {
 		hijacker, ok := w.(http.Hijacker)
 		if !ok {
@@ -217,7 +233,7 @@ func (b *backend) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = conn.Close()
 		return
 	}
-	w.WriteHeader(status)
+	w.WriteHeader(req.status)
 }
 
 func field(message protoreflect.Message, name protoreflect.Name) protoreflect.Value {
