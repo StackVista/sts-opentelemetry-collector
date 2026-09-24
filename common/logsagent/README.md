@@ -36,6 +36,8 @@ keeping their concurrency, exported chunk size and execution time bounded.
   drain budget covers the retry bound, and their deadlines cannot exceed the
   drain deadline. Delivery shutdown then closes admission and waits for
   admitted calls before exporter-helper's retry sender is stopped.
+  A canceled exporter shutdown still joins calls under their existing deadlines
+  and runs cleanup once; its cancellation and any cleanup error are returned.
 - **The final result remains visible.** Every admitted call is accounted for
   until it returns; rejected calls are counted separately. The final drain
   report considers failures, rejections, outstanding calls and exporter status.

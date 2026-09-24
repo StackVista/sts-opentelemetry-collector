@@ -13,6 +13,7 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/common/logsagent"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
+	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exportertest"
 )
 
@@ -44,6 +45,29 @@ func (h deliveryHost) GetExtensions() map[component.ID]component.Component {
 }
 
 func TestDeliveryShutdownPreservesAdmittedRetry(t *testing.T) {
+	for _, scenario := range []string{"normal", "canceled shutdown", "expired"} {
+		t.Run(scenario, func(t *testing.T) {
+			ctx := context.Background()
+			var expected error
+			switch scenario {
+			case "canceled shutdown":
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+				expected = context.Canceled
+			case "expired":
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithDeadline(ctx, time.Now().Add(-time.Second))
+				defer cancel()
+				expected = context.DeadlineExceeded
+			}
+			testDeliveryShutdownPreservesAdmittedRetry(ctx, t, expected)
+		})
+	}
+}
+
+func testDeliveryShutdownPreservesAdmittedRetry(shutdownCtx context.Context, t *testing.T, expected error) {
+	t.Helper()
 	var attempts atomic.Int32
 	entered := make(chan struct{})
 	release := make(chan struct{})
@@ -86,7 +110,7 @@ func TestDeliveryShutdownPreservesAdmittedRetry(t *testing.T) {
 	}
 	cancel()
 	stopped := make(chan error, 1)
-	go func() { stopped <- exp.Shutdown(context.Background()) }()
+	go func() { stopped <- exp.Shutdown(shutdownCtx) }()
 	select {
 	case err := <-stopped:
 		close(release)
@@ -94,11 +118,15 @@ func TestDeliveryShutdownPreservesAdmittedRetry(t *testing.T) {
 	case <-time.After(20 * time.Millisecond):
 	}
 	close(release)
-	for _, done := range []<-chan error{consumed, stopped} {
+	for i, done := range []<-chan error{consumed, stopped} {
 		select {
 		case err := <-done:
-			if err != nil {
-				t.Fatal(err)
+			want := expected
+			if i == 0 {
+				want = nil
+			}
+			if !errors.Is(err, want) {
+				t.Fatalf("completion error = %v, want %v", err, want)
 			}
 		case <-time.After(5 * time.Second):
 			t.Fatal("delivery did not finish")
@@ -107,5 +135,50 @@ func TestDeliveryShutdownPreservesAdmittedRetry(t *testing.T) {
 	snapshot := controller.observer.Snapshot()
 	if attempts.Load() != 2 || snapshot.Outstanding != 0 || snapshot.Acknowledged != 1 || snapshot.Failed != 0 {
 		t.Fatalf("admitted retry was not acknowledged once: attempts=%d, accounting=%+v", attempts.Load(), snapshot)
+	}
+}
+
+type shutdownExporter struct {
+	exporter.Logs
+	shutdown func(context.Context) error
+}
+
+func (e *shutdownExporter) Shutdown(ctx context.Context) error { return e.shutdown(ctx) }
+
+func TestDeliveryShutdownCleansUpOnceAndPreservesErrors(t *testing.T) {
+	type contextKey struct{}
+	cleanupErr := errors.New("cleanup failed")
+	var calls atomic.Int32
+	inner := &shutdownExporter{
+		shutdown: func(ctx context.Context) error {
+			calls.Add(1)
+			if ctx.Err() != nil || ctx.Value(contextKey{}) != "retained" {
+				t.Error("cleanup lost context values or inherited cancellation")
+			}
+			return cleanupErr
+		},
+	}
+	exp, err := newDeliveryExporter(inner, logsagent.DeliveryConfig{
+		ControllerExtension: component.MustNewIDWithName("stslogsagent", "logs"),
+		MaxConcurrentCalls:  1, MaxRecordBytes: 262144, MaxRequestBytes: 1048576,
+		ExportLifetime: time.Second,
+	}, exportertest.NewNopSettings(component.MustNewType("stsk8slogs")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), contextKey{}, "retained"))
+	cancel()
+	results := make(chan error, 4)
+	for range cap(results) {
+		go func() { results <- exp.Shutdown(ctx) }()
+	}
+	for range cap(results) {
+		err := <-results
+		if !errors.Is(err, context.Canceled) || !errors.Is(err, cleanupErr) {
+			t.Fatalf("shutdown did not preserve both errors: %v", err)
+		}
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("cleanup ran %d times, want 1", calls.Load())
 	}
 }

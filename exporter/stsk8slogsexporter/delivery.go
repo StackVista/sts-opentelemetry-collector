@@ -3,6 +3,7 @@ package stsk8slogsexporter
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/stackvista/sts-opentelemetry-collector/common/logsagent"
 	"go.opentelemetry.io/collector/component"
@@ -14,6 +15,8 @@ type deliveryExporter struct {
 	exporter.Logs
 	controllerID component.ID
 	delivery     *logsagent.Delivery
+	shutdownOnce sync.Once
+	shutdownErr  error
 }
 
 func newDeliveryExporter(
@@ -42,9 +45,11 @@ func (e *deliveryExporter) ConsumeLogs(ctx context.Context, logs plog.Logs) erro
 }
 
 func (e *deliveryExporter) Shutdown(ctx context.Context) error {
-	// Join admitted calls before exporterhelper stops its retry sender.
-	if err := e.delivery.Shutdown(ctx); err != nil {
-		return err
-	}
-	return e.Logs.Shutdown(ctx)
+	e.shutdownOnce.Do(func() {
+		// Admitted calls retain their existing deadlines until joined, even if shutdown is canceled.
+		drainErr := e.delivery.Shutdown(context.WithoutCancel(ctx))
+		cleanupErr := e.Logs.Shutdown(context.WithoutCancel(ctx))
+		e.shutdownErr = errors.Join(ctx.Err(), drainErr, cleanupErr)
+	})
+	return e.shutdownErr
 }
