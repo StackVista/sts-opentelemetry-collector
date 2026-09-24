@@ -37,7 +37,7 @@ func TestExportDiagnosticsAreBoundedAndDebugOnly(t *testing.T) {
 			ctrl.drain(time.Now().Add(time.Minute))
 			require.ErrorIs(t, c.ConsumeLogs(context.Background(), data), downstreamErr)
 			data.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0).Body().SetStr(strings.Repeat("x", 600))
-			require.ErrorContains(t, c.ConsumeLogs(context.Background(), data), "request_too_large")
+			require.ErrorContains(t, c.ConsumeLogs(context.Background(), data), "record_too_large")
 
 			entries := observed.All()
 			if level.Level() == zap.InfoLevel {
@@ -46,16 +46,15 @@ func TestExportDiagnosticsAreBoundedAndDebugOnly(t *testing.T) {
 			}
 			require.Len(t, entries, 3)
 			for i, expected := range []struct {
-				message  string
 				outcome  string
 				draining bool
 			}{
-				{"Logs export completed", "acknowledged", false},
-				{"Logs export completed", "terminal_export_error", true},
-				{"Logs export rejected", "request_too_large", true},
+				{"acknowledged", false},
+				{"terminal_export_error", true},
+				{"permanent_rejection", true},
 			} {
 				require.Equal(t, zap.DebugLevel, entries[i].Level)
-				require.Equal(t, expected.message, entries[i].Message)
+				require.Equal(t, "Logs export completed", entries[i].Message)
 				require.Equal(t, map[string]any{
 					"outcome": expected.outcome, "draining": expected.draining, "log_records": int64(1),
 				}, entries[i].ContextMap())

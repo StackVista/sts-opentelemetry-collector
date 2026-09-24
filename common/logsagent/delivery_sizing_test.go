@@ -68,18 +68,20 @@ func TestRecordSizeMatchesProtobufEnvelopes(t *testing.T) {
 						}
 					}
 					ctrl := &controllerStub{bound: time.Second}
-					calls := 0
-					next := logsConsumer(t, func(context.Context, plog.Logs) error { calls++; return nil })
+					received := 0
+					next := logsConsumer(t, func(_ context.Context, logs plog.Logs) error {
+						received += logs.LogRecordCount()
+						return nil
+					})
 					c, reader := newDelivery(t, cfg, ctrl, next)
 					err := c.ConsumeLogs(context.Background(), data)
 					if expectedOversized == 0 {
 						require.NoError(t, err)
-						require.Equal(t, 1, calls)
 					} else {
 						require.ErrorContains(t, err, "record_too_large")
 						require.True(t, consumererror.IsPermanent(err))
-						require.Zero(t, calls)
 					}
+					require.Equal(t, len(recordSizes)-expectedOversized, received)
 					require.EqualValues(t, expectedOversized, metricSum(t, reader, "stslogsagent.oversized_records"))
 				}
 			}

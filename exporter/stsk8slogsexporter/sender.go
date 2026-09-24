@@ -43,7 +43,7 @@ type sender struct {
 	timeout  time.Duration
 }
 
-// newSender borrows the discovery client's owned transport, including its proxy and trust.
+// newSender borrows the client's owned transport, including its proxy and trust.
 func newSender(client *http.Client, endpoint, apiKey string, timeout time.Duration) (*sender, error) {
 	if client == nil || client.Transport == nil {
 		return nil, errors.New("promtail sender requires an explicitly configured HTTP transport")

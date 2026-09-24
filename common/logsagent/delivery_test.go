@@ -254,20 +254,13 @@ func TestDrainRejectionsInFinalSnapshot(t *testing.T) {
 	require.Zero(t, ctrl.observer.Snapshot().DrainRejected)
 
 	ctrl.drain(time.Now().Add(time.Minute))
-	for _, rejection := range []struct {
-		reason string
-		bytes  int
-	}{
-		{reason: "admission_saturated"},
-		{reason: "record_too_large", bytes: 200},
-		{reason: "request_too_large", bytes: 600},
-	} {
+	for _, bodyBytes := range []int{0, 200, 600} {
 		data := logsData()
-		if rejection.bytes != 0 {
+		if bodyBytes != 0 {
 			data.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0).Body().SetStr(
-				strings.Repeat("x", rejection.bytes))
+				strings.Repeat("x", bodyBytes))
 		}
-		require.ErrorContains(t, c.ConsumeLogs(context.Background(), data), rejection.reason)
+		require.ErrorContains(t, c.ConsumeLogs(context.Background(), data), "admission_saturated")
 	}
 	ctrl.drain(time.Now().Add(-time.Second))
 	require.ErrorContains(t, c.ConsumeLogs(context.Background(), logsData()), "drain_budget_insufficient")
@@ -280,7 +273,9 @@ func TestDrainRejectionsInFinalSnapshot(t *testing.T) {
 }
 
 func TestConcurrentDrainRejections(t *testing.T) {
+	const calls = 64
 	cfg := deliveryDefaults(t)
+	cfg.MaxConcurrentCalls = calls
 	cfg.MaxRecordBytes = 128
 	cfg.MaxRequestBytes = 256
 	ctrl := &controllerStub{bound: time.Second}
@@ -290,16 +285,15 @@ func TestConcurrentDrainRejections(t *testing.T) {
 	data := logsData()
 	data.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0).Body().SetStr(strings.Repeat("x", 512))
 	data.MarkReadOnly()
-	const calls = 64
 	results := make(chan error, calls)
 	for range calls {
 		go func() { results <- c.ConsumeLogs(context.Background(), data) }()
 	}
 	for range calls {
-		require.ErrorContains(t, <-results, "request_too_large")
+		require.ErrorContains(t, <-results, "record_too_large")
 	}
 	require.NoError(t, c.Shutdown(context.Background()))
-	require.Equal(t, logsagent.ExportSnapshot{DrainRejected: calls}, ctrl.observer.Snapshot())
+	require.Equal(t, logsagent.ExportSnapshot{Failed: calls}, ctrl.observer.Snapshot())
 }
 
 func TestAbsoluteDrainBudget(t *testing.T) {
@@ -400,10 +394,10 @@ func TestRecordAndRequestSizeBounds(t *testing.T) {
 			if delta == 0 {
 				require.NoError(t, err)
 			} else {
-				require.ErrorContains(t, err, "request_too_large")
+				require.ErrorContains(t, err, "record_too_large")
 				require.True(t, consumererror.IsPermanent(err))
-				require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.pre_export_rejected_records",
-					attribute.String("reason", "request_too_large")))
+				require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.export_records",
+					attribute.String("outcome", "dropped")))
 			}
 		}
 	})
@@ -419,7 +413,7 @@ func TestUnknownAttemptDeadlineIsNotLifetimeExpiry(t *testing.T) {
 		attribute.String("outcome", "terminal_export_error")))
 }
 
-func TestOversizeRejectsAllAffectedRecordsBeforeSend(t *testing.T) {
+func TestOversizePreservesHealthyNeighbours(t *testing.T) {
 	for _, requestLimit := range []bool{true, false} {
 		t.Run(map[bool]string{true: "request", false: "record"}[requestLimit], func(t *testing.T) {
 			data := logsData()
@@ -430,16 +424,20 @@ func TestOversizeRejectsAllAffectedRecordsBeforeSend(t *testing.T) {
 				cfg.MaxRequestBytes = 128
 			}
 			calls := 0
-			next := logsConsumer(t, func(context.Context, plog.Logs) error { calls++; return nil })
+			next := logsConsumer(t, func(_ context.Context, received plog.Logs) error {
+				calls++
+				require.Equal(t, 1, received.LogRecordCount())
+				require.Equal(t, "record", received.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0).Body().Str())
+				return nil
+			})
 			ctrl := &controllerStub{bound: time.Second}
 			c, reader := newDelivery(t, cfg, ctrl, next)
 			require.True(t, consumererror.IsPermanent(c.ConsumeLogs(context.Background(), data)))
-			require.Zero(t, calls)
-			require.EqualValues(t, 2, metricSum(t, reader, "stslogsagent.pre_export_rejected_records"))
-			require.Equal(t, logsagent.ExportSnapshot{}, ctrl.observer.Snapshot())
-			if !requestLimit {
-				require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.oversized_records"))
-			}
+			require.Equal(t, 1, calls)
+			require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.export_records", attribute.String("outcome", "dropped")))
+			require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.export_records", attribute.String("outcome", "completed")))
+			require.Equal(t, logsagent.ExportSnapshot{Failed: 1}, ctrl.observer.Snapshot())
+			require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.oversized_records"))
 		})
 	}
 }

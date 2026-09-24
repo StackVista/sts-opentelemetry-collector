@@ -3,12 +3,10 @@ package logsagent
 import (
 	"context"
 	"errors"
-	"math/bits"
 	"sync"
 	"time"
 
 	"go.opentelemetry.io/collector/consumer"
-	"go.opentelemetry.io/collector/consumer/consumererror"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
@@ -77,30 +75,22 @@ func (c *Delivery) ConsumeLogs(ctx context.Context, data plog.Logs) error {
 	c.mu.Lock()
 	if c.next == nil || c.stopping {
 		c.mu.Unlock()
-		return c.reject(ctx, data.LogRecordCount(), "not_running", false)
+		return c.reject(ctx, data.LogRecordCount(), "not_running")
 	}
 	next, controller := c.next, c.controller
 	c.mu.Unlock()
 
 	records := data.LogRecordCount()
-	if (&plog.ProtoMarshaler{}).LogsSize(data) > c.cfg.MaxRequestBytes {
-		return c.reject(ctx, records, "request_too_large", true)
-	}
-	if oversized := oversizedRecords(data, c.cfg.MaxRecordBytes); oversized != 0 {
-		c.telemetry.oversized.Add(ctx, int64(oversized))
-		return c.reject(ctx, records, "record_too_large", true)
-	}
-
 	c.mu.Lock()
 	if c.stopping {
 		c.mu.Unlock()
-		return c.reject(ctx, records, "not_running", false)
+		return c.reject(ctx, records, "not_running")
 	}
 	deadline := time.Now().Add(c.cfg.ExportLifetime)
 	if drainDeadline := controller.DrainDeadline(); !drainDeadline.IsZero() {
 		if time.Until(drainDeadline) < c.retryBound {
 			c.mu.Unlock()
-			return c.reject(ctx, records, "drain_budget_insufficient", false)
+			return c.reject(ctx, records, "drain_budget_insufficient")
 		}
 		if drainDeadline.Before(deadline) {
 			deadline = drainDeadline
@@ -111,19 +101,14 @@ func (c *Delivery) ConsumeLogs(ctx context.Context, data plog.Logs) error {
 		c.account.Start()
 	default:
 		c.mu.Unlock()
-		return c.reject(ctx, records, "admission_saturated", false)
+		return c.reject(ctx, records, "admission_saturated")
 	}
 	c.mu.Unlock()
 
 	exportCtx, cancel := context.WithDeadline(context.WithoutCancel(ctx), deadline)
 	defer cancel()
 	c.telemetry.outstanding.Add(exportCtx, 1)
-	if next.Capabilities().MutatesData {
-		copyData := plog.NewLogs()
-		data.CopyTo(copyData)
-		data = copyData
-	}
-	err := next.ConsumeLogs(exportCtx, data)
+	err := c.deliver(exportCtx, next, data)
 	outcome := classifyOutcome(exportCtx, err)
 	if outcome == outcomeDeadline && err == nil {
 		err = context.DeadlineExceeded
@@ -143,7 +128,7 @@ func (c *Delivery) ConsumeLogs(ctx context.Context, data plog.Logs) error {
 	return err
 }
 
-func (c *Delivery) reject(ctx context.Context, records int, reason string, permanent bool) error {
+func (c *Delivery) reject(ctx context.Context, records int, reason string) error {
 	c.mu.Lock()
 	draining := c.controller != nil && !c.controller.DrainDeadline().IsZero()
 	if draining {
@@ -154,11 +139,7 @@ func (c *Delivery) reject(ctx context.Context, records int, reason string, perma
 	c.logger.Debug("Logs export rejected",
 		zap.String("outcome", reason),
 		zap.Bool("draining", draining), zap.Int("log_records", records))
-	err := errors.New("logs delivery pre-export rejection: " + reason)
-	if permanent {
-		return consumererror.NewPermanent(err)
-	}
-	return err
+	return errors.New("logs delivery pre-export rejection: " + reason)
 }
 
 func (c *Delivery) Shutdown(ctx context.Context) error {
@@ -176,34 +157,4 @@ func (c *Delivery) Shutdown(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-}
-
-func oversizedRecords(data plog.Logs, limit int) int {
-	marshaler := plog.ProtoMarshaler{}
-	resource := plog.NewLogs().ResourceLogs().AppendEmpty()
-	scope := plog.NewLogs().ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
-	oversized := 0
-	for _, rl := range data.ResourceLogs().All() {
-		rl.Resource().CopyTo(resource.Resource())
-		resource.SetSchemaUrl(rl.SchemaUrl())
-		resourceBytes := marshaler.ResourceLogsSize(resource)
-		for _, sl := range rl.ScopeLogs().All() {
-			sl.Scope().CopyTo(scope.Scope())
-			scope.SetSchemaUrl(sl.SchemaUrl())
-			scopeBytes := marshaler.ScopeLogsSize(scope)
-			for _, lr := range sl.LogRecords().All() {
-				recordBytes := messageSize(marshaler.LogRecordSize(lr))
-				requestBytes := messageSize(resourceBytes + messageSize(scopeBytes+recordBytes))
-				if requestBytes > limit {
-					oversized++
-				}
-			}
-		}
-	}
-	return oversized
-}
-
-// Resource, scope and record fields each use a one-byte protobuf tag.
-func messageSize(payloadBytes int) int {
-	return 1 + (bits.Len(uint(payloadBytes)|1)+6)/7 + payloadBytes //nolint:gosec // Protobuf sizes are nonnegative.
 }

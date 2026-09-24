@@ -14,18 +14,26 @@ type telemetry struct {
 	oversized        metric.Int64Counter
 	outcomes         metric.Int64Counter
 	outstanding      metric.Int64UpDownCounter
+	recordOutcomes   metric.Int64Counter
 }
 
 func newTelemetry(provider metric.MeterProvider) (telemetry, error) {
 	meter := provider.Meter("github.com/stackvista/sts-opentelemetry-collector/common/logsagent")
 	var t telemetry
-	var errs [5]error
+	var errs [6]error
 	t.rejectedRequests, errs[0] = meter.Int64Counter("stslogsagent.pre_export_rejected_requests")
 	t.rejectedRecords, errs[1] = meter.Int64Counter("stslogsagent.pre_export_rejected_records")
 	t.oversized, errs[2] = meter.Int64Counter("stslogsagent.oversized_records")
 	t.outcomes, errs[3] = meter.Int64Counter("stslogsagent.export_requests")
 	t.outstanding, errs[4] = meter.Int64UpDownCounter("stslogsagent.outstanding_requests")
+	t.recordOutcomes, errs[5] = meter.Int64Counter("stslogsagent.export_records")
 	return t, errors.Join(errs[:]...)
+}
+
+func (t telemetry) records(ctx context.Context, outcome string, count int) {
+	if count != 0 {
+		t.recordOutcomes.Add(ctx, int64(count), metric.WithAttributes(attribute.String("outcome", outcome)))
+	}
 }
 
 func (t telemetry) reject(ctx context.Context, reason string, records int) {
