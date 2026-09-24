@@ -296,7 +296,7 @@ func stressMetric(p *process, endpoint, metric, reason string) float64 {
 		}
 		name, _, _ := strings.Cut(fields[0], "{")
 		if !strings.HasSuffix(strings.TrimSuffix(name, "_total"), metric) ||
-			!strings.Contains(line, `reason="`+reason+`"`) {
+			(reason != "" && !strings.Contains(line, `reason="`+reason+`"`)) {
 			continue
 		}
 		value, err := strconv.ParseFloat(fields[len(fields)-1], 64)
@@ -315,23 +315,29 @@ func stressMetric(p *process, endpoint, metric, reason string) float64 {
 	return total
 }
 
-func TestStressSourceSizeRejections(t *testing.T) {
+func TestStressSourceSizeHandling(t *testing.T) {
 	t.Parallel()
 	for _, mode := range []string{"promtail", "native"} {
 		for _, scenario := range []struct {
-			reason string
-			count  int
-			bytes  int
+			name    string
+			count   int
+			bytes   int
+			dropped bool
 		}{
-			{"record_too_large", 1, 262144},
-			{"request_too_large", 5, 220000},
+			{"oversized record", 1, 262144, true},
+			{"large batch", 5, 220000, false},
+			{"reader batch", 100, 11000, false},
 		} {
-			t.Run(mode+"/"+scenario.reason, func(t *testing.T) {
+			t.Run(mode+"/"+scenario.name, func(t *testing.T) {
 				f := newFixture(t, mode)
 				var input strings.Builder
+				var expected []string
 				for i := range scenario.count {
-					fmt.Fprintf(&input, "2026-09-10T12:00:00.123456789Z stdout F %s\n",
-						strings.Repeat(string(rune('a'+i)), scenario.bytes))
+					body := fmt.Sprintf("%03d %s", i, strings.Repeat("x", scenario.bytes))
+					fmt.Fprintf(&input, "2026-09-10T12:00:00.123456789Z stdout F %s\n", body)
+					if !scenario.dropped {
+						expected = append(expected, body)
+					}
 				}
 				stressSource(t, f, 0, input.String())
 				port, endpoint := stressMetrics(t)
@@ -345,27 +351,64 @@ func TestStressSourceSizeRejections(t *testing.T) {
 					}
 				}), true)
 				p.ready()
-				eventually(t, 5*time.Second, "specific source size rejection", func() bool {
-					return p.event("Logs export rejected", map[string]any{
-						"outcome": scenario.reason, "mode": mode, "log_records": float64(scenario.count), "draining": false,
+				if scenario.dropped {
+					eventually(t, 5*time.Second, "individual oversized record dropped", func() bool {
+						return stressMetric(p, endpoint, "stslogsagent_oversized_records", "") == 1
 					})
-				})
-				eventually(t, 3*time.Second, "exact rejected request and record counters", func() bool {
-					return stressMetric(p, endpoint, "stslogsagent_pre_export_rejected_requests", scenario.reason) == 1 &&
-						stressMetric(p, endpoint, "stslogsagent_pre_export_rejected_records", scenario.reason) == float64(scenario.count)
-				})
-				if len(f.backend.snapshot()) != 0 {
-					t.Fatal("oversized source data reached an exporter")
+				} else {
+					f.backend.waitBodies(mode, expected, true)
+					if len(f.backend.snapshot()) < 2 {
+						t.Fatal("large batch was not split")
+					}
 				}
 				valid := f.appendRecords(1, 0, 1)
+				expected = append(expected, valid...)
 				f.backend.waitBodies(mode, valid, true)
 				p.waitExport("acknowledged")
 				p.signal()
 				p.wait(5*time.Second, true)
-				assertOrdinaryDrain(t, p, true)
-				f.backend.assertRecords(mode, valid, true)
+				assertOrdinaryDrain(t, p, !scenario.dropped)
+				f.backend.assertRecords(mode, expected, true)
 				f.backend.assertOnly(mode)
+				p2 := f.start(nil, true)
+				p2.ready()
+				valid = f.appendRecords(1, 1, 1)
+				expected = append(expected, valid...)
+				f.backend.waitBodies(mode, valid, true)
+				p2.signal()
+				p2.wait(5*time.Second, true)
+				f.backend.assertRecords(mode, expected, true)
 			})
 		}
+	}
+}
+
+func TestOversizedCRIPreservesHealthyNeighbour(t *testing.T) {
+	for _, mode := range []string{"promtail", "native"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newFixture(t, mode)
+			var input strings.Builder
+			for range 20 {
+				fmt.Fprintf(&input, "2026-09-10T12:00:00.123456789Z stdout P %s\n", strings.Repeat("x", 16000))
+			}
+			input.WriteString("2026-09-10T12:00:00.123456789Z stdout F end\n2026-09-10T12:00:00.123456789Z stdout F healthy-neighbour\n")
+			stressSource(t, f, 0, input.String())
+			p := f.start(nil, true)
+			p.ready()
+			f.backend.waitBodies(mode, []string{"healthy-neighbour"}, true)
+			p.waitExport("permanent_rejection")
+			p.signal()
+			p.wait(5*time.Second, true)
+			assertOrdinaryDrain(t, p, false)
+			f.backend.assertRecords(mode, []string{"healthy-neighbour"}, true)
+			p2 := f.start(nil, true)
+			p2.ready()
+			valid := f.appendRecords(1, 1, 1)
+			f.backend.waitBodies(mode, valid, true)
+			p2.signal()
+			p2.wait(5*time.Second, true)
+			f.backend.assertRecords(mode, append([]string{"healthy-neighbour"}, valid...), true)
+			f.backend.assertOnly(mode)
+		})
 	}
 }

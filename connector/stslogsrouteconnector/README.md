@@ -20,10 +20,10 @@ unset so that each call passes through one delivery guard.
 | `export_lifetime` | `90s` |
 
 Size limits use uncompressed OTLP protobuf sizes. Each record is sized as its
-own request including resource, scope and schema metadata. An oversized request
-or any oversized record permanently rejects the entire request before export.
-Other record validation belongs to the Promtail-compatible exporter, which can retain valid
-siblings.
+own request including resource, scope and schema metadata. Oversized records are
+dropped while valid siblings are retained, and larger requests are split into
+bounded chunks. Other record validation belongs to the Promtail-compatible
+exporter, which can retain valid siblings.
 
 Resource and scope envelope sizes are computed once per group. Individual
 record sizes include their protobuf field and enclosing length prefixes without

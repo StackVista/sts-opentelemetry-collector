@@ -15,6 +15,8 @@ import (
 )
 
 func TestExportDiagnosticsAreBoundedAndDebugOnly(t *testing.T) {
+	const completed = "Logs export completed"
+
 	for _, mode := range []logsagent.Mode{logsagent.PromtailMode, logsagent.OTELNativeMode} {
 		t.Run(string(mode), func(t *testing.T) {
 			for _, level := range []zap.AtomicLevel{zap.NewAtomicLevelAt(zap.DebugLevel), zap.NewAtomicLevelAt(zap.InfoLevel)} {
@@ -39,7 +41,7 @@ func TestExportDiagnosticsAreBoundedAndDebugOnly(t *testing.T) {
 					ctrl.drain(time.Now().Add(time.Minute))
 					require.ErrorIs(t, c.ConsumeLogs(context.Background(), data), downstreamErr)
 					data.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0).Body().SetStr(strings.Repeat("x", 600))
-					require.ErrorContains(t, c.ConsumeLogs(context.Background(), data), "request_too_large")
+					require.ErrorContains(t, c.ConsumeLogs(context.Background(), data), "record_too_large")
 
 					entries := observed.All()
 					if level.Level() == zap.InfoLevel {
@@ -52,9 +54,9 @@ func TestExportDiagnosticsAreBoundedAndDebugOnly(t *testing.T) {
 						outcome  string
 						draining bool
 					}{
-						{"Logs export completed", "acknowledged", false},
-						{"Logs export completed", "terminal_export_error", true},
-						{"Logs export rejected", "request_too_large", true},
+						{completed, "acknowledged", false},
+						{completed, "terminal_export_error", true},
+						{completed, "permanent_rejection", true},
 					} {
 						require.Equal(t, zap.DebugLevel, entries[i].Level)
 						require.Equal(t, expected.message, entries[i].Message)

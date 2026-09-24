@@ -29,8 +29,8 @@
   },
   {
     "file": "common/logsagent/delivery.go",
-    "old": "err := selected.ConsumeLogs(exportCtx, data)",
-    "new": "finish := FaultCall()\n\terr := selected.ConsumeLogs(exportCtx, data)\n\tFaultPause(\"completion\")\n\tfinish()"
+    "old": "err := c.deliver(exportCtx, selected, data, mode)",
+    "new": "finish := FaultCall()\n\terr := c.deliver(exportCtx, selected, data, mode)\n\tFaultPause(\"completion\")\n\tfinish()"
   },
   {
     "file": "extension/stslogsagentextension/factory.go",
