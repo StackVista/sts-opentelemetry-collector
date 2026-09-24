@@ -1,0 +1,5 @@
+case,exposition_name,relabel_target,scraped_name
+underscored_exposition,kus_cpu_usage_total,,kus_cpu_usage_total
+dotted_exposition,kubernetes.cpu.usage.total,,
+relabel_to_dotted,kus_cpu_usage_total,kubernetes.cpu.usage.total,kubernetes.cpu.usage.total
+relabel_to_underscored,kus_cpu_usage_total,kubernetes_cpu_usage_total,kubernetes_cpu_usage_total

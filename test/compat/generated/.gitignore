@@ -1,0 +1,4 @@
+# Intermediate extraction output. The live half is instance specific, so none of it is
+# committed; contract.csv is the reviewed artifact.
+*
+!.gitignore
