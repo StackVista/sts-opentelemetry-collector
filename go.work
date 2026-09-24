@@ -6,10 +6,13 @@ use (
 	./connector/topologyconnector
 	./exporter/clickhousestsexporter
 	./exporter/stskafkaexporter
+	./exporter/stsk8slogsexporter
 	./exporter/ststopologyexporter
 	./extension/servicetokenauthextension
+	./extension/stslogsagentextension
 	./extension/settingsproviderextension
 	./processor/stsusageprocessor
 	./receiver/k8sresourcereceiver
 	./test/e2e
+	./test/logsagent
 )

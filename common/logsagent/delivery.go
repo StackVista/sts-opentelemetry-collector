@@ -1,0 +1,160 @@
+package logsagent
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"time"
+
+	"go.opentelemetry.io/collector/consumer"
+	"go.opentelemetry.io/collector/pdata/plog"
+	"go.opentelemetry.io/otel/metric"
+	"go.uber.org/zap"
+)
+
+type Delivery struct {
+	cfg       DeliveryConfig
+	telemetry telemetry
+	account   Accounting
+	logger    *zap.Logger
+
+	mu         sync.Mutex
+	controller Controller
+	next       consumer.Logs
+	retryBound time.Duration
+	stopping   bool
+	slots      chan struct{}
+	done       chan struct{}
+}
+
+func NewDelivery(cfg DeliveryConfig, meter metric.MeterProvider, logger *zap.Logger) (*Delivery, error) {
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	telemetry, err := newTelemetry(meter)
+	if err != nil {
+		return nil, err
+	}
+	return &Delivery{
+		cfg:       cfg,
+		slots:     make(chan struct{}, cfg.MaxConcurrentCalls),
+		done:      make(chan struct{}),
+		telemetry: telemetry,
+		logger:    logger,
+	}, nil
+}
+
+func (c *Delivery) Start(controller Controller, next consumer.Logs) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.next != nil || c.stopping {
+		return errors.New("logs delivery already started or stopped")
+	}
+	if controller == nil {
+		return errors.New("controller_extension does not provide a logs agent controller")
+	}
+	if next == nil {
+		return errors.New("logs delivery requires a consumer")
+	}
+	bound := controller.RetryBound()
+	if bound <= 0 || bound > c.cfg.ExportLifetime {
+		return errors.New("validated retry bound must be positive and fit export_lifetime")
+	}
+	if err := controller.RegisterExportObserver(&c.account); err != nil {
+		return err
+	}
+	c.controller, c.next, c.retryBound = controller, next, bound
+	return nil
+}
+
+func (*Delivery) Capabilities() consumer.Capabilities {
+	return consumer.Capabilities{MutatesData: false}
+}
+
+func (c *Delivery) ConsumeLogs(ctx context.Context, data plog.Logs) error {
+	c.mu.Lock()
+	if c.next == nil || c.stopping {
+		c.mu.Unlock()
+		return c.reject(ctx, data.LogRecordCount(), "not_running")
+	}
+	next, controller := c.next, c.controller
+	c.mu.Unlock()
+
+	records := data.LogRecordCount()
+	c.mu.Lock()
+	if c.stopping {
+		c.mu.Unlock()
+		return c.reject(ctx, records, "not_running")
+	}
+	deadline := time.Now().Add(c.cfg.ExportLifetime)
+	if drainDeadline := controller.DrainDeadline(); !drainDeadline.IsZero() {
+		if time.Until(drainDeadline) < c.retryBound {
+			c.mu.Unlock()
+			return c.reject(ctx, records, "drain_budget_insufficient")
+		}
+		if drainDeadline.Before(deadline) {
+			deadline = drainDeadline
+		}
+	}
+	select {
+	case c.slots <- struct{}{}:
+		c.account.Start()
+	default:
+		c.mu.Unlock()
+		return c.reject(ctx, records, "admission_saturated")
+	}
+	c.mu.Unlock()
+
+	exportCtx, cancel := context.WithDeadline(context.WithoutCancel(ctx), deadline)
+	defer cancel()
+	c.telemetry.outstanding.Add(exportCtx, 1)
+	err := c.deliver(exportCtx, next, data)
+	outcome := classifyOutcome(exportCtx, err)
+	if outcome == outcomeDeadline && err == nil {
+		err = context.DeadlineExceeded
+	}
+	draining := !controller.DrainDeadline().IsZero()
+	c.telemetry.complete(exportCtx, outcome, draining)
+	c.logger.Debug("Logs export completed",
+		zap.String("outcome", outcome),
+		zap.Bool("draining", draining), zap.Int("log_records", records))
+	c.mu.Lock()
+	c.account.Finish(outcome)
+	<-c.slots
+	if c.stopping && len(c.slots) == 0 {
+		close(c.done)
+	}
+	c.mu.Unlock()
+	return err
+}
+
+func (c *Delivery) reject(ctx context.Context, records int, reason string) error {
+	c.mu.Lock()
+	draining := c.controller != nil && !c.controller.DrainDeadline().IsZero()
+	if draining {
+		c.account.RejectDrain()
+	}
+	c.mu.Unlock()
+	c.telemetry.reject(ctx, reason, records)
+	c.logger.Debug("Logs export rejected",
+		zap.String("outcome", reason),
+		zap.Bool("draining", draining), zap.Int("log_records", records))
+	return errors.New("logs delivery pre-export rejection: " + reason)
+}
+
+func (c *Delivery) Shutdown(ctx context.Context) error {
+	c.mu.Lock()
+	if !c.stopping {
+		c.stopping = true
+		if len(c.slots) == 0 {
+			close(c.done)
+		}
+	}
+	c.mu.Unlock()
+	select {
+	case <-c.done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}

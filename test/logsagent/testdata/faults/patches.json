@@ -1,0 +1,35 @@
+[
+  {
+    "file": "extension/stslogsagentextension/controller.go",
+    "old": "c.set.Logger.Info(\"Logs export drain finished\",",
+    "new": "logsagent.FaultFinalDrain()\n\t\tc.set.Logger.Info(\"Logs export drain finished\","
+  },
+  {
+    "file": "common/logsagent/processfault.go",
+    "source": "control.go.txt"
+  },
+  {
+    "file": "common/logsagent/deliveryfault.go",
+    "source": "delivery.go.txt"
+  },
+  {
+    "file": "common/logsagent/delivery.go",
+    "old": "func (c *Delivery) ConsumeLogs(",
+    "new": "func (c *Delivery) consumeLogs("
+  },
+  {
+    "file": "common/logsagent/delivery.go",
+    "old": "case <-c.done:\n\t\treturn nil",
+    "new": "case <-c.done:\n\t\tFaultMark(\"delivery_stopped\")\n\t\treturn nil"
+  },
+  {
+    "file": "extension/stslogsagentextension/controller.go",
+    "old": "c.exporterStatus = event.Status()",
+    "new": "c.exporterStatus = event.Status()\n\tif event.Status() == componentstatus.StatusStopping {\n\t\tlogsagent.FaultMark(\"selected_exporter_stopping\")\n\t}"
+  },
+  {
+    "file": "common/logsagent/delivery.go",
+    "old": "err := c.deliver(exportCtx, next, data)",
+    "new": "finish := FaultCall()\n\terr := c.deliver(exportCtx, next, data)\n\tFaultPause(\"completion\")\n\tfinish()"
+  }
+]

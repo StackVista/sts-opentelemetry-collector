@@ -1,0 +1,25 @@
+streams {
+  labels: "{sts_cluster_name=\"production-eu\",pod_uid=\"12345678-1234-1234-1234-123456789abc\",pod_name=\"payments-0\",container_name=\"app\",stream=\"stdout\"}"
+  entries {
+    timestamp { seconds: 1750000000 nanos: 123456789 }
+    line: "application text \"quoted\"\\path\nsecond line — 日本語"
+  }
+  entries {
+    timestamp { seconds: 1750000000 nanos: 123456790 }
+    line: ""
+  }
+}
+streams {
+  labels: "{sts_cluster_name=\"production-eu\",pod_uid=\"12345678-1234-1234-1234-123456789abc\",pod_name=\"payments-0\",container_name=\"app\",stream=\"stderr\"}"
+  entries {
+    timestamp { seconds: 1750000000 nanos: 123456791 }
+    line: "error"
+  }
+}
+streams {
+  labels: "{sts_cluster_name=\"production-eu\",pod_uid=\"12345678-1234-1234-1234-123456789abc\",pod_name=\"payments-0\",container_name=\"app\"}"
+  entries {
+    timestamp { seconds: 1750000000 nanos: 123456792 }
+    line: "without stream"
+  }
+}
