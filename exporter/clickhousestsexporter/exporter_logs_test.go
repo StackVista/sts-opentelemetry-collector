@@ -14,9 +14,6 @@ import (
 
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/collector/pdata/pcommon"
-	"go.opentelemetry.io/collector/pdata/plog"
-	conventions "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"go.uber.org/zap/zaptest"
 )
 
@@ -53,7 +50,14 @@ func TestLogsExporter_New(t *testing.T) {
 	}{
 		"no dsn": {
 			config: withDefaultConfig(),
-			want:   failWithMsg("exec create logs table sql: parse dsn address failed"),
+			want:   failWithMsg("parse dsn address failed"),
+		},
+		"no dsn fails at construction even without table creation": {
+			config: withDefaultConfig(func(cfg *clickhousestsexporter.Config) { cfg.CreateLogsTable = false }),
+			want: func(t *testing.T, exporter *clickhousestsexporter.LogsExporter, err error) {
+				require.Nil(t, exporter)
+				require.ErrorContains(t, err, "parse dsn address failed")
+			},
 		},
 	}
 
@@ -76,60 +80,66 @@ func TestLogsExporter_New(t *testing.T) {
 	}
 }
 
-func TestExporter_pushLogsData(t *testing.T) {
-	t.Run("push success", func(t *testing.T) {
-		var items int
-		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
-			t.Logf("%d, values:%+v", items, values)
-			if strings.HasPrefix(query, "INSERT") {
-				items++
-			}
-			return nil
-		})
+const (
+	logsTable          = "otel_logs"
+	logsResourcesTable = "otel_logs_resources"
+)
 
-		exporter := newTestLogsExporter(t, defaultEndpoint)
-		mustPushLogsData(t, exporter, simpleLogs(1))
-		mustPushLogsData(t, exporter, simpleLogs(2))
+type logsInserts struct {
+	logs      [][]driver.Value
+	resources [][]driver.Value
+	creates   []string
+}
 
-		require.Equal(t, 3, items)
+func recordLogsInserts(t *testing.T) *logsInserts {
+	inserts := &logsInserts{}
+	initClickhouseTestServer(t, func(query string, values []driver.Value) error {
+		switch {
+		case strings.HasPrefix(strings.TrimSpace(query), "CREATE"):
+			inserts.creates = append(inserts.creates, query)
+		case strings.HasPrefix(query, "INSERT INTO "+logsResourcesTable+" "):
+			inserts.resources = append(inserts.resources, values)
+		case strings.HasPrefix(query, "INSERT INTO "+logsTable+" "):
+			inserts.logs = append(inserts.logs, values)
+		}
+		return nil
 	})
-	t.Run("test check resource metadata", func(t *testing.T) {
-		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
-			if strings.HasPrefix(query, "INSERT") {
-				require.Equal(t, "https://opentelemetry.io/schemas/1.4.0", values[8])
-				require.Equal(t, map[string]string{
-					testServiceNameAttr: "test-service",
-				}, values[9])
-			}
-			return nil
-		})
-		exporter := newTestLogsExporter(t, defaultEndpoint)
-		mustPushLogsData(t, exporter, simpleLogs(1))
+	return inserts
+}
+
+// Inserts use the native batch API, which the fake database/sql driver cannot observe; the
+// row mapping is covered by internal tests and the inserts by the integration tests.
+func TestLogsExporter_TableCreation(t *testing.T) {
+	t.Run("tables are created by default", func(t *testing.T) {
+		inserts := recordLogsInserts(t)
+		newTestLogsExporter(t)
+
+		require.Len(t, inserts.creates, 2)
+		require.Contains(t, inserts.creates[0], logsResourcesTable)
+		require.Contains(t, inserts.creates[1], logsTable)
 	})
-	t.Run("test check scope metadata", func(t *testing.T) {
-		initClickhouseTestServer(t, func(query string, values []driver.Value) error {
-			if strings.HasPrefix(query, "INSERT") {
-				require.Equal(t, "https://opentelemetry.io/schemas/1.7.0", values[10])
-				require.Equal(t, "io.opentelemetry.contrib.clickhouse", values[11])
-				require.Equal(t, "1.0.0", values[12])
-				require.Equal(t, map[string]string{
-					"lib": "clickhouse",
-				}, values[13])
-			}
-			return nil
-		})
-		exporter := newTestLogsExporter(t, defaultEndpoint)
-		mustPushLogsData(t, exporter, simpleLogs(1))
+	t.Run("tables are not created when disabled", func(t *testing.T) {
+		inserts := recordLogsInserts(t)
+		newTestLogsExporter(t, func(cfg *clickhousestsexporter.Config) { cfg.CreateLogsTable = false })
+
+		require.Empty(t, inserts.creates)
+	})
+	t.Run("resources table TTL has slack beyond the logs TTL", func(t *testing.T) {
+		inserts := recordLogsInserts(t)
+		newTestLogsExporter(t, func(cfg *clickhousestsexporter.Config) { cfg.TTL = 72 * time.Hour })
+
+		require.Len(t, inserts.creates, 2)
+		require.Contains(t, inserts.creates[0], "toIntervalDay(4)")
+		require.Contains(t, inserts.creates[1], "toIntervalDay(3)")
 	})
 }
 
-func newTestLogsExporter(t *testing.T, dsn string, fns ...func(*clickhousestsexporter.Config)) *clickhousestsexporter.LogsExporter {
-	exporter, err := clickhousestsexporter.NewLogsExporter(zaptest.NewLogger(t), withTestExporterConfig(t, fns...)(dsn))
+func newTestLogsExporter(t *testing.T, fns ...func(*clickhousestsexporter.Config)) {
+	exporter, err := clickhousestsexporter.NewLogsExporter(zaptest.NewLogger(t), withTestExporterConfig(t, fns...)(defaultEndpoint))
 	require.NoError(t, err)
 	require.NoError(t, exporter.Start(context.TODO(), nil))
 
 	t.Cleanup(func() { _ = exporter.Shutdown(context.TODO()) })
-	return exporter
 }
 
 func withTestExporterConfig(t *testing.T, fns ...func(*clickhousestsexporter.Config)) func(string) *clickhousestsexporter.Config {
@@ -142,29 +152,6 @@ func withTestExporterConfig(t *testing.T, fns ...func(*clickhousestsexporter.Con
 		configMods = append(configMods, fns...)
 		return withDefaultConfig(configMods...)
 	}
-}
-
-func simpleLogs(count int) plog.Logs {
-	logs := plog.NewLogs()
-	rl := logs.ResourceLogs().AppendEmpty()
-	rl.SetSchemaUrl("https://opentelemetry.io/schemas/1.4.0")
-	rl.Resource().Attributes().PutStr(testServiceNameAttr, "test-service")
-	sl := rl.ScopeLogs().AppendEmpty()
-	sl.SetSchemaUrl("https://opentelemetry.io/schemas/1.7.0")
-	sl.Scope().SetName("io.opentelemetry.contrib.clickhouse")
-	sl.Scope().SetVersion("1.0.0")
-	sl.Scope().Attributes().PutStr("lib", "clickhouse")
-	for i := 0; i < count; i++ {
-		r := sl.LogRecords().AppendEmpty()
-		r.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
-		r.Attributes().PutStr(string(conventions.ServiceNameKey), "v")
-	}
-	return logs
-}
-
-func mustPushLogsData(t *testing.T, exporter *clickhousestsexporter.LogsExporter, ld plog.Logs) {
-	err := exporter.PushLogsData(context.TODO(), ld)
-	require.NoError(t, err)
 }
 
 func initClickhouseTestServer(t *testing.T, recorder recorder) {

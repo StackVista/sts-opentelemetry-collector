@@ -289,7 +289,11 @@ ClickHouse tables:
 - `logs_table_name` (default = otel_logs): The table name for logs.
 - `traces_table_name` (default = otel_traces): The table name for traces.
 - `metrics_table_name` (default = otel_metrics): The table name for metrics.
+- `logs_resources_table_name` (default = otel_logs_resources): The table name for the resources referenced by logs.
 - `create_traces_table` (default = true): Create the traces table on startup
+- `create_logs_table` (default = true): Create the logs and logs resources tables on startup. Disable when StackState manages the schema.
+
+Log records with an `EventName` are OTel events and are not written to the logs table.
 
 Processing:
 

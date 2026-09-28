@@ -56,15 +56,16 @@ func TestLoadConfig(t *testing.T) {
 		{
 			id: component.NewIDWithName(metadata.Type, "full"),
 			expected: &clickhousestsexporter.Config{
-				Endpoint:           defaultEndpoint,
-				Database:           testDatabase,
-				Username:           testUsername,
-				Password:           testPassword,
-				TTL:                72 * time.Hour,
-				LogsTableName:      "otel_logs",
-				TracesTableName:    "otel_traces",
-				MetricsTableName:   "otel_metrics",
-				ResourcesTableName: "otel_resources",
+				Endpoint:               defaultEndpoint,
+				Database:               testDatabase,
+				Username:               testUsername,
+				Password:               testPassword,
+				TTL:                    72 * time.Hour,
+				LogsTableName:          "otel_logs",
+				TracesTableName:        "otel_traces",
+				MetricsTableName:       "otel_metrics",
+				ResourcesTableName:     "otel_resources",
+				LogsResourcesTableName: "custom_logs_resources",
 				TimeoutSettings: exporterhelper.TimeoutConfig{
 					Timeout: 5 * time.Second,
 				},
@@ -86,6 +87,7 @@ func TestLoadConfig(t *testing.T) {
 				}(),
 				CreateResourcesTable: true,
 				CreateTracesTable:    true,
+				CreateLogsTable:      false,
 			},
 		},
 	}
