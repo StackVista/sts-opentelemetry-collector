@@ -345,6 +345,7 @@ jobs:
       - name: Run integration tests
         run: |
           (cd exporter/stskafkaexporter/integration && GOWORK=off go test -tags=integration ./...)
+          (cd exporter/clickhousestsexporter/integration && GOWORK=off go test -tags=integration ./...)
           (cd extension/settingsproviderextension/integration && GOWORK=off go test -tags=integration ./...)
 
   e2e-test:
