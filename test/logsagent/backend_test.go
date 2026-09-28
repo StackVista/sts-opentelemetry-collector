@@ -40,9 +40,10 @@ type wireRecord struct {
 }
 
 type request struct {
-	mode    string
-	status  int
-	records []wireRecord
+	mode       string
+	status     int
+	records    []wireRecord
+	receivedAt time.Time
 }
 
 type responsePlan struct {
@@ -73,6 +74,7 @@ type backend struct {
 	active             int
 	maxActive          int
 	promtailDescriptor protoreflect.MessageDescriptor
+	beforeResponse     func(context.Context, request)
 }
 
 func newBackend(t *testing.T, mode string) *backend {
@@ -113,6 +115,12 @@ func (b *backend) setPlan(mode string, plan responsePlan) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.plans[mode] = plan
+}
+
+func (b *backend) setBeforeResponse(hook func(context.Context, request)) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.beforeResponse = hook
 }
 
 func (b *backend) snapshot() []request {
@@ -159,6 +167,11 @@ func (b *backend) enter(ctx context.Context) func() {
 }
 
 func (b *backend) record(mode string, records []wireRecord) (responsePlan, int, bool) {
+	plan, req, loseResponse := b.recordAt(mode, records, time.Now())
+	return plan, req.status, loseResponse
+}
+
+func (b *backend) recordAt(mode string, records []wireRecord, receivedAt time.Time) (responsePlan, request, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	plan := b.plans[mode]
@@ -172,8 +185,9 @@ func (b *backend) record(mode string, records []wireRecord) (responsePlan, int, 
 		plan.lostResponses--
 	}
 	b.plans[mode] = plan
-	b.requests = append(b.requests, request{mode: mode, status: status, records: records})
-	return plan, status, loseResponse
+	req := request{mode: mode, status: status, records: records, receivedAt: receivedAt}
+	b.requests = append(b.requests, req)
+	return plan, req, loseResponse
 }
 
 func (b *backend) serveHTTP(w http.ResponseWriter, r *http.Request) {
@@ -222,6 +236,7 @@ func (b *backend) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	receivedAt := time.Now()
 	defer b.enter(r.Context())()
 	if r.Method != http.MethodPost || r.Header.Get("Content-Type") != "application/x-protobuf" {
 		b.t.Error("export did not use POST application/x-protobuf")
@@ -254,7 +269,13 @@ func (b *backend) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	plan, status, loseResponse := b.record(mode, records)
+	plan, req, loseResponse := b.recordAt(mode, records, receivedAt)
+	b.mu.Lock()
+	beforeResponse := b.beforeResponse
+	b.mu.Unlock()
+	if beforeResponse != nil {
+		beforeResponse(r.Context(), req)
+	}
 	if loseResponse {
 		hijacker, ok := w.(http.Hijacker)
 		if !ok {
@@ -272,8 +293,8 @@ func (b *backend) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	if mode == "native" {
 		w.Header().Set("Content-Type", "application/x-protobuf")
 	}
-	w.WriteHeader(status)
-	if mode == "native" && status == http.StatusOK {
+	w.WriteHeader(req.status)
+	if mode == "native" && req.status == http.StatusOK {
 		resp := plogotlp.NewExportResponse()
 		if plan.partial {
 			resp.PartialSuccess().SetRejectedLogRecords(1)

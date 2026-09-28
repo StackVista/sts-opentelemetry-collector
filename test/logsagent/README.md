@@ -47,7 +47,7 @@ does not promise a full retry budget for every buffered fragment during drain.
 | Invalid lifetime, concurrency, queue, retry and synchronous gate | Real startup rejection; each terminal exporter's bounds are challenged |
 | Omitted exporter timeout/retry settings | Insufficient effective lifetime rejected; sufficient lifetime permits startup, immediate-success export and shutdown |
 | Sequential partial-CRI shutdown during outage | One absolute drain budget, completed retries and late rejection, exact final counters after exporter shutdown |
-| Timer flush with a stopped/resumed child process | Expired export deadline, rejection of remaining fragments and final export shutdown |
+| Timer flush with a stopped/resumed child process | Holds the second retry at the backend response boundary before SIGSTOP; then verifies cancellation, one expired call, late rejections and no post-resume requests |
 | Record/request size limits | Rejection before export and corresponding counters |
 | Capability observation reset, both directions | Current-mode, malformed, authentication, transient and unsupported queries interrupt the candidate sequence; authentication readiness recovers |
 | Failed restart marker/message writes | Old route remains usable; cooldown expires before three fresh observations request one successful restart |
@@ -69,6 +69,12 @@ Collector default insertion or typed-config marshaling.
 The ordinary suite uses a normal OCB build and runs the harness with the race
 detector. The injected cases use a separate agent built with the race detector.
 Component race tests run separately. The suite timeout is 180s.
+
+The scheduling-stall case holds the second request for one timer-flushed CRI
+partial at the backend response boundary, then uses SIGSTOP/SIGCONT to expire
+the active retry. The response stays held until the child cancels it, which
+establishes request accounting before the stall. It requires exactly one expired
+call, rejection of every remaining partial, and no additional requests.
 
 Build and run the injected cases from the repository root:
 
