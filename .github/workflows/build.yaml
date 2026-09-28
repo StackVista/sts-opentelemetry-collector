@@ -137,7 +137,7 @@ jobs:
 
   publish:
     name: Scan, sign, and publish (${{ matrix.image }})
-    needs: build
+    needs: [build, lint, test, integration-test, e2e-test, logs-process-faults, validate]
     runs-on: ubuntu-latest
     permissions:
       contents: read
