@@ -65,7 +65,7 @@ func createLogsExporter(
 		return nil, errors.New("unable to cast config")
 	}
 
-	exporter, err := NewLogsExporter(set.Logger, c)
+	exporter, err := NewLogsExporter(set.TelemetrySettings, c)
 	if err != nil {
 		return nil, fmt.Errorf("cannot configure clickhouse logs exporter: %w", err)
 	}

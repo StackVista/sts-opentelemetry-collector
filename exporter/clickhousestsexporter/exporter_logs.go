@@ -20,6 +20,7 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
+	"go.opentelemetry.io/otel/metric"
 	conventions "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"go.uber.org/zap"
 )
@@ -39,11 +40,63 @@ type LogsExporter struct {
 	resourceExporter *ResourcesExporter
 	writtenResources *lru.Cache[uuid.UUID, time.Time]
 
-	logger *zap.Logger
-	cfg    *Config
+	logger    *zap.Logger
+	telemetry *logsTelemetry
+	cfg       *Config
 }
 
-func NewLogsExporter(logger *zap.Logger, cfg *Config) (*LogsExporter, error) {
+// logsTelemetry counts conditions that can recur on every batch when a source is persistently
+// misbehaving (e.g. an upstream that always sets EventName, or never sets a timestamp). These are
+// metrics rather than log lines for exactly that reason: a counter can't flood the collector's logs.
+type logsTelemetry struct {
+	skippedEvents          metric.Int64Counter
+	timestampFallbacks     metric.Int64Counter
+	severityClamped        metric.Int64Counter
+	resourceCacheEvictions metric.Int64Counter
+}
+
+func newLogsTelemetry(provider metric.MeterProvider) (*logsTelemetry, error) {
+	meter := provider.Meter("github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter")
+
+	skippedEvents, err := meter.Int64Counter("otelcol_clickhousests_skipped_event_records",
+		metric.WithDescription("Log records skipped because they carry an EventName (OTel events, not logs)"),
+		metric.WithUnit("{record}"))
+	if err != nil {
+		return nil, err
+	}
+	timestampFallbacks, err := meter.Int64Counter("otelcol_clickhousests_timestamp_fallback_records",
+		metric.WithDescription("Log records with neither Timestamp nor ObservedTimestamp set; stored with collector wall-clock time"),
+		metric.WithUnit("{record}"))
+	if err != nil {
+		return nil, err
+	}
+	severityClamped, err := meter.Int64Counter("otelcol_clickhousests_severity_clamped_records",
+		metric.WithDescription("Log records with an out-of-range SeverityNumber; stored as Unspecified"),
+		metric.WithUnit("{record}"))
+	if err != nil {
+		return nil, err
+	}
+	resourceCacheEvictions, err := meter.Int64Counter("otelcol_clickhousests_resource_cache_evictions",
+		metric.WithDescription("Resource cache entries evicted before their refresh window; resource cardinality exceeds the cache size"),
+		metric.WithUnit("{eviction}"))
+	if err != nil {
+		return nil, err
+	}
+
+	return &logsTelemetry{
+		skippedEvents:          skippedEvents,
+		timestampFallbacks:     timestampFallbacks,
+		severityClamped:        severityClamped,
+		resourceCacheEvictions: resourceCacheEvictions,
+	}, nil
+}
+
+func NewLogsExporter(set component.TelemetrySettings, cfg *Config) (*LogsExporter, error) {
+	logger := set.Logger
+	telemetry, err := newLogsTelemetry(set.MeterProvider)
+	if err != nil {
+		return nil, err
+	}
 	client, err := newClickhouseClient(cfg)
 	if err != nil {
 		return nil, err
@@ -61,7 +114,10 @@ func NewLogsExporter(logger *zap.Logger, cfg *Config) (*LogsExporter, error) {
 		_ = client.Close()
 		return nil, err
 	}
-	writtenResources, err := lru.New[uuid.UUID, time.Time](logsResourceCacheSize)
+	writtenResources, err := lru.NewWithEvict[uuid.UUID, time.Time](logsResourceCacheSize,
+		func(_ uuid.UUID, _ time.Time) {
+			telemetry.resourceCacheEvictions.Add(context.Background(), 1)
+		})
 	if err != nil {
 		_ = conn.Close()
 		_ = client.Close()
@@ -75,6 +131,7 @@ func NewLogsExporter(logger *zap.Logger, cfg *Config) (*LogsExporter, error) {
 		resourceExporter: resourceExporter,
 		writtenResources: writtenResources,
 		logger:           logger,
+		telemetry:        telemetry,
 		cfg:              cfg,
 	}, nil
 }
@@ -133,9 +190,23 @@ type logRow struct {
 // PushLogsData writes log records to ClickHouse. Records with an EventName are OTel events, not logs, and are skipped.
 func (e *LogsExporter) PushLogsData(ctx context.Context, ld plog.Logs) error {
 	start := time.Now()
-	rows, resources, err := logRowsFromPData(ld)
+	rows, resources, stats, err := logRowsFromPData(ld)
 	if err != nil {
 		return err
+	}
+
+	// Counted rather than logged: a source that persistently sets EventName, omits timestamps, or
+	// sends an invalid severity would otherwise log this on every single batch. The generic
+	// exporterhelper "sent" metric counts every received record regardless of these conditions, so
+	// these counters are the only signal that received and exported counts have diverged.
+	if stats.skippedEvents > 0 {
+		e.telemetry.skippedEvents.Add(ctx, int64(stats.skippedEvents))
+	}
+	if stats.timestampFallbacks > 0 {
+		e.telemetry.timestampFallbacks.Add(ctx, int64(stats.timestampFallbacks))
+	}
+	if stats.severityClamped > 0 {
+		e.telemetry.severityClamped.Add(ctx, int64(stats.severityClamped))
 	}
 	if len(rows) == 0 {
 		return nil
@@ -143,12 +214,15 @@ func (e *LogsExporter) PushLogsData(ctx context.Context, ld plog.Logs) error {
 
 	// Resources go first: a retry after a failed logs insert only re-writes resources, which the ReplacingMergeTree collapses.
 	if err := e.insertResources(ctx, resources); err != nil {
+		e.logger.Warn("insert log resources failed", zap.String("table", e.resourceExporter.tableName), zap.Error(err))
 		return fmt.Errorf("insert log resources: %w", err)
 	}
 
 	err = e.insertLogs(ctx, rows)
+	if err != nil {
+		e.logger.Warn("insert logs failed", zap.String("table", e.cfg.LogsTableName), zap.Error(err))
+	}
 	e.logger.Debug("insert logs", zap.Int("records", len(rows)),
-		zap.Int("skipped", ld.LogRecordCount()-len(rows)),
 		zap.String("cost", time.Since(start).String()))
 	return err
 }
@@ -208,10 +282,19 @@ func (e *LogsExporter) insertLogs(ctx context.Context, rows []logRow) error {
 	return nil
 }
 
-func logRowsFromPData(ld plog.Logs) ([]logRow, []*ResourceModel, error) {
+// logRowsStats counts records affected by silent per-record fallbacks, so PushLogsData can log
+// once per batch instead of once per record.
+type logRowsStats struct {
+	skippedEvents      int
+	timestampFallbacks int
+	severityClamped    int
+}
+
+func logRowsFromPData(ld plog.Logs) ([]logRow, []*ResourceModel, logRowsStats, error) {
 	rows := make([]logRow, 0, ld.LogRecordCount())
 	resources := make([]*ResourceModel, 0, ld.ResourceLogs().Len())
 	seenResources := make(map[uuid.UUID]struct{}, ld.ResourceLogs().Len())
+	var stats logRowsStats
 
 	for i := 0; i < ld.ResourceLogs().Len(); i++ {
 		resourceLogs := ld.ResourceLogs().At(i)
@@ -229,12 +312,13 @@ func logRowsFromPData(ld plog.Logs) ([]logRow, []*ResourceModel, error) {
 			for k := 0; k < records.Len(); k++ {
 				record := records.At(k)
 				if record.EventName() != "" {
+					stats.skippedEvents++
 					continue
 				}
 				if resource == nil {
 					var err error
 					if resource, err = NewResourceModel(resourceLogs.Resource()); err != nil {
-						return nil, nil, err
+						return nil, nil, stats, err
 					}
 					if _, seen := seenResources[resource.resourceRef]; !seen {
 						seenResources[resource.resourceRef] = struct{}{}
@@ -244,8 +328,16 @@ func logRowsFromPData(ld plog.Logs) ([]logRow, []*ResourceModel, error) {
 				if scopeAttributes == nil {
 					scopeAttributes = attributesToMap(scope.Attributes())
 				}
+				timestamp, usedWallClock := logTimestamp(record)
+				severity, clamped := severityNumber(record.SeverityNumber())
+				if usedWallClock {
+					stats.timestampFallbacks++
+				}
+				if clamped {
+					stats.severityClamped++
+				}
 				rows = append(rows, logRow{
-					timestamp:         logTimestamp(record),
+					timestamp:         timestamp,
 					observedTimestamp: record.ObservedTimestamp().AsTime(),
 					resource:          resource,
 					resourceSchemaURL: resourceLogs.SchemaUrl(),
@@ -258,32 +350,35 @@ func logRowsFromPData(ld plog.Logs) ([]logRow, []*ResourceModel, error) {
 					spanID:            SpanIDToHexOrEmptyString(record.SpanID()),
 					traceFlags:        uint8(record.Flags() & 0xff),
 					severityText:      record.SeverityText(),
-					severityNumber:    severityNumber(record.SeverityNumber()),
+					severityNumber:    severity,
 					body:              record.Body().AsString(),
 					logAttributes:     attributesToMap(record.Attributes()),
 				})
 			}
 		}
 	}
-	return rows, resources, nil
+	return rows, resources, stats, nil
 }
 
-func severityNumber(n plog.SeverityNumber) uint8 {
+// severityNumber reports whether n was outside the valid range and got clamped to Unspecified.
+func severityNumber(n plog.SeverityNumber) (uint8, bool) {
 	if n < 0 || n > math.MaxUint8 {
-		return uint8(plog.SeverityNumberUnspecified)
+		return uint8(plog.SeverityNumberUnspecified), true
 	}
-	return uint8(n)
+	return uint8(n), false
 }
 
-// logTimestamp follows the OTel log data model: fall back to the observed time when the event time is unknown.
-func logTimestamp(record plog.LogRecord) time.Time {
+// logTimestamp follows the OTel log data model: fall back to the observed time when the event time is
+// unknown, and reports whether it had to fall back further, to wall-clock time with no relation to the
+// actual event, because neither timestamp was set.
+func logTimestamp(record plog.LogRecord) (time.Time, bool) {
 	if record.Timestamp() != 0 {
-		return record.Timestamp().AsTime()
+		return record.Timestamp().AsTime(), false
 	}
 	if record.ObservedTimestamp() != 0 {
-		return record.ObservedTimestamp().AsTime()
+		return record.ObservedTimestamp().AsTime(), false
 	}
-	return time.Now()
+	return time.Now(), true
 }
 
 // withOneDayTTLSlack returns a copy of cfg whose table TTL is one day longer; a disabled TTL stays disabled.
@@ -408,7 +503,7 @@ func createDatabase(ctx context.Context, cfg *Config) error {
 
 func createLogsTable(ctx context.Context, cfg *Config, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, renderCreateLogsTableSQL(cfg)); err != nil {
-		return fmt.Errorf("exec create logs table sql: %w", err)
+		return fmt.Errorf("exec create logs table sql (table=%s): %w", cfg.LogsTableName, err)
 	}
 	return nil
 }

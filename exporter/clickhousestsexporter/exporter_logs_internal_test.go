@@ -42,10 +42,13 @@ func TestLogRowsFromPData_MapsAllFields(t *testing.T) {
 	r.SetSeverityNumber(plog.SeverityNumberError)
 	r.Body().SetStr("something failed")
 
-	rows, resources, err := logRowsFromPData(logs)
+	rows, resources, stats, err := logRowsFromPData(logs)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	require.Len(t, resources, 1)
+	require.Zero(t, stats.skippedEvents)
+	require.Zero(t, stats.timestampFallbacks)
+	require.Zero(t, stats.severityClamped)
 
 	row := rows[0]
 	require.Equal(t, ts, row.timestamp)
@@ -71,7 +74,7 @@ func TestLogRowsFromPData_StructuredBodyIsJSON(t *testing.T) {
 	logs := testLogs(1)
 	logs.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0).Body().SetEmptyMap().PutStr("msg", "hi")
 
-	rows, _, err := logRowsFromPData(logs)
+	rows, _, _, err := logRowsFromPData(logs)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"msg":"hi"}`, rows[0].body)
 }
@@ -83,9 +86,23 @@ func TestLogRowsFromPData_TimestampFallsBackToObserved(t *testing.T) {
 	r.SetTimestamp(0)
 	r.SetObservedTimestamp(pcommon.NewTimestampFromTime(observed))
 
-	rows, _, err := logRowsFromPData(logs)
+	rows, _, stats, err := logRowsFromPData(logs)
 	require.NoError(t, err)
 	require.Equal(t, observed, rows[0].timestamp)
+	require.Zero(t, stats.timestampFallbacks, "falling back to the observed timestamp is not a wall-clock fallback")
+}
+
+func TestLogRowsFromPData_TimestampFallsBackToWallClockWhenBothUnset(t *testing.T) {
+	logs := testLogs(1)
+	r := logs.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0)
+	r.SetTimestamp(0)
+	r.SetObservedTimestamp(0)
+
+	before := time.Now()
+	rows, _, stats, err := logRowsFromPData(logs)
+	require.NoError(t, err)
+	require.WithinRange(t, rows[0].timestamp, before, time.Now())
+	require.Equal(t, 1, stats.timestampFallbacks)
 }
 
 func TestLogRowsFromPData_SkipsEvents(t *testing.T) {
@@ -94,10 +111,11 @@ func TestLogRowsFromPData_SkipsEvents(t *testing.T) {
 	records.At(0).SetEventName("device.app.lifecycle")
 	records.At(2).SetEventName("browser.page_view")
 
-	rows, resources, err := logRowsFromPData(logs)
+	rows, resources, stats, err := logRowsFromPData(logs)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	require.Len(t, resources, 1)
+	require.Equal(t, 2, stats.skippedEvents)
 }
 
 func TestLogRowsFromPData_OnlyEventsProduceNothing(t *testing.T) {
@@ -106,26 +124,35 @@ func TestLogRowsFromPData_OnlyEventsProduceNothing(t *testing.T) {
 	records.At(0).SetEventName("a")
 	records.At(1).SetEventName("b")
 
-	rows, resources, err := logRowsFromPData(logs)
+	rows, resources, stats, err := logRowsFromPData(logs)
 	require.NoError(t, err)
 	require.Empty(t, rows)
 	require.Empty(t, resources)
+	require.Equal(t, 2, stats.skippedEvents)
 }
 
 func TestLogRowsFromPData_DeduplicatesResourcesPerBatch(t *testing.T) {
 	logs := testLogs(1)
 	testLogs(2).ResourceLogs().At(0).CopyTo(logs.ResourceLogs().AppendEmpty())
 
-	rows, resources, err := logRowsFromPData(logs)
+	rows, resources, _, err := logRowsFromPData(logs)
 	require.NoError(t, err)
 	require.Len(t, rows, 3)
 	require.Len(t, resources, 1)
 }
 
 func TestSeverityNumberIsClamped(t *testing.T) {
-	require.Equal(t, uint8(plog.SeverityNumberFatal4), severityNumber(plog.SeverityNumberFatal4))
-	require.Equal(t, uint8(0), severityNumber(plog.SeverityNumber(-1)))
-	require.Equal(t, uint8(0), severityNumber(plog.SeverityNumber(1000)))
+	n, clamped := severityNumber(plog.SeverityNumberFatal4)
+	require.Equal(t, uint8(plog.SeverityNumberFatal4), n)
+	require.False(t, clamped)
+
+	n, clamped = severityNumber(plog.SeverityNumber(-1))
+	require.Equal(t, uint8(0), n)
+	require.True(t, clamped)
+
+	n, clamped = severityNumber(plog.SeverityNumber(1000))
+	require.Equal(t, uint8(0), n)
+	require.True(t, clamped)
 }
 
 func TestWithOneDayTTLSlack(t *testing.T) {

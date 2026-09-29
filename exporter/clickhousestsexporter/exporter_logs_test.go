@@ -14,10 +14,19 @@ import (
 
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/otel/metric/noop"
 	"go.uber.org/zap/zaptest"
 )
 
 const testServiceNameAttr = "service.name"
+
+func testTelemetrySettings(t *testing.T) component.TelemetrySettings {
+	return component.TelemetrySettings{
+		Logger:        zaptest.NewLogger(t),
+		MeterProvider: noop.NewMeterProvider(),
+	}
+}
 
 func TestLogsExporter_New(t *testing.T) {
 	type validate func(*testing.T, *clickhousestsexporter.LogsExporter, error)
@@ -65,7 +74,7 @@ func TestLogsExporter_New(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 
 			var err error
-			exporter, err := clickhousestsexporter.NewLogsExporter(zaptest.NewLogger(t), test.config)
+			exporter, err := clickhousestsexporter.NewLogsExporter(testTelemetrySettings(t), test.config)
 			err = errors.Join(err, err)
 
 			if exporter != nil {
@@ -135,7 +144,7 @@ func TestLogsExporter_TableCreation(t *testing.T) {
 }
 
 func newTestLogsExporter(t *testing.T, fns ...func(*clickhousestsexporter.Config)) {
-	exporter, err := clickhousestsexporter.NewLogsExporter(zaptest.NewLogger(t), withTestExporterConfig(t, fns...)(defaultEndpoint))
+	exporter, err := clickhousestsexporter.NewLogsExporter(testTelemetrySettings(t), withTestExporterConfig(t, fns...)(defaultEndpoint))
 	require.NoError(t, err)
 	require.NoError(t, exporter.Start(context.TODO(), nil))
 
