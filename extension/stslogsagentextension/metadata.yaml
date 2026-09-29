@@ -1,0 +1,7 @@
+type: stslogsagent
+scope_name: github.com/stackvista/sts-opentelemetry-collector/extension/stslogsagentextension
+status:
+  class: extension
+  stability:
+    development: [extension]
+  distributions: [agent]

@@ -1,0 +1,69 @@
+extensions:
+  file_storage/logs:
+    directory: {{printf "%q" .Checkpoints}}
+    create_directory: true
+    recreate: false
+  stslogsagent/logs:
+    health_endpoint: {{printf "%q" .Health}}
+receivers:
+  filelog/pods:
+    include: [{{printf "%q" .Include}}]
+    include_file_path: true
+    start_at: beginning
+    storage: file_storage/logs
+    fingerprint_size: 64
+    preserve_trailing_whitespaces: true
+    poll_interval: 50ms
+    max_concurrent_files: {{.Files}}
+    max_log_size: 256KiB
+    retry_on_failure:
+      enabled: false
+    operators:
+      - type: container
+        id: container
+processors:
+  memory_limiter:
+    check_interval: 100ms
+    limit_mib: 128
+    spike_limit_mib: 32
+  transform/identity:
+    error_mode: propagate
+    log_statements:
+      - context: resource
+        statements:
+          - set(attributes["k8s.cluster.name"], "fixture-cluster")
+          - set(attributes["k8s.pod.uid"], "12345678-1234-1234-1234-123456789abc")
+          - set(attributes["k8s.pod.name"], "fixture-0")
+          - set(attributes["k8s.container.name"], "app")
+exporters:
+  stsk8slogs/promtail:
+    delivery:
+      controller_extension: stslogsagent/logs
+      max_concurrent_calls: {{.Concurrency}}
+      max_record_bytes: 262144
+      max_request_bytes: 1048576
+      export_lifetime: {{.Lifetime}}
+    endpoint: {{printf "%q" .PromtailURL}}
+    api_key: ${env:STS_API_KEY}
+    cluster_name: fixture-cluster
+    timeout: {{.AttemptTimeout}}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 100ms
+      max_interval: 200ms
+      max_elapsed_time: {{.RetryBudget}}
+    sending_queue:
+      enabled: false
+service:
+  telemetry:
+    logs:
+      encoding: json
+      level: debug
+    metrics:
+      level: none
+  extensions: [file_storage/logs, stslogsagent/logs]
+  pipelines:
+    logs/input:
+      receivers: [filelog/pods]
+      processors: [memory_limiter, transform/identity]
+      exporters: [stsk8slogs/promtail]

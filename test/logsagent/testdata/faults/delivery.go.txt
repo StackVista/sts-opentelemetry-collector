@@ -1,0 +1,50 @@
+package logsagent
+
+import (
+	"context"
+	"strconv"
+	"time"
+
+	"go.opentelemetry.io/collector/pdata/plog"
+)
+
+func (c *Delivery) ConsumeLogs(ctx context.Context, data plog.Logs) error {
+	if !FaultEnabled("admission") {
+		return c.consumeLogs(ctx, data)
+	}
+	done := make(chan error, c.cfg.MaxConcurrentCalls)
+	for i := range c.cfg.MaxConcurrentCalls {
+		copyData := plog.NewLogs()
+		data.CopyTo(copyData)
+		for _, rl := range copyData.ResourceLogs().All() {
+			for _, sl := range rl.ScopeLogs().All() {
+				for _, record := range sl.LogRecords().All() {
+					record.Body().SetStr(record.Body().Str() + " injected-call=" + strconv.Itoa(i))
+				}
+			}
+		}
+		go func() { done <- c.consumeLogs(ctx, copyData) }()
+	}
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
+	for c.account.Snapshot().Outstanding != int64(c.cfg.MaxConcurrentCalls) {
+		select {
+		case <-timeout.C:
+			panic("fault fixture did not fill delivery admission")
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+	FaultMark("admission_full")
+	err := c.consumeLogs(ctx, data)
+	if err == nil || err.Error() != "logs delivery pre-export rejection: admission_saturated" {
+		panic("excess call did not return an admission rejection")
+	}
+	FaultMark("admission_rejected")
+	for range c.cfg.MaxConcurrentCalls {
+		if callErr := <-done; callErr != nil {
+			panic(callErr)
+		}
+	}
+	return err
+}
