@@ -11,7 +11,6 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/common/logsagent"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componentstatus"
-	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/extension"
 	"go.opentelemetry.io/collector/extension/extensioncapabilities"
 	"go.opentelemetry.io/collector/featuregate"
@@ -21,10 +20,10 @@ import (
 )
 
 var (
-	_ logsagent.Controller                  = (*controller)(nil)
-	_ extensioncapabilities.PipelineWatcher = (*controller)(nil)
-	_ extensioncapabilities.ConfigWatcher   = (*controller)(nil)
-	_ componentstatus.Watcher               = (*controller)(nil)
+	_ logsagent.Controller                        = (*controller)(nil)
+	_ extensioncapabilities.PipelineWatcher       = (*controller)(nil)
+	_ extensioncapabilities.ConfigSnapshotWatcher = (*controller)(nil)
+	_ componentstatus.Watcher                     = (*controller)(nil)
 )
 
 type controller struct {
@@ -69,8 +68,8 @@ func (c *controller) Start(ctx context.Context, _ component.Host) error {
 	return nil
 }
 
-func (c *controller) NotifyConfig(_ context.Context, conf *confmap.Conf) error {
-	bounds, err := logsagent.ValidateEffectivePipelineConfig(conf)
+func (c *controller) NotifyConfigSnapshot(_ context.Context, snapshot extensioncapabilities.ConfigSnapshot) error {
+	bounds, err := logsagent.ValidateEffectivePipelineConfig(snapshot.Effective())
 	if err != nil {
 		return err
 	}

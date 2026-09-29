@@ -15,7 +15,7 @@ RUN zypper --non-interactive refresh \
 WORKDIR /go/src/github.com/stackvista/sts-opentelemetry-collector
 COPY . .
 
-RUN go install go.opentelemetry.io/collector/cmd/builder@v0.153.0
+RUN go install go.opentelemetry.io/collector/cmd/builder@v0.161.0
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH:-$(go env GOARCH)} builder --config ./sts-otel-builder.yaml
 
 FROM ${BASE_IMAGE}

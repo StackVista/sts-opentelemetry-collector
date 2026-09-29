@@ -16,7 +16,6 @@ import (
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/config/configopaque"
 	"go.opentelemetry.io/collector/confmap"
-	"go.opentelemetry.io/collector/confmap/xconfmap"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exportertest"
 )
@@ -153,7 +152,7 @@ func TestFactoryDefaultsAndConfiguration(t *testing.T) {
 			if tc.decodeFails {
 				t.Fatal("accepted an unsupported configuration")
 			}
-			err := xconfmap.Validate(cfg)
+			err := confmap.Validate(cfg)
 			if tc.valid {
 				if err != nil {
 					t.Fatal(err)
