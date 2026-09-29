@@ -19,7 +19,6 @@ import (
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
-	"go.uber.org/zap/zaptest"
 
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter"
 )
@@ -92,7 +91,7 @@ func (ch *clickHouse) exporterConfig(mods ...func(*clickhousestsexporter.Config)
 
 func startLogsExporter(t *testing.T, cfg *clickhousestsexporter.Config) *clickhousestsexporter.LogsExporter {
 	t.Helper()
-	exporter, err := clickhousestsexporter.NewLogsExporter(zaptest.NewLogger(t), cfg)
+	exporter, err := clickhousestsexporter.NewLogsExporter(componenttest.NewNopTelemetrySettings(), cfg)
 	require.NoError(t, err)
 	require.NoError(t, exporter.Start(context.Background(), componenttest.NewNopHost()))
 	t.Cleanup(func() { _ = exporter.Shutdown(context.Background()) })
