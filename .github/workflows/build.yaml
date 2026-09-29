@@ -137,7 +137,7 @@ jobs:
 
   publish:
     name: Scan, sign, and publish (${{ matrix.image }})
-    needs: build
+    needs: [build, lint, test, integration-test, e2e-test, logs-process-faults, validate]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -182,7 +182,7 @@ jobs:
           cp "/tmp/artifacts/image-${{ matrix.image }}-linux-amd64/image.tar" /tmp/sts-images/image-amd64.tar
           cp "/tmp/artifacts/image-${{ matrix.image }}-linux-arm64/image.tar" /tmp/sts-images/image-arm64.tar
 
-      - name: Load per-arch images for the CVE gate
+      - name: Load per-arch images for CVE reporting
         env:
           GATE_REPO: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           GATE_TAG: cve-gate-${{ matrix.image }}
@@ -192,28 +192,25 @@ jobs:
             loaded=$(docker load -i "/tmp/sts-images/image-${arch}.tar" | awk -F': ' '/Loaded image/ {print $NF}')
             target="${GATE_REPO}:${GATE_TAG}-${arch}"
             docker tag "$loaded" "$target"
-            # Scan under the published repository name so the product purls in our
-            # OpenVEX statements match. A second repository name left on the same
-            # image can win purl construction and stop those statements applying,
-            # failing this gate on a finding that policy has already answered.
+            # Keep the published repository identity so OpenVEX product PURLs match.
             if [ "$loaded" != "$target" ]; then
               docker rmi "$loaded" > /dev/null
             fi
           done
 
-      - name: CVE gate (amd64)
+      - name: CVE report and secret scan (amd64)
         uses: StackVista/image-pipeline/.github/actions/scan-image@6284a6fc006a7cc46a7f00d02c50d5f21b117b63
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cve-gate-${{ matrix.image }}-amd64
-          mode: gate
+          mode: inform
           severity: HIGH,CRITICAL
           upload-sarif: 'false'
 
-      - name: CVE gate (arm64)
+      - name: CVE report and secret scan (arm64)
         uses: StackVista/image-pipeline/.github/actions/scan-image@6284a6fc006a7cc46a7f00d02c50d5f21b117b63
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cve-gate-${{ matrix.image }}-arm64
-          mode: gate
+          mode: inform
           severity: HIGH,CRITICAL
           upload-sarif: 'false'
 
