@@ -16,13 +16,6 @@ func scriptedFeatures(f *fixture, initialMode string) {
 	f.backend.featureReplies <- featureReply{mode: initialMode, status: http.StatusOK}
 }
 
-func scriptedConfig(config map[string]any) {
-	capability := section(config, "extensions", "stslogsagent/logs")
-	capability["max_attempts"] = 1
-	capability["query_timeout"] = "5s"
-	capability["attempt_timeout"] = "5s"
-}
-
 func completedQueries(p *process) int {
 	return len(stressEvents(p, "Logs capability query completed", "")) +
 		len(stressEvents(p, "Logs capability query rejected", ""))
@@ -55,7 +48,7 @@ func assertNoRestart(t *testing.T, p *process) {
 	}
 }
 
-func TestCapabilityObservationReset(t *testing.T) {
+func TestInjectedCapabilityObservationReset(t *testing.T) {
 	t.Parallel()
 	for _, mode := range []string{"promtail", "native"} {
 		for _, reset := range []struct {
@@ -71,9 +64,9 @@ func TestCapabilityObservationReset(t *testing.T) {
 		} {
 			t.Run(mode+"/"+reset.name, func(t *testing.T) {
 				t.Parallel()
-				f := newFixture(t, mode)
+				f, _ := newFaultFixture(t, mode)
 				scriptedFeatures(f, mode)
-				p := f.start(stressValidated(t, scriptedConfig), true)
+				p := f.start(stressValidated(t, nil), true)
 				p.ready()
 				target := featureReply{mode: otherMode(mode), status: http.StatusOK}
 				deliverFeature(t, f, p, target)
@@ -112,19 +105,17 @@ func TestCapabilityObservationReset(t *testing.T) {
 	}
 }
 
-func TestRestartWriteFailureRecoversAfterCooldown(t *testing.T) {
+func TestInjectedRestartWriteFailureRecoversAfterCooldown(t *testing.T) {
 	t.Parallel()
 	for _, mode := range []string{"promtail", "native"} {
 		for _, stage := range []string{"marker", "message"} {
 			t.Run(mode+"/"+stage, func(t *testing.T) {
 				t.Parallel()
-				f := newFixture(t, mode)
+				f, control := newFaultFixture(t, mode)
+				control.hold("short_cooldown")
 				scriptedFeatures(f, mode)
 				const cooldown = 2 * time.Second
-				p := f.start(stressValidated(t, func(config map[string]any) {
-					scriptedConfig(config)
-					section(config, "extensions", "stslogsagent/logs")["restart_cooldown"] = cooldown.String()
-				}), true)
+				p := f.start(stressValidated(t, nil), true)
 				p.ready()
 				path := f.settings.Termination
 				if stage == "marker" {

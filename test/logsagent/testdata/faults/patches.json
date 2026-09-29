@@ -1,6 +1,15 @@
 [
   {
     "file": "extension/stslogsagentextension/controller.go",
+    "old": "defaultDiscoveryOptions()",
+    "new": "faultDiscoveryOptions()"
+  },
+  {
+    "file": "extension/stslogsagentextension/discoveryfault.go",
+    "source": "discovery.go.txt"
+  },
+  {
+    "file": "extension/stslogsagentextension/controller.go",
     "old": "c.set.Logger.Info(\"Logs export drain finished\",",
     "new": "logsagent.FaultFinalDrain()\n\t\tc.set.Logger.Info(\"Logs export drain finished\","
   },

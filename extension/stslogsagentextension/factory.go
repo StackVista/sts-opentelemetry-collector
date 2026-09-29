@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"syscall"
-	"time"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/extension"
@@ -20,9 +19,6 @@ func createDefaultConfig() component.Config {
 	return &Config{
 		StateDirectory: "/var/lib/otelcol/controller", HealthEndpoint: "0.0.0.0:13133",
 		TerminationMessagePath: "/dev/termination-log",
-		QueryTimeout:           20 * time.Second, AttemptTimeout: 5 * time.Second, MaxAttempts: 3,
-		InitialBackoff: 500 * time.Millisecond, MaxBackoff: 2 * time.Second,
-		PollInterval: time.Minute, Jitter: 0.2, StableObservations: 3, RestartCooldown: 10 * time.Minute,
 	}
 }
 

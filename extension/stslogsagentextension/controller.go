@@ -37,12 +37,13 @@ const (
 )
 
 type controller struct {
-	cfg    Config
-	set    extension.Settings
-	mu     sync.Mutex
-	mode   logsagent.Mode
-	state  restartState
-	bounds logsagent.PipelineConfig
+	cfg       Config
+	discovery discoveryOptions
+	set       extension.Settings
+	mu        sync.Mutex
+	mode      logsagent.Mode
+	state     restartState
+	bounds    logsagent.PipelineConfig
 
 	initialized    bool
 	configured     bool
@@ -80,6 +81,7 @@ type controller struct {
 func newController(cfg Config, set extension.Settings, restart func() error) (*controller, error) {
 	c := &controller{
 		cfg: cfg, set: set, now: time.Now, requestRestart: restart, writeState: saveState,
+		discovery:    defaultDiscoveryOptions(),
 		writeMessage: func(path string, data []byte) error { return os.WriteFile(path, data, 0o600) },
 	}
 	if err := c.initTelemetry(); err != nil {
@@ -104,7 +106,7 @@ func (c *controller) Start(ctx context.Context, _ component.Host) error {
 	}
 	opts := openapiclient.ConnectionOptions{
 		ReceiverURL: c.cfg.ReceiverURL, APIKey: string(c.cfg.APIKey), ProxyURL: string(c.cfg.ProxyURL),
-		InsecureSkipVerify: c.cfg.TLS.InsecureSkipVerify, RequestTimeout: c.cfg.AttemptTimeout,
+		InsecureSkipVerify: c.cfg.TLS.InsecureSkipVerify, RequestTimeout: c.discovery.query.AttemptTimeout,
 		UserAgent: c.set.BuildInfo.Command + "/" + c.set.BuildInfo.Version,
 	}
 	api, authCtx, err := openapiclient.NewOpenAPIClientWithOptions(ctx, opts)
@@ -112,11 +114,7 @@ func (c *controller) Start(ctx context.Context, _ component.Host) error {
 		return err
 	}
 	c.closeIdle = api.GetConfig().HTTPClient.CloseIdleConnections
-	client, err := features.NewClient(api.FeaturesAPI, features.QueryOptions{
-		Timeout: c.cfg.QueryTimeout, AttemptTimeout: c.cfg.AttemptTimeout, MaxAttempts: c.cfg.MaxAttempts,
-		InitialBackoff: c.cfg.InitialBackoff, MaxBackoff: c.cfg.MaxBackoff,
-		BooleanCapabilities: []string{"otel-logs"},
-	})
+	client, err := features.NewClient(api.FeaturesAPI, c.discovery.query)
 	if err != nil {
 		c.closeIdle()
 		return err
@@ -151,8 +149,7 @@ func (c *controller) Start(ctx context.Context, _ component.Host) error {
 	c.mode = mode
 	c.initialized = true
 	c.startPolling = func() (*features.Poller, error) {
-		return client.StartPolling(context.WithoutCancel(authCtx),
-			features.PollOptions{Interval: c.cfg.PollInterval, Jitter: c.cfg.Jitter})
+		return client.StartPolling(context.WithoutCancel(authCtx), c.discovery.poll)
 	}
 	c.mu.Unlock()
 	c.set.Logger.Info("Logs capability selected", zap.String("mode", string(mode)),
@@ -292,7 +289,8 @@ func (c *controller) observe(result features.Result) bool {
 	}
 	mode := observedMode(result)
 	now := c.now()
-	if result.Class != features.Valid || mode == c.mode || now.Before(c.state.LastAttemptAt.Add(c.cfg.RestartCooldown)) {
+	if result.Class != features.Valid || mode == c.mode ||
+		now.Before(c.state.LastAttemptAt.Add(c.discovery.restartCooldown)) {
 		c.candidate, c.observations = "", 0
 		c.mu.Unlock()
 		return false
@@ -301,7 +299,7 @@ func (c *controller) observe(result features.Result) bool {
 		c.candidate, c.observations = mode, 0
 	}
 	c.observations++
-	if c.observations < c.cfg.StableObservations {
+	if c.observations < c.discovery.stableObservations {
 		c.mu.Unlock()
 		return false
 	}
@@ -501,7 +499,8 @@ func (c *controller) initTelemetry() error {
 		defer c.mu.Unlock()
 		observer.ObserveInt64(state, int64(c.observations),
 			metric.WithAttributes(attribute.String("mode", string(c.mode)), attribute.String("field", "candidate_count")))
-		observer.ObserveInt64(state, int64(max(0, c.state.LastAttemptAt.Add(c.cfg.RestartCooldown).Sub(c.now()).Seconds())),
+		cooldown := max(0, c.state.LastAttemptAt.Add(c.discovery.restartCooldown).Sub(c.now()).Seconds())
+		observer.ObserveInt64(state, int64(cooldown),
 			metric.WithAttributes(attribute.String("mode", string(c.mode)), attribute.String("field", "cooldown_seconds")))
 		return nil
 	}, state)

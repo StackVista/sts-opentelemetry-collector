@@ -453,10 +453,15 @@ func newTransportFixture(t *testing.T, transport string) (*fixture, string) {
 	t.Helper()
 	mode := strings.TrimSuffix(transport, "_grpc")
 	f := newFixture(t, mode)
+	f.useTransport(transport)
+	return f, mode
+}
+
+func (f *fixture) useTransport(transport string) {
+	f.t.Helper()
 	if strings.HasSuffix(transport, "_grpc") {
 		server, ca := transportTLS(f)
 		endpoint := grpcTransport(f, server.TLS.Certificates[0], "127.0.0.1", false)
 		f.configure = func(config map[string]any) { useOTELNativeGRPC(config, endpoint, ca) }
 	}
-	return f, mode
 }

@@ -142,6 +142,13 @@ func TestDiscoveryStartup(t *testing.T) {
 				return
 			}
 			p.ready()
+			attempts := 1
+			if tc.status == 503 {
+				attempts = 3
+			}
+			if f.backend.polls() != attempts {
+				t.Fatalf("startup feature requests=%d, want %d", f.backend.polls(), attempts)
+			}
 			expected := f.appendRecords(0, 0, 1)
 			f.backend.waitBodies("promtail", expected, true)
 			p.signal()
@@ -152,10 +159,10 @@ func TestDiscoveryStartup(t *testing.T) {
 	}
 }
 
-func TestRuntimeDiscoveryAuthenticationRecovery(t *testing.T) {
+func TestInjectedRuntimeDiscoveryAuthenticationRecovery(t *testing.T) {
 	for _, mode := range []string{"promtail", "native"} {
 		t.Run(mode, func(t *testing.T) {
-			f := newFixture(t, mode)
+			f, _ := newFaultFixture(t, mode)
 			p := f.start(nil, true)
 			p.ready()
 			f.backend.setFeature(mode, 401, "")
@@ -175,10 +182,10 @@ func TestRuntimeDiscoveryAuthenticationRecovery(t *testing.T) {
 	}
 }
 
-func TestPersistedIntentDoesNotOverrideDiscovery(t *testing.T) {
+func TestInjectedPersistedIntentDoesNotOverrideDiscovery(t *testing.T) {
 	for _, selected := range []string{"promtail", "native"} {
 		t.Run(selected, func(t *testing.T) {
-			f := newFixture(t, selected)
+			f, _ := newFaultFixture(t, selected)
 			if err := os.MkdirAll(f.settings.Controller, 0700); err != nil {
 				t.Fatal(err)
 			}

@@ -48,7 +48,7 @@ func TestPollingRestartCallbackReentry(t *testing.T) {
 				return err
 			})
 			c.cfg.ReceiverURL = server.URL + "/stsAgent"
-			c.cfg.PollInterval, c.cfg.Jitter = time.Millisecond, 0
+			c.discovery.poll.Interval, c.discovery.poll.Jitter = time.Millisecond, 0
 			if err := c.Start(context.Background(), nil); err != nil {
 				t.Fatal(err)
 			}
@@ -161,7 +161,7 @@ func TestPollingShutdownJoinsIntentWrite(t *testing.T) {
 			var signals atomic.Int32
 			c := testController(t, func() error { signals.Add(1); return nil })
 			c.cfg.ReceiverURL = server.URL + "/stsAgent"
-			c.cfg.PollInterval, c.cfg.Jitter = time.Millisecond, 0
+			c.discovery.poll.Interval, c.discovery.poll.Jitter = time.Millisecond, 0
 			writing, release := make(chan struct{}), make(chan struct{})
 			block := func() {
 				close(writing)

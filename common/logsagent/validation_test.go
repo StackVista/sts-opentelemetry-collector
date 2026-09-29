@@ -24,15 +24,6 @@ extensions:
     receiver_url: http://127.0.0.1:18080
     state_directory: /tmp/logs-controller
     health_endpoint: 127.0.0.1:13133
-    query_timeout: 20s
-    attempt_timeout: 5s
-    max_attempts: 3
-    initial_backoff: 500ms
-    max_backoff: 2s
-    poll_interval: 60s
-    jitter: 0.2
-    stable_observations: 3
-    restart_cooldown: 10m
 receivers:
   filelog/pods:
     include: [/tmp/pods/*/*/*.log]

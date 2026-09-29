@@ -149,7 +149,7 @@ func assertOrdinaryDrain(t *testing.T, p *process, recovered bool) {
 	}
 }
 
-func TestCapabilityRestartDuringRetries(t *testing.T) {
+func TestInjectedCapabilityRestartDuringRetries(t *testing.T) {
 	for _, transport := range []string{"promtail", "native", "promtail_grpc", "native_grpc"} {
 		for _, recovery := range []bool{true, false} {
 			name := "outage"
@@ -157,7 +157,9 @@ func TestCapabilityRestartDuringRetries(t *testing.T) {
 				name = "recovery"
 			}
 			t.Run(transport+"/"+name, func(t *testing.T) {
-				f, oldMode := newTransportFixture(t, transport)
+				oldMode := strings.TrimSuffix(transport, "_grpc")
+				f, _ := newFaultFixture(t, oldMode)
+				f.useTransport(transport)
 				newMode := otherMode(oldMode)
 				f.backend.setPlan(oldMode, responsePlan{status: 503})
 				p := f.start(nil, true)

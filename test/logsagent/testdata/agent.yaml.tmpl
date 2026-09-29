@@ -10,15 +10,6 @@ extensions:
     state_directory: {{printf "%q" .Controller}}
     health_endpoint: {{printf "%q" .Health}}
     termination_message_path: {{printf "%q" .Termination}}
-    query_timeout: 500ms
-    attempt_timeout: 200ms
-    max_attempts: 2
-    initial_backoff: 20ms
-    max_backoff: 40ms
-    poll_interval: 100ms
-    jitter: 0
-    stable_observations: 3
-    restart_cooldown: 30s
   bearertokenauth/otel_native:
     scheme: SUSEObservability
     token: ${env:STS_API_KEY}

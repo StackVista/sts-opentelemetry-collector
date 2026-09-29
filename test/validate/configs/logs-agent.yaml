@@ -10,15 +10,6 @@ extensions:
     state_directory: /var/lib/otelcol/controller
     health_endpoint: 0.0.0.0:13133
     termination_message_path: /dev/termination-log
-    query_timeout: 20s
-    attempt_timeout: 5s
-    max_attempts: 3
-    initial_backoff: 500ms
-    max_backoff: 2s
-    poll_interval: 60s
-    jitter: 0.2
-    stable_observations: 3
-    restart_cooldown: 10m
   bearertokenauth/otel_native:
     scheme: SUSEObservability
     token: synthetic-fixture-key

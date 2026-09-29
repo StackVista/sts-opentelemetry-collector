@@ -1,0 +1,21 @@
+package stslogsagentextension
+
+import (
+	"time"
+
+	"github.com/stackvista/sts-opentelemetry-collector/common/logsagent"
+)
+
+func faultDiscoveryOptions() discoveryOptions {
+	options := defaultDiscoveryOptions()
+	options.query.Timeout = 5 * time.Second
+	options.query.AttemptTimeout = 5 * time.Second
+	options.query.MaxAttempts = 1
+	options.poll.Interval = 100 * time.Millisecond
+	options.poll.Jitter = 0
+	options.restartCooldown = 30 * time.Second
+	if logsagent.FaultEnabled("short_cooldown") {
+		options.restartCooldown = 2 * time.Second
+	}
+	return options
+}

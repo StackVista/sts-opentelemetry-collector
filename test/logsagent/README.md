@@ -66,9 +66,12 @@ The binary-independent checks reject omitted authored bound fields and
 invalid exporter-bound variants through the shared validator, without
 Collector default insertion or typed-config marshaling.
 
-The ordinary suite uses a normal OCB build and runs the harness with the race
-detector. The injected cases use a separate agent built with the race detector.
-Component race tests run separately. The suite timeout is 180s.
+The ordinary suite uses a normal OCB build with production discovery defaults and
+runs the harness with the race detector. Capability transitions, runtime
+authentication recovery and cooldown cases run as `TestInjected*` against a
+separate agent built with the race detector. Its source overlay shortens discovery
+timers while preserving the three-observation threshold. Component race tests run
+separately. Each suite timeout is 180s.
 
 The scheduling-stall case holds the second request for one timer-flushed CRI
 partial at the backend response boundary, then uses SIGSTOP/SIGCONT to expire
@@ -105,7 +108,11 @@ before delivery accounting finishes. It leaves the real context deadline,
 receiver and Collector shutdown running. Final reporting fails the test binary
 if any instrumented call has not finished. Signal testing substitutes the existing
 restart callback and allows its real SIGTERM implementation after fault removal.
-These hooks exist only in the separate test binary.
+Discovery testing uses one five-second attempt per query so the parent can
+control each completed observation, a 100ms poll interval without jitter, and a
+30s cooldown. Recovery cases use the `short_cooldown` file control to reduce that
+cooldown to two seconds. These hooks exist only in the separate test binary;
+the fixtures contain no discovery timing controls.
 
 Negative startup cases require the intended error category.
 Startup checks effective bounds after Collector default insertion; authored

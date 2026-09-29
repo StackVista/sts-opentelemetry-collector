@@ -37,15 +37,15 @@ func testController(t *testing.T, restart func() error) *controller {
 	cfg.StateDirectory = t.TempDir()
 	cfg.TerminationMessagePath = filepath.Join(t.TempDir(), "termination")
 	cfg.HealthEndpoint = testHealthEndpoint
-	cfg.PollInterval = time.Hour
-	cfg.AttemptTimeout = 100 * time.Millisecond
-	cfg.QueryTimeout = 200 * time.Millisecond
-	cfg.MaxAttempts = 1
 	set := extensiontest.NewNopSettings(component.MustNewType("stslogsagent"))
 	c, err := newController(*cfg, set, restart)
 	if err != nil {
 		t.Fatal(err)
 	}
+	c.discovery.poll.Interval = time.Hour
+	c.discovery.query.AttemptTimeout = 100 * time.Millisecond
+	c.discovery.query.Timeout = 200 * time.Millisecond
+	c.discovery.query.MaxAttempts = 1
 	t.Cleanup(func() { _ = c.Shutdown(context.Background()) })
 	return c
 }
@@ -198,7 +198,7 @@ func TestFailedRestartRecoveryAndCooldown(t *testing.T) {
 			if writes != 1 {
 				t.Fatal("restart attempted during cooldown")
 			}
-			now = now.Add(c.cfg.RestartCooldown)
+			now = now.Add(c.discovery.restartCooldown)
 			for range 2 {
 				observeAndRestart(c, observation(logsagent.OTELNativeMode))
 			}
@@ -399,10 +399,10 @@ func TestPollingStartsAfterReadyAndJoinsOnShutdown(t *testing.T) {
 	defer server.Close()
 	c := testController(t, func() error { return nil })
 	c.cfg.ReceiverURL = server.URL + "/stsAgent"
-	c.cfg.PollInterval = 20 * time.Millisecond
-	c.cfg.Jitter = 0
-	c.cfg.AttemptTimeout = 5 * time.Second
-	c.cfg.QueryTimeout = 10 * time.Second
+	c.discovery.poll.Interval = 20 * time.Millisecond
+	c.discovery.poll.Jitter = 0
+	c.discovery.query.AttemptTimeout = 5 * time.Second
+	c.discovery.query.Timeout = 10 * time.Second
 	if err := c.Start(context.Background(), nil); err != nil {
 		t.Fatal(err)
 	}

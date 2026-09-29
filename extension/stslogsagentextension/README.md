@@ -24,6 +24,11 @@ Only `otel-logs` requires a boolean value; unrelated capabilities do not affect
 selection. Configure the final Receiver URL: redirects are rejected, including
 same-host redirects. Receiver proxying uses the explicit `proxy_url` setting.
 
+Discovery uses internal defaults: a 20s query budget, 5s attempts, at most three
+attempts with 500ms initial and 2s maximum backoff, and polling every minute with
+20% jitter. Three consecutive changed observations are required, with a ten-minute
+restart cooldown. These controls are not exposed in Collector configuration.
+
 The selected destination remains fixed. Polling starts after pipeline readiness.
 A stable change requests SIGTERM after writing restart intent and the termination
 message. Failed writes or signaling reset the observation sequence and impose
