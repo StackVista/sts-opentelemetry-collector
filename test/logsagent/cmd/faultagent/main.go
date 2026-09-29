@@ -136,7 +136,7 @@ func generate(root, temp, buildDir string, config builderConfig) error {
 	if err := os.WriteFile(configPath, data, 0o600); err != nil {
 		return err
 	}
-	return goCommand(root, "run", "go.opentelemetry.io/collector/cmd/builder@v0.153.0",
+	return goCommand(root, "run", "go.opentelemetry.io/collector/cmd/builder@v0.161.0",
 		"--config="+configPath, "--skip-compilation").Run()
 }
 
