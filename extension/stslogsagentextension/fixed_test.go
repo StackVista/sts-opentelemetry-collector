@@ -17,6 +17,7 @@ import (
 	"go.opentelemetry.io/collector/component/componentstatus"
 
 	"go.opentelemetry.io/collector/extension"
+	"go.opentelemetry.io/collector/extension/extensioncapabilities"
 	"go.opentelemetry.io/collector/extension/extensiontest"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
@@ -193,7 +194,7 @@ func TestFixedBaselineConfigValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := fixedTestController(t)
-	if err := c.NotifyConfig(context.Background(), nil); err == nil {
+	if err := c.NotifyConfigSnapshot(context.Background(), extensioncapabilities.NewConfigSnapshot(nil, nil)); err == nil {
 		t.Fatal("missing config accepted")
 	}
 }

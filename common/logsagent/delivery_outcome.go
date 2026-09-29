@@ -27,7 +27,7 @@ func classifyOutcome(ctx context.Context, err error) string {
 	if consumererror.IsPermanent(err) {
 		return outcomePermanent
 	}
-	// exporterhelper v0.153.0 exposes these terminal reasons only as error prefixes.
+	// exporterhelper v0.161.0 exposes these terminal reasons only as error prefixes.
 	switch {
 	case strings.HasPrefix(err.Error(), "request will be cancelled before next retry: "):
 		return outcomeDeadline

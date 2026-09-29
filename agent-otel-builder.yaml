@@ -17,44 +17,44 @@ dist:
 connectors:
   - gomod: github.com/stackvista/sts-opentelemetry-collector/connector/stslogsrouteconnector v0.0.0
     path: ./connector/stslogsrouteconnector
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/spanmetricsconnector v0.153.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/routingconnector v0.153.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/spanmetricsconnector v0.161.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/routingconnector v0.161.0
 
 exporters:
   - gomod: github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8slogsexporter v0.0.0
     path: ./exporter/stsk8slogsexporter
-  - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.153.0
-  - gomod: go.opentelemetry.io/collector/exporter/otlpexporter v0.153.0
-  - gomod: go.opentelemetry.io/collector/exporter/otlphttpexporter v0.153.0
+  - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.161.0
+  - gomod: go.opentelemetry.io/collector/exporter/otlpexporter v0.161.0
+  - gomod: go.opentelemetry.io/collector/exporter/otlphttpexporter v0.161.0
 
 receivers:
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.153.0
-  - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.153.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.153.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.161.0
+  - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.161.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.161.0
   - gomod: github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver v0.0.0
     path: ./receiver/k8sresourcereceiver
 
 extensions:
   - gomod: github.com/stackvista/sts-opentelemetry-collector/extension/stslogsagentextension v0.0.0
     path: ./extension/stslogsagentextension
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage/filestorage v0.153.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.153.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/bearertokenauthextension v0.153.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/pprofextension v0.153.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector v0.153.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage/filestorage v0.161.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.161.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/bearertokenauthextension v0.161.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/pprofextension v0.161.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector v0.161.0
 
 processors:
-  - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.153.0
-  - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.153.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor v0.153.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.153.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.153.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/tailsamplingprocessor v0.153.0
+  - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.161.0
+  - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.161.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor v1.0.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.161.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.161.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/tailsamplingprocessor v0.161.0
 
 replaces:
   - github.com/stackvista/sts-opentelemetry-collector/common => ../common
   - google.golang.org/grpc => google.golang.org/grpc v1.83.2
-  - github.com/klauspost/compress => github.com/klauspost/compress v1.18.7
+  - github.com/klauspost/compress => github.com/klauspost/compress v1.20.0
   - golang.org/x/crypto => golang.org/x/crypto v0.56.0
   # The agent does not include the server modules that select these fixed exporters.
   # Keep its generated distribution on the patched OTel SDK release as well.
