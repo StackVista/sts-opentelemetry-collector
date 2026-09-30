@@ -9,7 +9,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -360,9 +359,10 @@ func logRowsFromPData(ld plog.Logs) ([]logRow, []*ResourceModel, logRowsStats, e
 	return rows, resources, stats, nil
 }
 
-// severityNumber reports whether n was outside the valid range and got clamped to Unspecified.
+// severityNumber reports whether n was outside the valid OTel range (Unspecified..Fatal4) and got
+// clamped to Unspecified.
 func severityNumber(n plog.SeverityNumber) (uint8, bool) {
-	if n < 0 || n > math.MaxUint8 {
+	if n < plog.SeverityNumberUnspecified || n > plog.SeverityNumberFatal4 {
 		return uint8(plog.SeverityNumberUnspecified), true
 	}
 	return uint8(n), false
