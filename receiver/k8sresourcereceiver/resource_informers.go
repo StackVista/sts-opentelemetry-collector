@@ -41,6 +41,11 @@ type Informers interface {
 	// in exactly one bucket.
 	ReadObjects() map[schema.GroupVersionResource]ObjectGroup
 
+	// StaticWatchesSynced reports whether every configured static (watch,
+	// namespace) pair has a synced informer. Forbidden or failed watches count
+	// as unsynced.
+	StaticWatchesSynced() bool
+
 	Start(ctx context.Context) error
 	Shutdown(ctx context.Context) error
 }
@@ -651,6 +656,21 @@ func (ri *ResourceInformers) ReadObjects() map[schema.GroupVersionResource]Objec
 	}
 
 	return result
+}
+
+func (ri *ResourceInformers) StaticWatchesSynced() bool {
+	ri.informersMu.RLock()
+	defer ri.informersMu.RUnlock()
+	for i := range ri.resolvedObjects {
+		ow := &ri.resolvedObjects[i]
+		for _, namespace := range expandNamespaces(ow) {
+			entry, ok := ri.staticInformers[formatStaticInformerKey(ow.GVR, namespace, ow.LabelSelector, ow.FieldSelector)]
+			if !ok || !entry.informer.HasSynced() {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // appendStoreObjects copies entry.informer.GetStore() into result under

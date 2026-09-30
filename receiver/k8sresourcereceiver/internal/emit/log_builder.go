@@ -145,6 +145,41 @@ func BuildCRDLogRecord(
 	return logs, nil
 }
 
+// BuildSnapshotBoundaryLogRecord creates a snapshot boundary record. complete is
+// only recorded on end boundaries.
+func BuildSnapshotBoundaryLogRecord(
+	boundary, snapshotID string, complete bool, timestamp time.Time, clusterName string,
+) plog.Logs {
+	logs := plog.NewLogs()
+	resourceLogs := logs.ResourceLogs().AppendEmpty()
+	if clusterName != "" {
+		resourceLogs.Resource().Attributes().PutStr(AttrK8sClusterName, clusterName)
+	}
+
+	scopeLogs := resourceLogs.ScopeLogs().AppendEmpty()
+	scopeLogs.Scope().SetName(ScopeName)
+
+	logRecord := scopeLogs.LogRecords().AppendEmpty()
+	logRecord.SetObservedTimestamp(pcommon.NewTimestampFromTime(timestamp))
+	logRecord.SetEventName(EventNameSnapshotBoundary)
+	logRecord.Attributes().PutStr(AttrEventDomain, EventDomainK8s)
+	logRecord.Attributes().PutStr(AttrK8sSnapshotBoundary, boundary)
+	if snapshotID != "" {
+		logRecord.Attributes().PutStr(AttrK8sSnapshotID, snapshotID)
+	}
+	if boundary == SnapshotBoundaryEnd {
+		logRecord.Attributes().PutBool(AttrK8sSnapshotComplete, complete)
+	}
+	return logs
+}
+
+// LogSnapshotBoundary builds and sends a snapshot boundary record.
+func LogSnapshotBoundary(
+	ctx context.Context, cons consumer.Logs, boundary, snapshotID string, complete bool, clusterName string,
+) error {
+	return cons.ConsumeLogs(ctx, BuildSnapshotBoundaryLogRecord(boundary, snapshotID, complete, time.Now(), clusterName))
+}
+
 // FormatGVRKey returns a unique key for a GroupVersionResource.
 func FormatGVRKey(gvr schema.GroupVersionResource) string {
 	return fmt.Sprintf("%s/%s/%s", gvr.Group, gvr.Version, gvr.Resource)

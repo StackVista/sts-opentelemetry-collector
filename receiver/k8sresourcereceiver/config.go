@@ -92,6 +92,10 @@ type Config struct {
 
 	// RancherEnrichment controls Rancher Manager URL enrichment. See rancher.go.
 	RancherEnrichment rancherEnrichmentConfig `mapstructure:"rancher_enrichment"`
+
+	// EmitSnapshotBoundaries emits KubernetesSnapshotBoundary records around each
+	// snapshot and on collection stop. Default: false.
+	EmitSnapshotBoundaries bool `mapstructure:"emit_snapshot_boundaries"`
 }
 
 // ObjectMatcher identifies a Kubernetes resource by plural name and API group.
