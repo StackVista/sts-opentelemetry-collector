@@ -5,7 +5,8 @@
 # replaced with literal values so the OTel Collector `validate` subcommand can
 # load it. Leader election is enabled here so the validate run covers the
 # k8s_leader_elector extension. The HTTP OTLP exporter (otlphttp) is used so this
-# fixture exercises the otlphttp exporter from the BOM.
+# fixture exercises the otlphttp exporter from the BOM. The experimental
+# Kubernetes topology branch (stsk8stopology exporter) is enabled.
 receivers:
   prometheus/self:
     config:
@@ -23,7 +24,8 @@ receivers:
     snapshot_interval: 5m
     discovery_mode: api_groups
     max_cr_total_data_size_bytes: 10485760
-    max_object_total_data_size_bytes: 10485760
+    max_object_total_data_size_bytes: 0
+    emit_snapshot_boundaries: true
     cr_api_groups:
       include:
         - kubevirt.io
@@ -37,6 +39,35 @@ receivers:
     peer_sync_port: 4319
     peer_sync_dns: k8s-resource-collector-peers
     k8s_leader_elector: k8s_leader_elector
+    objects:
+      - name: cronjobs
+        group: batch
+      - name: daemonsets
+        group: apps
+      - name: deployments
+        group: apps
+      - name: ingresses
+        group: networking.k8s.io
+      - name: jobs
+        group: batch
+      - name: namespaces
+        group: ""
+      - name: nodes
+        group: ""
+      - name: persistentvolumeclaims
+        group: ""
+      - name: persistentvolumes
+        group: ""
+      - name: pods
+        group: ""
+      - name: replicasets
+        group: apps
+      - name: services
+        group: ""
+      - name: statefulsets
+        group: apps
+      - name: volumeattachments
+        group: storage.k8s.io
 
 processors:
   transform/pre-k8sattributes:
@@ -90,6 +121,28 @@ exporters:
       initial_interval: 5s
       max_interval: 30s
       max_elapsed_time: 300s
+  stsk8stopology:
+    endpoint: https://suse-observability/receiver/stsAgent/intake
+    api_key: test-api-key
+    proxy_url: ""
+    tls:
+      insecure_skip_verify: true
+    cluster_name: test-cluster
+    cluster_type: kubernetes
+    interval: 90s
+    resources:
+      persistentvolumes: true
+      persistentvolumeclaims: true
+      namespaces: true
+      configmaps: true
+      secrets: true
+      daemonsets: true
+      deployments: true
+      replicasets: true
+      statefulsets: true
+      ingresses: true
+      jobs: true
+      cronjobs: true
 
 extensions:
   health_check:
@@ -124,6 +177,9 @@ service:
       receivers: [k8sresource]
       processors: []
       exporters: [otlphttp/suse-observability]
+    logs/kubernetes-topology:
+      receivers: [k8sresource]
+      exporters: [stsk8stopology]
     metrics/self:
       receivers: [prometheus/self]
       processors: [transform/pre-k8sattributes, k8s_attributes, transform/self-metrics, batch]
