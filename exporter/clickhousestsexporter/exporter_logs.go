@@ -410,6 +410,8 @@ const (
 CREATE TABLE IF NOT EXISTS %s (
      Timestamp DateTime64(9) CODEC(Delta, ZSTD(1)),
      ObservedTimestamp DateTime64(9) CODEC(Delta, ZSTD(1)),
+     -- Server-assigned (never in the insert column list); partitioning/TTL key off this, not the producer-controlled Timestamp.
+     IngestedAt DateTime64(9) DEFAULT now64(9) CODEC(Delta, ZSTD(1)),
      ResourceRef UUID CODEC(ZSTD(1)),
      ResourceSchemaUrl LowCardinality(String) CODEC(ZSTD(1)),
      ServiceName LowCardinality(String) CODEC(ZSTD(1)),
@@ -432,7 +434,7 @@ CREATE TABLE IF NOT EXISTS %s (
      INDEX idx_body lowerUTF8(Body) TYPE ngrambf_v1(3, 65536, 3, 0) GRANULARITY 1
 ) ENGINE MergeTree()
 %s
-PARTITION BY toDate(Timestamp)
+PARTITION BY toDate(IngestedAt)
 ORDER BY (ServiceName, ResourceRef, toUnixTimestamp(Timestamp))
 SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
 `
@@ -509,7 +511,7 @@ func createLogsTable(ctx context.Context, cfg *Config, db *sql.DB) error {
 }
 
 func renderCreateLogsTableSQL(cfg *Config) string {
-	ttlExpr := internal.GenerateTTLExpr(cfg.TTLDays, cfg.TTL, "Timestamp")
+	ttlExpr := internal.GenerateTTLExpr(cfg.TTLDays, cfg.TTL, "IngestedAt")
 	return fmt.Sprintf(createLogsTableSQL, cfg.LogsTableName, ttlExpr)
 }
 

@@ -313,11 +313,15 @@ func TestLogsExporter_CreatesTablesWithTTL(t *testing.T) {
 
 	logsDDL := ch.createTableQuery(t, "otel_logs")
 	require.Contains(t, logsDDL, "ENGINE = MergeTree")
-	require.Contains(t, logsDDL, "TTL toDateTime(Timestamp) + toIntervalDay(3)")
+	require.Contains(t, logsDDL, "TTL toDateTime(IngestedAt) + toIntervalDay(3)",
+		"retention keys off server-assigned IngestedAt, not the producer-controlled Timestamp")
+	require.Contains(t, logsDDL, "ttl_only_drop_parts", "date-partitioned, so whole-part TTL drop is correct and cheap")
 
 	resourcesDDL := ch.createTableQuery(t, "otel_logs_resources")
 	require.Contains(t, resourcesDDL, "ENGINE = ReplacingMergeTree")
 	require.Contains(t, resourcesDDL, "TTL toDateTime(Timestamp) + toIntervalDay(4)", "one day of slack beyond the logs TTL")
+	require.NotContains(t, resourcesDDL, "ttl_only_drop_parts",
+		"unpartitioned table: a stale resource sharing a merged part with fresh ones would never expire under whole-part TTL")
 }
 
 func TestLogsExporter_WritesToExternallyManagedSchema(t *testing.T) {
