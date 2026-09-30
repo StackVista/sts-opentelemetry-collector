@@ -1,0 +1,191 @@
+//go:build kubeapiserver
+
+// Copied into stackstate-agent pkg/collector/corechecks/cluster/topologycollectors
+// by generate.sh; it runs the cluster-agent collectors over testdata/cluster.json.
+package topologycollectors
+
+import (
+	"encoding/json"
+	"os"
+	"sort"
+	"sync"
+	"testing"
+
+	configmock "github.com/DataDog/datadog-agent/pkg/config/mock"
+	"github.com/StackVista/stackstate-receiver-go-client/pkg/model/topology"
+	appsV1 "k8s.io/api/apps/v1"
+	batchV1 "k8s.io/api/batch/v1"
+	batchV1B1 "k8s.io/api/batch/v1beta1"
+	coreV1 "k8s.io/api/core/v1"
+	extensionsV1B "k8s.io/api/extensions/v1beta1"
+	netV1 "k8s.io/api/networking/v1"
+	storageV1 "k8s.io/api/storage/v1"
+	"k8s.io/apimachinery/pkg/version"
+)
+
+type goldenClient struct{ raw map[string][]json.RawMessage }
+
+func goldenList[T any](t *testing.T, c *goldenClient, kind string) []T {
+	out := []T{}
+	for _, raw := range c.raw[kind] {
+		var typed T
+		if err := json.Unmarshal(raw, &typed); err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, typed)
+	}
+	return out
+}
+
+type goldenAPI struct {
+	t *testing.T
+	c *goldenClient
+}
+
+func (g goldenAPI) GetDaemonSets() ([]appsV1.DaemonSet, error) { return goldenList[appsV1.DaemonSet](g.t, g.c, "DaemonSet"), nil }
+func (g goldenAPI) GetReplicaSets() ([]appsV1.ReplicaSet, error) { return goldenList[appsV1.ReplicaSet](g.t, g.c, "ReplicaSet"), nil }
+func (g goldenAPI) GetDeployments() ([]appsV1.Deployment, error) { return goldenList[appsV1.Deployment](g.t, g.c, "Deployment"), nil }
+func (g goldenAPI) GetStatefulSets() ([]appsV1.StatefulSet, error) { return goldenList[appsV1.StatefulSet](g.t, g.c, "StatefulSet"), nil }
+func (g goldenAPI) GetJobs() ([]batchV1.Job, error)                { return goldenList[batchV1.Job](g.t, g.c, "Job"), nil }
+func (g goldenAPI) GetCronJobsV1B1() ([]batchV1B1.CronJob, error)  { return nil, nil }
+func (g goldenAPI) GetCronJobsV1() ([]batchV1.CronJob, error)      { return goldenList[batchV1.CronJob](g.t, g.c, "CronJob"), nil }
+func (g goldenAPI) GetEndpoints() ([]coreV1.Endpoints, error)      { return goldenList[coreV1.Endpoints](g.t, g.c, "Endpoints"), nil }
+func (g goldenAPI) GetNodes() ([]coreV1.Node, error)               { return goldenList[coreV1.Node](g.t, g.c, "Node"), nil }
+func (g goldenAPI) GetPods() ([]coreV1.Pod, error)                 { return goldenList[coreV1.Pod](g.t, g.c, "Pod"), nil }
+func (g goldenAPI) GetServices() ([]coreV1.Service, error)         { return goldenList[coreV1.Service](g.t, g.c, "Service"), nil }
+func (g goldenAPI) GetIngressesExtV1B1() ([]extensionsV1B.Ingress, error) { return nil, nil }
+func (g goldenAPI) GetIngressesNetV1() ([]netV1.Ingress, error)    { return goldenList[netV1.Ingress](g.t, g.c, "Ingress"), nil }
+func (g goldenAPI) GetConfigMaps() ([]coreV1.ConfigMap, error)     { return goldenList[coreV1.ConfigMap](g.t, g.c, "ConfigMap"), nil }
+func (g goldenAPI) GetSecrets() ([]coreV1.Secret, error)           { return goldenList[coreV1.Secret](g.t, g.c, "Secret"), nil }
+func (g goldenAPI) GetNamespaces() ([]coreV1.Namespace, error)     { return goldenList[coreV1.Namespace](g.t, g.c, "Namespace"), nil }
+func (g goldenAPI) GetPersistentVolumes() ([]coreV1.PersistentVolume, error) {
+	return goldenList[coreV1.PersistentVolume](g.t, g.c, "PersistentVolume"), nil
+}
+func (g goldenAPI) GetPersistentVolumeClaims() ([]coreV1.PersistentVolumeClaim, error) {
+	return goldenList[coreV1.PersistentVolumeClaim](g.t, g.c, "PersistentVolumeClaim"), nil
+}
+func (g goldenAPI) GetVolumeAttachments() ([]storageV1.VolumeAttachment, error) {
+	return goldenList[storageV1.VolumeAttachment](g.t, g.c, "VolumeAttachment"), nil
+}
+func (g goldenAPI) GetVersion() (*version.Info, error) { return &version.Info{Major: "1", Minor: "33"}, nil }
+
+func TestGenerateExporterGolden(t *testing.T) {
+	fixture, output := os.Getenv("GOLDEN_FIXTURE"), os.Getenv("GOLDEN_OUTPUT")
+	if fixture == "" || output == "" {
+		t.Skip("GOLDEN_FIXTURE and GOLDEN_OUTPUT are required")
+	}
+	configmock.New(t).SetWithoutSource("cluster_name", "golden-cluster")
+
+	data, err := os.ReadFile(fixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var objects []json.RawMessage
+	if err := json.Unmarshal(data, &objects); err != nil {
+		t.Fatal(err)
+	}
+	client := &goldenClient{raw: map[string][]json.RawMessage{}}
+	for _, raw := range objects {
+		var head struct{ Kind string }
+		if err := json.Unmarshal(raw, &head); err != nil {
+			t.Fatal(err)
+		}
+		client.raw[head.Kind] = append(client.raw[head.Kind], raw)
+	}
+	api := goldenAPI{t: t, c: client}
+	instance := topology.Instance{Type: "kubernetes", URL: "golden-cluster"}
+
+	nodeCh := make(chan *NodeIdentifierCorrelation)
+	containerCh := make(chan *ContainerCorrelation)
+	volumeCh := make(chan *VolumeCorrelation)
+	podCh := make(chan *PodLabelCorrelation)
+	endpointCh := make(chan *ServiceSelectorCorrelation)
+	componentCh := make(chan *topology.Component)
+	relationCh := make(chan *topology.Relation)
+
+	k8sVersion, _ := api.GetVersion()
+	common := NewClusterTopologyCommon(instance, Kubernetes, api, componentCh, relationCh, k8sVersion)
+	collector := NewClusterTopologyCollector(common)
+	collectors := []ClusterTopologyCollector{
+		NewClusterCollector(collector),
+		NewNodeCollector(nodeCh, collector),
+		NewPodCollector(containerCh, volumeCh, podCh, collector),
+		NewServiceCollector(endpointCh, collector),
+		NewPersistentVolumeCollector(collector, false),
+		NewNamespaceCollector(collector),
+		NewConfigMapCollector(collector, 100*1024),
+		NewSecretCollector(collector),
+		NewDaemonSetCollector(collector),
+		NewDeploymentCollector(collector),
+		NewReplicaSetCollector(collector),
+		NewStatefulSetCollector(collector),
+		NewIngressCollector(collector),
+		NewJobCollector(collector),
+		NewCronJobCollector(collector),
+	}
+	correlator := NewClusterTopologyCorrelator(common)
+	correlators := []ClusterTopologyCorrelator{
+		NewContainerCorrelator(nodeCh, containerCh, correlator),
+		NewVolumeCorrelator(volumeCh, correlator, true),
+		NewService2PodCorrelator(podCh, endpointCh, correlator),
+	}
+
+	var producers sync.WaitGroup
+	producers.Add(1 + len(correlators))
+	go func() {
+		defer producers.Done()
+		for _, c := range collectors {
+			if err := c.CollectorFunction(); err != nil {
+				t.Error(err)
+			}
+		}
+	}()
+	for _, c := range correlators {
+		go func(c ClusterTopologyCorrelator) {
+			defer producers.Done()
+			if err := c.CorrelateFunction(); err != nil {
+				t.Error(err)
+			}
+		}(c)
+	}
+	done := make(chan struct{})
+	go func() { producers.Wait(); common.CorrelateRelations(); close(done) }()
+
+	var components []*topology.Component
+	var relations []*topology.Relation
+loop:
+	for {
+		select {
+		case c := <-componentCh:
+			components = append(components, c)
+		case r := <-relationCh:
+			relations = append(relations, r)
+		case <-done:
+			break loop
+		}
+	}
+
+	out, err := json.MarshalIndent(map[string]any{
+		"components": sortedJSON(t, components),
+		"relations":  sortedJSON(t, relations),
+	}, "", " ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(output, append(out, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func sortedJSON[T any](t *testing.T, items []T) []json.RawMessage {
+	out := make([]json.RawMessage, 0, len(items))
+	for _, item := range items {
+		raw, err := json.Marshal(item)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, raw)
+	}
+	sort.Slice(out, func(i, j int) bool { return string(out[i]) < string(out[j]) })
+	return out
+}
