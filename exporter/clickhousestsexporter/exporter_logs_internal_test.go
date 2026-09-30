@@ -150,6 +150,10 @@ func TestSeverityNumberIsClamped(t *testing.T) {
 	require.Equal(t, uint8(0), n)
 	require.True(t, clamped)
 
+	n, clamped = severityNumber(plog.SeverityNumberFatal4 + 1)
+	require.Equal(t, uint8(0), n, "above Fatal4 but still within uint8 range must still clamp")
+	require.True(t, clamped)
+
 	n, clamped = severityNumber(plog.SeverityNumber(1000))
 	require.Equal(t, uint8(0), n)
 	require.True(t, clamped)
