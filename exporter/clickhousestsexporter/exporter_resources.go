@@ -152,7 +152,9 @@ CREATE TABLE IF NOT EXISTS %s (
 ) ENGINE = ReplacingMergeTree(Timestamp)
 %s
 ORDER BY (ResourceRef)
-SETTINGS index_granularity=512, ttl_only_drop_parts = 1;
+-- No ttl_only_drop_parts: this table isn't partitioned by date, so a stale row can share a merged
+-- part with fresh ones; row-level TTL is required for expiry to actually happen.
+SETTINGS index_granularity=512;
 `
 	// language=ClickHouse SQL
 	//nolint:lll
