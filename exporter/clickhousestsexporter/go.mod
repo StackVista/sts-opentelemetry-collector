@@ -15,7 +15,6 @@ require (
 	go.opentelemetry.io/collector/config/configoptional v1.67.0
 	go.opentelemetry.io/collector/config/configretry v1.67.0
 	go.opentelemetry.io/collector/confmap v1.67.0
-	go.opentelemetry.io/collector/confmap/xconfmap v1.67.0
 	go.opentelemetry.io/collector/exporter v1.67.0
 	go.opentelemetry.io/collector/exporter/exporterhelper v0.161.0
 	go.opentelemetry.io/collector/exporter/exportertest v0.161.0

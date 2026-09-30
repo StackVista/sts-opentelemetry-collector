@@ -319,9 +319,44 @@ func TestLogsExporter_CreatesTablesWithTTL(t *testing.T) {
 
 	resourcesDDL := ch.createTableQuery(t, "otel_logs_resources")
 	require.Contains(t, resourcesDDL, "ENGINE = ReplacingMergeTree")
-	require.Contains(t, resourcesDDL, "TTL toDateTime(Timestamp) + toIntervalDay(4)", "one day of slack beyond the logs TTL")
+	require.Contains(t, resourcesDDL, "TTL toDateTime(Timestamp) + toIntervalDay(5)", "two days of slack beyond the logs TTL")
 	require.NotContains(t, resourcesDDL, "ttl_only_drop_parts",
 		"unpartitioned table: a stale resource sharing a merged part with fresh ones would never expire under whole-part TTL")
+}
+
+// TestLogsExporter_ResourceRetentionOutlivesCachedLogWindow reproduces the reported orphan: a resource
+// written just past a naive "logs TTL + 1 day" slack must still survive, because a log written up to
+// logsResourceRefreshInterval later (possibly on the next calendar day) can reference that cached
+// ResourceRef, and that log's whole day-partition survives a full day longer than one day of resource
+// slack reaches. TTL is only applied during merges, not at insert, so OPTIMIZE ... FINAL forces it.
+func TestLogsExporter_ResourceRetentionOutlivesCachedLogWindow(t *testing.T) {
+	ch := startClickHouse(t)
+	startLogsExporter(t, ch.exporterConfig(func(cfg *clickhousestsexporter.Config) { cfg.TTLDays = 1 }))
+
+	withinFixedSlack := uuid.New()
+	insertResourceAt(t, ch, withinFixedSlack, time.Now().Add(-2*24*time.Hour-10*time.Minute))
+	pastFixedSlack := uuid.New()
+	insertResourceAt(t, ch, pastFixedSlack, time.Now().Add(-3*24*time.Hour-10*time.Minute))
+
+	_, err := ch.db.Exec(fmt.Sprintf("OPTIMIZE TABLE %s.otel_logs_resources FINAL", ch.database))
+	require.NoError(t, err)
+
+	present := map[uuid.UUID]bool{}
+	for _, r := range ch.resources(t) {
+		present[r.ResourceRef] = true
+	}
+	require.True(t, present[withinFixedSlack],
+		"past a naive +1 day slack but within the fixed +2 day slack: must not be dropped")
+	require.False(t, present[pastFixedSlack], "past even the fixed +2 day slack: must expire")
+}
+
+func insertResourceAt(t *testing.T, ch *clickHouse, ref uuid.UUID, ts time.Time) {
+	t.Helper()
+	_, err := ch.db.Exec(
+		fmt.Sprintf("INSERT INTO %s.otel_logs_resources (Timestamp, ResourceRef, ResourceAttributes, AuthScope) VALUES (?, ?, ?, ?)", ch.database),
+		ts, ref, map[string]string{"test": "resource-retention"}, []string{},
+	)
+	require.NoError(t, err)
 }
 
 func TestLogsExporter_WritesToExternallyManagedSchema(t *testing.T) {

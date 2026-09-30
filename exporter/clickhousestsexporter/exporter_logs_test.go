@@ -138,7 +138,7 @@ func TestLogsExporter_TableCreation(t *testing.T) {
 		newTestLogsExporter(t, func(cfg *clickhousestsexporter.Config) { cfg.TTL = 72 * time.Hour })
 
 		require.Len(t, inserts.creates, 2)
-		require.Contains(t, inserts.creates[0], "toIntervalDay(4)")
+		require.Contains(t, inserts.creates[0], "toIntervalDay(5)")
 		require.Contains(t, inserts.creates[1], "toIntervalDay(3)")
 	})
 }
