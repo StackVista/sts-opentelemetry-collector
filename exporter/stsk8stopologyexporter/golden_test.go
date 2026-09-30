@@ -154,3 +154,29 @@ func TestExporterDoesNotSendWithoutCompleteSnapshot(t *testing.T) {
 	payloads, _ := capture.snapshot()
 	assert.Empty(t, payloads, "unbracketed or incomplete observer state must never reach the intake")
 }
+
+func TestOpenShiftKeepsKubernetesInstance(t *testing.T) {
+	hostname.SetClusterName(goldenClusterName)
+	cfg := testConfig()
+	cfg.ClusterType = clusterTypeOpenShift
+	exp := newTopologyExporter(cfg, zaptest.NewLogger(t), nil)
+	assert.Equal(t, topology.Instance{Type: clusterTypeKubernetes, URL: goldenClusterName}, exp.instance)
+
+	for _, logs := range snapshotRecords(t, "1", loadFixture(t)) {
+		require.NoError(t, exp.consumeLogs(context.Background(), logs))
+	}
+	objects, ok := exp.store.view(time.Now(), cfg.SnapshotMaxAge)
+	require.True(t, ok)
+	result, err := collectTopology(&cacheClient{objects: objects, logger: exp.logger},
+		exp.instance, collectors.ClusterType(cfg.ClusterType), cfg, exp.logger)
+	require.NoError(t, err)
+	for _, component := range result.components {
+		if component.Type.Name != "pod" {
+			continue
+		}
+		tags, ok := component.Data["tags"].(map[string]string)
+		require.True(t, ok)
+		assert.Equal(t, clusterTypeOpenShift, tags["cluster-type"])
+		assert.Equal(t, "openshift-pod", tags["component-type"])
+	}
+}

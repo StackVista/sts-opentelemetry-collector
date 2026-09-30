@@ -41,11 +41,12 @@ type topologyExporter struct {
 
 func newTopologyExporter(cfg *Config, logger *zap.Logger, sender *intakeSender) *topologyExporter {
 	return &topologyExporter{
-		cfg:      cfg,
-		logger:   logger,
-		store:    newObjectStore(),
-		sender:   sender,
-		instance: topology.Instance{Type: cfg.ClusterType, URL: cfg.ClusterName},
+		cfg:    cfg,
+		logger: logger,
+		store:  newObjectStore(),
+		sender: sender,
+		// The cluster agent always reports a kubernetes instance; cluster_type only changes tags.
+		instance: topology.Instance{Type: clusterTypeKubernetes, URL: cfg.ClusterName},
 		now:      time.Now,
 		ready:    make(chan struct{}, 1),
 	}

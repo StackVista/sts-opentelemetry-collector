@@ -29,7 +29,7 @@ type Config struct {
 	// ClusterName is the topology instance URL; it must match the cluster name
 	// configured in the Kubernetes StackPack.
 	ClusterName string `mapstructure:"cluster_name"`
-	// ClusterType is kubernetes or openshift.
+	// ClusterType is kubernetes or openshift; it sets the cluster-type tags.
 	ClusterType string `mapstructure:"cluster_type"`
 	// InternalHostname identifies the producer to the topology sync, which
 	// binds snapshot state to it. It must be stable across restarts and
