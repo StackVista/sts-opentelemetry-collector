@@ -7,6 +7,7 @@ use (
 	./exporter/clickhousestsexporter
 	./exporter/stskafkaexporter
 	./exporter/stsk8slogsexporter
+	./exporter/stsk8stopologyexporter
 	./exporter/ststopologyexporter
 	./extension/servicetokenauthextension
 	./extension/stslogsagentextension

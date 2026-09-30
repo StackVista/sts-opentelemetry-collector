@@ -56,6 +56,7 @@ linters:
       - examples$
       - connector/topologyconnector/generated/
       - extension/settingsproviderextension/generated/
+      - exporter/stsk8stopologyexporter/internal/(topologycollectors|urn|hostname|dns|apiserver)/
   settings:
     gomoddirectives:
       replace-local: true
@@ -74,3 +75,4 @@ formatters:
       - third_party$
       - builtin$
       - examples$
+      - exporter/stsk8stopologyexporter/internal/(topologycollectors|urn|hostname|dns|apiserver)/
