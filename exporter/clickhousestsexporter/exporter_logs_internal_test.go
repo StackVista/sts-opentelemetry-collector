@@ -159,11 +159,11 @@ func TestSeverityNumberIsClamped(t *testing.T) {
 	require.True(t, clamped)
 }
 
-func TestWithOneDayTTLSlack(t *testing.T) {
+func TestWithResourceTTLSlack(t *testing.T) {
 	cfg := &Config{TTL: 72 * time.Hour}
-	require.Equal(t, 96*time.Hour, withOneDayTTLSlack(cfg).TTL)
+	require.Equal(t, 120*time.Hour, withResourceTTLSlack(cfg).TTL)
 	require.Equal(t, 72*time.Hour, cfg.TTL, "the original config is not modified")
 
-	require.Equal(t, uint(4), withOneDayTTLSlack(&Config{TTLDays: 3}).TTLDays)
-	require.Equal(t, time.Duration(0), withOneDayTTLSlack(&Config{}).TTL, "no TTL stays no TTL")
+	require.Equal(t, uint(5), withResourceTTLSlack(&Config{TTLDays: 3}).TTLDays)
+	require.Equal(t, time.Duration(0), withResourceTTLSlack(&Config{}).TTL, "no TTL stays no TTL")
 }

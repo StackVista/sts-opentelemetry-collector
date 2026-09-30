@@ -106,7 +106,7 @@ func NewLogsExporter(set component.TelemetrySettings, cfg *Config) (*LogsExporte
 		return nil, err
 	}
 	resourceExporter, err := newResourceExporter(
-		logger, withOneDayTTLSlack(cfg), cfg.LogsResourcesTableName, cfg.CreateLogsTable,
+		logger, withResourceTTLSlack(cfg), cfg.LogsResourcesTableName, cfg.CreateLogsTable,
 	)
 	if err != nil {
 		_ = conn.Close()
@@ -381,14 +381,21 @@ func logTimestamp(record plog.LogRecord) (time.Time, bool) {
 	return time.Now(), true
 }
 
-// withOneDayTTLSlack returns a copy of cfg whose table TTL is one day longer; a disabled TTL stays disabled.
-func withOneDayTTLSlack(cfg *Config) *Config {
+// resourceTTLSlack must exceed the logs TTL by more than one day: a resource written up to 23:59 on
+// day D can still be the cached ResourceRef for a log written up to logsResourceRefreshInterval later,
+// which can fall on day D+1. That log's whole day-partition survives until day D+1 end-of-day plus the
+// logs retention — one day past what a single day of resource slack reaches from day D. Two days of
+// slack guarantees the resource outlives every log that can reference it.
+const resourceTTLSlack = 2 * 24 * time.Hour
+
+// withResourceTTLSlack returns a copy of cfg whose table TTL is resourceTTLSlack longer; a disabled TTL stays disabled.
+func withResourceTTLSlack(cfg *Config) *Config {
 	c := *cfg
 	switch {
 	case c.TTL > 0:
-		c.TTL += 24 * time.Hour
+		c.TTL += resourceTTLSlack
 	case c.TTLDays > 0:
-		c.TTLDays++
+		c.TTLDays += uint(resourceTTLSlack / (24 * time.Hour))
 	}
 	return &c
 }
