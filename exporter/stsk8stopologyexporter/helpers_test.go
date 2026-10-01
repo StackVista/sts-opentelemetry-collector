@@ -119,5 +119,6 @@ func testConfig() *Config {
 	cfg.Endpoint = "http://127.0.0.1:1/stsAgent/intake"
 	cfg.APIKey = "test-key"
 	cfg.ClusterName = goldenClusterName
+	cfg.DiscoveryEnabled = false
 	return cfg
 }

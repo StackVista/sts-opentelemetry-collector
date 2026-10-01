@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/StackVista/stackstate-receiver-go-client/pkg/openapiclient"
+	"github.com/StackVista/stackstate-receiver-go-client/pkg/openapiclient/features"
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8stopologyexporter/internal/log"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configoptional"
@@ -31,6 +32,7 @@ func createDefaultConfig() component.Config {
 	return &Config{
 		TimeoutSettings:       exporterhelper.TimeoutConfig{Timeout: 30 * time.Second},
 		ClusterType:           clusterTypeKubernetes,
+		DiscoveryEnabled:      true,
 		Interval:              90 * time.Second,
 		SnapshotMaxAge:        15 * time.Minute,
 		CollectTimeout:        10 * time.Minute,
@@ -59,6 +61,12 @@ func createLogsExporter(ctx context.Context, set exporter.Settings, config compo
 	if !ok {
 		return nil, errors.New("invalid Kubernetes topology exporter configuration")
 	}
+	return buildLogsExporter(ctx, set, cfg, defaultDiscoveryOptions())
+}
+
+func buildLogsExporter(
+	ctx context.Context, set exporter.Settings, cfg *Config, discovery discoveryOptions,
+) (exporter.Logs, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -71,7 +79,7 @@ func createLogsExporter(ctx context.Context, set exporter.Settings, config compo
 		producer = podHostname
 	}
 	userAgent := set.BuildInfo.Command + "/" + set.BuildInfo.Version
-	api, _, err := openapiclient.NewOpenAPIClientWithOptions(ctx, openapiclient.ConnectionOptions{
+	api, authCtx, err := openapiclient.NewOpenAPIClientWithOptions(ctx, openapiclient.ConnectionOptions{
 		ReceiverURL:        strings.TrimSuffix(cfg.Endpoint, "/intake"),
 		APIKey:             string(cfg.APIKey),
 		ProxyURL:           string(cfg.ProxyURL),
@@ -95,6 +103,19 @@ func createLogsExporter(ctx context.Context, set exporter.Settings, config compo
 	log.SetLogger(set.Logger)
 	exp := newTopologyExporter(cfg, set.Logger, sender)
 	exp.producer = producer
+	exp.discovery = discovery
+	exp.mode = newModeSelector(discovery.stableObservations)
+	if cfg.DiscoveryEnabled {
+		client, err := features.NewClient(api.FeaturesAPI, discovery.query)
+		if err != nil {
+			return nil, err
+		}
+		exp.features = client
+		exp.authCtx = authCtx
+	}
+	if err := registerModeGauge(set, exp.mode); err != nil {
+		return nil, err
+	}
 	return exporterhelper.NewLogs(ctx, set, cfg, exp.consumeLogs,
 		exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
 		exporterhelper.WithTimeout(exporterhelper.TimeoutConfig{Timeout: 0}),

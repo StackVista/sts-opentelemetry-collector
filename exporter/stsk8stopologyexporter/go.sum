@@ -1,5 +1,5 @@
-github.com/StackVista/stackstate-receiver-go-client v0.0.0-20260928134251-ae7cedbb4859 h1:+M8D93EofeWRqgAFCak2H23ZSz1xtF5Y3wAMHOdCWjE=
-github.com/StackVista/stackstate-receiver-go-client v0.0.0-20260928134251-ae7cedbb4859/go.mod h1:pirS1serNZgKV2BJ1JrwGfavhMisccD8ahnxux/hTJk=
+github.com/StackVista/stackstate-receiver-go-client v0.0.0-20261001074615-fd72bbd18e84 h1:6g0SPcwpj34GFFgXMek7XCoGoL8J3/JyDUuZCl8MSp4=
+github.com/StackVista/stackstate-receiver-go-client v0.0.0-20261001074615-fd72bbd18e84/go.mod h1:pirS1serNZgKV2BJ1JrwGfavhMisccD8ahnxux/hTJk=
 github.com/cenkalti/backoff/v7 v7.0.0 h1:ZP+QAaaOnVUHo+ufFpZ835hbT3x2fy+h2lecVEosZ6A=
 github.com/cenkalti/backoff/v7 v7.0.0/go.mod h1:qcKBGwsu4hpxHtQ8tWYsQ+ifzx2+sS+Xx/3jfe30lI8=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
