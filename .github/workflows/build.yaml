@@ -301,6 +301,14 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: false
+      - name: Verify public YAML source ownership
+        run: python3 scripts/verify-yaml-owners.py
+      - name: Qualify maintained YAML owners and real callers
+        run: |
+          set -euo pipefail
+          (cd third_party/uap-go && GOWORK=off go test -race -timeout=30m ./...)
+          (cd third_party/scaleway-sdk-go && GOWORK=off go test ./...)
+          (cd test/yamlowners && GOWORK=off go test -race ./...)
       - name: Run tests
         run: |
           set -euo pipefail

@@ -323,7 +323,8 @@
     "patched_files": {
       "scw/config.go": "02d612bf99416f4e4eeb17f9089dfac5a2442e7c03715a4bf4d864e5528aae77",
       "api/k8s/v1/kubeconfig.go": "f72eb1fc88b2270d4f4ba2783efdb9392bbbecf28b469f10d2db654cbdbda45f",
-      "go.mod": "07c9978ef66377f9710838af994bb31f0595c77e983e5a10997118a38403e86c"
+      "go.mod": "07c9978ef66377f9710838af994bb31f0595c77e983e5a10997118a38403e86c",
+      "go.sum": "f370c14ff36e3e493d0dc9afad8293e4d18bc1c4a851f2bd9bf7966062b4f03f"
     }
   }
 }
