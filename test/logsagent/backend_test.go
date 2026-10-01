@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/golang/snappy"
-
+	"go.opentelemetry.io/collector/pdata/plog/plogotlp"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
@@ -40,6 +40,7 @@ type wireRecord struct {
 }
 
 type request struct {
+	mode       string
 	status     int
 	records    []wireRecord
 	receivedAt time.Time
@@ -48,15 +49,26 @@ type request struct {
 type responsePlan struct {
 	status        int
 	failures      int
+	partial       bool
 	lostResponses int
+}
+
+type featureReply struct {
+	mode   string
+	status int
+	body   string
 }
 
 type backend struct {
 	t                  *testing.T
 	server             *httptest.Server
 	mu                 sync.Mutex
+	mode               string
+	featureStatus      int
+	featureBody        string
 	featureCalls       int
-	plan               responsePlan
+	featureReplies     chan featureReply
+	plans              map[string]responsePlan
 	requests           []request
 	responseDelay      time.Duration
 	active             int
@@ -65,11 +77,14 @@ type backend struct {
 	beforeResponse     func(context.Context, request)
 }
 
-func newBackend(t *testing.T) *backend {
+func newBackend(t *testing.T, mode string) *backend {
 	t.Helper()
 	b := &backend{
-		t:                  t,
-		plan:               responsePlan{status: http.StatusOK},
+		t: t, mode: mode, featureStatus: http.StatusOK,
+		plans: map[string]responsePlan{
+			"promtail": {status: http.StatusOK},
+			"native":   {status: http.StatusOK},
+		},
 		promtailDescriptor: receiverDescriptor(t),
 	}
 	b.server = httptest.NewServer(http.HandlerFunc(b.serveHTTP))
@@ -90,10 +105,16 @@ func receiverDescriptor(t *testing.T) protoreflect.MessageDescriptor {
 	return file.Messages().ByName("PushRequest")
 }
 
-func (b *backend) setPlan(plan responsePlan) {
+func (b *backend) setFeature(mode string, status int, body string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.plan = plan
+	b.mode, b.featureStatus, b.featureBody = mode, status, body
+}
+
+func (b *backend) setPlan(mode string, plan responsePlan) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.plans[mode] = plan
 }
 
 func (b *backend) setBeforeResponse(hook func(context.Context, request)) {
@@ -114,8 +135,14 @@ func (b *backend) polls() int {
 	return b.featureCalls
 }
 
-func (b *backend) attempts() int {
-	return len(b.snapshot())
+func (b *backend) attempts(mode string) int {
+	count := 0
+	for _, req := range b.snapshot() {
+		if req.mode == mode {
+			count++
+		}
+	}
+	return count
 }
 
 func (b *backend) enter(ctx context.Context) func() {
@@ -139,10 +166,15 @@ func (b *backend) enter(ctx context.Context) func() {
 	}
 }
 
-func (b *backend) record(records []wireRecord, receivedAt time.Time) (request, bool) {
+func (b *backend) record(mode string, records []wireRecord) (responsePlan, int, bool) {
+	plan, req, loseResponse := b.recordAt(mode, records, time.Now())
+	return plan, req.status, loseResponse
+}
+
+func (b *backend) recordAt(mode string, records []wireRecord, receivedAt time.Time) (responsePlan, request, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	plan := b.plan
+	plan := b.plans[mode]
 	status := plan.status
 	if plan.failures > 0 {
 		status = http.StatusServiceUnavailable
@@ -152,10 +184,10 @@ func (b *backend) record(records []wireRecord, receivedAt time.Time) (request, b
 	if loseResponse {
 		plan.lostResponses--
 	}
-	b.plan = plan
-	req := request{status: status, records: records, receivedAt: receivedAt}
+	b.plans[mode] = plan
+	req := request{mode: mode, status: status, records: records, receivedAt: receivedAt}
 	b.requests = append(b.requests, req)
-	return req, loseResponse
+	return plan, req, loseResponse
 }
 
 func (b *backend) serveHTTP(w http.ResponseWriter, r *http.Request) {
@@ -163,22 +195,42 @@ func (b *backend) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		b.t.Error("fixture received unexpected URL query")
 	}
 	if r.URL.Path == "/stsAgent/features" {
+		if r.Method != http.MethodGet || r.Header.Get("Authorization") != "ApiKey "+syntheticKey {
+			b.t.Error("incorrect feature method or synthetic authorization")
+		}
 		b.mu.Lock()
 		b.featureCalls++
+		mode, status, body := b.mode, b.featureStatus, b.featureBody
+		replies := b.featureReplies
 		b.mu.Unlock()
-		b.t.Error("fixed agent requested features")
-		http.NotFound(w, r)
+		if replies != nil {
+			select {
+			case reply := <-replies:
+				mode, status, body = reply.mode, reply.status, reply.body
+			case <-r.Context().Done():
+				return
+			}
+		}
+		if body == "" {
+			body = fmt.Sprintf(`{"otel-logs":%t}`, mode == "native")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, body)
 		return
 	}
+	var mode string
 	switch r.URL.Path {
 	case "/stsAgent/logs/k8s":
+		mode = "promtail"
 		if r.Header.Get("sts-api-key") != syntheticKey {
 			b.t.Error("incorrect synthetic promtail authorization")
 		}
 	case "/otel/v1/logs":
-		b.t.Error("fixed agent delivered native logs")
-		http.NotFound(w, r)
-		return
+		mode = "native"
+		if r.Header.Get("Authorization") != "SUSEObservability "+syntheticKey {
+			b.t.Error("incorrect synthetic native authorization")
+		}
 	default:
 		b.t.Errorf("unexpected fixture endpoint %q", r.URL.Path)
 		http.NotFound(w, r)
@@ -206,13 +258,18 @@ func (b *backend) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	records, err := decodePromtail(b.promtailDescriptor, payload)
+	var records []wireRecord
+	if mode == "promtail" {
+		records, err = decodePromtail(b.promtailDescriptor, payload)
+	} else {
+		records, err = decodeNative(payload)
+	}
 	if err != nil {
-		b.t.Errorf("decode promtail export: %v", err)
+		b.t.Errorf("decode %s export: %v", mode, err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	req, loseResponse := b.record(records, receivedAt)
+	plan, req, loseResponse := b.recordAt(mode, records, receivedAt)
 	b.mu.Lock()
 	beforeResponse := b.beforeResponse
 	b.mu.Unlock()
@@ -233,7 +290,23 @@ func (b *backend) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = conn.Close()
 		return
 	}
+	if mode == "native" {
+		w.Header().Set("Content-Type", "application/x-protobuf")
+	}
 	w.WriteHeader(req.status)
+	if mode == "native" && req.status == http.StatusOK {
+		resp := plogotlp.NewExportResponse()
+		if plan.partial {
+			resp.PartialSuccess().SetRejectedLogRecords(1)
+			resp.PartialSuccess().SetErrorMessage("synthetic record rejection")
+		}
+		data, err := resp.MarshalProto()
+		if err != nil {
+			b.t.Errorf("encode partial success: %v", err)
+			return
+		}
+		_, _ = w.Write(data)
+	}
 }
 
 func field(message protoreflect.Message, name protoreflect.Name) protoreflect.Value {
@@ -281,10 +354,40 @@ func decodePromtail(descriptor protoreflect.MessageDescriptor, payload []byte) (
 	return records, nil
 }
 
-func (b *backend) bodies(acceptedOnly bool) map[string]int {
+func decodeNative(payload []byte) ([]wireRecord, error) {
+	req := plogotlp.NewExportRequest()
+	if err := req.UnmarshalProto(payload); err != nil {
+		return nil, err
+	}
+	var records []wireRecord
+	resources := req.Logs().ResourceLogs()
+	for i := 0; i < resources.Len(); i++ {
+		resource := resources.At(i)
+		attr := func(key string) string {
+			value, _ := resource.Resource().Attributes().Get(key)
+			return value.Str()
+		}
+		scopes := resource.ScopeLogs()
+		for j := 0; j < scopes.Len(); j++ {
+			logs := scopes.At(j).LogRecords()
+			for k := 0; k < logs.Len(); k++ {
+				record := logs.At(k)
+				stream, _ := record.Attributes().Get("log.iostream")
+				records = append(records, wireRecord{
+					body: record.Body().Str(), timestamp: uint64(record.Timestamp()),
+					cluster: attr("k8s.cluster.name"), podUID: attr("k8s.pod.uid"), podName: attr("k8s.pod.name"),
+					container: attr("k8s.container.name"), stream: stream.Str(),
+				})
+			}
+		}
+	}
+	return records, nil
+}
+
+func (b *backend) bodies(mode string, acceptedOnly bool) map[string]int {
 	counts := make(map[string]int)
 	for _, req := range b.snapshot() {
-		if acceptedOnly && req.status/100 != 2 {
+		if req.mode != mode || (acceptedOnly && req.status/100 != 2) {
 			continue
 		}
 		for _, record := range req.records {
@@ -294,10 +397,10 @@ func (b *backend) bodies(acceptedOnly bool) map[string]int {
 	return counts
 }
 
-func (b *backend) waitBodies(bodies []string, acceptedOnly bool) {
+func (b *backend) waitBodies(mode string, bodies []string, acceptedOnly bool) {
 	b.t.Helper()
-	eventually(b.t, 10*time.Second, "wire records", func() bool {
-		counts := b.bodies(acceptedOnly)
+	eventually(b.t, 10*time.Second, "wire records on "+mode, func() bool {
+		counts := b.bodies(mode, acceptedOnly)
 		for _, body := range bodies {
 			if counts[body] == 0 {
 				return false
@@ -307,22 +410,24 @@ func (b *backend) waitBodies(bodies []string, acceptedOnly bool) {
 	})
 }
 
-func (b *backend) assertOnly() {
+func (b *backend) assertOnly(mode string) {
 	b.t.Helper()
-	if b.polls() != 0 {
-		b.t.Fatal("fixed agent requested features")
+	for _, req := range b.snapshot() {
+		if req.mode != mode {
+			b.t.Fatalf("fixed %s route sent a request to %s", mode, req.mode)
+		}
 	}
 }
 
-func (b *backend) assertRecords(expected []string, acceptedOnly bool) {
+func (b *backend) assertRecords(mode string, expected []string, acceptedOnly bool) {
 	b.t.Helper()
-	counts := b.bodies(acceptedOnly)
+	counts := b.bodies(mode, acceptedOnly)
 	if len(counts) != len(expected) {
-		b.t.Fatalf("promtail saw %d distinct records; want %d", len(counts), len(expected))
+		b.t.Fatalf("%s saw %d distinct records; want %d", mode, len(counts), len(expected))
 	}
 	for _, body := range expected {
 		if counts[body] != 1 {
-			b.t.Errorf("promtail record %q appeared %d times; want once", strings.TrimSpace(body), counts[body])
+			b.t.Errorf("%s record %q appeared %d times; want once", mode, strings.TrimSpace(body), counts[body])
 		}
 	}
 }
@@ -334,7 +439,7 @@ func (b *backend) assertIdentity() {
 			if record.cluster != "fixture-cluster" || record.podUID != "12345678-1234-1234-1234-123456789abc" ||
 				record.podName != "fixture-0" || record.container != "app" || record.stream != "stdout" ||
 				record.timestamp != uint64(time.Date(2026, 9, 10, 12, 0, 0, 123456789, time.UTC).UnixNano()) {
-				b.t.Errorf("incorrect identity, timestamp or stream: %+v", record)
+				b.t.Errorf("incorrect identity, timestamp or stream on %s: %+v", req.mode, record)
 			}
 		}
 	}

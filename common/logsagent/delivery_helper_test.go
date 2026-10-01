@@ -37,139 +37,155 @@ func helperExporter(t *testing.T, push consumer.ConsumeLogsFunc, options ...expo
 }
 
 func TestActualHelperTerminalClassifications(t *testing.T) {
-	for _, tc := range []struct {
-		name       string
-		failure    error
-		retryLimit time.Duration
-		lifetime   time.Duration
-		prefix     string
-		outcome    string
-	}{
-		{
-			name: "retry exhausted", failure: errors.New("unavailable"),
-			retryLimit: time.Millisecond, lifetime: time.Second,
-			prefix: "no more retries left: ", outcome: "retry_exhausted",
-		},
-		{
-			name: "attempt timeout exhausts retries", failure: context.DeadlineExceeded,
-			retryLimit: time.Millisecond, lifetime: time.Second,
-			prefix: "no more retries left: ", outcome: "retry_exhausted",
-		},
-		{
-			name: "next retry beyond lifetime", failure: errors.New("unavailable"),
-			retryLimit: time.Minute, lifetime: 50 * time.Millisecond,
-			prefix: "request will be cancelled before next retry: ", outcome: "deadline_expired",
-		},
-		{
-			name: "permanent", failure: consumererror.NewPermanent(errors.New("rejected")),
-			retryLimit: time.Second, lifetime: time.Second,
-			prefix: "not retryable error: ", outcome: "permanent_rejection",
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			retry := configretry.NewDefaultBackOffConfig()
-			retry.InitialInterval, retry.MaxInterval = 200*time.Millisecond, 200*time.Millisecond
-			retry.RandomizationFactor = 0
-			retry.MaxElapsedTime = tc.retryLimit
-			exp := helperExporter(t, func(context.Context, plog.Logs) error { return tc.failure },
-				exporterhelper.WithRetry(retry))
-			cfg := deliveryDefaults(t)
-			cfg.ExportLifetime = tc.lifetime
-			ctrl := &controllerStub{bound: time.Millisecond}
-			c, reader := newDelivery(t, cfg, ctrl, exp)
-			before := time.Now()
-			err := c.ConsumeLogs(context.Background(), logsData())
-			require.Error(t, err)
-			require.True(t, strings.HasPrefix(err.Error(), tc.prefix), "unexpected helper error: %v", err)
-			if tc.outcome == "deadline_expired" {
-				require.Less(t, time.Since(before), cfg.ExportLifetime)
-				require.EqualValues(t, 1, ctrl.observer.Snapshot().DeadlineExpired)
-			} else {
-				require.Zero(t, ctrl.observer.Snapshot().DeadlineExpired)
+	for _, mode := range []logsagent.Mode{logsagent.PromtailMode, logsagent.OTELNativeMode} {
+		t.Run(string(mode), func(t *testing.T) {
+			for _, tc := range []struct {
+				name       string
+				failure    error
+				retryLimit time.Duration
+				lifetime   time.Duration
+				prefix     string
+				outcome    string
+			}{
+				{
+					name: "retry exhausted", failure: errors.New("unavailable"),
+					retryLimit: time.Millisecond, lifetime: time.Second,
+					prefix: "no more retries left: ", outcome: "retry_exhausted",
+				},
+				{
+					name: "attempt timeout exhausts retries", failure: context.DeadlineExceeded,
+					retryLimit: time.Millisecond, lifetime: time.Second,
+					prefix: "no more retries left: ", outcome: "retry_exhausted",
+				},
+				{
+					name: "next retry beyond lifetime", failure: errors.New("unavailable"),
+					retryLimit: time.Minute, lifetime: 50 * time.Millisecond,
+					prefix: "request will be cancelled before next retry: ", outcome: "deadline_expired",
+				},
+				{
+					name: "permanent", failure: consumererror.NewPermanent(errors.New("rejected")),
+					retryLimit: time.Second, lifetime: time.Second,
+					prefix: "not retryable error: ", outcome: "permanent_rejection",
+				},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					retry := configretry.NewDefaultBackOffConfig()
+					retry.InitialInterval, retry.MaxInterval = 200*time.Millisecond, 200*time.Millisecond
+					retry.RandomizationFactor = 0
+					retry.MaxElapsedTime = tc.retryLimit
+					exp := helperExporter(t, func(context.Context, plog.Logs) error { return tc.failure },
+						exporterhelper.WithRetry(retry))
+					cfg := deliveryDefaults(t)
+					cfg.ExportLifetime = tc.lifetime
+					ctrl := &controllerStub{mode: mode, bound: time.Millisecond}
+					c, reader := newDelivery(t, cfg, ctrl, exp)
+					before := time.Now()
+					err := c.ConsumeLogs(context.Background(), logsData())
+					require.Error(t, err)
+					require.True(t, strings.HasPrefix(err.Error(), tc.prefix), "unexpected helper error: %v", err)
+					if tc.outcome == "deadline_expired" {
+						require.Less(t, time.Since(before), cfg.ExportLifetime)
+						require.EqualValues(t, 1, ctrl.observer.Snapshot().DeadlineExpired)
+					} else {
+						require.Zero(t, ctrl.observer.Snapshot().DeadlineExpired)
+					}
+					require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.export_requests",
+						attribute.String("outcome", tc.outcome)))
+				})
 			}
-			require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.export_requests",
-				attribute.String("outcome", tc.outcome)))
 		})
 	}
 }
 
 func TestHelperLifetimeExpiryDuringAttempt(t *testing.T) {
-	retry := configretry.NewDefaultBackOffConfig()
-	retry.InitialInterval, retry.MaxInterval = 30*time.Millisecond, 30*time.Millisecond
-	retry.RandomizationFactor = 0
-	retry.MaxElapsedTime = time.Second
-	exp := helperExporter(t, func(ctx context.Context, _ plog.Logs) error {
-		<-ctx.Done()
-		return errors.New("unavailable")
-	}, exporterhelper.WithRetry(retry))
-	cfg := deliveryDefaults(t)
-	cfg.ExportLifetime = 20 * time.Millisecond
-	ctrl := &controllerStub{bound: time.Millisecond}
-	c, reader := newDelivery(t, cfg, ctrl, exp)
-	require.Error(t, c.ConsumeLogs(context.Background(), logsData()))
-	require.EqualValues(t, 1, ctrl.observer.Snapshot().DeadlineExpired)
-	require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.export_requests",
-		attribute.String("outcome", "deadline_expired")))
+	for _, mode := range []logsagent.Mode{logsagent.PromtailMode, logsagent.OTELNativeMode} {
+		t.Run(string(mode), func(t *testing.T) {
+			retry := configretry.NewDefaultBackOffConfig()
+			retry.InitialInterval, retry.MaxInterval = 30*time.Millisecond, 30*time.Millisecond
+			retry.RandomizationFactor = 0
+			retry.MaxElapsedTime = time.Second
+			exp := helperExporter(t, func(ctx context.Context, _ plog.Logs) error {
+				<-ctx.Done()
+				return errors.New("unavailable")
+			}, exporterhelper.WithRetry(retry))
+			cfg := deliveryDefaults(t)
+			cfg.ExportLifetime = 20 * time.Millisecond
+			ctrl := &controllerStub{mode: mode, bound: time.Millisecond}
+			c, reader := newDelivery(t, cfg, ctrl, exp)
+			require.Error(t, c.ConsumeLogs(context.Background(), logsData()))
+			require.EqualValues(t, 1, ctrl.observer.Snapshot().DeadlineExpired)
+			require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.export_requests",
+				attribute.String("outcome", "deadline_expired")))
+		})
+	}
 }
 
 func TestHelperRetryRecovery(t *testing.T) {
-	retry := configretry.NewDefaultBackOffConfig()
-	retry.InitialInterval, retry.MaxInterval = time.Millisecond, time.Millisecond
-	retry.MaxElapsedTime = time.Second
-	attempts := 0
-	exp := helperExporter(t, func(context.Context, plog.Logs) error {
-		attempts++
-		if attempts < 3 {
-			return errors.New("unavailable")
-		}
-		return nil
-	}, exporterhelper.WithRetry(retry))
-	ctrl := &controllerStub{bound: time.Second}
-	c, reader := newDelivery(t, deliveryDefaults(t), ctrl, exp)
-	require.NoError(t, c.ConsumeLogs(context.Background(), logsData()))
-	require.Equal(t, 3, attempts)
-	require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.export_requests",
-		attribute.String("outcome", "acknowledged")))
+	for _, mode := range []logsagent.Mode{logsagent.PromtailMode, logsagent.OTELNativeMode} {
+		t.Run(string(mode), func(t *testing.T) {
+			retry := configretry.NewDefaultBackOffConfig()
+			retry.InitialInterval, retry.MaxInterval = time.Millisecond, time.Millisecond
+			retry.MaxElapsedTime = time.Second
+			attempts := 0
+			exp := helperExporter(t, func(context.Context, plog.Logs) error {
+				attempts++
+				if attempts < 3 {
+					return errors.New("unavailable")
+				}
+				return nil
+			}, exporterhelper.WithRetry(retry))
+			ctrl := &controllerStub{mode: mode, bound: time.Second}
+			c, reader := newDelivery(t, deliveryDefaults(t), ctrl, exp)
+			require.NoError(t, c.ConsumeLogs(context.Background(), logsData()))
+			require.Equal(t, 3, attempts)
+			require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.export_requests",
+				attribute.String("outcome", "acknowledged")))
+		})
+	}
 }
 
 func TestQueueWaiterCompletionDoesNotMeanWorkerCompletion(t *testing.T) {
-	entered := make(chan struct{})
-	release := make(chan struct{})
-	workerDone := make(chan struct{})
-	var releaseOnce sync.Once
-	defer releaseOnce.Do(func() { close(release) })
-	queue := exporterhelper.NewDefaultQueueConfig()
-	queue.QueueSize, queue.NumConsumers = 1, 1
-	queue.WaitForResult, queue.BlockOnOverflow = true, true
-	exp := helperExporter(t, func(context.Context, plog.Logs) error {
-		close(entered)
-		<-release
-		close(workerDone)
-		return nil
-	}, exporterhelper.WithQueue(configoptional.Some(queue)))
-	cfg := deliveryDefaults(t)
-	cfg.MaxConcurrentCalls = 1
-	cfg.ExportLifetime = 50 * time.Millisecond
-	ctrl := &controllerStub{bound: time.Millisecond}
-	c, reader := newDelivery(t, cfg, ctrl, exp)
-	result := make(chan error, 1)
-	go func() { result <- c.ConsumeLogs(context.Background(), logsData()) }()
-	select {
-	case <-entered:
-	case <-time.After(time.Second):
-		t.Fatal("worker did not start")
+	for _, mode := range []logsagent.Mode{logsagent.PromtailMode, logsagent.OTELNativeMode} {
+		t.Run(string(mode), func(t *testing.T) {
+			entered := make(chan struct{})
+			release := make(chan struct{})
+			workerDone := make(chan struct{})
+			var releaseOnce sync.Once
+			defer releaseOnce.Do(func() { close(release) })
+			queue := exporterhelper.NewDefaultQueueConfig()
+			queue.QueueSize, queue.NumConsumers = 1, 1
+			queue.WaitForResult, queue.BlockOnOverflow = true, true
+			exp := helperExporter(t, func(context.Context, plog.Logs) error {
+				close(entered)
+				<-release
+				close(workerDone)
+				return nil
+			}, exporterhelper.WithQueue(configoptional.Some(queue)))
+			cfg := deliveryDefaults(t)
+			cfg.MaxConcurrentCalls = 1
+			cfg.ExportLifetime = 50 * time.Millisecond
+			ctrl := &controllerStub{mode: mode, bound: time.Millisecond}
+			c, reader := newDelivery(t, cfg, ctrl, exp)
+			result := make(chan error, 1)
+			go func() { result <- c.ConsumeLogs(context.Background(), logsData()) }()
+			select {
+			case <-entered:
+			case <-time.After(time.Second):
+				t.Fatal("worker did not start")
+			}
+			ctrl.drain(time.Now().Add(cfg.ExportLifetime))
+			require.ErrorIs(t, <-result, context.DeadlineExceeded)
+			require.Equal(t, logsagent.ExportSnapshot{Failed: 1, DeadlineExpired: 1}, ctrl.observer.Snapshot())
+			require.NoError(t, c.Shutdown(context.Background()))
+			select {
+			case <-workerDone:
+				t.Fatal("worker should still be active after delivery shutdown")
+			default:
+			}
+			require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.export_requests",
+				attribute.String("outcome", "deadline_expired"), attribute.Bool("draining", true)))
+			releaseOnce.Do(func() { close(release) })
+			<-workerDone
+		})
 	}
-	ctrl.drain(time.Now().Add(cfg.ExportLifetime))
-	require.ErrorIs(t, <-result, context.DeadlineExceeded)
-	require.Equal(t, logsagent.ExportSnapshot{Failed: 1, DeadlineExpired: 1}, ctrl.observer.Snapshot())
-	require.NoError(t, c.Shutdown(context.Background()))
-	select {
-	case <-workerDone:
-		t.Fatal("worker should still be active after delivery shutdown")
-	default:
-	}
-	require.EqualValues(t, 1, metricSum(t, reader, "stslogsagent.export_requests",
-		attribute.String("outcome", "deadline_expired"), attribute.Bool("draining", true)))
-	releaseOnce.Do(func() { close(release) })
-	<-workerDone
 }

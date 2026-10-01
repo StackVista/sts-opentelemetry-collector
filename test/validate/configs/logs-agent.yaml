@@ -4,9 +4,17 @@ extensions:
     create_directory: true
     recreate: false
   stslogsagent/logs:
+    discovery_enabled: true
+    receiver_url: http://127.0.0.1:18080/stsAgent
+    api_key: synthetic-fixture-key
+    state_directory: /var/lib/otelcol/controller
     health_endpoint: 0.0.0.0:13133
+    termination_message_path: /dev/termination-log
+  bearertokenauth/otel_native:
+    scheme: SUSEObservability
+    token: synthetic-fixture-key
 receivers:
-  filelog/pods:
+  file_log/pods:
     include: [/var/log/pods/*/*/*.log]
     exclude:
       - /var/log/pods/fixture_logs-agent-fixture_*/logs-agent/*.log
@@ -32,7 +40,7 @@ processors:
       - context: resource
         statements:
           - delete_key(attributes, "k8s.pod.uid") where attributes["k8s.pod.uid"] != nil and not IsMatch(attributes["k8s.pod.uid"], "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-  k8sattributes:
+  k8s_attributes:
     auth_type: serviceAccount
     filter:
       node: fixture-node
@@ -67,17 +75,32 @@ processors:
       - context: resource
         statements:
           - set(attributes["k8s.cluster.name"], "fixture-cluster")
+connectors:
+  stslogsroute/logs:
+    controller_extension: stslogsagent/logs
+    promtail_pipeline: logs/promtail
+    native_pipeline: logs/otel_native
+    max_concurrent_calls: 8
+    max_record_bytes: 262144
+    max_request_bytes: 1048576
+    export_lifetime: 90s
 exporters:
   stsk8slogs/promtail:
-    delivery:
-      controller_extension: stslogsagent/logs
-      max_concurrent_calls: 8
-      max_record_bytes: 262144
-      max_request_bytes: 1048576
-      export_lifetime: 90s
     endpoint: http://127.0.0.1:18080/stsAgent/logs/k8s
     api_key: synthetic-fixture-key
     cluster_name: fixture-cluster
+    timeout: 5s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 5s
+      max_elapsed_time: 30s
+    sending_queue:
+      enabled: false
+  otlp_http/otel_native:
+    endpoint: http://127.0.0.1:4318
+    auth:
+      authenticator: bearertokenauth/otel_native
     timeout: 5s
     retry_on_failure:
       enabled: true
@@ -95,9 +118,15 @@ service:
               prometheus:
                 host: 0.0.0.0
                 port: 8888
-  extensions: [file_storage/logs, stslogsagent/logs]
+  extensions: [file_storage/logs, stslogsagent/logs, bearertokenauth/otel_native]
   pipelines:
     logs/input:
-      receivers: [filelog/pods]
-      processors: [memory_limiter, transform/static_pod, k8sattributes, transform/cluster]
+      receivers: [file_log/pods]
+      processors: [memory_limiter, transform/static_pod, k8s_attributes, transform/cluster]
+      exporters: [stslogsroute/logs]
+    logs/promtail:
+      receivers: [stslogsroute/logs]
       exporters: [stsk8slogs/promtail]
+    logs/otel_native:
+      receivers: [stslogsroute/logs]
+      exporters: [otlp_http/otel_native]

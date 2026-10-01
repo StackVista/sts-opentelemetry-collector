@@ -16,8 +16,10 @@ import (
 )
 
 type ResourcesExporter struct {
-	client    *sql.DB
-	insertSQL string
+	client      *sql.DB
+	insertSQL   string
+	tableName   string
+	createTable bool
 
 	logger *zap.Logger
 	cfg    *Config
@@ -63,17 +65,24 @@ func attributesToAuthScope(attrs pcommon.Map) []string {
 }
 
 func NewResourceExporter(logger *zap.Logger, cfg *Config) (*ResourcesExporter, error) {
+	return newResourceExporter(logger, cfg, cfg.ResourcesTableName, cfg.CreateResourcesTable)
+}
+
+func newResourceExporter(
+	logger *zap.Logger, cfg *Config, tableName string, createTable bool,
+) (*ResourcesExporter, error) {
 	client, err := newClickhouseClient(cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	return &ResourcesExporter{
-		client: client,
-		logger: logger,
-
-		insertSQL: renderInsertResourcesSQL(cfg.ResourcesTableName),
-		cfg:       cfg,
+		client:      client,
+		logger:      logger,
+		insertSQL:   renderInsertResourcesSQL(tableName),
+		tableName:   tableName,
+		createTable: createTable,
+		cfg:         cfg,
 	}, nil
 }
 
@@ -86,7 +95,7 @@ func (e *ResourcesExporter) Shutdown(_ context.Context) error {
 }
 
 func (e *ResourcesExporter) Start(ctx context.Context, _ component.Host) error {
-	if !e.cfg.CreateResourcesTable {
+	if !e.createTable {
 		return nil
 	}
 
@@ -94,7 +103,7 @@ func (e *ResourcesExporter) Start(ctx context.Context, _ component.Host) error {
 		return err
 	}
 
-	return createResourcesTable(ctx, e.cfg.TTLDays, e.cfg.TTL, e.cfg.ResourcesTableName, e.client)
+	return createResourcesTable(ctx, e.cfg.TTLDays, e.cfg.TTL, e.tableName, e.client)
 }
 
 func (e *ResourcesExporter) InsertResources(ctx context.Context, resources []*ResourceModel) error {
@@ -104,7 +113,7 @@ func (e *ResourcesExporter) InsertResources(ctx context.Context, resources []*Re
 
 		resourceStatement, err := tx.PrepareContext(ctx, e.insertSQL)
 		if err != nil {
-			return fmt.Errorf("PrepareContext Traces:%w", err)
+			return fmt.Errorf("PrepareContext Resources:%w", err)
 		}
 		defer func() {
 			_ = resourceStatement.Close()
@@ -124,7 +133,7 @@ func (e *ResourcesExporter) InsertResources(ctx context.Context, resources []*Re
 		return nil
 	})
 	duration := time.Since(start)
-	e.logger.Debug("insert resources", zap.Int("records", len(resources)),
+	e.logger.Debug("insert resources", zap.String("table", e.tableName), zap.Int("records", len(resources)),
 		zap.String("cost", duration.String()))
 
 	return err
@@ -135,13 +144,17 @@ const (
 	createResourcesTableSQL = `
 CREATE TABLE IF NOT EXISTS %s (
      Timestamp DateTime64(9) CODEC(Delta, ZSTD(1)),
-		 ResourceRef UUID,
+     ResourceRef UUID CODEC(ZSTD(1)),
      ResourceAttributes Map(LowCardinality(String), String) CODEC(ZSTD(1)),
-	 AuthScope Array(LowCardinality(String)),
-) ENGINE = ReplacingMergeTree
+     AuthScope Array(LowCardinality(String)),
+     INDEX idx_res_attr_key mapKeys(ResourceAttributes) TYPE bloom_filter(0.01) GRANULARITY 1,
+     INDEX idx_res_attr_value mapValues(ResourceAttributes) TYPE bloom_filter(0.01) GRANULARITY 1
+) ENGINE = ReplacingMergeTree(Timestamp)
 %s
-ORDER BY (ResourceRef, toUnixTimestamp(Timestamp))
-SETTINGS index_granularity=512, ttl_only_drop_parts = 1;
+ORDER BY (ResourceRef)
+-- No ttl_only_drop_parts: this table isn't partitioned by date, so a stale row can share a merged
+-- part with fresh ones; row-level TTL is required for expiry to actually happen.
+SETTINGS index_granularity=512;
 `
 	// language=ClickHouse SQL
 	//nolint:lll

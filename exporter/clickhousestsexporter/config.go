@@ -41,6 +41,8 @@ type Config struct {
 	MetricsTableName string `mapstructure:"metrics_table_name"`
 	// ResourcesTableName is the table name for resources. default is `otel_resources`.
 	ResourcesTableName string `mapstructure:"resources_table_name"`
+	// LogsResourcesTableName is the table name for resources of logs. default is `otel_logs_resources`.
+	LogsResourcesTableName string `mapstructure:"logs_resources_table_name"`
 
 	// Deprecated: Use 'ttl' instead
 	TTLDays uint `mapstructure:"ttl_days"`
@@ -50,6 +52,8 @@ type Config struct {
 	CreateTracesTable bool `mapstructure:"create_traces_table"`
 	// Create the resources table on startup
 	CreateResourcesTable bool `mapstructure:"create_resources_table"`
+	// Create the logs and logs resources tables on startup
+	CreateLogsTable bool `mapstructure:"create_logs_table"`
 
 	driverName string
 }

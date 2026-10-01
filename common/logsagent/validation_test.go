@@ -20,6 +20,9 @@ extensions:
     create_directory: true
     recreate: false
   stslogsagent/logs:
+    discovery_enabled: true
+    receiver_url: http://127.0.0.1:18080
+    state_directory: /tmp/logs-controller
     health_endpoint: 127.0.0.1:13133
 receivers:
   filelog/pods:
@@ -52,16 +55,29 @@ processors:
     log_statements:
       - context: resource
         statements: ['set(attributes["k8s.cluster.name"], "fixture")']
+connectors:
+  stslogsroute/logs:
+    controller_extension: stslogsagent/logs
+    promtail_pipeline: logs/promtail
+    native_pipeline: logs/otel_native
+    max_concurrent_calls: 8
+    max_record_bytes: 262144
+    max_request_bytes: 1048576
+    export_lifetime: 55s
 exporters:
   stsk8slogs/promtail:
-    delivery:
-      controller_extension: stslogsagent/logs
-      max_concurrent_calls: 8
-      max_record_bytes: 262144
-      max_request_bytes: 1048576
-      export_lifetime: 55s
     endpoint: http://127.0.0.1:18080/stsAgent/logs/k8s
     cluster_name: fixture
+    timeout: 5s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 5s
+      max_elapsed_time: 30s
+    sending_queue:
+      enabled: false
+  otlp_http/otel_native:
+    endpoint: http://127.0.0.1:14318
     timeout: 5s
     retry_on_failure:
       enabled: true
@@ -76,7 +92,13 @@ service:
     logs/input:
       receivers: [filelog/pods]
       processors: [memory_limiter, transform/static_pod, k8sattributes, transform/cluster]
+      exporters: [stslogsroute/logs]
+    logs/promtail:
+      receivers: [stslogsroute/logs]
       exporters: [stsk8slogs/promtail]
+    logs/otel_native:
+      receivers: [stslogsroute/logs]
+      exporters: [otlp_http/otel_native]
 `
 
 func fixtureMap(t *testing.T, fixture string) map[string]any {
@@ -116,10 +138,11 @@ func fixtureDelete(t *testing.T, values map[string]any, path string) {
 
 func TestValidatePipelineConfig(t *testing.T) {
 	base := logsagent.PipelineConfig{
-		ExtensionID:        "stslogsagent/logs",
-		PromtailExporterID: "stsk8slogs/promtail",
-		ExportLifetime:     55 * time.Second,
-		RetryBound:         35 * time.Second,
+		ExtensionID:          "stslogsagent/logs",
+		PromtailExporterID:   "stsk8slogs/promtail",
+		OTELNativeExporterID: "otlp_http/otel_native",
+		ExportLifetime:       55 * time.Second,
+		RetryBound:           35 * time.Second,
 	}
 	tests := []struct {
 		name    string
@@ -129,23 +152,22 @@ func TestValidatePipelineConfig(t *testing.T) {
 	}{
 		{name: "spec graph", want: base},
 		{
-			name:    "canonical component IDs",
-			fixture: strings.NewReplacer("filelog/", "file_log/", "k8sattributes", "k8s_attributes").Replace(pipelineFixture),
-			want:    base,
-		},
-		{
-			name: "configurable component and pipeline IDs",
+			name: "grpc and configurable component and pipeline IDs",
 			fixture: strings.NewReplacer(
 				"stslogsagent/logs", "stslogsagent/custom",
-
+				"stslogsroute/logs", "stslogsroute/custom",
+				"logs/promtail", "logs/old",
+				"logs/otel_native", "logs/new",
 				"logs/input", "logs/source",
 				"filelog/pods", "filelog/custom",
 				"file_storage/logs", "file_storage/custom",
 				"stsk8slogs/promtail", "stsk8slogs/custom",
+				"otlp_http/otel_native", "otlp/custom",
 			).Replace(pipelineFixture),
 			want: logsagent.PipelineConfig{
 				ExtensionID: "stslogsagent/custom", PromtailExporterID: "stsk8slogs/custom",
-				RetryBound: base.RetryBound, ExportLifetime: base.ExportLifetime,
+				OTELNativeExporterID: "otlp/custom", ExportLifetime: base.ExportLifetime,
+				RetryBound: base.RetryBound,
 			},
 		},
 		{
@@ -156,21 +178,22 @@ func TestValidatePipelineConfig(t *testing.T) {
 			want: base,
 		},
 		{
-			name: "slower Promtail exporter determines bound",
+			name: "slower inactive OTELNative exporter determines bound",
 			changes: map[string]any{
-				"exporters::stsk8slogs/promtail::retry_on_failure::max_elapsed_time": "31s",
-				"exporters::stsk8slogs/promtail::delivery::export_lifetime":          "92s",
+				"exporters::otlp_http/otel_native::retry_on_failure::max_elapsed_time": "31s",
+				"connectors::stslogsroute/logs::export_lifetime":                       "92s",
 			},
 			want: logsagent.PipelineConfig{
 				ExtensionID: base.ExtensionID, PromtailExporterID: base.PromtailExporterID,
-				RetryBound: 36 * time.Second, ExportLifetime: 92 * time.Second,
+				OTELNativeExporterID: base.OTELNativeExporterID, ExportLifetime: 92 * time.Second,
+				RetryBound: 36 * time.Second,
 			},
 		},
 		{
 			name: "explicit retry tuning",
 			changes: map[string]any{
-				"exporters::stsk8slogs/promtail::retry_on_failure::randomization_factor": 0,
-				"exporters::stsk8slogs/promtail::retry_on_failure::multiplier":           1.0,
+				"exporters::otlp_http/otel_native::retry_on_failure::randomization_factor": 0,
+				"exporters::otlp_http/otel_native::retry_on_failure::multiplier":           1.0,
 			},
 			want: base,
 		},
@@ -231,7 +254,7 @@ func TestValidatePipelineConfigRejectsExporterChanges(t *testing.T) {
 		{"sending_queue::enabled", nil, "enabled"},
 		{"sending_queue::enabled", "true", "enabled"},
 	}
-	for _, exporter := range []string{"stsk8slogs/promtail"} {
+	for _, exporter := range []string{"stsk8slogs/promtail", "otlp_http/otel_native"} {
 		for _, tt := range tests {
 			t.Run(exporter+"/"+tt.path+"/"+tt.want, func(t *testing.T) {
 				values := fixtureMap(t, pipelineFixture)
@@ -260,29 +283,38 @@ func TestValidatePipelineConfigRejectsGraphChanges(t *testing.T) {
 		value any
 		want  string
 	}{
-		{"connector graph", "connectors", map[string]any{"forward/logs": nil}, "must not configure connectors"},
-		{"malformed connectors", "connectors", "invalid", "must not configure connectors"},
-		{"wrong signal", "service::pipelines", map[string]any{"traces/input": nil}, "logs input pipeline"},
-		{"wrong controller", "exporters::stsk8slogs/promtail::delivery::controller_extension", "health_check", "stslogsagent"},
-		{"missing controller", "exporters::stsk8slogs/promtail::delivery::controller_extension", "stslogsagent/absent", "enabled"},
-		{"disabled controller", "service::extensions", []any{"file_storage/logs"}, "enabled"},
+		{"second route", "connectors::stslogsroute/extra", nil, "exactly one route"},
+		{"same destinations", "connectors::stslogsroute/logs::native_pipeline", "logs/promtail", "distinct logs"},
+		{"missing destination", "connectors::stslogsroute/logs::native_pipeline", "logs/missing", "one logs input"},
+		{"wrong signal", "connectors::stslogsroute/logs::native_pipeline", "traces/otel_native", "distinct logs"},
+		{"wrong capability", "connectors::stslogsroute/logs::controller_extension", "health_check", "stslogsagent"},
+		{"missing capability", "connectors::stslogsroute/logs::controller_extension", "stslogsagent/absent", "enabled"},
+		{"disabled capability", "service::extensions", []any{"file_storage/logs"}, "enabled"},
 		{"disabled storage", "service::extensions", []any{"stslogsagent/logs"}, "enabled file_storage"},
 		{"duplicate extension", "service::extensions", []string{"file_storage/logs", "stslogsagent/logs", "file_storage/logs"}, "distinct"},
 		{"extra logs bypass", "service::pipelines::logs/bypass", map[string]any{
 			"receivers": []string{"filelog/pods"}, "exporters": []string{"stsk8slogs/promtail"},
-		}, "exactly one"},
-		{"uninspected signal graph", "service::pipelines::metrics/extra", nil, "exactly one"},
-		{"input fanout", "service::pipelines::logs/input::exporters", []string{"debug/extra", "stsk8slogs/promtail"}, "only to"},
-		{"input bypass", "service::pipelines::logs/input::exporters", []string{"debug"}, "only to"},
+		}, "exactly three"},
+		{"uninspected signal graph", "service::pipelines::metrics/extra", nil, "exactly three"},
+		{"input fanout", "service::pipelines::logs/input::exporters", []string{"stslogsroute/logs", "stsk8slogs/promtail"}, "only to"},
+		{"input bypass", "service::pipelines::logs/input::exporters", []string{"stsk8slogs/promtail"}, "only to"},
 		{"second file reader", "service::pipelines::logs/input::receivers", []string{"filelog/pods", "filelog/other"}, "exactly one filelog"},
 		{"wrong input", "service::pipelines::logs/input::receivers", []string{"otlp"}, "exactly one filelog"},
 		{"receiver scalar", "service::pipelines::logs/input::receivers", "filelog/pods", "exactly one filelog"},
-		{"missing exporter", "service::pipelines::logs/input::exporters", []string{"stsk8slogs/absent"}, "configured mapping"},
+		{"terminal fanout", "service::pipelines::logs/otel_native::exporters", []string{"otlp_http/otel_native", "debug"}, "exactly one exporter"},
+		{"terminal direct receiver", "service::pipelines::logs/promtail::receivers", []string{"filelog/pods"}, "only the route"},
+		{"wrong promtail", "service::pipelines::logs/promtail::exporters", []string{"debug"}, "stsk8slogs"},
+		{"wrong native", "service::pipelines::logs/otel_native::exporters", []string{"stsk8slogs/promtail"}, "OTLP exporter"},
+		{"native cycle", "service::pipelines::logs/otel_native::exporters", []string{"stslogsroute/logs"}, "OTLP exporter"},
+		{"missing exporter", "service::pipelines::logs/otel_native::exporters", []string{"otlp/absent"}, "configured mapping"},
+		{"terminal processor", "service::pipelines::logs/otel_native::processors", []string{"batch"}, "must be empty"},
 		{"input batch", "service::pipelines::logs/input::processors", []string{"batch/logs"}, "asynchronous processor"},
 		{"unknown processor", "service::pipelines::logs/input::processors", []string{"custom/buffer"}, "asynchronous processor"},
 		{"missing processor", "service::pipelines::logs/input::processors", []string{"transform/missing"}, "configured mapping"},
 		{"duplicate processor", "service::pipelines::logs/input::processors", []string{"memory_limiter", "memory_limiter"}, "distinct"},
 		{"nonstring processor", "service::pipelines::logs/input::processors", []any{12}, "list of component IDs"},
+		{"receiver collision", "receivers::stslogsroute/logs", nil, "also be defined as a receiver"},
+		{"exporter collision", "exporters::stslogsroute/logs", nil, "also be defined as an exporter"},
 		{"receiver retries", "receivers::filelog/pods::retry_on_failure::enabled", true, "explicitly false"},
 		{"receiver default retries", "receivers::filelog/pods::retry_on_failure", nil, "explicitly false"},
 		{"storage recreation", "extensions::file_storage/logs::recreate", true, "explicitly false"},
@@ -291,10 +323,10 @@ func TestValidatePipelineConfigRejectsGraphChanges(t *testing.T) {
 		{"file concurrency", "receivers::filelog/pods::max_concurrent_files", 7, "max_concurrent_files + 2"},
 		{"concurrency overflow", "receivers::filelog/pods::max_concurrent_files", int64(math.MaxInt64), "max_concurrent_files + 2"},
 		{"zero concurrency", "receivers::filelog/pods::max_concurrent_files", 0, "positive integer"},
-		{"small admission", "exporters::stsk8slogs/promtail::delivery::max_concurrent_calls", 5, "max_concurrent_files + 2"},
-		{"zero record limit", "exporters::stsk8slogs/promtail::delivery::max_record_bytes", 0, "positive integer"},
-		{"small request limit", "exporters::stsk8slogs/promtail::delivery::max_request_bytes", 10, "must not exceed"},
-		{"short lifetime", "exporters::stsk8slogs/promtail::delivery::export_lifetime", "54.999999999s", "plus 20s"},
+		{"small admission", "connectors::stslogsroute/logs::max_concurrent_calls", 5, "max_concurrent_files + 2"},
+		{"zero record limit", "connectors::stslogsroute/logs::max_record_bytes", 0, "positive integer"},
+		{"small request limit", "connectors::stslogsroute/logs::max_request_bytes", 10, "must not exceed"},
+		{"short lifetime", "connectors::stslogsroute/logs::export_lifetime", "54.999999999s", "plus 20s"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -304,13 +336,13 @@ func TestValidatePipelineConfigRejectsGraphChanges(t *testing.T) {
 		})
 	}
 	for _, path := range []string{
-		"exporters::stsk8slogs/promtail::delivery", "service", "service::pipelines::logs/input", "receivers::filelog/pods",
+		"connectors", "service", "service::pipelines::logs/otel_native", "receivers::filelog/pods",
 		"extensions::stslogsagent/logs", "extensions::file_storage/logs",
 		"extensions::file_storage/logs::recreate", "receivers::filelog/pods::storage",
 		"receivers::filelog/pods::retry_on_failure", "receivers::filelog/pods::max_concurrent_files",
-		"exporters::stsk8slogs/promtail::delivery::max_concurrent_calls",
-		"exporters::stsk8slogs/promtail::delivery::max_record_bytes", "exporters::stsk8slogs/promtail::delivery::max_request_bytes",
-		"exporters::stsk8slogs/promtail::delivery::export_lifetime",
+		"connectors::stslogsroute/logs::max_concurrent_calls",
+		"connectors::stslogsroute/logs::max_record_bytes", "connectors::stslogsroute/logs::max_request_bytes",
+		"connectors::stslogsroute/logs::export_lifetime",
 	} {
 		t.Run("missing/"+path, func(t *testing.T) {
 			values := fixtureMap(t, pipelineFixture)
@@ -322,11 +354,11 @@ func TestValidatePipelineConfigRejectsGraphChanges(t *testing.T) {
 
 func TestValidatePipelineConfigDurationScalars(t *testing.T) {
 	for _, path := range []string{
-		"exporters::stsk8slogs/promtail::delivery::export_lifetime",
+		"connectors::stslogsroute/logs::export_lifetime",
 		"exporters::stsk8slogs/promtail::timeout",
-		"exporters::stsk8slogs/promtail::retry_on_failure::initial_interval",
-		"exporters::stsk8slogs/promtail::retry_on_failure::max_interval",
-		"exporters::stsk8slogs/promtail::retry_on_failure::max_elapsed_time",
+		"exporters::otlp_http/otel_native::retry_on_failure::initial_interval",
+		"exporters::otlp_http/otel_native::retry_on_failure::max_interval",
+		"exporters::otlp_http/otel_native::retry_on_failure::max_elapsed_time",
 	} {
 		t.Run(path, func(t *testing.T) {
 			for _, value := range []any{
@@ -355,9 +387,9 @@ func TestValidatePipelineConfigOverflow(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			values := fixtureMap(t, pipelineFixture)
-			fixtureSet(t, values, "exporters::stsk8slogs/promtail::delivery::export_lifetime", "9223372036854775807ns")
-			fixtureSet(t, values, "exporters::stsk8slogs/promtail::timeout", tt.timeout)
-			fixtureSet(t, values, "exporters::stsk8slogs/promtail::retry_on_failure::max_elapsed_time", tt.elapsed)
+			fixtureSet(t, values, "connectors::stslogsroute/logs::export_lifetime", "9223372036854775807ns")
+			fixtureSet(t, values, "exporters::otlp_http/otel_native::timeout", tt.timeout)
+			fixtureSet(t, values, "exporters::otlp_http/otel_native::retry_on_failure::max_elapsed_time", tt.elapsed)
 			assertPipelineRejected(t, values, tt.want)
 		})
 	}
@@ -366,10 +398,10 @@ func TestValidatePipelineConfigOverflow(t *testing.T) {
 func TestValidatePipelineConfigErrorsDoNotEchoValues(t *testing.T) {
 	const marker = "untrusted-configuration-value"
 	for _, path := range []string{
-		"exporters::stsk8slogs/promtail::delivery::export_lifetime",
-		"exporters::stsk8slogs/promtail::delivery::controller_extension",
+		"connectors::stslogsroute/logs::export_lifetime",
+		"connectors::stslogsroute/logs::controller_extension",
 		"exporters::stsk8slogs/promtail::sending_queue",
-		"exporters::stsk8slogs/promtail::retry_on_failure::multiplier",
+		"exporters::otlp_http/otel_native::retry_on_failure::multiplier",
 		"receivers::filelog/pods::storage",
 	} {
 		values := fixtureMap(t, pipelineFixture)
@@ -389,11 +421,36 @@ func TestValidatePipelineConfigEmpty(t *testing.T) {
 	}
 }
 
+func TestOTELNativeExporterNamesAndDisabledQueues(t *testing.T) {
+	for _, kind := range []string{"otlp_http", "otlphttp", "otlp_grpc", "otlp"} {
+		for _, effective := range []bool{false, true} {
+			nativeID := kind + "/otel_native"
+			values := fixtureMap(t, strings.ReplaceAll(pipelineFixture, "otlp_http/otel_native", nativeID))
+			validate := logsagent.ValidatePipelineConfig
+			if effective {
+				validate = logsagent.ValidateEffectivePipelineConfig
+				for _, id := range []string{"stsk8slogs/promtail", nativeID} {
+					fixtureSet(t, values, "exporters::"+id+"::sending_queue", nil)
+				}
+			}
+			conf := confmap.NewFromStringMap(values)
+			before := snapshotConfig(t, conf)
+			got, err := validate(conf)
+			if err != nil || got.RetryBound != 35*time.Second {
+				t.Fatalf("%s effective=%t: %+v, %v", kind, effective, got, err)
+			}
+			if before != snapshotConfig(t, conf) {
+				t.Fatal("validation mutated configuration")
+			}
+		}
+	}
+}
+
 func TestEffectiveConfigOmittedRecreate(t *testing.T) {
 	values := fixtureMap(t, pipelineFixture)
 	fixtureDelete(t, values, "extensions::file_storage/logs::recreate")
 	fixtureSet(t, values, "exporters::stsk8slogs/promtail::sending_queue", nil)
-	fixtureSet(t, values, "exporters::stsk8slogs/promtail::sending_queue", nil)
+	fixtureSet(t, values, "exporters::otlp_http/otel_native::sending_queue", nil)
 	conf := confmap.NewFromStringMap(values)
 	before := snapshotConfig(t, conf)
 	got, err := logsagent.ValidateEffectivePipelineConfig(conf)
@@ -416,13 +473,13 @@ func TestEffectiveConfigRejectsUnsafeValues(t *testing.T) {
 		{"extensions::file_storage/logs::recreate", true},
 		{"extensions::file_storage/logs::recreate", nil},
 		{"extensions::file_storage/logs::recreate", "false"},
-		{"exporters::stsk8slogs/promtail::sending_queue::num_consumers", 1},
+		{"exporters::otlp_http/otel_native::sending_queue::num_consumers", 1},
 		{"exporters::stsk8slogs/promtail::sending_queue", map[string]any{}},
-		{"exporters::stsk8slogs/promtail::sending_queue", map[string]any{"enabled": true}},
-		{"exporters::stsk8slogs/promtail::sending_queue", map[string]any{}},
-		{"exporters::stsk8slogs/promtail::sending_queue::sizer", map[string]any{}},
-		{"exporters::stsk8slogs/promtail::sending_queue::sizer", "bytes"},
-		{"exporters::stsk8slogs/promtail::sending_queue::sizer", "items"},
+		{"exporters::otlp_http/otel_native::sending_queue", map[string]any{"enabled": true}},
+		{"exporters::otlp_http/otel_native::sending_queue", map[string]any{}},
+		{"exporters::otlp_http/otel_native::sending_queue::sizer", map[string]any{}},
+		{"exporters::otlp_http/otel_native::sending_queue::sizer", "bytes"},
+		{"exporters::otlp_http/otel_native::sending_queue::sizer", "items"},
 		{"exporters::stsk8slogs/promtail::sending_queue::batch", map[string]any{}},
 		{"receivers::filelog/pods::retry_on_failure::enabled", true},
 		{"receivers::filelog/pods::preserve_trailing_whitespaces", false},
