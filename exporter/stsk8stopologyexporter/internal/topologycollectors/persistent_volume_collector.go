@@ -49,6 +49,10 @@ func (pvc *PersistentVolumeCollector) CollectorFunction() error {
 	// Produce a map t
 	nodeByPersistentVolume := make(map[string]string)
 	for _, va := range volumeAttachments {
+		// Inline-spec attachments (CSI migration) have no PersistentVolume to relate to.
+		if va.Spec.Source.PersistentVolumeName == nil {
+			continue
+		}
 		nodeByPersistentVolume[*va.Spec.Source.PersistentVolumeName] = va.Spec.NodeName
 	}
 
@@ -81,6 +85,9 @@ func (pvc *PersistentVolumeCollector) CollectorFunction() error {
 	}
 
 	for _, va := range volumeAttachments {
+		if va.Spec.Source.PersistentVolumeName == nil {
+			continue
+		}
 		persistentVolumeExternalID := pvc.buildPersistentVolumeExternalID(*va.Spec.Source.PersistentVolumeName)
 		nodeExternalID := pvc.buildNodeExternalID(va.Spec.NodeName)
 		pvc.SubmitRelation(pvc.nodeToPersistentVolumeStackStateRelation(nodeExternalID, persistentVolumeExternalID))
