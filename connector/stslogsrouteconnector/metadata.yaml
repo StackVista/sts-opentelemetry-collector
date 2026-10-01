@@ -1,0 +1,8 @@
+type: stslogsroute
+
+status:
+  class: connector
+  stability:
+    development: [logs_to_logs]
+  codeowners:
+    active: SUSE

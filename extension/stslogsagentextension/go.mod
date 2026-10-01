@@ -3,9 +3,11 @@ module github.com/stackvista/sts-opentelemetry-collector/extension/stslogsagente
 go 1.26.6
 
 require (
+	github.com/StackVista/stackstate-receiver-go-client v0.0.0-20261001074615-fd72bbd18e84
 	github.com/stackvista/sts-opentelemetry-collector/common v0.0.0
 	go.opentelemetry.io/collector/component v1.67.0
 	go.opentelemetry.io/collector/component/componentstatus v0.161.0
+	go.opentelemetry.io/collector/config/configopaque v1.67.0
 	go.opentelemetry.io/collector/extension v1.67.0
 	go.opentelemetry.io/collector/extension/extensioncapabilities v0.161.0
 	go.opentelemetry.io/collector/featuregate v1.67.0
@@ -34,6 +36,7 @@ require (
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/cihub/seelog v0.0.0-20170130134532-f561c5e57575 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/hashicorp/go-version v1.9.0 // indirect
@@ -52,6 +55,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.46.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
+	golang.org/x/oauth2 v0.36.0 // indirect
 )
 
 replace github.com/stackvista/sts-opentelemetry-collector/common => ../../common

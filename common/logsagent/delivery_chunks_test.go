@@ -85,7 +85,7 @@ func TestChunksPreserveRecordsMetadataAndInput(t *testing.T) {
 				return nil
 			}, consumer.WithCapabilities(consumer.Capabilities{MutatesData: mutates}))
 			require.NoError(t, err)
-			ctrl := &controllerStub{bound: time.Second}
+			ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Second}
 			c, reader := newDelivery(t, cfg, ctrl, next)
 			require.NoError(t, c.ConsumeLogs(context.Background(), data))
 			require.Greater(t, calls, 1)
@@ -117,7 +117,7 @@ func chunkFixture(t *testing.T) (*logsagent.DeliveryConfig, plog.Logs) {
 func TestChunksShareAdmissionDeadlineAndCancellationProtection(t *testing.T) {
 	cfg, data := chunkFixture(t)
 	cfg.ExportLifetime = 50 * time.Millisecond
-	ctrl := &controllerStub{bound: time.Millisecond}
+	ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Millisecond}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var deadlines []time.Time
@@ -145,7 +145,7 @@ func TestChunksShareAdmissionDeadlineAndCancellationProtection(t *testing.T) {
 
 func TestChunkRetriesDoNotRepeatAcknowledgedChunks(t *testing.T) {
 	cfg, data := chunkFixture(t)
-	ctrl := &controllerStub{bound: time.Second}
+	ctrl := &controllerStub{mode: logsagent.PromtailMode, bound: time.Second}
 	attempts := make(map[string]int)
 	retry := configretry.NewDefaultBackOffConfig()
 	retry.InitialInterval, retry.MaxInterval = time.Millisecond, time.Millisecond

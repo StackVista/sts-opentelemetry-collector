@@ -11,9 +11,9 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 )
 
-func (c *Delivery) deliver(ctx context.Context, next consumer.Logs, data plog.Logs) error {
+func (c *Delivery) deliver(ctx context.Context, next consumer.Logs, data plog.Logs, mode Mode) error {
 	remaining := data.LogRecordCount()
-	defer func() { c.telemetry.records(ctx, "unsent", remaining) }()
+	defer func() { c.telemetry.records(ctx, mode, "unsent", remaining) }()
 	oversized := 0
 	for record := range sizedRecords(data) {
 		if err := ctx.Err(); err != nil {
@@ -24,8 +24,8 @@ func (c *Delivery) deliver(ctx context.Context, next consumer.Logs, data plog.Lo
 		}
 	}
 	remaining -= oversized
-	c.telemetry.oversized.Add(ctx, int64(oversized))
-	c.telemetry.records(ctx, "dropped", oversized)
+	c.telemetry.oversized.Add(ctx, int64(oversized), modeAttributes(mode))
+	c.telemetry.records(ctx, mode, "dropped", oversized)
 	var droppedErr error
 	if oversized != 0 {
 		droppedErr = consumererror.NewPermanent(errors.New("logs delivery: record_too_large"))
@@ -52,7 +52,7 @@ func (c *Delivery) deliver(ctx context.Context, next consumer.Logs, data plog.Lo
 		if err != nil {
 			outcome = "failed"
 		}
-		c.telemetry.records(ctx, outcome, count)
+		c.telemetry.records(ctx, mode, outcome, count)
 		return err
 	}
 	if oversized == 0 && (&plog.ProtoMarshaler{}).LogsSize(data) <= c.cfg.MaxRequestBytes {

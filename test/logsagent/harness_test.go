@@ -43,10 +43,10 @@ func TestMain(m *testing.M) {
 }
 
 type settings struct {
-	Checkpoints, Health                   string
-	Include, PromtailURL                  string
-	Files, Concurrency                    int
-	Lifetime, RetryBudget, AttemptTimeout time.Duration
+	Checkpoints, Controller, Health, Termination     string
+	Include, ReceiverURL, PromtailURL, OTELNativeURL string
+	Files, Concurrency                               int
+	Lifetime, RetryBudget, AttemptTimeout            time.Duration
 }
 
 func defaultSettings() settings {
@@ -70,12 +70,12 @@ type fixture struct {
 	configure func(map[string]any)
 }
 
-func newFixture(t *testing.T) *fixture {
+func newFixture(t *testing.T, mode string) *fixture {
 	t.Helper()
-	return newBinaryFixture(t, "OTEL_AGENT_BINARY")
+	return newBinaryFixture(t, mode, "OTEL_AGENT_BINARY")
 }
 
-func newBinaryFixture(t *testing.T, variable string) *fixture {
+func newBinaryFixture(t *testing.T, mode, variable string) *fixture {
 	t.Helper()
 	binary := os.Getenv(variable)
 	if binary == "" {
@@ -90,11 +90,15 @@ func newBinaryFixture(t *testing.T, variable string) *fixture {
 		t.Fatalf("%s must name an executable file: %s", variable, absolute)
 	}
 	root := t.TempDir()
-	b := newBackend(t)
+	b := newBackend(t, mode)
 	s := defaultSettings()
 	s.Checkpoints = filepath.Join(root, "checkpoints")
+	s.Controller = filepath.Join(root, "controller")
+	s.Termination = filepath.Join(root, "termination.log")
 	s.Include = filepath.Join(root, "pods", "*", "*", "*.log")
+	s.ReceiverURL = b.server.URL + "/stsAgent"
 	s.PromtailURL = b.server.URL + "/stsAgent/logs/k8s"
+	s.OTELNativeURL = b.server.URL + "/otel"
 	return &fixture{t: t, binary: absolute, root: root, settings: s, backend: b}
 }
 
@@ -141,6 +145,17 @@ func (f *fixture) start(mutate func(map[string]any), synchronous bool) *process 
 	}
 	if mutate != nil {
 		mutate(config)
+	}
+	if os.Getenv("OTEL_COMPARISON_DESIGN") == "queued" {
+		for _, value := range section(config, "exporters") {
+			exporter, ok := value.(map[string]any)
+			if ok {
+				exporter["sending_queue"] = map[string]any{
+					"enabled": true, "sizer": "requests", "queue_size": f.settings.Concurrency,
+					"num_consumers": 4, "wait_for_result": true, "block_on_overflow": true,
+				}
+			}
+		}
 	}
 	data, err := yaml.Marshal(config)
 	if err != nil {
