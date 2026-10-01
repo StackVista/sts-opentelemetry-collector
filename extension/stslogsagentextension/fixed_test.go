@@ -184,6 +184,20 @@ func TestFixedBaselineFixedLifecycle(t *testing.T) {
 	}
 }
 
+func TestFixedNativeModeSelectedWithoutDiscovery(t *testing.T) {
+	c := fixedTestController(t)
+	c.cfg.FixedMode = logsagent.OTELNativeMode
+	if err := c.Start(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if c.SelectedMode() != logsagent.OTELNativeMode {
+		t.Fatal("fixed native mode was not selected")
+	}
+	if c.startPolling != nil {
+		t.Fatal("fixed mode configured capability polling")
+	}
+}
+
 func TestFixedBaselineConfigValidation(t *testing.T) {
 	for _, endpoint := range []string{"", "invalid", "http://localhost:1234"} {
 		if err := (&Config{HealthEndpoint: endpoint}).Validate(); err == nil {

@@ -1,3 +1,4 @@
+//nolint:goconst // Keep fixture modes beside their expected destinations.
 package logsagent_test
 
 import (
@@ -67,6 +68,39 @@ func TestFixedProcessCompatibility(t *testing.T) {
 	p.assertDrain("completed")
 	f.backend.assertOnly("promtail")
 	f.backend.assertRecords("promtail", expected, true)
+	if f.backend.polls() != 0 {
+		t.Fatal("fixed configuration made feature requests")
+	}
+}
+
+func TestFixedNativeGraph(t *testing.T) {
+	config := renderConfig(t, defaultSettings())
+	controller := section(config, "extensions", "stslogsagent/logs")
+	controller["discovery_enabled"] = false
+	controller["fixed_mode"] = "native"
+	bounds, err := logsagent.ValidatePipelineConfig(confmap.NewFromStringMap(config))
+	if err != nil || bounds.OTELNativeExporterID == "" {
+		t.Fatalf("fixed native graph rejected: %+v, %v", bounds, err)
+	}
+}
+
+func TestFixedNativeProcessIgnoresFeatures(t *testing.T) {
+	f := newFixture(t, "promtail")
+	f.configure = func(config map[string]any) {
+		controller := section(config, "extensions", "stslogsagent/logs")
+		controller["discovery_enabled"] = false
+		controller["fixed_mode"] = "native"
+	}
+	p := f.start(nil, true)
+	p.ready()
+	expected := f.appendRecords(0, 0, 1)
+	f.backend.waitBodies("native", expected, true)
+	p.waitExport("acknowledged")
+	p.signal()
+	p.wait(5*time.Second, true)
+	p.assertDrain("completed")
+	f.backend.assertOnly("native")
+	f.backend.assertRecords("native", expected, true)
 	if f.backend.polls() != 0 {
 		t.Fatal("fixed configuration made feature requests")
 	}

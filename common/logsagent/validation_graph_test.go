@@ -65,3 +65,44 @@ func TestDeliveryGraphSelection(t *testing.T) {
 		}
 	}
 }
+
+func TestDeliveryGraphFixedNative(t *testing.T) {
+	for _, effective := range []bool{false, true} {
+		validate := logsagent.ValidatePipelineConfig
+		if effective {
+			validate = logsagent.ValidateEffectivePipelineConfig
+		}
+		name := map[bool]string{false: "authored", true: "effective"}[effective]
+		routed := func(t *testing.T) map[string]any {
+			t.Helper()
+			values := fixtureMap(t, pipelineFixture)
+			fixtureSet(t, values, "extensions::stslogsagent/logs::discovery_enabled", false)
+			fixtureSet(t, values, "extensions::stslogsagent/logs::fixed_mode", "native")
+			return values
+		}
+		t.Run(name+"/routed", func(t *testing.T) {
+			cfg, err := validate(confmap.NewFromStringMap(routed(t)))
+			require.NoError(t, err)
+			require.Equal(t, "otlp_http/otel_native", cfg.OTELNativeExporterID)
+		})
+		t.Run(name+"/routed-without-native", func(t *testing.T) {
+			values := routed(t)
+			fixtureDelete(t, values, "connectors::stslogsroute/logs::native_pipeline")
+			fixtureDelete(t, values, "service::pipelines::logs/otel_native")
+			_, err := validate(confmap.NewFromStringMap(values))
+			require.ErrorContains(t, err, "fixed_mode is native")
+		})
+		t.Run(name+"/fixed-promtail-with-native", func(t *testing.T) {
+			values := routed(t)
+			fixtureSet(t, values, "extensions::stslogsagent/logs::fixed_mode", "promtail")
+			_, err := validate(confmap.NewFromStringMap(values))
+			require.ErrorContains(t, err, "native_pipeline must be configured exactly")
+		})
+		t.Run(name+"/direct", func(t *testing.T) {
+			values := fixtureMap(t, directPipelineFixture)
+			fixtureSet(t, values, "extensions::stslogsagent/logs::fixed_mode", "native")
+			_, err := validate(confmap.NewFromStringMap(values))
+			require.ErrorContains(t, err, "direct logs delivery requires fixed Promtail mode")
+		})
+	}
+}

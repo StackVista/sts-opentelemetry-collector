@@ -167,8 +167,8 @@ func deliveryPipelines(root configFields) (PipelineConfig, configFields, configF
 		if *root.err != nil {
 			return cfg, input, delivery, *root.err
 		}
-		if discoveryEnabled(controller) {
-			return cfg, input, delivery, errors.New("direct logs delivery requires discovery_enabled to be false")
+		if discoveryEnabled(controller) || fixedNative(controller) {
+			return cfg, input, delivery, errors.New("direct logs delivery requires fixed Promtail mode")
 		}
 		return cfg, input, delivery, *root.err
 	}
@@ -195,12 +195,13 @@ func deliveryPipelines(root configFields) (PipelineConfig, configFields, configF
 	if *root.err != nil {
 		return cfg, input, delivery, *root.err
 	}
-	discovery := discoveryEnabled(controller)
-	if discovery != (nativeID != "") {
-		return cfg, input, delivery, errors.New("native_pipeline must be configured exactly when discovery_enabled is true")
+	native := discoveryEnabled(controller) || fixedNative(controller)
+	if native != (nativeID != "") {
+		return cfg, input, delivery, errors.New(
+			"native_pipeline must be configured exactly when discovery_enabled is true or fixed_mode is native")
 	}
 	pipelineCount, countName := 2, "two"
-	if discovery {
+	if native {
 		pipelineCount, countName = 3, "three"
 	}
 	if len(pipelines.values) != pipelineCount {
@@ -217,7 +218,7 @@ func deliveryPipelines(root configFields) (PipelineConfig, configFields, configF
 	}
 	input = pipelines.namedObject(inputID, "input pipeline")
 	cfg.PromtailExporterID = terminalExporter(pipelines.namedObject(promtailID, "Promtail pipeline"), routeID)
-	if discovery {
+	if native {
 		cfg.OTELNativeExporterID = terminalExporter(pipelines.namedObject(nativeID, "OTELNative pipeline"), routeID)
 	}
 	if *root.err != nil {
@@ -226,7 +227,7 @@ func deliveryPipelines(root configFields) (PipelineConfig, configFields, configF
 	if !componentType(cfg.PromtailExporterID, "stsk8slogs") {
 		return cfg, input, delivery, errors.New("the Promtail pipeline must export to stsk8slogs")
 	}
-	if discovery && !componentType(cfg.OTELNativeExporterID, "otlp_http", "otlphttp", "otlp_grpc", "otlp") {
+	if native && !componentType(cfg.OTELNativeExporterID, "otlp_http", "otlphttp", "otlp_grpc", "otlp") {
 		return cfg, input, delivery, errors.New("OTELNative pipeline requires an OTLP exporter")
 	}
 	if outputs := input.strings("exporters", false); len(outputs) != 1 || outputs[0] != routeID {
@@ -267,6 +268,21 @@ func discoveryEnabled(controller configFields) bool {
 		controller.fail("discovery_enabled", "must be a boolean")
 	}
 	return enabled
+}
+
+func fixedNative(controller configFields) bool {
+	switch mode := controller.values["fixed_mode"].(type) {
+	case nil:
+		return false
+	case string:
+		return Mode(mode) == OTELNativeMode
+	case Mode:
+		// Effective configuration retains the extension's typed field.
+		return mode == OTELNativeMode
+	default:
+		controller.fail("fixed_mode", "must be a string")
+		return false
+	}
 }
 
 func terminalExporter(pipeline configFields, routeID string) string {
