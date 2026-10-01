@@ -6,6 +6,7 @@ require (
 	github.com/StackVista/stackstate-receiver-go-client v0.0.0-20260928134251-ae7cedbb4859
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/collector/component v1.67.0
+	go.opentelemetry.io/collector/component/componentstatus v0.161.0
 	go.opentelemetry.io/collector/component/componenttest v0.161.0
 	go.opentelemetry.io/collector/config/configopaque v1.67.0
 	go.opentelemetry.io/collector/config/configoptional v1.67.0
