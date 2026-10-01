@@ -3,6 +3,7 @@ package k8sresourcereceiver
 import (
 	"context"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -91,6 +92,10 @@ func (c *resourceCollector) Shutdown(ctx context.Context) error {
 	// since the loop reads from informer caches.
 	c.wg.Wait()
 
+	if c.config.EmitSnapshotBoundaries {
+		c.emitBoundary(context.WithoutCancel(ctx), emit.SnapshotBoundaryReset, "", false)
+	}
+
 	if c.informers != nil {
 		return c.informers.Shutdown(ctx)
 	}
@@ -125,13 +130,23 @@ func (c *resourceCollector) runIncrementLoop(ctx context.Context) {
 // cache, and emits changes. Periodically emits full snapshots for TTL freshness.
 func (c *resourceCollector) runIncrement(ctx context.Context) {
 	start := time.Now()
+	// Checked before reading: HasSynced is monotonic, so every watch counted as
+	// synced here is fully represented in the objects read below.
+	staticSynced := c.informers.StaticWatchesSynced()
 	currentCRDs := c.informers.ReadCRDs()
 	currentObjects := c.informers.ReadObjects()
 	currentObjects = c.applyPayloadBudgets(ctx, currentObjects)
 	changes := c.peerStore.ComputeChanges(currentCRDs, currentObjects)
 
 	if c.lastSnapshotTime.IsZero() || time.Since(c.lastSnapshotTime) >= c.config.SnapshotInterval {
+		snapshotID := strconv.FormatInt(start.UnixNano(), 10)
+		if c.config.EmitSnapshotBoundaries {
+			c.emitBoundary(ctx, emit.SnapshotBoundaryStart, snapshotID, false)
+		}
 		c.emitSnapshot(ctx, currentCRDs, currentObjects, changes)
+		if c.config.EmitSnapshotBoundaries {
+			c.emitBoundary(ctx, emit.SnapshotBoundaryEnd, snapshotID, staticSynced)
+		}
 		c.recordSnapshotApplied(ctx, changes)
 		c.lastSnapshotTime = time.Now()
 		c.metrics.RecordCycle(ctx, metrics.ModeSnapshot, time.Since(start))
@@ -237,6 +252,15 @@ func (c *resourceCollector) emitSnapshot(
 		zap.Int64("objects", objAdded),
 		zap.Int64("deleted", crdDeleted+objDeleted),
 	)
+}
+
+func (c *resourceCollector) emitBoundary(ctx context.Context, boundary, snapshotID string, complete bool) {
+	if err := emit.LogSnapshotBoundary(ctx, c.consumer, boundary, snapshotID, complete, c.config.ClusterName); err != nil {
+		c.logger.Debug("Failed to emit snapshot boundary",
+			zap.String("boundary", boundary),
+			zap.Error(err),
+		)
+	}
 }
 
 // emitIncrement emits the given changes using a two-phase ordering chosen to

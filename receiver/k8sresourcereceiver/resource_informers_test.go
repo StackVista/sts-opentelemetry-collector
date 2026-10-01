@@ -507,6 +507,7 @@ func TestResourceInformers_StaticInformer_StartsAndReads(t *testing.T) {
 	require.Len(t, objs[podsGVR].Objects, 1)
 	assert.Equal(t, "nginx", objs[podsGVR].Objects[0].GetName())
 	assert.Equal(t, ObjectSourceStatic, objs[podsGVR].Source)
+	assert.True(t, ri.StaticWatchesSynced())
 }
 
 func TestResourceInformers_StaticInformer_NamespaceExpansion(t *testing.T) {
@@ -773,6 +774,7 @@ func TestResourceInformers_StaticInformer_PerEntryForbidden(t *testing.T) {
 	require.Contains(t, objs, podsGVR, "ns-b pods must surface despite ns-a being forbidden")
 	require.Len(t, objs[podsGVR].Objects, 1)
 	assert.Equal(t, "b", objs[podsGVR].Objects[0].GetName())
+	assert.False(t, ri.StaticWatchesSynced(), "a forbidden watch must leave static state incomplete")
 }
 
 func TestFormatStaticInformerKey_Distinct(t *testing.T) {

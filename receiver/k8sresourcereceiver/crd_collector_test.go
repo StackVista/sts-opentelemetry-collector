@@ -1001,3 +1001,83 @@ func TestConfig_Simplified(t *testing.T) {
 		assert.Equal(t, DiscoveryModeAPIGroups, cfg.DiscoveryMode)
 	})
 }
+
+func TestResourceCollector_SnapshotBoundaries(t *testing.T) {
+	scheme := testScheme()
+	registerCRGVR(scheme, "example.com", "v1", "TestResource")
+
+	crd := makeTestCRDUnstructured("testresources.example.com", "example.com", "TestResource", "testresources")
+	cr := makeTestCR("my-resource", "default", "example.com", "v1", "TestResource")
+
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme,
+		map[schema.GroupVersionResource]string{
+			crdGVR: testCRDListKind,
+			{Group: testExampleGroup, Version: "v1", Resource: testTestResources}: testResourceListKind,
+		},
+		crd, cr,
+	)
+
+	sink := &consumertest.LogsSink{}
+	config := testConfig([]string{testExampleGroup}, nil)
+	config.EmitSnapshotBoundaries = true
+	collector := newTestCollector(t, config, sink, client, tracker.NewForbiddenTracker(1*time.Hour))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	require.NoError(t, collector.Start(ctx))
+
+	waitForInitialEmissions(t, sink, 4)
+	require.NoError(t, collector.Shutdown(ctx))
+
+	var boundaries []string
+	var ids []string
+	for _, logs := range sink.AllLogs() {
+		record := logs.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0)
+		if record.EventName() != emit.EventNameSnapshotBoundary {
+			continue
+		}
+		boundary, _ := record.Attributes().Get(emit.AttrK8sSnapshotBoundary)
+		boundaries = append(boundaries, boundary.Str())
+		if id, ok := record.Attributes().Get(emit.AttrK8sSnapshotID); ok {
+			ids = append(ids, id.Str())
+		}
+		if boundary.Str() == emit.SnapshotBoundaryEnd {
+			complete, ok := record.Attributes().Get(emit.AttrK8sSnapshotComplete)
+			require.True(t, ok)
+			assert.True(t, complete.Bool())
+		}
+	}
+
+	assert.Equal(t, []string{emit.SnapshotBoundaryStart, emit.SnapshotBoundaryEnd, emit.SnapshotBoundaryReset}, boundaries)
+	require.Len(t, ids, 2)
+	assert.Equal(t, ids[0], ids[1])
+
+	first := sink.AllLogs()[0].ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0)
+	assert.Equal(t, emit.EventNameSnapshotBoundary, first.EventName())
+	assert.Equal(t, 5, sink.LogRecordCount(), "start, CRD, CR, end, reset")
+}
+
+func TestResourceCollector_NoSnapshotBoundariesByDefault(t *testing.T) {
+	scheme := testScheme()
+	crd := makeTestCRDUnstructured("testresources.example.com", "example.com", "TestResource", "testresources")
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme,
+		map[schema.GroupVersionResource]string{
+			crdGVR: testCRDListKind,
+		},
+		crd,
+	)
+
+	sink := &consumertest.LogsSink{}
+	collector := newTestCollector(t, testConfig([]string{testExampleGroup}, nil), sink, client, tracker.NewForbiddenTracker(1*time.Hour))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	require.NoError(t, collector.Start(ctx))
+	waitForInitialEmissions(t, sink, 1)
+	require.NoError(t, collector.Shutdown(ctx))
+
+	for _, logs := range sink.AllLogs() {
+		record := logs.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0)
+		assert.NotEqual(t, emit.EventNameSnapshotBoundary, record.EventName())
+	}
+}

@@ -27,4 +27,20 @@ const (
 	EventNameCR     = "KubernetesCustomResourceEvent"
 	EventNameObject = "KubernetesObjectEvent"
 	EventNameCRD    = "KubernetesCustomResourceDefinitionEvent"
+
+	// EventNameSnapshotBoundary marks snapshot start/end and collection reset for
+	// consumers that must distinguish a complete snapshot from partial state.
+	EventNameSnapshotBoundary = "KubernetesSnapshotBoundary"
+
+	AttrK8sSnapshotBoundary = "k8s.snapshot.boundary"
+	AttrK8sSnapshotID       = "k8s.snapshot.id"
+	// AttrK8sSnapshotComplete is set on end boundaries: true only when every
+	// configured static watch had a synced informer when the snapshot was read.
+	AttrK8sSnapshotComplete = "k8s.snapshot.complete"
+
+	SnapshotBoundaryStart = "start"
+	SnapshotBoundaryEnd   = "end"
+	// SnapshotBoundaryReset is emitted when this replica stops collecting, e.g.
+	// on leadership loss, so consumers discard state they can no longer refresh.
+	SnapshotBoundaryReset = "reset"
 )

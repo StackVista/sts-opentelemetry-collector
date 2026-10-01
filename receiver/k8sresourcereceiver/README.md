@@ -19,6 +19,19 @@ the object event. The raw object body is unchanged. These attributes let
 StackPack presentations reproduce legacy readiness and restart values without
 platform expression extensions.
 
+## Snapshot boundaries
+
+With `emit_snapshot_boundaries: true`, the receiver brackets each snapshot with
+`KubernetesSnapshotBoundary` records carrying `k8s.snapshot.boundary`
+(`start`/`end`) and a shared `k8s.snapshot.id`. The end record's
+`k8s.snapshot.complete` is true only when every configured static watch had a
+synced informer before the snapshot was read. A `reset` boundary is emitted when
+collection stops, for example on leadership loss.
+
+Consumers that treat absence as deletion, such as the `stsk8stopology`
+exporter, use these records to act only on complete snapshots. Existing
+mappings select other event names and ignore them.
+
 ## Peer-sync protocol
 
 A short reference for the in-process peer sync that keeps `k8sresourcereceiver`

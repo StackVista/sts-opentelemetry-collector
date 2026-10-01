@@ -1,0 +1,3961 @@
+{
+ "components": [
+  {
+   "externalId": "urn:cluster:/kubernetes:golden-cluster",
+   "type": {
+    "name": "cluster"
+   },
+   "data": {
+    "name": "golden-cluster",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-cluster"
+    }
+   },
+   "sourceProperties": null
+  },
+  {
+   "externalId": "urn:endpoint:/golden-cluster:ingress-456.elb.example.test",
+   "type": {
+    "name": "endpoint"
+   },
+   "data": {
+    "creationTimestamp": "2026-09-01T10:00:00Z",
+    "identifiers": [],
+    "kind": "Endpoint",
+    "name": "ingress-456.elb.example.test",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-endpoint",
+     "namespace": "shop"
+    }
+   },
+   "sourceProperties": null
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:default:pod/crasher",
+   "type": {
+    "name": "pod"
+   },
+   "data": {
+    "identifiers": [],
+    "name": "crasher",
+    "status": {
+     "phase": "Running"
+    },
+    "tags": {
+     "app": "crasher",
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-pod",
+     "namespace": "default",
+     "service-account": "default"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "app": "crasher"
+     },
+     "name": "crasher",
+     "namespace": "default",
+     "resourceVersion": "100",
+     "uid": "uid-default-crasher"
+    },
+    "spec": {
+     "containers": [
+      {
+       "image": "crasher:bad",
+       "name": "app",
+       "resources": {}
+      }
+     ],
+     "initContainers": [
+      {
+       "image": "busybox",
+       "name": "init",
+       "resources": {}
+      }
+     ],
+     "nodeName": "node-a",
+     "restartPolicy": "Always",
+     "serviceAccountName": "default"
+    },
+    "status": {
+     "conditions": [
+      {
+       "lastProbeTime": null,
+       "lastTransitionTime": "2026-09-01T10:00:00Z",
+       "reason": "ContainersNotReady",
+       "status": "False",
+       "type": "Ready"
+      },
+      {
+       "lastProbeTime": null,
+       "lastTransitionTime": "2026-09-01T10:00:00Z",
+       "status": "True",
+       "type": "PodScheduled"
+      }
+     ],
+     "containerStatuses": [
+      {
+       "containerID": "containerd://cr00000000000000000000000000000000000000000000000000000000000000",
+       "image": "crasher:bad",
+       "imageID": "docker.io/crasher:bad@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "lastState": {},
+       "name": "app",
+       "ready": false,
+       "restartCount": 12,
+       "started": false,
+       "state": {
+        "waiting": {
+         "message": "back-off 5m0s restarting failed container",
+         "reason": "CrashLoopBackOff"
+        }
+       }
+      }
+     ],
+     "hostIP": "10.0.0.10",
+     "phase": "Running",
+     "podIP": "10.1.0.40",
+     "podIPs": [
+      {
+       "ip": "10.1.0.40"
+      }
+     ],
+     "qosClass": "BestEffort",
+     "startTime": "2026-09-01T10:00:00Z"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:default:pod/crasher:container/app",
+   "type": {
+    "name": "container"
+   },
+   "data": {
+    "docker": {
+     "containerId": "cr00000000000000000000000000000000000000000000000000000000000000",
+     "image": "crasher:bad",
+     "imageId": "docker.io/crasher:bad@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "identifiers": [
+     "urn:container:/node-a-golden-cluster:cr00000000000000000000000000000000000000000000000000000000000000"
+    ],
+    "name": "app",
+    "pod": "crasher",
+    "podIP": "10.1.0.40",
+    "podPhase": "Running",
+    "restartCount": 12,
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-container",
+     "namespace": "default"
+    }
+   },
+   "sourceProperties": null
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:default:pod/pending-pod",
+   "type": {
+    "name": "pod"
+   },
+   "data": {
+    "identifiers": [],
+    "name": "pending-pod",
+    "status": {
+     "phase": "Pending"
+    },
+    "tags": {
+     "app": "pending",
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-pod",
+     "namespace": "default"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "app": "pending"
+     },
+     "name": "pending-pod",
+     "namespace": "default",
+     "resourceVersion": "100",
+     "uid": "uid-default-pending-pod"
+    },
+    "spec": {
+     "containers": [
+      {
+       "image": "busybox",
+       "name": "p",
+       "resources": {}
+      }
+     ]
+    },
+    "status": {
+     "conditions": [
+      {
+       "lastProbeTime": null,
+       "lastTransitionTime": "2026-09-01T10:00:00Z",
+       "reason": "Unschedulable",
+       "status": "False",
+       "type": "PodScheduled"
+      }
+     ],
+     "phase": "Pending"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:default:service/kubernetes",
+   "type": {
+    "name": "service"
+   },
+   "data": {
+    "identifiers": [
+     "urn:endpoint:/golden-cluster:10.96.0.1",
+     "urn:service:/golden-cluster:default:kubernetes"
+    ],
+    "name": "kubernetes",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component": "apiserver",
+     "component-type": "kubernetes-service",
+     "namespace": "default",
+     "service-type": "ClusterIP"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "component": "apiserver"
+     },
+     "name": "kubernetes",
+     "namespace": "default",
+     "resourceVersion": "100",
+     "uid": "uid-default-kubernetes"
+    },
+    "spec": {
+     "clusterIP": "10.96.0.1",
+     "clusterIPs": [
+      "10.96.0.1"
+     ],
+     "ports": [
+      {
+       "name": "https",
+       "port": 443,
+       "targetPort": 6443
+      }
+     ],
+     "type": "ClusterIP"
+    },
+    "status": {
+     "loadBalancer": {}
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:empty-dir:volume/shop/web-5d8f-abcde/cache",
+   "type": {
+    "name": "volume"
+   },
+   "data": {
+    "name": "cache",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-volume",
+     "kind": "empty-dir",
+     "namespace": "shop"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Volume",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "name": "cache",
+     "namespace": "shop"
+    },
+    "volume": {
+     "emptyDir": {},
+     "name": "cache"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:empty-dir:volume/shop/web-5d8f-fghij/cache",
+   "type": {
+    "name": "volume"
+   },
+   "data": {
+    "name": "cache",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-volume",
+     "kind": "empty-dir",
+     "namespace": "shop"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Volume",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "name": "cache",
+     "namespace": "shop"
+    },
+    "volume": {
+     "emptyDir": {},
+     "name": "cache"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:kube-system:daemonset/node-exporter",
+   "type": {
+    "name": "daemonset"
+   },
+   "data": {
+    "name": "node-exporter",
+    "tags": {
+     "app": "node-exporter",
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-daemonset",
+     "namespace": "kube-system"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "apps/v1",
+    "kind": "DaemonSet",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "app": "node-exporter"
+     },
+     "name": "node-exporter",
+     "namespace": "kube-system",
+     "resourceVersion": "100",
+     "uid": "uid-kube-system-node-exporter"
+    },
+    "spec": {
+     "selector": {
+      "matchLabels": {
+       "app": "node-exporter"
+      }
+     },
+     "template": {
+      "metadata": {
+       "labels": {
+        "app": "node-exporter"
+       }
+      },
+      "spec": {
+       "containers": [
+        {
+         "image": "prom/node-exporter",
+         "name": "exporter",
+         "resources": {}
+        }
+       ]
+      }
+     },
+     "updateStrategy": {}
+    },
+    "status": {
+     "currentNumberScheduled": 2,
+     "desiredNumberScheduled": 2,
+     "numberAvailable": 2,
+     "numberMisscheduled": 0,
+     "numberReady": 2
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-a",
+   "type": {
+    "name": "pod"
+   },
+   "data": {
+    "identifiers": [],
+    "name": "node-exporter-node-a",
+    "status": {
+     "phase": "Running"
+    },
+    "tags": {
+     "app": "node-exporter",
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-pod",
+     "namespace": "kube-system",
+     "service-account": "default"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "app": "node-exporter"
+     },
+     "name": "node-exporter-node-a",
+     "namespace": "kube-system",
+     "ownerReferences": [
+      {
+       "apiVersion": "apps/v1",
+       "controller": true,
+       "kind": "DaemonSet",
+       "name": "node-exporter",
+       "uid": "uid-kube-system-node-exporter"
+      }
+     ],
+     "resourceVersion": "100",
+     "uid": "uid-kube-system-node-exporter-node-a"
+    },
+    "spec": {
+     "containers": [
+      {
+       "image": "prom/node-exporter",
+       "name": "exporter",
+       "resources": {},
+       "volumeMounts": [
+        {
+         "mountPath": "/host/proc",
+         "name": "proc",
+         "readOnly": true
+        }
+       ]
+      }
+     ],
+     "nodeName": "node-a",
+     "restartPolicy": "Always",
+     "serviceAccountName": "default",
+     "volumes": [
+      {
+       "hostPath": {
+        "path": "/proc"
+       },
+       "name": "proc"
+      }
+     ]
+    },
+    "status": {
+     "conditions": [
+      {
+       "lastProbeTime": null,
+       "lastTransitionTime": "2026-09-01T10:00:00Z",
+       "status": "True",
+       "type": "Ready"
+      },
+      {
+       "lastProbeTime": null,
+       "lastTransitionTime": "2026-09-01T10:00:00Z",
+       "status": "True",
+       "type": "PodScheduled"
+      }
+     ],
+     "containerStatuses": [
+      {
+       "containerID": "containerd://ne000000000000000000000000000000000000000000000000000000000000000",
+       "image": "prom/node-exporter",
+       "imageID": "docker.io/prom/node-exporter@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "lastState": {},
+       "name": "exporter",
+       "ready": true,
+       "restartCount": 0,
+       "started": true,
+       "state": {
+        "running": {
+         "startedAt": "2026-09-01T10:00:00Z"
+        }
+       }
+      }
+     ],
+     "hostIP": "10.0.0.10",
+     "phase": "Running",
+     "podIP": "10.0.0.10",
+     "podIPs": [
+      {
+       "ip": "10.0.0.10"
+      }
+     ],
+     "qosClass": "BestEffort",
+     "startTime": "2026-09-01T10:00:00Z"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-a:container/exporter",
+   "type": {
+    "name": "container"
+   },
+   "data": {
+    "docker": {
+     "containerId": "ne000000000000000000000000000000000000000000000000000000000000000",
+     "image": "prom/node-exporter",
+     "imageId": "docker.io/prom/node-exporter@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "identifiers": [
+     "urn:container:/node-a-golden-cluster:ne000000000000000000000000000000000000000000000000000000000000000"
+    ],
+    "name": "exporter",
+    "pod": "node-exporter-node-a",
+    "podIP": "10.0.0.10",
+    "podPhase": "Running",
+    "restartCount": 0,
+    "startTime": "2026-09-01T10:00:00Z",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-container",
+     "namespace": "kube-system"
+    }
+   },
+   "sourceProperties": null
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-b",
+   "type": {
+    "name": "pod"
+   },
+   "data": {
+    "identifiers": [],
+    "name": "node-exporter-node-b",
+    "status": {
+     "phase": "Running"
+    },
+    "tags": {
+     "app": "node-exporter",
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-pod",
+     "namespace": "kube-system",
+     "service-account": "default"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "app": "node-exporter"
+     },
+     "name": "node-exporter-node-b",
+     "namespace": "kube-system",
+     "ownerReferences": [
+      {
+       "apiVersion": "apps/v1",
+       "controller": true,
+       "kind": "DaemonSet",
+       "name": "node-exporter",
+       "uid": "uid-kube-system-node-exporter"
+      }
+     ],
+     "resourceVersion": "100",
+     "uid": "uid-kube-system-node-exporter-node-b"
+    },
+    "spec": {
+     "containers": [
+      {
+       "image": "prom/node-exporter",
+       "name": "exporter",
+       "resources": {},
+       "volumeMounts": [
+        {
+         "mountPath": "/host/proc",
+         "name": "proc",
+         "readOnly": true
+        }
+       ]
+      }
+     ],
+     "nodeName": "node-b",
+     "restartPolicy": "Always",
+     "serviceAccountName": "default",
+     "volumes": [
+      {
+       "hostPath": {
+        "path": "/proc"
+       },
+       "name": "proc"
+      }
+     ]
+    },
+    "status": {
+     "conditions": [
+      {
+       "lastProbeTime": null,
+       "lastTransitionTime": "2026-09-01T10:00:00Z",
+       "status": "True",
+       "type": "Ready"
+      },
+      {
+       "lastProbeTime": null,
+       "lastTransitionTime": "2026-09-01T10:00:00Z",
+       "status": "True",
+       "type": "PodScheduled"
+      }
+     ],
+     "containerStatuses": [
+      {
+       "containerID": "containerd://ne000001000000000000000000000000000000000000000000000000000000000",
+       "image": "prom/node-exporter",
+       "imageID": "docker.io/prom/node-exporter@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "lastState": {},
+       "name": "exporter",
+       "ready": true,
+       "restartCount": 0,
+       "started": true,
+       "state": {
+        "running": {
+         "startedAt": "2026-09-01T10:00:00Z"
+        }
+       }
+      }
+     ],
+     "hostIP": "10.0.0.11",
+     "phase": "Running",
+     "podIP": "10.0.0.11",
+     "podIPs": [
+      {
+       "ip": "10.0.0.11"
+      }
+     ],
+     "qosClass": "BestEffort",
+     "startTime": "2026-09-01T10:00:00Z"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-b:container/exporter",
+   "type": {
+    "name": "container"
+   },
+   "data": {
+    "docker": {
+     "containerId": "ne000001000000000000000000000000000000000000000000000000000000000",
+     "image": "prom/node-exporter",
+     "imageId": "docker.io/prom/node-exporter@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "identifiers": [
+     "urn:container:/node-b-golden-cluster:ne000001000000000000000000000000000000000000000000000000000000000"
+    ],
+    "name": "exporter",
+    "pod": "node-exporter-node-b",
+    "podIP": "10.0.0.11",
+    "podPhase": "Running",
+    "restartCount": 0,
+    "startTime": "2026-09-01T10:00:00Z",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-container",
+     "namespace": "kube-system"
+    }
+   },
+   "sourceProperties": null
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:namespace/default",
+   "type": {
+    "name": "namespace"
+   },
+   "data": {
+    "identifiers": [
+     "urn:kubernetes:/golden-cluster:namespace/default"
+    ],
+    "name": "default",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-namespace",
+     "kubernetes.io/metadata.name": "default"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Namespace",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "kubernetes.io/metadata.name": "default"
+     },
+     "name": "default",
+     "resourceVersion": "100",
+     "uid": "uid-cluster-default"
+    },
+    "spec": {
+     "finalizers": [
+      "kubernetes"
+     ]
+    },
+    "status": {
+     "phase": "Active"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:namespace/kube-system",
+   "type": {
+    "name": "namespace"
+   },
+   "data": {
+    "identifiers": [
+     "urn:kubernetes:/golden-cluster:namespace/kube-system"
+    ],
+    "name": "kube-system",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-namespace",
+     "kubernetes.io/metadata.name": "kube-system"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Namespace",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "kubernetes.io/metadata.name": "kube-system"
+     },
+     "name": "kube-system",
+     "resourceVersion": "100",
+     "uid": "uid-cluster-kube-system"
+    },
+    "spec": {
+     "finalizers": [
+      "kubernetes"
+     ]
+    },
+    "status": {
+     "phase": "Active"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:namespace/shop",
+   "type": {
+    "name": "namespace"
+   },
+   "data": {
+    "identifiers": [
+     "urn:kubernetes:/golden-cluster:namespace/shop"
+    ],
+    "name": "shop",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-namespace",
+     "kubernetes.io/metadata.name": "shop"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Namespace",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "kubernetes.io/metadata.name": "shop"
+     },
+     "name": "shop",
+     "resourceVersion": "100",
+     "uid": "uid-cluster-shop"
+    },
+    "spec": {
+     "finalizers": [
+      "kubernetes"
+     ]
+    },
+    "status": {
+     "phase": "Active"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:node/node-a",
+   "type": {
+    "name": "node"
+   },
+   "data": {
+    "identifiers": [
+     "urn:ip:/golden-cluster:node-a:10.0.0.10",
+     "urn:host:/node-a-golden-cluster"
+    ],
+    "instanceId": "node-a-golden-cluster",
+    "name": "node-a",
+    "sts_host": "node-a-golden-cluster",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-node",
+     "kubernetes.io/hostname": "node-a",
+     "topology.kubernetes.io/zone": "eu-west-1a"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Node",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "kubernetes.io/hostname": "node-a",
+      "topology.kubernetes.io/zone": "eu-west-1a"
+     },
+     "name": "node-a",
+     "resourceVersion": "100",
+     "uid": "uid-cluster-node-a"
+    },
+    "spec": {
+     "providerID": "aws:///eu-west-1a/i-node-a"
+    },
+    "status": {
+     "addresses": [
+      {
+       "address": "10.0.0.10",
+       "type": "InternalIP"
+      },
+      {
+       "address": "node-a",
+       "type": "Hostname"
+      }
+     ],
+     "allocatable": {
+      "cpu": "4",
+      "memory": "16Gi"
+     },
+     "capacity": {
+      "cpu": "4",
+      "memory": "16Gi"
+     },
+     "conditions": [
+      {
+       "lastHeartbeatTime": "2026-09-01T10:00:00Z",
+       "lastTransitionTime": "2026-09-01T10:00:00Z",
+       "message": "ready",
+       "reason": "KubeletReady",
+       "status": "True",
+       "type": "Ready"
+      }
+     ],
+     "daemonEndpoints": {
+      "kubeletEndpoint": {
+       "Port": 10250
+      }
+     },
+     "nodeInfo": {
+      "architecture": "amd64",
+      "bootID": "b",
+      "containerRuntimeVersion": "containerd://1.7",
+      "kernelVersion": "6.4",
+      "kubeProxyVersion": "v1.33.2",
+      "kubeletVersion": "v1.33.2",
+      "machineID": "m",
+      "operatingSystem": "linux",
+      "osImage": "SUSE",
+      "systemUUID": "s"
+     }
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:node/node-b",
+   "type": {
+    "name": "node"
+   },
+   "data": {
+    "identifiers": [
+     "urn:ip:/golden-cluster:node-b:10.0.0.11",
+     "urn:host:/node-b-golden-cluster"
+    ],
+    "instanceId": "node-b-golden-cluster",
+    "name": "node-b",
+    "sts_host": "node-b-golden-cluster",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-node",
+     "kubernetes.io/hostname": "node-b",
+     "topology.kubernetes.io/zone": "eu-west-1b"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Node",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "kubernetes.io/hostname": "node-b",
+      "topology.kubernetes.io/zone": "eu-west-1b"
+     },
+     "name": "node-b",
+     "resourceVersion": "100",
+     "uid": "uid-cluster-node-b"
+    },
+    "spec": {
+     "providerID": "aws:///eu-west-1b/i-node-b"
+    },
+    "status": {
+     "addresses": [
+      {
+       "address": "10.0.0.11",
+       "type": "InternalIP"
+      },
+      {
+       "address": "node-b",
+       "type": "Hostname"
+      }
+     ],
+     "allocatable": {
+      "cpu": "4",
+      "memory": "16Gi"
+     },
+     "capacity": {
+      "cpu": "4",
+      "memory": "16Gi"
+     },
+     "conditions": [
+      {
+       "lastHeartbeatTime": "2026-09-01T10:00:00Z",
+       "lastTransitionTime": "2026-09-01T10:00:00Z",
+       "message": "ready",
+       "reason": "KubeletReady",
+       "status": "True",
+       "type": "Ready"
+      }
+     ],
+     "daemonEndpoints": {
+      "kubeletEndpoint": {
+       "Port": 10250
+      }
+     },
+     "nodeInfo": {
+      "architecture": "amd64",
+      "bootID": "b",
+      "containerRuntimeVersion": "containerd://1.7",
+      "kernelVersion": "6.4",
+      "kubeProxyVersion": "v1.33.2",
+      "kubeletVersion": "v1.33.2",
+      "machineID": "m",
+      "operatingSystem": "linux",
+      "osImage": "SUSE",
+      "systemUUID": "s"
+     }
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:persistent-volume/nfs-share",
+   "type": {
+    "name": "persistent-volume"
+   },
+   "data": {
+    "identifiers": [],
+    "name": "nfs-share",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-persistentvolume"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "PersistentVolume",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "name": "nfs-share",
+     "resourceVersion": "100",
+     "uid": "uid-cluster-nfs-share"
+    },
+    "spec": {
+     "accessModes": [
+      "ReadWriteMany"
+     ],
+     "capacity": {
+      "storage": "100Gi"
+     },
+     "nfs": {
+      "path": "/exports/share",
+      "server": "nfs.example.test"
+     },
+     "persistentVolumeReclaimPolicy": "Retain"
+    },
+    "status": {
+     "phase": "Available"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:persistent-volume/pvc-db-0",
+   "type": {
+    "name": "persistent-volume"
+   },
+   "data": {
+    "identifiers": [],
+    "name": "pvc-db-0",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-persistentvolume",
+     "persistent-volume-node": "node-b",
+     "topology.kubernetes.io/zone": "eu-west-1b"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "PersistentVolume",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "topology.kubernetes.io/zone": "eu-west-1b"
+     },
+     "name": "pvc-db-0",
+     "resourceVersion": "100",
+     "uid": "uid-cluster-pvc-db-0"
+    },
+    "spec": {
+     "accessModes": [
+      "ReadWriteOnce"
+     ],
+     "awsElasticBlockStore": {
+      "fsType": "ext4",
+      "volumeID": "aws://eu-west-1b/vol-0123456789"
+     },
+     "capacity": {
+      "storage": "10Gi"
+     },
+     "claimRef": {
+      "apiVersion": "v1",
+      "kind": "PersistentVolumeClaim",
+      "name": "data-db-0",
+      "namespace": "shop",
+      "uid": "uid-shop-data-db-0"
+     },
+     "persistentVolumeReclaimPolicy": "Delete",
+     "storageClassName": "gp3",
+     "volumeMode": "Filesystem"
+    },
+    "status": {
+     "phase": "Bound"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:projected:volume/shop/web-5d8f-abcde/kube-api-access",
+   "type": {
+    "name": "volume"
+   },
+   "data": {
+    "name": "kube-api-access",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-volume",
+     "kind": "projection",
+     "namespace": "shop"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Volume",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "name": "kube-api-access",
+     "namespace": "shop"
+    },
+    "volume": {
+     "name": "kube-api-access",
+     "projected": {
+      "sources": [
+       {
+        "serviceAccountToken": {
+         "expirationSeconds": 3607,
+         "path": "token"
+        }
+       },
+       {
+        "configMap": {
+         "items": [
+          {
+           "key": "ca.crt",
+           "path": "ca.crt"
+          }
+         ],
+         "name": "kube-root-ca.crt"
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:projected:volume/shop/web-5d8f-fghij/kube-api-access",
+   "type": {
+    "name": "volume"
+   },
+   "data": {
+    "name": "kube-api-access",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-volume",
+     "kind": "projection",
+     "namespace": "shop"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Volume",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "name": "kube-api-access",
+     "namespace": "shop"
+    },
+    "volume": {
+     "name": "kube-api-access",
+     "projected": {
+      "sources": [
+       {
+        "serviceAccountToken": {
+         "expirationSeconds": 3607,
+         "path": "token"
+        }
+       },
+       {
+        "configMap": {
+         "items": [
+          {
+           "key": "ca.crt",
+           "path": "ca.crt"
+          }
+         ],
+         "name": "kube-root-ca.crt"
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:configmap/app-config",
+   "type": {
+    "name": "configmap"
+   },
+   "data": {
+    "identifiers": [
+     "urn:kubernetes:/golden-cluster:shop:configmap/app-config"
+    ],
+    "name": "app-config",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-configmap",
+     "namespace": "shop"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "binaryData": {
+     "logo.png": "W2Ryb3BwZWQgOSBjaGFycywgaGFzaHN1bTogMDc1ZjhlM2YyMmZjYjU5Ml0="
+    },
+    "data": {
+     "mode": "production",
+     "settings.json": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[dropped 68800 chars, hashsum: f223431cb6e8fbeb]"
+    },
+    "kind": "ConfigMap",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "name": "app-config",
+     "namespace": "shop",
+     "resourceVersion": "100",
+     "uid": "uid-shop-app-config"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:configmap/kube-root-ca.crt",
+   "type": {
+    "name": "configmap"
+   },
+   "data": {
+    "identifiers": [
+     "urn:kubernetes:/golden-cluster:shop:configmap/kube-root-ca.crt"
+    ],
+    "name": "kube-root-ca.crt",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-configmap",
+     "namespace": "shop"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "data": {
+     "ca.crt": "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n"
+    },
+    "kind": "ConfigMap",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "name": "kube-root-ca.crt",
+     "namespace": "shop",
+     "resourceVersion": "100",
+     "uid": "uid-shop-kube-root-ca.crt"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:cronjob/backup",
+   "type": {
+    "name": "cronjob"
+   },
+   "data": {
+    "name": "backup",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-cronjob",
+     "namespace": "shop"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "batch/v1",
+    "kind": "CronJob",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "name": "backup",
+     "namespace": "shop",
+     "resourceVersion": "100",
+     "uid": "uid-shop-backup"
+    },
+    "spec": {
+     "concurrencyPolicy": "Forbid",
+     "jobTemplate": {
+      "metadata": {},
+      "spec": {
+       "template": {
+        "metadata": {},
+        "spec": {
+         "containers": [
+          {
+           "image": "busybox",
+           "name": "backup",
+           "resources": {}
+          }
+         ],
+         "restartPolicy": "Never"
+        }
+       }
+      }
+     },
+     "schedule": "0 3 * * *",
+     "suspend": false
+    },
+    "status": {
+     "lastScheduleTime": "2026-09-01T10:00:00Z"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:deployment/web",
+   "type": {
+    "name": "deployment"
+   },
+   "data": {
+    "name": "web",
+    "tags": {
+     "app": "web",
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-deployment",
+     "namespace": "shop"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "apps/v1",
+    "kind": "Deployment",
+    "metadata": {
+     "annotations": {
+      "monitor.pod-ready-state.stackstate.io/overrides": "{}"
+     },
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "app": "web"
+     },
+     "name": "web",
+     "namespace": "shop",
+     "resourceVersion": "100",
+     "uid": "uid-shop-web"
+    },
+    "spec": {
+     "replicas": 2,
+     "selector": {
+      "matchLabels": {
+       "app": "web"
+      }
+     },
+     "strategy": {
+      "type": "RollingUpdate"
+     },
+     "template": {
+      "metadata": {
+       "labels": {
+        "app": "web"
+       }
+      },
+      "spec": {
+       "containers": [
+        {
+         "image": "nginx:1.27",
+         "name": "web",
+         "resources": {}
+        }
+       ]
+      }
+     }
+    },
+    "status": {
+     "availableReplicas": 2,
+     "observedGeneration": 1,
+     "readyReplicas": 2,
+     "replicas": 2,
+     "updatedReplicas": 2
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:ingress/shop",
+   "type": {
+    "name": "ingress"
+   },
+   "data": {
+    "identifiers": [],
+    "name": "shop",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-ingress",
+     "namespace": "shop"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "networking.k8s.io/v1",
+    "kind": "Ingress",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "name": "shop",
+     "namespace": "shop",
+     "resourceVersion": "100",
+     "uid": "uid-shop-shop"
+    },
+    "spec": {
+     "ingressClassName": "nginx",
+     "rules": [
+      {
+       "host": "shop.example.test",
+       "http": {
+        "paths": [
+         {
+          "backend": {
+           "service": {
+            "name": "web",
+            "port": {
+             "number": 80
+            }
+           }
+          },
+          "path": "/",
+          "pathType": "Prefix"
+         }
+        ]
+       }
+      }
+     ],
+     "tls": [
+      {
+       "hosts": [
+        "shop.example.test"
+       ],
+       "secretName": "shop-tls"
+      }
+     ]
+    },
+    "status": {
+     "loadBalancer": {
+      "ingress": [
+       {
+        "hostname": "ingress-456.elb.example.test"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:job/backup-29000000",
+   "type": {
+    "name": "job"
+   },
+   "data": {
+    "name": "backup-29000000",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-job",
+     "job-name": "backup-29000000",
+     "namespace": "shop"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "batch/v1",
+    "kind": "Job",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "job-name": "backup-29000000"
+     },
+     "name": "backup-29000000",
+     "namespace": "shop",
+     "ownerReferences": [
+      {
+       "apiVersion": "batch/v1",
+       "controller": true,
+       "kind": "CronJob",
+       "name": "backup",
+       "uid": "uid-shop-backup"
+      }
+     ],
+     "resourceVersion": "100",
+     "uid": "uid-shop-backup-29000000"
+    },
+    "spec": {
+     "backoffLimit": 0,
+     "completions": 1,
+     "parallelism": 1,
+     "template": {
+      "metadata": {},
+      "spec": {
+       "containers": [
+        {
+         "image": "busybox",
+         "name": "backup",
+         "resources": {}
+        }
+       ],
+       "restartPolicy": "Never"
+      }
+     }
+    },
+    "status": {
+     "conditions": [
+      {
+       "lastProbeTime": null,
+       "lastTransitionTime": "2026-09-01T10:00:00Z",
+       "reason": "BackoffLimitExceeded",
+       "status": "True",
+       "type": "Failed"
+      }
+     ],
+     "failed": 1,
+     "startTime": "2026-09-01T10:00:00Z"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:job/migrate",
+   "type": {
+    "name": "job"
+   },
+   "data": {
+    "name": "migrate",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-job",
+     "job-name": "migrate",
+     "namespace": "shop"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "batch/v1",
+    "kind": "Job",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "job-name": "migrate"
+     },
+     "name": "migrate",
+     "namespace": "shop",
+     "resourceVersion": "100",
+     "uid": "uid-shop-migrate"
+    },
+    "spec": {
+     "completions": 1,
+     "parallelism": 1,
+     "template": {
+      "metadata": {},
+      "spec": {
+       "containers": [
+        {
+         "image": "migrate:1",
+         "name": "migrate",
+         "resources": {}
+        }
+       ],
+       "restartPolicy": "Never"
+      }
+     }
+    },
+    "status": {
+     "completionTime": "2026-09-01T10:00:00Z",
+     "startTime": "2026-09-01T10:00:00Z",
+     "succeeded": 1
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:persistent-volume-claim/data-db-0",
+   "type": {
+    "name": "persistent-volume-claim"
+   },
+   "data": {
+    "identifiers": [],
+    "name": "data-db-0",
+    "tags": {
+     "app": "db",
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-persistentvolumeclaim",
+     "namespace": "shop"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "PersistentVolumeClaim",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "app": "db"
+     },
+     "name": "data-db-0",
+     "namespace": "shop",
+     "resourceVersion": "100",
+     "uid": "uid-shop-data-db-0"
+    },
+    "spec": {
+     "accessModes": [
+      "ReadWriteOnce"
+     ],
+     "resources": {
+      "requests": {
+       "storage": "10Gi"
+      }
+     },
+     "storageClassName": "gp3",
+     "volumeMode": "Filesystem",
+     "volumeName": "pvc-db-0"
+    },
+    "status": {
+     "accessModes": [
+      "ReadWriteOnce"
+     ],
+     "capacity": {
+      "storage": "10Gi"
+     },
+     "phase": "Bound"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/backup-29000000-xyz12",
+   "type": {
+    "name": "pod"
+   },
+   "data": {
+    "identifiers": [],
+    "name": "backup-29000000-xyz12",
+    "status": {
+     "phase": "Failed"
+    },
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-pod",
+     "job-name": "backup-29000000",
+     "namespace": "shop",
+     "service-account": "default"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "job-name": "backup-29000000"
+     },
+     "name": "backup-29000000-xyz12",
+     "namespace": "shop",
+     "ownerReferences": [
+      {
+       "apiVersion": "batch/v1",
+       "controller": true,
+       "kind": "Job",
+       "name": "backup-29000000",
+       "uid": "uid-shop-backup-29000000"
+      }
+     ],
+     "resourceVersion": "100",
+     "uid": "uid-shop-backup-29000000-xyz12"
+    },
+    "spec": {
+     "containers": [
+      {
+       "image": "busybox",
+       "name": "backup",
+       "resources": {}
+      }
+     ],
+     "nodeName": "node-a",
+     "restartPolicy": "Always",
+     "serviceAccountName": "default"
+    },
+    "status": {
+     "conditions": [
+      {
+       "lastProbeTime": null,
+       "lastTransitionTime": "2026-09-01T10:00:00Z",
+       "status": "False",
+       "type": "Ready"
+      },
+      {
+       "lastProbeTime": null,
+       "lastTransitionTime": "2026-09-01T10:00:00Z",
+       "status": "True",
+       "type": "PodScheduled"
+      }
+     ],
+     "containerStatuses": [
+      {
+       "containerID": "containerd://bb00000000000000000000000000000000000000000000000000000000000000",
+       "image": "busybox",
+       "imageID": "docker.io/busybox@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "lastState": {},
+       "name": "backup",
+       "ready": false,
+       "restartCount": 0,
+       "started": false,
+       "state": {
+        "terminated": {
+         "containerID": "containerd://bb00000000000000000000000000000000000000000000000000000000000000",
+         "exitCode": 2,
+         "finishedAt": "2026-09-01T10:00:00Z",
+         "reason": "Error",
+         "startedAt": "2026-09-01T10:00:00Z"
+        }
+       }
+      }
+     ],
+     "hostIP": "10.0.0.10",
+     "phase": "Failed",
+     "podIP": "10.1.0.30",
+     "podIPs": [
+      {
+       "ip": "10.1.0.30"
+      }
+     ],
+     "qosClass": "BestEffort",
+     "startTime": "2026-09-01T10:00:00Z"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/backup-29000000-xyz12:container/backup",
+   "type": {
+    "name": "container"
+   },
+   "data": {
+    "docker": {
+     "containerId": "bb00000000000000000000000000000000000000000000000000000000000000",
+     "image": "busybox",
+     "imageId": "docker.io/busybox@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "exitCode": 2,
+    "identifiers": [
+     "urn:container:/node-a-golden-cluster:bb00000000000000000000000000000000000000000000000000000000000000"
+    ],
+    "name": "backup",
+    "pod": "backup-29000000-xyz12",
+    "podIP": "10.1.0.30",
+    "podPhase": "Failed",
+    "restartCount": 0,
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-container",
+     "namespace": "shop"
+    }
+   },
+   "sourceProperties": null
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/db-0",
+   "type": {
+    "name": "pod"
+   },
+   "data": {
+    "identifiers": [],
+    "name": "db-0",
+    "status": {
+     "phase": "Running"
+    },
+    "tags": {
+     "app": "db",
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-pod",
+     "namespace": "shop",
+     "service-account": "default",
+     "statefulset.kubernetes.io/pod-name": "db-0"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "app": "db",
+      "statefulset.kubernetes.io/pod-name": "db-0"
+     },
+     "name": "db-0",
+     "namespace": "shop",
+     "ownerReferences": [
+      {
+       "apiVersion": "apps/v1",
+       "controller": true,
+       "kind": "StatefulSet",
+       "name": "db",
+       "uid": "uid-shop-db"
+      }
+     ],
+     "resourceVersion": "100",
+     "uid": "uid-shop-db-0"
+    },
+    "spec": {
+     "containers": [
+      {
+       "image": "postgres:16",
+       "name": "db",
+       "ports": [
+        {
+         "containerPort": 5432,
+         "hostPort": 5432
+        }
+       ],
+       "resources": {},
+       "volumeMounts": [
+        {
+         "mountPath": "/var/lib/postgresql",
+         "name": "data"
+        }
+       ]
+      }
+     ],
+     "nodeName": "node-b",
+     "restartPolicy": "Always",
+     "serviceAccountName": "default",
+     "volumes": [
+      {
+       "name": "data",
+       "persistentVolumeClaim": {
+        "claimName": "data-db-0"
+       }
+      }
+     ]
+    },
+    "status": {
+     "conditions": [
+      {
+       "lastProbeTime": null,
+       "lastTransitionTime": "2026-09-01T10:00:00Z",
+       "status": "True",
+       "type": "Ready"
+      },
+      {
+       "lastProbeTime": null,
+       "lastTransitionTime": "2026-09-01T10:00:00Z",
+       "status": "True",
+       "type": "PodScheduled"
+      }
+     ],
+     "containerStatuses": [
+      {
+       "containerID": "containerd://db00000000000000000000000000000000000000000000000000000000000000",
+       "image": "postgres:16",
+       "imageID": "docker.io/postgres:16@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "lastState": {},
+       "name": "db",
+       "ready": true,
+       "restartCount": 0,
+       "started": true,
+       "state": {
+        "running": {
+         "startedAt": "2026-09-01T10:00:00Z"
+        }
+       }
+      }
+     ],
+     "hostIP": "10.0.0.11",
+     "phase": "Running",
+     "podIP": "10.1.0.20",
+     "podIPs": [
+      {
+       "ip": "10.1.0.20"
+      }
+     ],
+     "qosClass": "BestEffort",
+     "startTime": "2026-09-01T10:00:00Z"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/db-0:container/db",
+   "type": {
+    "name": "container"
+   },
+   "data": {
+    "containerPort": 5432,
+    "docker": {
+     "containerId": "db00000000000000000000000000000000000000000000000000000000000000",
+     "image": "postgres:16",
+     "imageId": "docker.io/postgres:16@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "hostPort": 5432,
+    "identifiers": [
+     "urn:container:/node-b-golden-cluster:db00000000000000000000000000000000000000000000000000000000000000"
+    ],
+    "name": "db",
+    "pod": "db-0",
+    "podIP": "10.1.0.20",
+    "podPhase": "Running",
+    "restartCount": 0,
+    "startTime": "2026-09-01T10:00:00Z",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-container",
+     "namespace": "shop"
+    }
+   },
+   "sourceProperties": null
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/migrate-q1w2e",
+   "type": {
+    "name": "pod"
+   },
+   "data": {
+    "identifiers": [],
+    "name": "migrate-q1w2e",
+    "status": {
+     "phase": "Succeeded"
+    },
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-pod",
+     "job-name": "migrate",
+     "namespace": "shop",
+     "service-account": "default"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "job-name": "migrate"
+     },
+     "name": "migrate-q1w2e",
+     "namespace": "shop",
+     "ownerReferences": [
+      {
+       "apiVersion": "batch/v1",
+       "controller": true,
+       "kind": "Job",
+       "name": "migrate",
+       "uid": "uid-shop-migrate"
+      }
+     ],
+     "resourceVersion": "100",
+     "uid": "uid-shop-migrate-q1w2e"
+    },
+    "spec": {
+     "containers": [
+      {
+       "image": "migrate:1",
+       "name": "migrate",
+       "resources": {}
+      }
+     ],
+     "nodeName": "node-b",
+     "restartPolicy": "Always",
+     "serviceAccountName": "default"
+    },
+    "status": {
+     "conditions": [
+      {
+       "lastProbeTime": null,
+       "lastTransitionTime": "2026-09-01T10:00:00Z",
+       "status": "False",
+       "type": "Ready"
+      },
+      {
+       "lastProbeTime": null,
+       "lastTransitionTime": "2026-09-01T10:00:00Z",
+       "status": "True",
+       "type": "PodScheduled"
+      }
+     ],
+     "containerStatuses": [
+      {
+       "containerID": "containerd://m100000000000000000000000000000000000000000000000000000000000000",
+       "image": "migrate:1",
+       "imageID": "docker.io/migrate:1@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "lastState": {},
+       "name": "migrate",
+       "ready": false,
+       "restartCount": 0,
+       "started": false,
+       "state": {
+        "terminated": {
+         "exitCode": 0,
+         "finishedAt": "2026-09-01T10:00:00Z",
+         "reason": "Completed",
+         "startedAt": "2026-09-01T10:00:00Z"
+        }
+       }
+      }
+     ],
+     "hostIP": "10.0.0.11",
+     "phase": "Succeeded",
+     "podIP": "10.1.0.31",
+     "podIPs": [
+      {
+       "ip": "10.1.0.31"
+      }
+     ],
+     "qosClass": "BestEffort",
+     "startTime": "2026-09-01T10:00:00Z"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/migrate-q1w2e:container/migrate",
+   "type": {
+    "name": "container"
+   },
+   "data": {
+    "docker": {
+     "containerId": "m100000000000000000000000000000000000000000000000000000000000000",
+     "image": "migrate:1",
+     "imageId": "docker.io/migrate:1@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "exitCode": 0,
+    "identifiers": [
+     "urn:container:/node-b-golden-cluster:m100000000000000000000000000000000000000000000000000000000000000"
+    ],
+    "name": "migrate",
+    "pod": "migrate-q1w2e",
+    "podIP": "10.1.0.31",
+    "podPhase": "Succeeded",
+    "restartCount": 0,
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-container",
+     "namespace": "shop"
+    }
+   },
+   "sourceProperties": null
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde",
+   "type": {
+    "name": "pod"
+   },
+   "data": {
+    "identifiers": [],
+    "name": "web-5d8f-abcde",
+    "status": {
+     "phase": "Running"
+    },
+    "tags": {
+     "app": "web",
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-pod",
+     "namespace": "shop",
+     "pod-template-hash": "5d8f",
+     "service-account": "web"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "app": "web",
+      "pod-template-hash": "5d8f"
+     },
+     "name": "web-5d8f-abcde",
+     "namespace": "shop",
+     "ownerReferences": [
+      {
+       "apiVersion": "apps/v1",
+       "controller": true,
+       "kind": "ReplicaSet",
+       "name": "web-5d8f",
+       "uid": "uid-shop-web-5d8f"
+      }
+     ],
+     "resourceVersion": "100",
+     "uid": "uid-shop-web-5d8f-abcde"
+    },
+    "spec": {
+     "containers": [
+      {
+       "env": [
+        {
+         "name": "DB_PASSWORD",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "password",
+           "name": "db-credentials"
+          }
+         }
+        },
+        {
+         "name": "MODE",
+         "valueFrom": {
+          "configMapKeyRef": {
+           "key": "mode",
+           "name": "app-config"
+          }
+         }
+        }
+       ],
+       "envFrom": [
+        {
+         "configMapRef": {
+          "name": "app-config"
+         }
+        }
+       ],
+       "image": "nginx:1.27",
+       "name": "web",
+       "ports": [
+        {
+         "containerPort": 80,
+         "protocol": "TCP"
+        }
+       ],
+       "resources": {},
+       "volumeMounts": [
+        {
+         "mountPath": "/etc/app",
+         "name": "config"
+        },
+        {
+         "mountPath": "/etc/tls",
+         "name": "tls"
+        },
+        {
+         "mountPath": "/cache",
+         "name": "cache"
+        },
+        {
+         "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+         "name": "kube-api-access"
+        },
+        {
+         "mountPath": "/podinfo",
+         "name": "podinfo"
+        }
+       ]
+      }
+     ],
+     "nodeName": "node-a",
+     "restartPolicy": "Always",
+     "serviceAccountName": "web",
+     "volumes": [
+      {
+       "configMap": {
+        "name": "app-config"
+       },
+       "name": "config"
+      },
+      {
+       "name": "tls",
+       "secret": {
+        "secretName": "shop-tls"
+       }
+      },
+      {
+       "emptyDir": {},
+       "name": "cache"
+      },
+      {
+       "name": "kube-api-access",
+       "projected": {
+        "sources": [
+         {
+          "serviceAccountToken": {
+           "expirationSeconds": 3607,
+           "path": "token"
+          }
+         },
+         {
+          "configMap": {
+           "items": [
+            {
+             "key": "ca.crt",
+             "path": "ca.crt"
+            }
+           ],
+           "name": "kube-root-ca.crt"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "downwardAPI": {
+        "items": [
+         {
+          "fieldRef": {
+           "fieldPath": "metadata.labels"
+          },
+          "path": "labels"
+         }
+        ]
+       },
+       "name": "podinfo"
+      }
+     ]
+    },
+    "status": {
+     "conditions": [
+      {
+       "lastProbeTime": null,
+       "lastTransitionTime": "2026-09-01T10:00:00Z",
+       "status": "True",
+       "type": "Ready"
+      },
+      {
+       "lastProbeTime": null,
+       "lastTransitionTime": "2026-09-01T10:00:00Z",
+       "status": "True",
+       "type": "PodScheduled"
+      }
+     ],
+     "containerStatuses": [
+      {
+       "containerID": "containerd://c0ffee0100000000000000000000000000000000000000000000000000000000",
+       "image": "nginx:1.27",
+       "imageID": "docker.io/nginx:1.27@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "lastState": {},
+       "name": "web",
+       "ready": true,
+       "restartCount": 0,
+       "started": true,
+       "state": {
+        "running": {
+         "startedAt": "2026-09-01T10:00:00Z"
+        }
+       }
+      }
+     ],
+     "hostIP": "10.0.0.10",
+     "phase": "Running",
+     "podIP": "10.1.0.11",
+     "podIPs": [
+      {
+       "ip": "10.1.0.11"
+      }
+     ],
+     "qosClass": "BestEffort",
+     "startTime": "2026-09-01T10:00:00Z"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde:container/web",
+   "type": {
+    "name": "container"
+   },
+   "data": {
+    "containerPort": 80,
+    "docker": {
+     "containerId": "c0ffee0100000000000000000000000000000000000000000000000000000000",
+     "image": "nginx:1.27",
+     "imageId": "docker.io/nginx:1.27@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "identifiers": [
+     "urn:container:/node-a-golden-cluster:c0ffee0100000000000000000000000000000000000000000000000000000000"
+    ],
+    "name": "web",
+    "pod": "web-5d8f-abcde",
+    "podIP": "10.1.0.11",
+    "podPhase": "Running",
+    "restartCount": 0,
+    "startTime": "2026-09-01T10:00:00Z",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-container",
+     "namespace": "shop"
+    }
+   },
+   "sourceProperties": null
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij",
+   "type": {
+    "name": "pod"
+   },
+   "data": {
+    "identifiers": [],
+    "name": "web-5d8f-fghij",
+    "status": {
+     "phase": "Running"
+    },
+    "tags": {
+     "app": "web",
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-pod",
+     "namespace": "shop",
+     "pod-template-hash": "5d8f",
+     "service-account": "web"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "app": "web",
+      "pod-template-hash": "5d8f"
+     },
+     "name": "web-5d8f-fghij",
+     "namespace": "shop",
+     "ownerReferences": [
+      {
+       "apiVersion": "apps/v1",
+       "controller": true,
+       "kind": "ReplicaSet",
+       "name": "web-5d8f",
+       "uid": "uid-shop-web-5d8f"
+      }
+     ],
+     "resourceVersion": "100",
+     "uid": "uid-shop-web-5d8f-fghij"
+    },
+    "spec": {
+     "containers": [
+      {
+       "env": [
+        {
+         "name": "DB_PASSWORD",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "password",
+           "name": "db-credentials"
+          }
+         }
+        },
+        {
+         "name": "MODE",
+         "valueFrom": {
+          "configMapKeyRef": {
+           "key": "mode",
+           "name": "app-config"
+          }
+         }
+        }
+       ],
+       "envFrom": [
+        {
+         "configMapRef": {
+          "name": "app-config"
+         }
+        }
+       ],
+       "image": "nginx:1.27",
+       "name": "web",
+       "ports": [
+        {
+         "containerPort": 80,
+         "protocol": "TCP"
+        }
+       ],
+       "resources": {},
+       "volumeMounts": [
+        {
+         "mountPath": "/etc/app",
+         "name": "config"
+        },
+        {
+         "mountPath": "/etc/tls",
+         "name": "tls"
+        },
+        {
+         "mountPath": "/cache",
+         "name": "cache"
+        },
+        {
+         "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+         "name": "kube-api-access"
+        },
+        {
+         "mountPath": "/podinfo",
+         "name": "podinfo"
+        }
+       ]
+      }
+     ],
+     "nodeName": "node-b",
+     "restartPolicy": "Always",
+     "serviceAccountName": "web",
+     "volumes": [
+      {
+       "configMap": {
+        "name": "app-config"
+       },
+       "name": "config"
+      },
+      {
+       "name": "tls",
+       "secret": {
+        "secretName": "shop-tls"
+       }
+      },
+      {
+       "emptyDir": {},
+       "name": "cache"
+      },
+      {
+       "name": "kube-api-access",
+       "projected": {
+        "sources": [
+         {
+          "serviceAccountToken": {
+           "expirationSeconds": 3607,
+           "path": "token"
+          }
+         },
+         {
+          "configMap": {
+           "items": [
+            {
+             "key": "ca.crt",
+             "path": "ca.crt"
+            }
+           ],
+           "name": "kube-root-ca.crt"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "downwardAPI": {
+        "items": [
+         {
+          "fieldRef": {
+           "fieldPath": "metadata.labels"
+          },
+          "path": "labels"
+         }
+        ]
+       },
+       "name": "podinfo"
+      }
+     ]
+    },
+    "status": {
+     "conditions": [
+      {
+       "lastProbeTime": null,
+       "lastTransitionTime": "2026-09-01T10:00:00Z",
+       "status": "True",
+       "type": "Ready"
+      },
+      {
+       "lastProbeTime": null,
+       "lastTransitionTime": "2026-09-01T10:00:00Z",
+       "status": "True",
+       "type": "PodScheduled"
+      }
+     ],
+     "containerStatuses": [
+      {
+       "containerID": "containerd://c0ffee0200000000000000000000000000000000000000000000000000000000",
+       "image": "nginx:1.27",
+       "imageID": "docker.io/nginx:1.27@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "lastState": {},
+       "name": "web",
+       "ready": true,
+       "restartCount": 3,
+       "started": true,
+       "state": {
+        "running": {
+         "startedAt": "2026-09-01T10:00:00Z"
+        }
+       }
+      }
+     ],
+     "hostIP": "10.0.0.11",
+     "phase": "Running",
+     "podIP": "10.1.0.12",
+     "podIPs": [
+      {
+       "ip": "10.1.0.12"
+      }
+     ],
+     "qosClass": "BestEffort",
+     "startTime": "2026-09-01T10:00:00Z"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij:container/web",
+   "type": {
+    "name": "container"
+   },
+   "data": {
+    "containerPort": 80,
+    "docker": {
+     "containerId": "c0ffee0200000000000000000000000000000000000000000000000000000000",
+     "image": "nginx:1.27",
+     "imageId": "docker.io/nginx:1.27@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "identifiers": [
+     "urn:container:/node-b-golden-cluster:c0ffee0200000000000000000000000000000000000000000000000000000000"
+    ],
+    "name": "web",
+    "pod": "web-5d8f-fghij",
+    "podIP": "10.1.0.12",
+    "podPhase": "Running",
+    "restartCount": 3,
+    "startTime": "2026-09-01T10:00:00Z",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-container",
+     "namespace": "shop"
+    }
+   },
+   "sourceProperties": null
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:replicaset/orphan-rs",
+   "type": {
+    "name": "replicaset"
+   },
+   "data": {
+    "name": "orphan-rs",
+    "tags": {
+     "app": "orphan",
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-replicaset",
+     "namespace": "shop"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "apps/v1",
+    "kind": "ReplicaSet",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "app": "orphan"
+     },
+     "name": "orphan-rs",
+     "namespace": "shop",
+     "resourceVersion": "100",
+     "uid": "uid-shop-orphan-rs"
+    },
+    "spec": {
+     "replicas": 0,
+     "selector": {
+      "matchLabels": {
+       "app": "orphan"
+      }
+     },
+     "template": {
+      "metadata": {
+       "labels": {
+        "app": "orphan"
+       }
+      },
+      "spec": {
+       "containers": [
+        {
+         "image": "busybox",
+         "name": "o",
+         "resources": {}
+        }
+       ]
+      }
+     }
+    },
+    "status": {
+     "replicas": 0
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:replicaset/web-5d8f",
+   "type": {
+    "name": "replicaset"
+   },
+   "data": {
+    "name": "web-5d8f",
+    "tags": {
+     "app": "web",
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-replicaset",
+     "namespace": "shop",
+     "pod-template-hash": "5d8f"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "apps/v1",
+    "kind": "ReplicaSet",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "app": "web",
+      "pod-template-hash": "5d8f"
+     },
+     "name": "web-5d8f",
+     "namespace": "shop",
+     "ownerReferences": [
+      {
+       "apiVersion": "apps/v1",
+       "controller": true,
+       "kind": "Deployment",
+       "name": "web",
+       "uid": "uid-shop-web"
+      }
+     ],
+     "resourceVersion": "100",
+     "uid": "uid-shop-web-5d8f"
+    },
+    "spec": {
+     "replicas": 2,
+     "selector": {
+      "matchLabels": {
+       "app": "web",
+       "pod-template-hash": "5d8f"
+      }
+     },
+     "template": {
+      "metadata": {
+       "labels": {
+        "app": "web"
+       }
+      },
+      "spec": {
+       "containers": [
+        {
+         "image": "nginx:1.27",
+         "name": "web",
+         "resources": {}
+        }
+       ]
+      }
+     }
+    },
+    "status": {
+     "availableReplicas": 2,
+     "fullyLabeledReplicas": 2,
+     "observedGeneration": 1,
+     "readyReplicas": 2,
+     "replicas": 2
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:secret/db-credentials",
+   "type": {
+    "name": "secret"
+   },
+   "data": {
+    "identifiers": [
+     "urn:kubernetes:/golden-cluster:shop:secret/db-credentials"
+    ],
+    "name": "db-credentials",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-secret",
+     "namespace": "shop"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "data": {
+     "\u003cdata hash\u003e": "OGNjNWFjZWM4YmExYzZmODJkMzgwYjJkMjc2MzQ2NTVlNTk1MDI0ZWJkZDY4ODQxNGVjMDMxNmM0YmNhM2ZiMg=="
+    },
+    "kind": "Secret",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "name": "db-credentials",
+     "namespace": "shop",
+     "resourceVersion": "100",
+     "uid": "uid-shop-db-credentials"
+    },
+    "type": "Opaque"
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:secret/shop-tls",
+   "type": {
+    "name": "secret"
+   },
+   "data": {
+    "certificateExpiration": 2106113401000,
+    "identifiers": [
+     "urn:kubernetes:/golden-cluster:shop:secret/shop-tls"
+    ],
+    "name": "shop-tls",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-secret",
+     "namespace": "shop"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "data": {
+     "\u003cdata hash\u003e": "YWQ3MDM1NGUwNDk3ZDNiMzlhN2EzY2U3OTliMjc5M2I2OWZlNzAxZTBmYjgwNWFkOTlmNzRmZmJlNDhkOTBlMQ=="
+    },
+    "kind": "Secret",
+    "metadata": {
+     "annotations": {
+      "kubectl.kubernetes.io/last-applied-configuration": "\u003credacted\u003e"
+     },
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "name": "shop-tls",
+     "namespace": "shop",
+     "resourceVersion": "100",
+     "uid": "uid-shop-shop-tls"
+    },
+    "type": "kubernetes.io/tls"
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:service/db",
+   "type": {
+    "name": "service"
+   },
+   "data": {
+    "identifiers": [
+     "urn:service:/golden-cluster:shop:db"
+    ],
+    "name": "db",
+    "tags": {
+     "app": "db",
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-service",
+     "namespace": "shop",
+     "service": "headless",
+     "service-type": "ClusterIP"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "app": "db"
+     },
+     "name": "db",
+     "namespace": "shop",
+     "resourceVersion": "100",
+     "uid": "uid-shop-db"
+    },
+    "spec": {
+     "clusterIP": "None",
+     "clusterIPs": [
+      "None"
+     ],
+     "ports": [
+      {
+       "port": 5432,
+       "protocol": "TCP",
+       "targetPort": 5432
+      }
+     ],
+     "selector": {
+      "app": "db"
+     },
+     "type": "ClusterIP"
+    },
+    "status": {
+     "loadBalancer": {}
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:service/shop-lb",
+   "type": {
+    "name": "service"
+   },
+   "data": {
+    "identifiers": [
+     "urn:endpoint:/golden-cluster:10.96.0.20",
+     "urn:ingress-point:/lb-123.elb.example.test",
+     "urn:ingress-point:/203.0.113.10",
+     "urn:service:/golden-cluster:shop:shop-lb"
+    ],
+    "name": "shop-lb",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-service",
+     "namespace": "shop",
+     "service-type": "LoadBalancer"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "name": "shop-lb",
+     "namespace": "shop",
+     "resourceVersion": "100",
+     "uid": "uid-shop-shop-lb"
+    },
+    "spec": {
+     "clusterIP": "10.96.0.20",
+     "clusterIPs": [
+      "10.96.0.20"
+     ],
+     "ports": [
+      {
+       "nodePort": 30443,
+       "port": 443,
+       "protocol": "TCP",
+       "targetPort": 80
+      }
+     ],
+     "selector": {
+      "app": "web"
+     },
+     "type": "LoadBalancer"
+    },
+    "status": {
+     "loadBalancer": {
+      "ingress": [
+       {
+        "hostname": "lb-123.elb.example.test"
+       },
+       {
+        "ip": "203.0.113.10"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:service/web",
+   "type": {
+    "name": "service"
+   },
+   "data": {
+    "identifiers": [
+     "urn:endpoint:/golden-cluster:10.96.0.10",
+     "urn:service:/golden-cluster:shop:web"
+    ],
+    "name": "web",
+    "tags": {
+     "app": "web",
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-service",
+     "namespace": "shop",
+     "service-type": "ClusterIP"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "app": "web"
+     },
+     "name": "web",
+     "namespace": "shop",
+     "resourceVersion": "100",
+     "uid": "uid-shop-web"
+    },
+    "spec": {
+     "clusterIP": "10.96.0.10",
+     "clusterIPs": [
+      "10.96.0.10"
+     ],
+     "ports": [
+      {
+       "name": "http",
+       "port": 80,
+       "protocol": "TCP",
+       "targetPort": 80
+      }
+     ],
+     "selector": {
+      "app": "web"
+     },
+     "type": "ClusterIP"
+    },
+    "status": {
+     "loadBalancer": {}
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:statefulset/db",
+   "type": {
+    "name": "statefulset"
+   },
+   "data": {
+    "name": "db",
+    "tags": {
+     "app": "db",
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-statefulset",
+     "namespace": "shop"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "apps/v1",
+    "kind": "StatefulSet",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "labels": {
+      "app": "db"
+     },
+     "name": "db",
+     "namespace": "shop",
+     "resourceVersion": "100",
+     "uid": "uid-shop-db"
+    },
+    "spec": {
+     "replicas": 1,
+     "selector": {
+      "matchLabels": {
+       "app": "db"
+      }
+     },
+     "serviceName": "db",
+     "template": {
+      "metadata": {
+       "labels": {
+        "app": "db"
+       }
+      },
+      "spec": {
+       "containers": [
+        {
+         "image": "postgres:16",
+         "name": "db",
+         "resources": {}
+        }
+       ]
+      }
+     },
+     "updateStrategy": {},
+     "volumeClaimTemplates": [
+      {
+       "metadata": {
+        "name": "data"
+       },
+       "spec": {
+        "accessModes": [
+         "ReadWriteOnce"
+        ],
+        "resources": {
+         "requests": {
+          "storage": "10Gi"
+         }
+        }
+       },
+       "status": {}
+      }
+     ]
+    },
+    "status": {
+     "availableReplicas": 1,
+     "currentReplicas": 1,
+     "readyReplicas": 1,
+     "replicas": 1,
+     "updatedReplicas": 1
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:external-volume:aws-ebs/eu-west-1b/vol-0123456789/0",
+   "type": {
+    "name": "volume-source"
+   },
+   "data": {
+    "name": "aws://eu-west-1b/vol-0123456789",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-volumesource",
+     "kind": "aws-ebs",
+     "partition": "0",
+     "topology.kubernetes.io/zone": "eu-west-1b",
+     "volume-id": "aws://eu-west-1b/vol-0123456789"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "VolumeSource",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "name": "aws://eu-west-1b/vol-0123456789"
+    },
+    "source": {
+     "awsElasticBlockStore": {
+      "fsType": "ext4",
+      "volumeID": "aws://eu-west-1b/vol-0123456789"
+     }
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:external-volume:hostpath/node-a/proc",
+   "type": {
+    "name": "volume"
+   },
+   "data": {
+    "name": "proc",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-volume",
+     "kind": "hostpath",
+     "namespace": "kube-system",
+     "nodename": "node-a",
+     "path": "/proc"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Volume",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "name": "proc",
+     "namespace": "kube-system"
+    },
+    "volume": {
+     "hostPath": {
+      "path": "/proc"
+     },
+     "name": "proc"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:external-volume:hostpath/node-b/proc",
+   "type": {
+    "name": "volume"
+   },
+   "data": {
+    "name": "proc",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-volume",
+     "kind": "hostpath",
+     "namespace": "kube-system",
+     "nodename": "node-b",
+     "path": "/proc"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "Volume",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "name": "proc",
+     "namespace": "kube-system"
+    },
+    "volume": {
+     "hostPath": {
+      "path": "/proc"
+     },
+     "name": "proc"
+    }
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:external-volume:nfs/nfs.example.test//exports/share",
+   "type": {
+    "name": "volume-source"
+   },
+   "data": {
+    "name": "nfs.example.test",
+    "tags": {
+     "cluster-name": "golden-cluster",
+     "cluster-type": "kubernetes",
+     "component-type": "kubernetes-volumesource",
+     "kind": "nfs",
+     "path": "/exports/share",
+     "server": "nfs.example.test"
+    }
+   },
+   "sourceProperties": {
+    "apiVersion": "v1",
+    "kind": "VolumeSource",
+    "metadata": {
+     "creationTimestamp": "2026-09-01T10:00:00Z",
+     "name": "nfs.example.test"
+    },
+    "source": {
+     "nfs": {
+      "path": "/exports/share",
+      "server": "nfs.example.test"
+     }
+    }
+   }
+  }
+ ],
+ "relations": [
+  {
+   "externalId": "urn:endpoint:/golden-cluster:ingress-456.elb.example.test-\u003eurn:kubernetes:/golden-cluster:shop:ingress/shop",
+   "sourceId": "urn:endpoint:/golden-cluster:ingress-456.elb.example.test",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:ingress/shop",
+   "type": {
+    "name": "routes"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:default:pod/crasher-\u003eurn:kubernetes:/golden-cluster:default:pod/crasher:container/app",
+   "sourceId": "urn:kubernetes:/golden-cluster:default:pod/crasher",
+   "targetId": "urn:kubernetes:/golden-cluster:default:pod/crasher:container/app",
+   "type": {
+    "name": "encloses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:default:pod/crasher-\u003eurn:kubernetes:/golden-cluster:node/node-a",
+   "sourceId": "urn:kubernetes:/golden-cluster:default:pod/crasher",
+   "targetId": "urn:kubernetes:/golden-cluster:node/node-a",
+   "type": {
+    "name": "scheduled_on"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:default:pod/crasher:container/app-\u003eurn:kubernetes:/golden-cluster:node/node-a",
+   "sourceId": "urn:kubernetes:/golden-cluster:default:pod/crasher:container/app",
+   "targetId": "urn:kubernetes:/golden-cluster:node/node-a",
+   "type": {
+    "name": "runs_on"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:kube-system:daemonset/node-exporter-\u003eurn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-a",
+   "sourceId": "urn:kubernetes:/golden-cluster:kube-system:daemonset/node-exporter",
+   "targetId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-a",
+   "type": {
+    "name": "controls"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:kube-system:daemonset/node-exporter-\u003eurn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-b",
+   "sourceId": "urn:kubernetes:/golden-cluster:kube-system:daemonset/node-exporter",
+   "targetId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-b",
+   "type": {
+    "name": "controls"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-a-\u003eurn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-a:container/exporter",
+   "sourceId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-a",
+   "targetId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-a:container/exporter",
+   "type": {
+    "name": "encloses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-a-\u003eurn:kubernetes:/golden-cluster:node/node-a",
+   "sourceId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-a",
+   "targetId": "urn:kubernetes:/golden-cluster:node/node-a",
+   "type": {
+    "name": "scheduled_on"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-a-\u003eurn:kubernetes:external-volume:hostpath/node-a/proc",
+   "sourceId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-a",
+   "targetId": "urn:kubernetes:external-volume:hostpath/node-a/proc",
+   "type": {
+    "name": "claims"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-a:container/exporter-\u003eurn:kubernetes:/golden-cluster:node/node-a",
+   "sourceId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-a:container/exporter",
+   "targetId": "urn:kubernetes:/golden-cluster:node/node-a",
+   "type": {
+    "name": "runs_on"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-a:container/exporter-\u003eurn:kubernetes:external-volume:hostpath/node-a/proc",
+   "sourceId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-a:container/exporter",
+   "targetId": "urn:kubernetes:external-volume:hostpath/node-a/proc",
+   "type": {
+    "name": "mounts"
+   },
+   "data": {
+    "mountPath": "/host/proc",
+    "mountPropagation": null,
+    "name": "proc",
+    "readOnly": true,
+    "subPath": ""
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-b-\u003eurn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-b:container/exporter",
+   "sourceId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-b",
+   "targetId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-b:container/exporter",
+   "type": {
+    "name": "encloses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-b-\u003eurn:kubernetes:/golden-cluster:node/node-b",
+   "sourceId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-b",
+   "targetId": "urn:kubernetes:/golden-cluster:node/node-b",
+   "type": {
+    "name": "scheduled_on"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-b-\u003eurn:kubernetes:external-volume:hostpath/node-b/proc",
+   "sourceId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-b",
+   "targetId": "urn:kubernetes:external-volume:hostpath/node-b/proc",
+   "type": {
+    "name": "claims"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-b:container/exporter-\u003eurn:kubernetes:/golden-cluster:node/node-b",
+   "sourceId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-b:container/exporter",
+   "targetId": "urn:kubernetes:/golden-cluster:node/node-b",
+   "type": {
+    "name": "runs_on"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-b:container/exporter-\u003eurn:kubernetes:external-volume:hostpath/node-b/proc",
+   "sourceId": "urn:kubernetes:/golden-cluster:kube-system:pod/node-exporter-node-b:container/exporter",
+   "targetId": "urn:kubernetes:external-volume:hostpath/node-b/proc",
+   "type": {
+    "name": "mounts"
+   },
+   "data": {
+    "mountPath": "/host/proc",
+    "mountPropagation": null,
+    "name": "proc",
+    "readOnly": true,
+    "subPath": ""
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:namespace/default-\u003eurn:kubernetes:/golden-cluster:default:pod/crasher",
+   "sourceId": "urn:kubernetes:/golden-cluster:namespace/default",
+   "targetId": "urn:kubernetes:/golden-cluster:default:pod/crasher",
+   "type": {
+    "name": "encloses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:namespace/default-\u003eurn:kubernetes:/golden-cluster:default:pod/pending-pod",
+   "sourceId": "urn:kubernetes:/golden-cluster:namespace/default",
+   "targetId": "urn:kubernetes:/golden-cluster:default:pod/pending-pod",
+   "type": {
+    "name": "encloses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:namespace/default-\u003eurn:kubernetes:/golden-cluster:default:service/kubernetes",
+   "sourceId": "urn:kubernetes:/golden-cluster:namespace/default",
+   "targetId": "urn:kubernetes:/golden-cluster:default:service/kubernetes",
+   "type": {
+    "name": "encloses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:namespace/kube-system-\u003eurn:kubernetes:/golden-cluster:kube-system:daemonset/node-exporter",
+   "sourceId": "urn:kubernetes:/golden-cluster:namespace/kube-system",
+   "targetId": "urn:kubernetes:/golden-cluster:kube-system:daemonset/node-exporter",
+   "type": {
+    "name": "encloses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:namespace/shop-\u003eurn:kubernetes:/golden-cluster:shop:cronjob/backup",
+   "sourceId": "urn:kubernetes:/golden-cluster:namespace/shop",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:cronjob/backup",
+   "type": {
+    "name": "encloses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:namespace/shop-\u003eurn:kubernetes:/golden-cluster:shop:deployment/web",
+   "sourceId": "urn:kubernetes:/golden-cluster:namespace/shop",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:deployment/web",
+   "type": {
+    "name": "encloses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:namespace/shop-\u003eurn:kubernetes:/golden-cluster:shop:job/migrate",
+   "sourceId": "urn:kubernetes:/golden-cluster:namespace/shop",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:job/migrate",
+   "type": {
+    "name": "encloses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:namespace/shop-\u003eurn:kubernetes:/golden-cluster:shop:pod/backup-29000000-xyz12",
+   "sourceId": "urn:kubernetes:/golden-cluster:namespace/shop",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:pod/backup-29000000-xyz12",
+   "type": {
+    "name": "encloses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:namespace/shop-\u003eurn:kubernetes:/golden-cluster:shop:pod/migrate-q1w2e",
+   "sourceId": "urn:kubernetes:/golden-cluster:namespace/shop",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:pod/migrate-q1w2e",
+   "type": {
+    "name": "encloses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:namespace/shop-\u003eurn:kubernetes:/golden-cluster:shop:replicaset/orphan-rs",
+   "sourceId": "urn:kubernetes:/golden-cluster:namespace/shop",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:replicaset/orphan-rs",
+   "type": {
+    "name": "encloses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:namespace/shop-\u003eurn:kubernetes:/golden-cluster:shop:service/db",
+   "sourceId": "urn:kubernetes:/golden-cluster:namespace/shop",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:service/db",
+   "type": {
+    "name": "encloses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:namespace/shop-\u003eurn:kubernetes:/golden-cluster:shop:service/shop-lb",
+   "sourceId": "urn:kubernetes:/golden-cluster:namespace/shop",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:service/shop-lb",
+   "type": {
+    "name": "encloses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:namespace/shop-\u003eurn:kubernetes:/golden-cluster:shop:service/web",
+   "sourceId": "urn:kubernetes:/golden-cluster:namespace/shop",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:service/web",
+   "type": {
+    "name": "encloses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:namespace/shop-\u003eurn:kubernetes:/golden-cluster:shop:statefulset/db",
+   "sourceId": "urn:kubernetes:/golden-cluster:namespace/shop",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:statefulset/db",
+   "type": {
+    "name": "encloses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:node/node-a-\u003eurn:cluster:/kubernetes:golden-cluster",
+   "sourceId": "urn:kubernetes:/golden-cluster:node/node-a",
+   "targetId": "urn:cluster:/kubernetes:golden-cluster",
+   "type": {
+    "name": "belongs_to"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:node/node-b-\u003eurn:cluster:/kubernetes:golden-cluster",
+   "sourceId": "urn:kubernetes:/golden-cluster:node/node-b",
+   "targetId": "urn:cluster:/kubernetes:golden-cluster",
+   "type": {
+    "name": "belongs_to"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:node/node-b-\u003eurn:kubernetes:/golden-cluster:persistent-volume/pvc-db-0",
+   "sourceId": "urn:kubernetes:/golden-cluster:node/node-b",
+   "targetId": "urn:kubernetes:/golden-cluster:persistent-volume/pvc-db-0",
+   "type": {
+    "name": "exposes"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:persistent-volume/nfs-share-\u003eurn:kubernetes:external-volume:nfs/nfs.example.test//exports/share",
+   "sourceId": "urn:kubernetes:/golden-cluster:persistent-volume/nfs-share",
+   "targetId": "urn:kubernetes:external-volume:nfs/nfs.example.test//exports/share",
+   "type": {
+    "name": "exposes"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:persistent-volume/pvc-db-0-\u003eurn:kubernetes:external-volume:aws-ebs/eu-west-1b/vol-0123456789/0",
+   "sourceId": "urn:kubernetes:/golden-cluster:persistent-volume/pvc-db-0",
+   "targetId": "urn:kubernetes:external-volume:aws-ebs/eu-west-1b/vol-0123456789/0",
+   "type": {
+    "name": "exposes"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:projected:volume/shop/web-5d8f-abcde/kube-api-access-\u003eurn:kubernetes:/golden-cluster:shop:configmap/kube-root-ca.crt",
+   "sourceId": "urn:kubernetes:/golden-cluster:projected:volume/shop/web-5d8f-abcde/kube-api-access",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:configmap/kube-root-ca.crt",
+   "type": {
+    "name": "projects"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:projected:volume/shop/web-5d8f-fghij/kube-api-access-\u003eurn:kubernetes:/golden-cluster:shop:configmap/kube-root-ca.crt",
+   "sourceId": "urn:kubernetes:/golden-cluster:projected:volume/shop/web-5d8f-fghij/kube-api-access",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:configmap/kube-root-ca.crt",
+   "type": {
+    "name": "projects"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:cronjob/backup-\u003eurn:kubernetes:/golden-cluster:shop:job/backup-29000000",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:cronjob/backup",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:job/backup-29000000",
+   "type": {
+    "name": "creates"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:deployment/web-\u003eurn:kubernetes:/golden-cluster:shop:replicaset/web-5d8f",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:deployment/web",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:replicaset/web-5d8f",
+   "type": {
+    "name": "controls"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:ingress/shop-\u003eurn:kubernetes:/golden-cluster:shop:service/web",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:ingress/shop",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:service/web",
+   "type": {
+    "name": "routes"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:persistent-volume-claim/data-db-0-\u003eurn:kubernetes:/golden-cluster:persistent-volume/pvc-db-0",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:persistent-volume-claim/data-db-0",
+   "targetId": "urn:kubernetes:/golden-cluster:persistent-volume/pvc-db-0",
+   "type": {
+    "name": "exposes"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/backup-29000000-xyz12-\u003eurn:kubernetes:/golden-cluster:node/node-a",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/backup-29000000-xyz12",
+   "targetId": "urn:kubernetes:/golden-cluster:node/node-a",
+   "type": {
+    "name": "scheduled_on"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/backup-29000000-xyz12-\u003eurn:kubernetes:/golden-cluster:shop:pod/backup-29000000-xyz12:container/backup",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/backup-29000000-xyz12",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:pod/backup-29000000-xyz12:container/backup",
+   "type": {
+    "name": "encloses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/backup-29000000-xyz12:container/backup-\u003eurn:kubernetes:/golden-cluster:node/node-a",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/backup-29000000-xyz12:container/backup",
+   "targetId": "urn:kubernetes:/golden-cluster:node/node-a",
+   "type": {
+    "name": "runs_on"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/db-0-\u003eurn:kubernetes:/golden-cluster:node/node-b",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/db-0",
+   "targetId": "urn:kubernetes:/golden-cluster:node/node-b",
+   "type": {
+    "name": "scheduled_on"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/db-0-\u003eurn:kubernetes:/golden-cluster:shop:persistent-volume-claim/data-db-0",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/db-0",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:persistent-volume-claim/data-db-0",
+   "type": {
+    "name": "claims"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/db-0-\u003eurn:kubernetes:/golden-cluster:shop:pod/db-0:container/db",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/db-0",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:pod/db-0:container/db",
+   "type": {
+    "name": "encloses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/db-0:container/db-\u003eurn:kubernetes:/golden-cluster:node/node-b",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/db-0:container/db",
+   "targetId": "urn:kubernetes:/golden-cluster:node/node-b",
+   "type": {
+    "name": "runs_on"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/db-0:container/db-\u003eurn:kubernetes:/golden-cluster:shop:persistent-volume-claim/data-db-0",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/db-0:container/db",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:persistent-volume-claim/data-db-0",
+   "type": {
+    "name": "mounts"
+   },
+   "data": {
+    "mountPath": "/var/lib/postgresql",
+    "mountPropagation": null,
+    "name": "data",
+    "readOnly": false,
+    "subPath": ""
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/migrate-q1w2e-\u003eurn:kubernetes:/golden-cluster:node/node-b",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/migrate-q1w2e",
+   "targetId": "urn:kubernetes:/golden-cluster:node/node-b",
+   "type": {
+    "name": "scheduled_on"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/migrate-q1w2e-\u003eurn:kubernetes:/golden-cluster:shop:pod/migrate-q1w2e:container/migrate",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/migrate-q1w2e",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:pod/migrate-q1w2e:container/migrate",
+   "type": {
+    "name": "encloses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/migrate-q1w2e:container/migrate-\u003eurn:kubernetes:/golden-cluster:node/node-b",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/migrate-q1w2e:container/migrate",
+   "targetId": "urn:kubernetes:/golden-cluster:node/node-b",
+   "type": {
+    "name": "runs_on"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde-\u003eurn:kubernetes:/golden-cluster:empty-dir:volume/shop/web-5d8f-abcde/cache",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde",
+   "targetId": "urn:kubernetes:/golden-cluster:empty-dir:volume/shop/web-5d8f-abcde/cache",
+   "type": {
+    "name": "claims"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde-\u003eurn:kubernetes:/golden-cluster:node/node-a",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde",
+   "targetId": "urn:kubernetes:/golden-cluster:node/node-a",
+   "type": {
+    "name": "scheduled_on"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde-\u003eurn:kubernetes:/golden-cluster:projected:volume/shop/web-5d8f-abcde/kube-api-access",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde",
+   "targetId": "urn:kubernetes:/golden-cluster:projected:volume/shop/web-5d8f-abcde/kube-api-access",
+   "type": {
+    "name": "claims"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde-\u003eurn:kubernetes:/golden-cluster:shop:configmap/app-config",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:configmap/app-config",
+   "type": {
+    "name": "claims"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde-\u003eurn:kubernetes:/golden-cluster:shop:configmap/app-config",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:configmap/app-config",
+   "type": {
+    "name": "uses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde-\u003eurn:kubernetes:/golden-cluster:shop:configmap/app-config",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:configmap/app-config",
+   "type": {
+    "name": "uses_value"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde-\u003eurn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde:container/web",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde:container/web",
+   "type": {
+    "name": "encloses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde-\u003eurn:kubernetes:/golden-cluster:shop:secret/db-credentials",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:secret/db-credentials",
+   "type": {
+    "name": "uses_value"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde-\u003eurn:kubernetes:/golden-cluster:shop:secret/shop-tls",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:secret/shop-tls",
+   "type": {
+    "name": "claims"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde:container/web-\u003eurn:kubernetes:/golden-cluster:empty-dir:volume/shop/web-5d8f-abcde/cache",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde:container/web",
+   "targetId": "urn:kubernetes:/golden-cluster:empty-dir:volume/shop/web-5d8f-abcde/cache",
+   "type": {
+    "name": "mounts"
+   },
+   "data": {
+    "mountPath": "/cache",
+    "mountPropagation": null,
+    "name": "cache",
+    "readOnly": false,
+    "subPath": ""
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde:container/web-\u003eurn:kubernetes:/golden-cluster:node/node-a",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde:container/web",
+   "targetId": "urn:kubernetes:/golden-cluster:node/node-a",
+   "type": {
+    "name": "runs_on"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde:container/web-\u003eurn:kubernetes:/golden-cluster:projected:volume/shop/web-5d8f-abcde/kube-api-access",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde:container/web",
+   "targetId": "urn:kubernetes:/golden-cluster:projected:volume/shop/web-5d8f-abcde/kube-api-access",
+   "type": {
+    "name": "mounts"
+   },
+   "data": {
+    "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+    "mountPropagation": null,
+    "name": "kube-api-access",
+    "readOnly": false,
+    "subPath": ""
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde:container/web-\u003eurn:kubernetes:/golden-cluster:shop:configmap/app-config",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde:container/web",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:configmap/app-config",
+   "type": {
+    "name": "mounts"
+   },
+   "data": {
+    "mountPath": "/etc/app",
+    "mountPropagation": null,
+    "name": "config",
+    "readOnly": false,
+    "subPath": ""
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde:container/web-\u003eurn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde:container/web",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde",
+   "type": {
+    "name": "mounts"
+   },
+   "data": {
+    "mountPath": "/podinfo",
+    "mountPropagation": null,
+    "name": "podinfo",
+    "readOnly": false,
+    "subPath": ""
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde:container/web-\u003eurn:kubernetes:/golden-cluster:shop:secret/shop-tls",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde:container/web",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:secret/shop-tls",
+   "type": {
+    "name": "mounts"
+   },
+   "data": {
+    "mountPath": "/etc/tls",
+    "mountPropagation": null,
+    "name": "tls",
+    "readOnly": false,
+    "subPath": ""
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij-\u003eurn:kubernetes:/golden-cluster:empty-dir:volume/shop/web-5d8f-fghij/cache",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij",
+   "targetId": "urn:kubernetes:/golden-cluster:empty-dir:volume/shop/web-5d8f-fghij/cache",
+   "type": {
+    "name": "claims"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij-\u003eurn:kubernetes:/golden-cluster:node/node-b",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij",
+   "targetId": "urn:kubernetes:/golden-cluster:node/node-b",
+   "type": {
+    "name": "scheduled_on"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij-\u003eurn:kubernetes:/golden-cluster:projected:volume/shop/web-5d8f-fghij/kube-api-access",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij",
+   "targetId": "urn:kubernetes:/golden-cluster:projected:volume/shop/web-5d8f-fghij/kube-api-access",
+   "type": {
+    "name": "claims"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij-\u003eurn:kubernetes:/golden-cluster:shop:configmap/app-config",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:configmap/app-config",
+   "type": {
+    "name": "claims"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij-\u003eurn:kubernetes:/golden-cluster:shop:configmap/app-config",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:configmap/app-config",
+   "type": {
+    "name": "uses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij-\u003eurn:kubernetes:/golden-cluster:shop:configmap/app-config",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:configmap/app-config",
+   "type": {
+    "name": "uses_value"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij-\u003eurn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij:container/web",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij:container/web",
+   "type": {
+    "name": "encloses"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij-\u003eurn:kubernetes:/golden-cluster:shop:secret/db-credentials",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:secret/db-credentials",
+   "type": {
+    "name": "uses_value"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij-\u003eurn:kubernetes:/golden-cluster:shop:secret/shop-tls",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:secret/shop-tls",
+   "type": {
+    "name": "claims"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij:container/web-\u003eurn:kubernetes:/golden-cluster:empty-dir:volume/shop/web-5d8f-fghij/cache",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij:container/web",
+   "targetId": "urn:kubernetes:/golden-cluster:empty-dir:volume/shop/web-5d8f-fghij/cache",
+   "type": {
+    "name": "mounts"
+   },
+   "data": {
+    "mountPath": "/cache",
+    "mountPropagation": null,
+    "name": "cache",
+    "readOnly": false,
+    "subPath": ""
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij:container/web-\u003eurn:kubernetes:/golden-cluster:node/node-b",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij:container/web",
+   "targetId": "urn:kubernetes:/golden-cluster:node/node-b",
+   "type": {
+    "name": "runs_on"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij:container/web-\u003eurn:kubernetes:/golden-cluster:projected:volume/shop/web-5d8f-fghij/kube-api-access",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij:container/web",
+   "targetId": "urn:kubernetes:/golden-cluster:projected:volume/shop/web-5d8f-fghij/kube-api-access",
+   "type": {
+    "name": "mounts"
+   },
+   "data": {
+    "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+    "mountPropagation": null,
+    "name": "kube-api-access",
+    "readOnly": false,
+    "subPath": ""
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij:container/web-\u003eurn:kubernetes:/golden-cluster:shop:configmap/app-config",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij:container/web",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:configmap/app-config",
+   "type": {
+    "name": "mounts"
+   },
+   "data": {
+    "mountPath": "/etc/app",
+    "mountPropagation": null,
+    "name": "config",
+    "readOnly": false,
+    "subPath": ""
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij:container/web-\u003eurn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij:container/web",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij",
+   "type": {
+    "name": "mounts"
+   },
+   "data": {
+    "mountPath": "/podinfo",
+    "mountPropagation": null,
+    "name": "podinfo",
+    "readOnly": false,
+    "subPath": ""
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij:container/web-\u003eurn:kubernetes:/golden-cluster:shop:secret/shop-tls",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij:container/web",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:secret/shop-tls",
+   "type": {
+    "name": "mounts"
+   },
+   "data": {
+    "mountPath": "/etc/tls",
+    "mountPropagation": null,
+    "name": "tls",
+    "readOnly": false,
+    "subPath": ""
+   }
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:replicaset/web-5d8f-\u003eurn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:replicaset/web-5d8f",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde",
+   "type": {
+    "name": "controls"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:replicaset/web-5d8f-\u003eurn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:replicaset/web-5d8f",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij",
+   "type": {
+    "name": "controls"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:service/db-\u003eurn:kubernetes:/golden-cluster:shop:pod/db-0",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:service/db",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:pod/db-0",
+   "type": {
+    "name": "exposes"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:service/shop-lb-\u003eurn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:service/shop-lb",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde",
+   "type": {
+    "name": "exposes"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:service/shop-lb-\u003eurn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:service/shop-lb",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij",
+   "type": {
+    "name": "exposes"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:service/web-\u003eurn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:service/web",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde",
+   "type": {
+    "name": "exposes"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:service/web-\u003eurn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:service/web",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij",
+   "type": {
+    "name": "exposes"
+   },
+   "data": {}
+  },
+  {
+   "externalId": "urn:kubernetes:/golden-cluster:shop:statefulset/db-\u003eurn:kubernetes:/golden-cluster:shop:pod/db-0",
+   "sourceId": "urn:kubernetes:/golden-cluster:shop:statefulset/db",
+   "targetId": "urn:kubernetes:/golden-cluster:shop:pod/db-0",
+   "type": {
+    "name": "controls"
+   },
+   "data": {}
+  }
+ ]
+}

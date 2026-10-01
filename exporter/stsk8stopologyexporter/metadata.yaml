@@ -1,0 +1,8 @@
+type: stsk8stopology
+
+status:
+  class: exporter
+  stability:
+    development: [logs]
+  codeowners:
+    active: SUSE
