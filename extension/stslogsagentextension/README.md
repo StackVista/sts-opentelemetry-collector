@@ -5,8 +5,10 @@ shutdown. This mode needs no discovery credentials, state files or native pipeli
 and makes no feature queries.
 
 Fixed mode accepts one Filelog pipeline exporting directly to `stsk8slogs` with
-its `delivery` settings, or two pipelines joined by `stslogsroute`. Discovery
-requires three routed pipelines. Routed terminal exporters leave `delivery`
+its `delivery` settings, or two pipelines joined by `stslogsroute`. Set
+`fixed_mode: native` to export OTLP without discovery; like discovery, it
+requires three routed pipelines and makes no feature queries. `fixed_mode` is
+rejected when discovery is enabled. Routed terminal exporters leave `delivery`
 unset; the connector registers the shared delivery observer. A pipeline must
 have one delivery owner, never both route and exporter wrappers.
 

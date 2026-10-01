@@ -95,9 +95,14 @@ func (c *controller) Start(ctx context.Context, _ component.Host) error {
 		if err := c.startHealth(ctx); err != nil {
 			return err
 		}
+		mode := logsagent.PromtailMode
+		if c.cfg.FixedMode != "" {
+			mode = c.cfg.FixedMode
+		}
 		c.mu.Lock()
-		c.mode, c.initialized = logsagent.PromtailMode, true
+		c.mode, c.initialized = mode, true
 		c.mu.Unlock()
+		c.set.Logger.Info("Logs export mode fixed", zap.String("mode", string(mode)))
 		return nil
 	}
 	state, err := loadState(c.cfg.StateDirectory)
