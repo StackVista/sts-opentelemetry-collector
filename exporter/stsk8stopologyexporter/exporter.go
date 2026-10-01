@@ -45,8 +45,11 @@ type topologyExporter struct {
 
 	// delivery guards the cancel function of the snapshot being sent, so a
 	// reset can stop it before it reaches stop_snapshot.
-	delivery       sync.Mutex
-	cancelDelivery context.CancelFunc
+	delivery          sync.Mutex
+	cancelDelivery    context.CancelFunc
+	handoverScheduled time.Time
+
+	testHookDuringReset func()
 }
 
 func newTopologyExporter(cfg *Config, logger *zap.Logger, sender *intakeSender) *topologyExporter {
@@ -122,8 +125,7 @@ func (e *topologyExporter) consumeBoundary(attrs pcommon.Map) {
 			e.logger.Warn("Cluster Observer snapshot was incomplete; not sending topology until a complete snapshot arrives")
 		}
 	case "reset":
-		e.cancelActiveDelivery()
-		e.store.reset()
+		e.resetCollection()
 		e.logger.Info("Cluster Observer stopped collecting; topology sending paused")
 	}
 }
@@ -188,6 +190,40 @@ func (e *topologyExporter) run(ctx context.Context) {
 	}
 }
 
+// resetCollection discards the observer state and cancels any delivery. Both
+// happen under the delivery lock, which a delivery also holds while it
+// registers and reads the store, so no delivery can start from the old state.
+func (e *topologyExporter) resetCollection() {
+	e.delivery.Lock()
+	defer e.delivery.Unlock()
+	if e.cancelDelivery != nil {
+		e.cancelDelivery()
+	}
+	if e.testHookDuringReset != nil {
+		e.testHookDuringReset()
+	}
+	e.store.reset()
+}
+
+// scheduleHandover sends once the handover delay after readySince has passed.
+// The delay outlasts requests a former leader may still have in flight: the
+// sync gives ownership to an unseen producer, so a late first request from the
+// predecessor would otherwise displace this exporter.
+func (e *topologyExporter) scheduleHandover(readySince time.Time, wait time.Duration) {
+	e.delivery.Lock()
+	defer e.delivery.Unlock()
+	if e.handoverScheduled.Equal(readySince) {
+		return
+	}
+	e.handoverScheduled = readySince
+	time.AfterFunc(wait, func() {
+		select {
+		case e.ready <- struct{}{}:
+		default:
+		}
+	})
+}
+
 // sendSnapshot builds and sends one full topology snapshot. It reports false
 // when the store has no current complete snapshot.
 func (e *topologyExporter) sendSnapshot(ctx context.Context) (bool, error) {
@@ -197,16 +233,19 @@ func (e *topologyExporter) sendSnapshot(ctx context.Context) (bool, error) {
 	defer cancel()
 	e.delivery.Lock()
 	e.cancelDelivery = cancel
+	objects, readySince, ok := e.store.view(e.now(), e.cfg.SnapshotMaxAge)
 	e.delivery.Unlock()
 	defer func() {
 		e.delivery.Lock()
 		e.cancelDelivery = nil
 		e.delivery.Unlock()
 	}()
-
-	objects, ok := e.store.view(e.now(), e.cfg.SnapshotMaxAge)
 	if !ok {
 		return false, nil
+	}
+	if wait := readySince.Add(e.cfg.HandoverDelay).Sub(e.now()); wait > 0 {
+		e.scheduleHandover(readySince, wait)
+		return true, nil
 	}
 	client := &cacheClient{objects: objects, logger: e.logger}
 	result, err := collectTopology(client, e.instance, collectors.ClusterType(e.cfg.ClusterType), e.cfg, e.logger)
@@ -233,14 +272,6 @@ func (e *topologyExporter) sendSnapshot(ctx context.Context) (bool, error) {
 		zap.Int("requests", len(payloads)),
 	)
 	return true, nil
-}
-
-func (e *topologyExporter) cancelActiveDelivery() {
-	e.delivery.Lock()
-	defer e.delivery.Unlock()
-	if e.cancelDelivery != nil {
-		e.cancelDelivery()
-	}
 }
 
 func stringAttr(attrs pcommon.Map, key string) string {

@@ -28,7 +28,8 @@ exporter only sends after it has seen a complete, bracketed observer snapshot:
 
 If any request in a snapshot fails, the remaining requests are not sent and the
 snapshot is retried at the next interval. A reset cancels a snapshot that is
-still being sent. A panic in the collectors abandons the snapshot and stops the
+still being sent; the reset and a delivery's read of the cache are serialized,
+so no delivery can start from the state being reset. A panic in the collectors abandons the snapshot and stops the
 exporter with a permanent error status rather than terminating the collector.
 
 The topology sync accepts a snapshot from a producer it has not recently seen
@@ -38,6 +39,14 @@ new leader takes over at once and a former leader's late requests cannot
 complete its successor's snapshot. A producer that returns after another has
 taken over is only accepted once it is the sole recent producer, which bounds,
 rather than prevents, the delay when rolling back to the cluster agent.
+
+The sync has no fencing, so a former leader's first request that is processed
+after its successor's start would take ownership back. Leader election stops
+the former leader, cancelling its requests, before the lease can pass. The
+successor then waits `handover_delay` after the observer becomes ready before
+its first snapshot, which covers requests the Receiver accepted but had not yet
+processed. A request delayed beyond that is only recovered once the successor
+is the sole recent producer.
 
 Pipelines feeding this exporter must not reorder records: do not add batching
 or asynchronous processors, and the exporter has no sending queue.
@@ -57,6 +66,7 @@ disable or size them for this pipeline.
 | `cluster_type` | `kubernetes` | `kubernetes` or `openshift` |
 | `internal_hostname` | pod hostname | Producer identity; see below |
 | `interval` | `90s` | Time between snapshots |
+| `handover_delay` | `60s` | Wait after the observer becomes ready before the first snapshot |
 | `snapshot_max_age` | `15m` | Pause sending after this long without a complete observer snapshot |
 | `collect_timeout` | `10m` | Bound on one topology build |
 | `max_elements_per_request` | `10000` | Components and relations per request |

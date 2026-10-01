@@ -42,6 +42,9 @@ type Config struct {
 	// SnapshotMaxAge stops sending when no complete Cluster Observer snapshot
 	// has been received for this long, e.g. after losing leadership silently.
 	SnapshotMaxAge time.Duration `mapstructure:"snapshot_max_age"`
+	// HandoverDelay postpones the first snapshot after the observer becomes
+	// ready, so requests a former leader still has in flight are processed first.
+	HandoverDelay time.Duration `mapstructure:"handover_delay"`
 	// CollectTimeout bounds one topology build.
 	CollectTimeout time.Duration `mapstructure:"collect_timeout"`
 	// MaxElementsPerRequest splits a snapshot into several ordered requests.
@@ -97,6 +100,9 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.SnapshotMaxAge < cfg.Interval {
 		return errors.New("snapshot_max_age must not be shorter than interval")
+	}
+	if cfg.HandoverDelay < 0 {
+		return errors.New("handover_delay must not be negative")
 	}
 	if cfg.MaxElementsPerRequest <= 0 || cfg.MaxAttempts <= 0 {
 		return errors.New("max_elements_per_request and max_attempts must be positive")

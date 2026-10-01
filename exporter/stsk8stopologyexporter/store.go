@@ -24,6 +24,7 @@ type objectStore struct {
 	seen         map[objectKey]struct{}
 	ready        bool
 	lastComplete time.Time
+	readySince   time.Time
 }
 
 func newObjectStore() *objectStore {
@@ -70,6 +71,9 @@ func (s *objectStore) endSnapshot(id string, complete bool, now time.Time) bool 
 	}
 	s.seen = nil
 	s.snapshotID = ""
+	if complete && !s.ready {
+		s.readySince = now
+	}
 	s.ready = complete
 	if complete {
 		s.lastComplete = now
@@ -87,16 +91,16 @@ func (s *objectStore) reset() {
 }
 
 // view returns a copy of the objects when the store holds a complete snapshot
-// no older than maxAge.
-func (s *objectStore) view(now time.Time, maxAge time.Duration) (map[objectKey]storedObject, bool) {
+// no older than maxAge, and when the store became ready.
+func (s *objectStore) view(now time.Time, maxAge time.Duration) (map[objectKey]storedObject, time.Time, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.ready || now.Sub(s.lastComplete) > maxAge {
-		return nil, false
+		return nil, time.Time{}, false
 	}
 	out := make(map[objectKey]storedObject, len(s.objects))
 	for key, value := range s.objects {
 		out[key] = value
 	}
-	return out, true
+	return out, s.readySince, true
 }
