@@ -16,3 +16,7 @@ use (
 	./test/e2e
 	./test/logsagent
 )
+
+replace github.com/ua-parser/uap-go => ./third_party/uap-go
+
+replace github.com/scaleway/scaleway-sdk-go => ./third_party/scaleway-sdk-go

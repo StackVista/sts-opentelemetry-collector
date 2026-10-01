@@ -64,3 +64,5 @@ replaces:
   - go.opentelemetry.io/otel/exporters/stdout/stdoutlog => go.opentelemetry.io/otel/exporters/stdout/stdoutlog v0.21.0
   # OTel log v0.21.0 uses attribute.Value; the bridge must use the matching API.
   - go.opentelemetry.io/contrib/bridges/otelzap => go.opentelemetry.io/contrib/bridges/otelzap v0.20.0
+  - github.com/ua-parser/uap-go => ../third_party/uap-go
+  - github.com/scaleway/scaleway-sdk-go => ../third_party/scaleway-sdk-go
