@@ -23,6 +23,8 @@ and unexpected rejection errors fail startup.
 Only `otel-logs` requires a boolean value; unrelated capabilities do not affect
 selection. Configure the final Receiver URL: redirects are rejected, including
 same-host redirects. Receiver proxying uses the explicit `proxy_url` setting.
+Proxy authentication rejection (407), including HTTPS CONNECT, fails startup
+as configuration failure. CONNECT 5xx responses retain temporary-failure fallback.
 
 Discovery uses internal defaults: a 20s query budget, 5s attempts, at most three
 attempts with 500ms initial and 2s maximum backoff, and polling every minute with

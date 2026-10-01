@@ -309,6 +309,61 @@ func TestTransportMissingCA(t *testing.T) {
 	}
 }
 
+func TestTransportHTTPSProxyConnectRejection(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		status   int
+		attempts int32
+		failure  string
+	}{
+		{"authentication", http.StatusProxyAuthRequired, 1, "configuration"},
+		{"forbidden", http.StatusForbidden, 1, "rejected"},
+		{"not_found", http.StatusNotFound, 1, "rejected"},
+		{"unavailable", http.StatusServiceUnavailable, 3, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t, "native")
+			var attempts atomic.Int32
+			proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodConnect || r.Host != "receiver.invalid:443" {
+					t.Error("expected Receiver CONNECT request")
+				}
+				attempts.Add(1)
+				http.Error(w, "synthetic-private-proxy-body", tc.status)
+			}))
+			t.Cleanup(proxy.Close)
+			f.settings.ReceiverURL = "https://receiver.invalid/stsAgent"
+			records := f.appendRecords(0, 0, 1)
+			p := f.start(func(config map[string]any) {
+				section(config, "extensions", "stslogsagent/logs")["proxy_url"] = proxy.URL
+			}, true)
+			if tc.failure != "" {
+				p.wait(8*time.Second, false)
+				p.assertStartupReason("logs capability startup failed: " + tc.failure)
+				if len(f.backend.snapshot()) != 0 || strings.Contains(p.output.String(), "Logs capability selected") {
+					t.Fatal("permanent proxy rejection allowed route selection or collection")
+				}
+				if p.status("/ready") == http.StatusOK {
+					t.Fatal("failed startup retained readiness")
+				}
+			} else {
+				p.ready()
+				f.backend.waitBodies("promtail", records, true)
+				p.signal()
+				p.wait(5*time.Second, true)
+				f.backend.assertOnly("promtail")
+				f.backend.assertRecords("promtail", records, true)
+			}
+			if got := attempts.Load(); got != tc.attempts {
+				t.Fatalf("CONNECT attempts = %d, want %d", got, tc.attempts)
+			}
+			if strings.Contains(p.output.String(), "synthetic-private-proxy-body") {
+				t.Fatal("startup exposed proxy response body")
+			}
+		})
+	}
+}
+
 func TestTransportHTTPExplicitProxy(t *testing.T) {
 	for _, mode := range []string{"promtail", "native"} {
 		t.Run(mode, func(t *testing.T) {

@@ -58,6 +58,7 @@ does not promise a full retry budget for every buffered fragment during drain.
 | Native gRPC success and partial success | Decoded records, authorization and rejection reporting without whole-request retry |
 | Inactive native gRPC with an unavailable endpoint | PromtailMode startup, readiness, delivery and drain; measured CPU time and reconnect logs |
 | Custom CA, missing CA and proxy variants | Trust/rejection for discovery and both exports; explicit HTTP proxy and gRPC HTTPS_PROXY/NO_PROXY behavior |
+| HTTPS discovery proxy CONNECT rejection | 407 fails startup before collection; permanent rejections do not fall back; 503 retries and selects Promtail |
 | Injected admission saturation, both routes | Eight synchronous calls hold completion; the ninth call is counted and rejected before export |
 | Injected completion delay, both routes | Backend acceptance precedes deadline expiry; connector and final failed drain wait for the admitted call to return |
 | Injected signal callback failure, both directions | Persisted intent/message, restored readiness, fixed route, cooldown suppression and exactly one real SIGTERM after three fresh observations |

@@ -3,7 +3,7 @@ module github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8slogsexpo
 go 1.26.6
 
 require (
-	github.com/StackVista/stackstate-receiver-go-client v0.0.0-20260929090421-82c5cc1db9ee
+	github.com/StackVista/stackstate-receiver-go-client v0.0.0-20261001065453-f2036fa8975f
 	github.com/golang/snappy v1.0.0
 	github.com/google/uuid v1.6.0
 	github.com/stackvista/sts-opentelemetry-collector/common v0.0.0

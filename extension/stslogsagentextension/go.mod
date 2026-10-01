@@ -3,7 +3,7 @@ module github.com/stackvista/sts-opentelemetry-collector/extension/stslogsagente
 go 1.26.6
 
 require (
-	github.com/StackVista/stackstate-receiver-go-client v0.0.0-20260929090421-82c5cc1db9ee
+	github.com/StackVista/stackstate-receiver-go-client v0.0.0-20261001065453-f2036fa8975f
 	github.com/stackvista/sts-opentelemetry-collector/common v0.0.0
 	go.opentelemetry.io/collector/component v1.67.0
 	go.opentelemetry.io/collector/component/componentstatus v0.161.0
