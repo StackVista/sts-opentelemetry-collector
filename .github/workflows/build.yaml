@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches:
-      - '*'
+      - '**'
     tags:
       - 'v*'
       - 'test-*'
@@ -490,3 +490,14 @@ jobs:
           docker cp "$container:/usr/bin/sts-opentelemetry-agent-collector" /tmp/otel-agent
           chmod +x /tmp/otel-agent
           OTEL_AGENT_BINARY=/tmp/otel-agent go test -race -count=1 -timeout=180s ./test/logsagent/... -require-agent
+
+  ci-success:
+    name: ci-success
+    if: always()
+    needs: [build, detect-modules, lint, test, integration-test, e2e-test, logs-process-faults, validate, publish]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Fail unless every required job succeeded
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        run: exit 1
