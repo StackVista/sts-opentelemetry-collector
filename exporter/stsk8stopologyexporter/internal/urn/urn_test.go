@@ -3,16 +3,12 @@ package urn
 import (
 	"testing"
 
-	"github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8stopologyexporter/internal/hostname"
 	"github.com/stretchr/testify/assert"
 	coreV1 "k8s.io/api/core/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestAwsUrnBuilder_BuildNodeInstanceIdentifier(t *testing.T) {
-	var testClusterName = "mycluster"
-	hostname.SetClusterName(testClusterName)
-
 	builder := NewURNBuilder(Kubernetes, "uurrll")
 
 	awsProviderID := "aws:///us-east-1b/i-024b28584ed2e6321"
@@ -33,14 +29,11 @@ func TestAwsUrnBuilder_BuildNodeInstanceIdentifier(t *testing.T) {
 		"urn:ip:/uurrll:10.20.01.02",
 		"urn:host:/uurrll:cluster.internal.amazon.net",
 		"urn:host:/amazon.com",
-		"urn:host:/ip-10-0-01-01.eu-west-1.compute.internal-mycluster",
+		"urn:host:/ip-10-0-01-01.eu-west-1.compute.internal-uurrll",
 	}, awsIdentifiers)
 }
 
 func TestAzureUrnBuilder_BuildNodeInstanceIdentifier(t *testing.T) {
-	var testClusterName = "mycluster"
-	hostname.SetClusterName(testClusterName)
-
 	builder := NewURNBuilder(Kubernetes, "uurrll")
 
 	azureProviderID := "azure:///subscriptions/d7e2ab8d-5edd-4db4-bc04-b1a193778fa3/resourceGroups/mc_test-stackstate_dev-cluster_westeurope/providers/Microsoft.Compute/virtualMachineScaleSets/aks-nodepool1-11692903-vmss/virtualMachines/0"
@@ -64,14 +57,11 @@ func TestAzureUrnBuilder_BuildNodeInstanceIdentifier(t *testing.T) {
 		"urn:host:/host.azure.com",
 		"urn:azure:/subscriptions/d7e2ab8d-5edd-4db4-bc04-b1a193778fa3/resourceGroups/mc_test-stackstate_dev-cluster_westeurope/providers/Microsoft.Compute/virtualMachineScaleSets/aks-nodepool1-11692903-vmss/virtualMachines/0",
 		"urn:azure:/SUBSCRIPTIONS/D7E2AB8D-5EDD-4DB4-BC04-B1A193778FA3/RESOURCEGROUPS/MC_TEST-STACKSTATE_DEV-CLUSTER_WESTEUROPE/PROVIDERS/MICROSOFT.COMPUTE/VIRTUALMACHINESCALESETS/AKS-NODEPOOL1-11692903-VMSS/VIRTUALMACHINES/0",
-		"urn:host:/aks-nodepool1-11692903-vmss000000-mycluster",
+		"urn:host:/aks-nodepool1-11692903-vmss000000-uurrll",
 	}, azureIdentifiers)
 }
 
 func TestGceUrnBuilder_BuildNodeInstanceIdentifier(t *testing.T) {
-	var testClusterName = "mycluster"
-	hostname.SetClusterName(testClusterName)
-
 	builder := NewURNBuilder(Kubernetes, "uurrll")
 
 	gceProviderID := "gce://test-stackstate/europe-west4-a/gke-test-default-pool-9f8f65a4-2kld"
@@ -91,6 +81,6 @@ func TestGceUrnBuilder_BuildNodeInstanceIdentifier(t *testing.T) {
 		"urn:ip:/uurrll:10.20.01.02",
 		"urn:host:/uurrll:cluster.internal.dns.gce.net",
 		"urn:host:/host.gce.com",
-		"urn:host:/gke-test-default-pool-bbd2dc11-9wxt-mycluster",
+		"urn:host:/gke-test-default-pool-bbd2dc11-9wxt-uurrll",
 	}, gceIdentifiers)
 }

@@ -8,7 +8,6 @@ import (
 	"github.com/StackVista/stackstate-receiver-go-client/pkg/model/topology"
 
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8stopologyexporter/internal/apiserver"
-	"github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8stopologyexporter/internal/hostname"
 	"github.com/stretchr/testify/assert"
 	coreV1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,7 +15,6 @@ import (
 )
 
 func TestRelationCorrelation(t *testing.T) {
-	testClusterName := "test-cluster-name"
 	clusterName := "test-cluster-name"
 	namespace := "default"
 	pod1Name := "pod-1"
@@ -30,7 +28,6 @@ func TestRelationCorrelation(t *testing.T) {
 	node1Provider := "aws://eu-west-1/" + instanceID
 	someTimestamp := metav1.NewTime(time.Now())
 
-	hostname.SetClusterName(testClusterName)
 
 	pod1 := podWithConfigMapEnv(namespace, pod1Name, configMap1Name, configMap2Name, someTimestamp)
 	pod2 := podWithSecretEnv(namespace, pod2Name, secret1Name, secret2Name, someTimestamp)

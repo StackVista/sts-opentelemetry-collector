@@ -13,7 +13,6 @@ import (
 
 	"github.com/StackVista/stackstate-receiver-go-client/pkg/model/topology"
 	"github.com/StackVista/stackstate-receiver-go-client/pkg/transactional"
-	"github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8stopologyexporter/internal/hostname"
 	collectors "github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8stopologyexporter/internal/topologycollectors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,7 +24,6 @@ import (
 // testdata/golden.json is the cluster-agent output for testdata/cluster.json,
 // produced by testdata/agentgolden/generate.sh.
 func TestTopologyMatchesClusterAgent(t *testing.T) {
-	hostname.SetClusterName(goldenClusterName)
 	cfg := testConfig()
 	exp := newTopologyExporter(cfg, zaptest.NewLogger(t), nil)
 	for _, logs := range snapshotRecords(t, "1", loadFixture(t)) {
@@ -156,7 +154,6 @@ func TestExporterDoesNotSendWithoutCompleteSnapshot(t *testing.T) {
 }
 
 func TestOpenShiftKeepsKubernetesInstance(t *testing.T) {
-	hostname.SetClusterName(goldenClusterName)
 	cfg := testConfig()
 	cfg.ClusterType = clusterTypeOpenShift
 	exp := newTopologyExporter(cfg, zaptest.NewLogger(t), nil)
@@ -179,4 +176,32 @@ func TestOpenShiftKeepsKubernetesInstance(t *testing.T) {
 		assert.Equal(t, clusterTypeOpenShift, tags["cluster-type"])
 		assert.Equal(t, "openshift-pod", tags["component-type"])
 	}
+}
+
+func TestNodeHostnamesAreScopedToEachExporter(t *testing.T) {
+	nodeHosts := func(clusterName string) map[string]any {
+		cfg := testConfig()
+		cfg.ClusterName = clusterName
+		exp := newTopologyExporter(cfg, zaptest.NewLogger(t), nil)
+		for _, logs := range snapshotRecords(t, clusterName, loadFixture(t)) {
+			require.NoError(t, exp.consumeLogs(context.Background(), logs))
+		}
+		objects, ok := exp.store.view(time.Now(), cfg.SnapshotMaxAge)
+		require.True(t, ok)
+		result, err := collectTopology(&cacheClient{objects: objects, logger: exp.logger},
+			exp.instance, collectors.Kubernetes, cfg, exp.logger)
+		require.NoError(t, err)
+		hosts := map[string]any{}
+		for _, component := range result.components {
+			if name, ok := component.Data["name"].(string); ok && component.Type.Name == "node" {
+				hosts[name] = component.Data["sts_host"]
+			}
+		}
+		return hosts
+	}
+
+	first := nodeHosts("cluster-a")
+	second := nodeHosts("cluster-b")
+	assert.Equal(t, "node-a-cluster-a", first["node-a"])
+	assert.Equal(t, "node-a-cluster-b", second["node-a"])
 }

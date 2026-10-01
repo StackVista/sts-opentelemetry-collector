@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/StackVista/stackstate-receiver-go-client/pkg/openapiclient"
-	"github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8stopologyexporter/internal/hostname"
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8stopologyexporter/internal/log"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configoptional"
@@ -84,7 +83,6 @@ func createLogsExporter(ctx context.Context, set exporter.Settings, config compo
 	}
 
 	log.SetLogger(set.Logger)
-	hostname.SetClusterName(cfg.ClusterName)
 	exp := newTopologyExporter(cfg, set.Logger, sender)
 	return exporterhelper.NewLogs(ctx, set, cfg, exp.consumeLogs,
 		exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),

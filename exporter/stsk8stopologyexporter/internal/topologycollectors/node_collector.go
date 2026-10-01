@@ -74,7 +74,7 @@ func (nc *NodeCollector) nodeToStackStateComponent(node v1.Node) (*topology.Comp
 	// k8s object TypeMeta seem to be archived, it's always empty.
 	tags := nc.initTags(node.ObjectMeta, metav1.TypeMeta{Kind: "Node"})
 
-	hostname, err := hostname.GetHostname(node)
+	hostname, err := hostname.GetHostname(node, nc.GetInstance().URL)
 	if err != nil {
 		hostname = node.Name
 	}

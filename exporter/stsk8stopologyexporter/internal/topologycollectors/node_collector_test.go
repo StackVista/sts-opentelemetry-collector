@@ -13,7 +13,6 @@ import (
 	"github.com/StackVista/stackstate-receiver-go-client/pkg/model/topology"
 
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8stopologyexporter/internal/apiserver"
-	"github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8stopologyexporter/internal/hostname"
 	"github.com/stretchr/testify/assert"
 	coreV1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,8 +20,6 @@ import (
 )
 
 func TestNodeCollector(t *testing.T) {
-	var testClusterName = "test-cluster-name"
-	hostname.SetClusterName(testClusterName)
 
 	creationTime = v1.Time{Time: time.Now().Add(-1 * time.Hour)}
 	creationTimeFormatted := creationTime.UTC().Format(time.RFC3339)
