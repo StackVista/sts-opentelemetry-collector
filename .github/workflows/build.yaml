@@ -137,7 +137,7 @@ jobs:
 
   publish:
     name: Scan, sign, and publish (${{ matrix.image }})
-    needs: [build, lint, test, integration-test, e2e-test, logs-process-faults, validate]
+    needs: [build, lint, test, integration-test, schema-compatibility, e2e-test, logs-process-faults, validate]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -354,7 +354,6 @@ jobs:
     permissions:
       contents: read
     continue-on-error: true
-    if: false
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -373,8 +372,8 @@ jobs:
         id: stackstate-schema-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          client-id: ${{ secrets.READ_STACKSTATE_SCHEMA_GH_APP_CLIENT_ID }}
-          private-key: ${{ secrets.READ_STACKSTATE_SCHEMA_GH_APP_PRIVATE_KEY }}
+          client-id: ${{ secrets.STACKSTATE_REPO_READ_GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STACKSTATE_REPO_READ_GH_APP_PRIVATE_KEY }}
           repositories: stackstate
           permission-contents: read
       - name: Run against StackState's real, pinned schema
