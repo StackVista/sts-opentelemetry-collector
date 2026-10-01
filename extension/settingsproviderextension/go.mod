@@ -17,7 +17,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.46.0
 	go.uber.org/zap v1.28.0
 	go.yaml.in/yaml/v3 v3.0.5
-	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
