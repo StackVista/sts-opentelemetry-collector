@@ -120,5 +120,6 @@ func testConfig() *Config {
 	cfg.APIKey = "test-key"
 	cfg.ClusterName = goldenClusterName
 	cfg.DiscoveryEnabled = false
+	cfg.HandoverDelay = 0
 	return cfg
 }

@@ -35,6 +35,7 @@ func createDefaultConfig() component.Config {
 		DiscoveryEnabled:      true,
 		Interval:              90 * time.Second,
 		SnapshotMaxAge:        15 * time.Minute,
+		HandoverDelay:         time.Minute,
 		CollectTimeout:        10 * time.Minute,
 		MaxElementsPerRequest: 10000,
 		MaxAttempts:           3,

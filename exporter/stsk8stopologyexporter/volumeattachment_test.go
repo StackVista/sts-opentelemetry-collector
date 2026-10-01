@@ -30,7 +30,7 @@ func TestInlineVolumeAttachmentIsIgnored(t *testing.T) {
 	for _, logs := range snapshotRecords(t, "1", append(loadFixture(t), inline)) {
 		require.NoError(t, exp.consumeLogs(context.Background(), logs))
 	}
-	objects, ok := exp.store.view(time.Now(), cfg.SnapshotMaxAge)
+	objects, _, ok := exp.store.view(time.Now(), cfg.SnapshotMaxAge)
 	require.True(t, ok)
 	result, err := collectTopology(&cacheClient{objects: objects, logger: exp.logger},
 		exp.instance, collectors.Kubernetes, cfg, exp.logger)
