@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -103,12 +104,14 @@ func TestExporterSendsChunkedSnapshotThroughIntake(t *testing.T) {
 
 	payloads, headers := capture.snapshot()
 	require.Len(t, payloads, want)
+	podHostname, err := os.Hostname()
+	require.NoError(t, err)
 	var components []topology.Component
 	var relations []topology.Relation
 	for i, payload := range payloads {
 		assert.Equal(t, "test-key", headers[i].Get("sts-api-key"))
 		assert.Equal(t, "gzip", headers[i].Get("Content-Encoding"))
-		assert.Equal(t, goldenClusterName+"-cluster-topology", payload.InternalHostname)
+		assert.Equal(t, podHostname, payload.InternalHostname, "the default producer is the pod hostname")
 		assert.Empty(t, payload.Health)
 		require.Len(t, payload.Topologies, 1)
 		chunk := payload.Topologies[0]

@@ -2,6 +2,8 @@ package stsk8stopologyexporter
 
 import (
 	"errors"
+	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -11,7 +13,10 @@ import (
 	"go.uber.org/zap"
 )
 
-var errCollectTimeout = errors.New("kubernetes topology collection did not finish in time")
+var (
+	errCollectTimeout = errors.New("kubernetes topology collection did not finish in time")
+	errCollectPanic   = errors.New("kubernetes topology collector panicked")
+)
 
 type collectResult struct {
 	components []*topology.Component
@@ -95,10 +100,18 @@ func collectTopology(
 		collectors.NewService2PodCorrelator(podCorrelationChannel, endpointCorrelationChannel, commonCorrelator),
 	}
 
+	panics := make(chan error, 1+len(clusterCorrelators))
+	recoverPanic := func() {
+		if r := recover(); r != nil {
+			panics <- fmt.Errorf("%w: %v\n%s", errCollectPanic, r, debug.Stack())
+		}
+	}
+
 	var producers sync.WaitGroup
 	producers.Add(1 + len(clusterCorrelators))
 	go func() {
 		defer producers.Done()
+		defer recoverPanic()
 		for _, collector := range clusterCollectors {
 			if err := collector.CollectorFunction(); err != nil {
 				errChannel <- err
@@ -108,6 +121,7 @@ func collectTopology(
 	for _, correlator := range clusterCorrelators {
 		go func(correlator collectors.ClusterTopologyCorrelator) {
 			defer producers.Done()
+			defer recoverPanic()
 			if err := correlator.CorrelateFunction(); err != nil {
 				errChannel <- err
 			}
@@ -132,7 +146,15 @@ func collectTopology(
 		case err := <-errChannel:
 			logger.Warn("Kubernetes topology collector error", zap.Error(err))
 			result.errors = append(result.errors, err)
+		case err := <-panics:
+			go drain(componentChannel, relationChannel, errChannel, done)
+			return collectResult{}, err
 		case <-done:
+			select {
+			case err := <-panics:
+				return collectResult{}, err
+			default:
+			}
 			return result, nil
 		case <-timeout.C:
 			// Producers block on the unbuffered channels; drain them so their goroutines exit.

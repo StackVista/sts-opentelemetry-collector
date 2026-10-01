@@ -27,9 +27,20 @@ exporter only sends after it has seen a complete, bracketed observer snapshot:
   `snapshot_max_age`.
 
 If any request in a snapshot fails, the remaining requests are not sent and the
-snapshot is retried at the next interval. Pipelines feeding this exporter must
-not reorder records: do not add batching or asynchronous processors, and the
-exporter has no sending queue.
+snapshot is retried at the next interval. A reset cancels a snapshot that is
+still being sent. A panic in the collectors abandons the snapshot and stops the
+exporter with a permanent error status rather than terminating the collector.
+
+The topology sync accepts a snapshot from a producer it has not recently seen
+immediately, and ignores data from producers that are no longer active. Each
+collector replica therefore uses its pod hostname as `internal_hostname`, so a
+new leader takes over at once and a former leader's late requests cannot
+complete its successor's snapshot. A producer that returns after another has
+taken over is only accepted once it is the sole recent producer, which bounds,
+rather than prevents, the delay when rolling back to the cluster agent.
+
+Pipelines feeding this exporter must not reorder records: do not add batching
+or asynchronous processors, and the exporter has no sending queue.
 
 The observer must watch every kind the collectors read, including Secrets and
 ConfigMaps if those components are required. Its payload budgets drop large
@@ -44,7 +55,7 @@ disable or size them for this pipeline.
 | `api_key` | | Receiver API key |
 | `cluster_name` | | Topology instance URL; must match the StackPack instance |
 | `cluster_type` | `kubernetes` | `kubernetes` or `openshift` |
-| `internal_hostname` | `<cluster_name>-cluster-topology` | Producer identity; the sync binds snapshot state to it |
+| `internal_hostname` | pod hostname | Producer identity; see below |
 | `interval` | `90s` | Time between snapshots |
 | `snapshot_max_age` | `15m` | Pause sending after this long without a complete observer snapshot |
 | `collect_timeout` | `10m` | Bound on one topology build |
@@ -66,7 +77,11 @@ excluded from linting. Changes from the original:
 
 - Agent imports point at local packages; `internal/log` and `internal/util`
   replace the agent logging and path helpers.
-- `hostname.SetClusterName` replaces the agent's global `cluster_name` setting.
+- `hostname.GetHostname` takes the cluster name from the topology instance
+  instead of the agent's global `cluster_name` setting; the agent sets both from
+  the same value.
+- `VolumeAttachment`s with an inline volume spec are skipped instead of
+  dereferencing a missing `persistentVolumeName`.
 - The relation cache uses a mutex; the original appended to it concurrently.
 - `log.Warnf` no longer uses `%w`.
 - Protobuf `ProtoMessage` wrappers were removed; `k8s.io/api` no longer

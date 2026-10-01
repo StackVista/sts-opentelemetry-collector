@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -105,6 +107,11 @@ func normalize[T any](t *testing.T, items []T) []any {
 		out = append(out, value)
 	}
 	return out
+}
+
+func testLogger(t *testing.T) *zap.Logger {
+	t.Helper()
+	return zaptest.NewLogger(t)
 }
 
 func testConfig() *Config {

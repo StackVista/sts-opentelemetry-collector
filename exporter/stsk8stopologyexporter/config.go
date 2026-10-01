@@ -31,9 +31,10 @@ type Config struct {
 	ClusterName string `mapstructure:"cluster_name"`
 	// ClusterType is kubernetes or openshift; it sets the cluster-type tags.
 	ClusterType string `mapstructure:"cluster_type"`
-	// InternalHostname identifies the producer to the topology sync, which
-	// binds snapshot state to it. It must be stable across restarts and
-	// leader changes. Default: <cluster_name>-cluster-topology.
+	// InternalHostname identifies the producer to the topology sync. The sync
+	// switches to an unseen producer immediately and ignores data from
+	// producers that are no longer active, so the default, the pod hostname,
+	// keeps a former leader's late requests out of its successor's snapshot.
 	InternalHostname string `mapstructure:"internal_hostname"`
 
 	// Interval between full topology snapshots.
@@ -104,11 +105,4 @@ func (cfg *Config) Validate() error {
 		return errors.New("configmap_max_datasize must be positive")
 	}
 	return nil
-}
-
-func (cfg *Config) internalHostname() string {
-	if cfg.InternalHostname != "" {
-		return cfg.InternalHostname
-	}
-	return cfg.ClusterName + "-cluster-topology"
 }

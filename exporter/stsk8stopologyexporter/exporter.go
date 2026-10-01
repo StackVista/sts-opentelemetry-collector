@@ -2,11 +2,14 @@ package stsk8stopologyexporter
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
 	"github.com/StackVista/stackstate-receiver-go-client/pkg/model/topology"
 	collectors "github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8stopologyexporter/internal/topologycollectors"
+	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/component/componentstatus"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.uber.org/zap"
@@ -31,12 +34,19 @@ type topologyExporter struct {
 	store    *objectStore
 	sender   *intakeSender
 	instance topology.Instance
+	producer string
 	now      func() time.Time
 
 	ready   chan struct{}
 	cancel  context.CancelFunc
 	wg      sync.WaitGroup
 	started time.Time
+	host    component.Host
+
+	// delivery guards the cancel function of the snapshot being sent, so a
+	// reset can stop it before it reaches stop_snapshot.
+	delivery       sync.Mutex
+	cancelDelivery context.CancelFunc
 }
 
 func newTopologyExporter(cfg *Config, logger *zap.Logger, sender *intakeSender) *topologyExporter {
@@ -47,12 +57,14 @@ func newTopologyExporter(cfg *Config, logger *zap.Logger, sender *intakeSender) 
 		sender: sender,
 		// The cluster agent always reports a kubernetes instance; cluster_type only changes tags.
 		instance: topology.Instance{Type: clusterTypeKubernetes, URL: cfg.ClusterName},
+		producer: cfg.InternalHostname,
 		now:      time.Now,
 		ready:    make(chan struct{}, 1),
 	}
 }
 
-func (e *topologyExporter) start(_ context.Context) error {
+func (e *topologyExporter) start(_ context.Context, host component.Host) error {
+	e.host = host
 	ctx, cancel := context.WithCancel(context.Background())
 	e.cancel = cancel
 	e.started = e.now()
@@ -110,6 +122,7 @@ func (e *topologyExporter) consumeBoundary(attrs pcommon.Map) {
 			e.logger.Warn("Cluster Observer snapshot was incomplete; not sending topology until a complete snapshot arrives")
 		}
 	case "reset":
+		e.cancelActiveDelivery()
 		e.store.reset()
 		e.logger.Info("Cluster Observer stopped collecting; topology sending paused")
 	}
@@ -158,7 +171,16 @@ func (e *topologyExporter) run(ctx context.Context) {
 		case <-e.ready:
 		case <-ticker.C:
 		}
-		if !e.sendSnapshot(ctx) && !warned && e.now().Sub(e.started) > e.cfg.SnapshotMaxAge {
+		sent, err := e.sendSnapshot(ctx)
+		if errors.Is(err, errCollectPanic) {
+			// A panicking collector may leave correlators blocked; stop rather than leak every cycle.
+			e.logger.Error("Kubernetes topology collection failed permanently; no further topology is sent", zap.Error(err))
+			if e.host != nil {
+				componentstatus.ReportStatus(e.host, componentstatus.NewPermanentErrorEvent(err))
+			}
+			return
+		}
+		if !sent && !warned && e.now().Sub(e.started) > e.cfg.SnapshotMaxAge {
 			e.logger.Warn("No complete Cluster Observer snapshot received; check that the observer " +
 				"feeds this exporter with emit_snapshot_boundaries enabled")
 			warned = true
@@ -166,18 +188,31 @@ func (e *topologyExporter) run(ctx context.Context) {
 	}
 }
 
-// sendSnapshot builds and sends one full topology snapshot, returning false
+// sendSnapshot builds and sends one full topology snapshot. It reports false
 // when the store has no current complete snapshot.
-func (e *topologyExporter) sendSnapshot(ctx context.Context) bool {
+func (e *topologyExporter) sendSnapshot(ctx context.Context) (bool, error) {
+	// Registered before reading the store: a reset either empties the store
+	// first or cancels this delivery.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	e.delivery.Lock()
+	e.cancelDelivery = cancel
+	e.delivery.Unlock()
+	defer func() {
+		e.delivery.Lock()
+		e.cancelDelivery = nil
+		e.delivery.Unlock()
+	}()
+
 	objects, ok := e.store.view(e.now(), e.cfg.SnapshotMaxAge)
 	if !ok {
-		return false
+		return false, nil
 	}
 	client := &cacheClient{objects: objects, logger: e.logger}
 	result, err := collectTopology(client, e.instance, collectors.ClusterType(e.cfg.ClusterType), e.cfg, e.logger)
 	if err != nil {
 		e.logger.Warn("Skipping topology snapshot", zap.Error(err))
-		return true
+		return true, err
 	}
 	components := make([]topology.Component, 0, len(result.components))
 	for _, component := range result.components {
@@ -187,17 +222,25 @@ func (e *topologyExporter) sendSnapshot(ctx context.Context) bool {
 	for _, relation := range result.relations {
 		relations = append(relations, *relation)
 	}
-	payloads := buildPayloads(e.cfg.internalHostname(), e.instance, components, relations, e.cfg.MaxElementsPerRequest)
+	payloads := buildPayloads(e.producer, e.instance, components, relations, e.cfg.MaxElementsPerRequest)
 	if err := e.sender.sendAll(ctx, payloads); err != nil {
 		e.logger.Warn("Failed to send topology snapshot; retrying at the next interval", zap.Error(err))
-		return true
+		return true, nil
 	}
 	e.logger.Debug("Sent topology snapshot",
 		zap.Int("components", len(components)),
 		zap.Int("relations", len(relations)),
 		zap.Int("requests", len(payloads)),
 	)
-	return true
+	return true, nil
+}
+
+func (e *topologyExporter) cancelActiveDelivery() {
+	e.delivery.Lock()
+	defer e.delivery.Unlock()
+	if e.cancelDelivery != nil {
+		e.cancelDelivery()
+	}
 }
 
 func stringAttr(attrs pcommon.Map, key string) string {

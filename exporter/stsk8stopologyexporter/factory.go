@@ -3,6 +3,8 @@ package stsk8stopologyexporter
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -60,6 +62,14 @@ func createLogsExporter(ctx context.Context, set exporter.Settings, config compo
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+	producer := cfg.InternalHostname
+	if producer == "" {
+		podHostname, err := os.Hostname()
+		if err != nil {
+			return nil, fmt.Errorf("internal_hostname is not set and the hostname is unavailable: %w", err)
+		}
+		producer = podHostname
+	}
 	userAgent := set.BuildInfo.Command + "/" + set.BuildInfo.Version
 	api, _, err := openapiclient.NewOpenAPIClientWithOptions(ctx, openapiclient.ConnectionOptions{
 		ReceiverURL:        strings.TrimSuffix(cfg.Endpoint, "/intake"),
@@ -84,13 +94,14 @@ func createLogsExporter(ctx context.Context, set exporter.Settings, config compo
 
 	log.SetLogger(set.Logger)
 	exp := newTopologyExporter(cfg, set.Logger, sender)
+	exp.producer = producer
 	return exporterhelper.NewLogs(ctx, set, cfg, exp.consumeLogs,
 		exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
 		exporterhelper.WithTimeout(exporterhelper.TimeoutConfig{Timeout: 0}),
 		exporterhelper.WithRetry(configretry.BackOffConfig{Enabled: false}),
 		// Records must be applied in emission order for snapshot boundaries to hold.
 		exporterhelper.WithQueue(configoptional.None[exporterhelper.QueueBatchConfig]()),
-		exporterhelper.WithStart(func(ctx context.Context, _ component.Host) error { return exp.start(ctx) }),
+		exporterhelper.WithStart(exp.start),
 		exporterhelper.WithShutdown(exp.shutdown),
 	)
 }
