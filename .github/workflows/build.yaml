@@ -493,7 +493,7 @@ jobs:
   ci-success:
     name: ci-success
     if: always()
-    needs: [build, detect-modules, lint, test, integration-test, e2e-test, logs-process-faults, validate, publish]
+    needs: [build, detect-modules, lint, test, integration-test, schema-compatibility, e2e-test, logs-process-faults, validate, publish]
     runs-on: ubuntu-latest
     permissions: {}
     steps:
