@@ -2,6 +2,7 @@
 """Verify complete public source owners against the reviewed inventory."""
 import hashlib
 import json
+import tarfile
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1] / "third_party"
@@ -21,6 +22,15 @@ for name, source in inventory.items():
     expected.update(source["patched_files"])
     actual = {str(p.relative_to(directory)): hashlib.sha256(p.read_bytes()).hexdigest()
               for p in directory.rglob("*") if p.is_file()}
+    for archive in directory.rglob("UPSTREAM-GITHUB.tar"):
+        actual.pop(str(archive.relative_to(directory)))
+        prefix = archive.parent.relative_to(directory)
+        with tarfile.open(archive) as archived:
+            for member in archived.getmembers():
+                if member.isfile():
+                    path = str(prefix / member.name)
+                    assert path not in actual, f"duplicate archived source: {path}"
+                    actual[path] = hashlib.sha256(archived.extractfile(member).read()).hexdigest()
     assert actual == expected, f"{name}: missing, added or changed source/asset"
     assert source["commit"] and source["sum"] and source["go_mod_sum"]
     assert any("license" in p.lower() for p in expected), f"{name}: license missing"

@@ -30,3 +30,9 @@ both collectors for both architectures. Remove a replacement when a compatible
 upstream release uses maintained YAML and has equivalent caller qualification.
 Review these owners with each collector dependency update; do not silently
 substitute a different parser generation or Scaleway release.
+
+Original inactive `.github` trees are retained byte-for-byte in
+`UPSTREAM-GITHUB.tar` beside their owning source/core. The inventory guard reads
+and verifies their original paths and bytes directly from each archive. This
+preserves complete upstream attribution without treating upstream workflows as
+executable product workflows. No product security-audit exclusions are added.
