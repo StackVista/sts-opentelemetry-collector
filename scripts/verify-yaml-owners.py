@@ -32,6 +32,19 @@ for name, source in inventory.items():
                     assert path not in actual, f"duplicate archived source: {path}"
                     actual[path] = hashlib.sha256(archived.extractfile(member).read()).hexdigest()
     assert actual == expected, f"{name}: missing, added or changed source/asset"
+    parser, maintained, legacy = ("v3", "v3.0.5", "v3.0.1") if name == "uap-go" else ("v2", "v2.4.4", "v2.4.0")
+    for path in source["patched_files"]:
+        data = (directory / path).read_bytes()
+        if path == "go.sum":
+            data = b"".join(line for line in data.splitlines(keepends=True)
+                            if not line.startswith(f"go.yaml.in/yaml/{parser} ".encode()))
+        else:
+            data = data.replace(f"go.yaml.in/yaml/{parser}".encode(), f"gopkg.in/yaml.{parser}".encode())
+            if path == "go.mod":
+                data = data.replace(f"gopkg.in/yaml.{parser} {maintained}".encode(),
+                                    f"gopkg.in/yaml.{parser} {legacy}".encode())
+        assert hashlib.sha256(data).hexdigest() == source["original_files"][path], f"{name}/{path}: non-parser source patch"
+
     assert source["commit"] and source["sum"] and source["go_mod_sum"]
     assert any("license" in p.lower() for p in expected), f"{name}: license missing"
     print(f"{name}: {len(actual)} attributed files verified")
