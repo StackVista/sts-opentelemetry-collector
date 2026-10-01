@@ -302,7 +302,10 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: false
       - name: Verify public YAML source ownership
-        run: python3 scripts/verify-yaml-owners.py
+        run: |
+          set -euo pipefail
+          python3 scripts/verify-yaml-owners.py
+          python3 scripts/test_verify_yaml_owners.py
       - name: Qualify maintained YAML owners and real callers
         run: |
           set -euo pipefail

@@ -14,6 +14,13 @@ licenses, generated files and UAP core assets. No private source is included.
 original Git file's SHA256. The allowed source changes are matching maintained
 v3/v2 imports and module metadata. Run `python3 scripts/verify-yaml-owners.py`
 to reject unexplained changes, missing assets or incomplete attribution.
+The guard reads blobs and executable modes from `HEAD` (or `--revision`) and
+requires the worktree to match that committed snapshot. It verifies original
+assets inside the inert archives too. `original_modes` records the exact upstream
+Git modes; tar permission bits are interpreted as Git executable status.
+Run `python3 scripts/test_verify_yaml_owners.py` for isolated temporary Git-tree
+controls covering committed omissions hidden by local files, archive omissions,
+source edits, licenses and modes. The controls do not create commits.
 
 The OCB manifests apply replacements to each independent generated executable;
 `go.work` applies the same owners to developer and component tests. Dependency
