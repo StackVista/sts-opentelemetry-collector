@@ -60,6 +60,9 @@ type platform struct {
 	features  map[string]any
 	status    int
 	snapshots atomic.Int32
+	// holdFirstIntake, when set, blocks the first intake request until closed.
+	holdFirstIntake chan struct{}
+	firstIntake     chan struct{}
 }
 
 func (p *platform) set(status int, advertised map[string]any) {
@@ -86,7 +89,13 @@ func (p *platform) handler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(body)
 	case strings.HasSuffix(r.URL.Path, "/stsAgent/intake"):
-		p.snapshots.Add(1)
+		if p.snapshots.Add(1) == 1 && p.holdFirstIntake != nil {
+			close(p.firstIntake)
+			select {
+			case <-p.holdFirstIntake:
+			case <-r.Context().Done():
+			}
+		}
 		w.WriteHeader(http.StatusOK)
 	default:
 		w.WriteHeader(http.StatusNotFound)
@@ -101,6 +110,7 @@ func startWithDiscovery(t *testing.T, p *platform, interval time.Duration) func(
 	cfg.DiscoveryEnabled = true
 	cfg.Interval = interval
 	cfg.SnapshotMaxAge = 2 * time.Hour
+	cfg.MaxElementsPerRequest = 25
 	opts := defaultDiscoveryOptions()
 	opts.query.Timeout, opts.query.AttemptTimeout, opts.query.MaxAttempts = time.Second, time.Second, 1
 	opts.poll = features.PollOptions{Interval: 20 * time.Millisecond}
@@ -162,4 +172,24 @@ func TestResumingSendsWithoutWaitingForTheInterval(t *testing.T) {
 
 	p.set(http.StatusOK, map[string]any{capabilityLegacyKubernetesTopology: true})
 	require.Eventually(t, func() bool { return p.snapshots.Load() > 0 }, 10*time.Second, 10*time.Millisecond)
+}
+
+// A slow snapshot must not finish, and so refresh legacy topology, after the
+// platform has confirmed it no longer needs it.
+func TestConfirmedDisableStopsSnapshotDeliveryInFlight(t *testing.T) {
+	p := &platform{holdFirstIntake: make(chan struct{}), firstIntake: make(chan struct{})}
+	p.set(http.StatusOK, map[string]any{capabilityLegacyKubernetesTopology: true})
+	stop := startWithDiscovery(t, p, time.Hour)
+	defer stop()
+	select {
+	case <-p.firstIntake:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the first intake request never arrived")
+	}
+
+	p.set(http.StatusOK, map[string]any{capabilityLegacyKubernetesTopology: false})
+	time.Sleep(300 * time.Millisecond)
+	close(p.holdFirstIntake)
+	time.Sleep(300 * time.Millisecond)
+	assert.Equal(t, int32(1), p.snapshots.Load(), "no chunk, and so no stop_snapshot, may follow a confirmed disable")
 }

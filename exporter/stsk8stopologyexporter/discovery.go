@@ -124,7 +124,14 @@ func (e *topologyExporter) applyObservation(result features.Result) {
 		e.logger.Warn("Platform feature query failed; keeping the current legacy topology mode",
 			zap.String("class", string(result.Class)), zap.Int("status", result.StatusCode))
 	}
+	// Under the delivery lock, which a delivery holds while it checks the mode:
+	// a confirmed disable either precedes the delivery or cancels it.
+	e.delivery.Lock()
 	legacy, changed := e.mode.observe(result)
+	if changed && !legacy && e.cancelDelivery != nil {
+		e.cancelDelivery()
+	}
+	e.delivery.Unlock()
 	if !changed {
 		return
 	}

@@ -251,14 +251,15 @@ func (e *topologyExporter) scheduleHandover(readySince time.Time, wait time.Dura
 // sendSnapshot builds and sends one full topology snapshot. It reports false
 // when the store has no current complete snapshot.
 func (e *topologyExporter) sendSnapshot(ctx context.Context) (bool, error) {
-	if !e.mode.legacyEnabled() {
-		return true, nil
-	}
-	// Registered before reading the store: a reset either empties the store
-	// first or cancels this delivery.
+	// Registered with the mode check and store read: a reset or a confirmed
+	// legacy disable either happens first or cancels this delivery.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	e.delivery.Lock()
+	if !e.mode.legacyEnabled() {
+		e.delivery.Unlock()
+		return true, nil
+	}
 	e.cancelDelivery = cancel
 	objects, readySince, ok := e.store.view(e.now(), e.cfg.SnapshotMaxAge)
 	e.delivery.Unlock()

@@ -68,7 +68,8 @@ without the capability always receives legacy topology.
 
 The first valid answer, awaited before the first snapshot, decides the mode.
 Later changes need three consecutive matching answers from the one-minute poll.
-Resuming sends a snapshot immediately. The
+A confirmed disable cancels a snapshot that is still being sent. Resuming
+sends a snapshot immediately. The
 `otelcol_stsk8stopology_legacy_export_enabled` gauge reports the current mode.
 
 ## Configuration
