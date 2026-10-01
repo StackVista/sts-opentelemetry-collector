@@ -1,0 +1,55 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "{{ .OtlpGRPCEndpoint }}"
+
+connectors:
+  forward: {}
+
+processors:
+  batch:
+    timeout: 2s
+    send_batch_size: 10000
+  resource/removeStsApiKey:
+    attributes:
+      - key: sts_api_key
+        action: delete
+  attributes/removeStsApiKey:
+    actions:
+      - key: client_sts_api_key
+        action: delete
+      - key: server_sts_api_key
+        action: delete
+
+exporters:
+  clickhousests/logs:
+    endpoint: "tcp://{{ .ClickHouseAddr }}?dial_timeout=10s&compress=lz4"
+    username: "{{ .ClickHouseUser }}"
+    password: "{{ .ClickHousePassword }}"
+    database: "{{ .Database }}"
+    create_logs_table: true
+    create_traces_table: false
+    create_resources_table: false
+    sending_queue:
+      batch:
+        sizer: items
+        flush_timeout: 2s
+        min_size: 10000
+        max_size: 20000
+
+service:
+  telemetry:
+    logs:
+      level: debug
+  pipelines:
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [forward]
+    logs/clickhouse:
+      receivers: [forward]
+      processors:
+        - resource/removeStsApiKey
+        - attributes/removeStsApiKey
+      exporters: [clickhousests/logs]
