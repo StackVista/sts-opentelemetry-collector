@@ -380,7 +380,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.stackstate-schema-token.outputs.token }}
           # renovate: datasource=git-refs depName=https://github.com/StackVista/stackstate
-          STACKSTATE_SCHEMA_REF_VERSION: TODO-pin-to-a-real-stackstate-commit-once-otel_logs_schema.sql-is-pushed
+          STACKSTATE_SCHEMA_REF_VERSION: be45a6d9767c276200cf6f27e41a737366a0ab7c
         run: |
           cd exporter/clickhousestsexporter/integration
           GOWORK=off go test -tags "integration schema_contract" -run TestLogsExporter_MatchesStackStateSchema -v ./...

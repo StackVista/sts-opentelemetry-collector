@@ -20,7 +20,7 @@ import (
 // this test outside CI). CI sets that env var from the annotated value in build.yaml, which is what
 // Renovate bumps — keep this fallback in sync with it manually until that's automated.
 const (
-	stackstateSchemaRefFallback = "TODO-pin-to-a-real-stackstate-commit-once-otel_logs_schema.sql-is-pushed"
+	stackstateSchemaRefFallback = "be45a6d9767c276200cf6f27e41a737366a0ab7c"
 	stackstateSchemaRepo        = "StackVista/stackstate"
 	stackstateSchemaPath        = "stackstate-traces/src/test/resources/otel_logs_schema.sql"
 
