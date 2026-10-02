@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/StackVista/stackstate-receiver-go-client/pkg/model/topology"
+	"github.com/StackVista/stackstate-receiver-go-client/pkg/openapiclient/features"
 	collectors "github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8stopologyexporter/internal/topologycollectors"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componentstatus"
@@ -37,6 +38,13 @@ type topologyExporter struct {
 	producer string
 	now      func() time.Time
 
+	// features is nil when discovery is disabled; legacy topology is then always sent.
+	features *features.Client
+	//nolint:containedctx // carries the Receiver credential the feature client authenticates with
+	authCtx   context.Context
+	discovery discoveryOptions
+	mode      *modeSelector
+
 	ready   chan struct{}
 	cancel  context.CancelFunc
 	wg      sync.WaitGroup
@@ -59,10 +67,12 @@ func newTopologyExporter(cfg *Config, logger *zap.Logger, sender *intakeSender) 
 		store:  newObjectStore(),
 		sender: sender,
 		// The cluster agent always reports a kubernetes instance; cluster_type only changes tags.
-		instance: topology.Instance{Type: clusterTypeKubernetes, URL: cfg.ClusterName},
-		producer: cfg.InternalHostname,
-		now:      time.Now,
-		ready:    make(chan struct{}, 1),
+		instance:  topology.Instance{Type: clusterTypeKubernetes, URL: cfg.ClusterName},
+		producer:  cfg.InternalHostname,
+		now:       time.Now,
+		ready:     make(chan struct{}, 1),
+		discovery: defaultDiscoveryOptions(),
+		mode:      newModeSelector(defaultDiscoveryOptions().stableObservations),
 	}
 }
 
@@ -71,8 +81,15 @@ func (e *topologyExporter) start(_ context.Context, host component.Host) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	e.cancel = cancel
 	e.started = e.now()
+	initialized := make(chan struct{})
+	if e.features != nil {
+		e.wg.Add(1)
+		go e.discover(ctx, initialized)
+	} else {
+		close(initialized)
+	}
 	e.wg.Add(1)
-	go e.run(ctx)
+	go e.run(ctx, initialized)
 	return nil
 }
 
@@ -161,8 +178,15 @@ func (e *topologyExporter) consumeObject(record plog.LogRecord) {
 	e.store.upsert(key, stringAttr(attrs, attrVersion), object)
 }
 
-func (e *topologyExporter) run(ctx context.Context) {
+func (e *topologyExporter) run(ctx context.Context, initialized <-chan struct{}) {
 	defer e.wg.Done()
+	// Wait for the first platform answer so a platform that no longer needs
+	// legacy topology does not receive one first.
+	select {
+	case <-ctx.Done():
+		return
+	case <-initialized:
+	}
 	ticker := time.NewTicker(e.cfg.Interval)
 	defer ticker.Stop()
 	warned := false
@@ -227,11 +251,15 @@ func (e *topologyExporter) scheduleHandover(readySince time.Time, wait time.Dura
 // sendSnapshot builds and sends one full topology snapshot. It reports false
 // when the store has no current complete snapshot.
 func (e *topologyExporter) sendSnapshot(ctx context.Context) (bool, error) {
-	// Registered before reading the store: a reset either empties the store
-	// first or cancels this delivery.
+	// Registered with the mode check and store read: a reset or a confirmed
+	// legacy disable either happens first or cancels this delivery.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	e.delivery.Lock()
+	if !e.mode.legacyEnabled() {
+		e.delivery.Unlock()
+		return true, nil
+	}
 	e.cancelDelivery = cancel
 	objects, readySince, ok := e.store.view(e.now(), e.cfg.SnapshotMaxAge)
 	e.delivery.Unlock()

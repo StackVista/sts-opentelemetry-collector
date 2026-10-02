@@ -3,7 +3,7 @@ module github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8stopology
 go 1.26.6
 
 require (
-	github.com/StackVista/stackstate-receiver-go-client v0.0.0-20260928134251-ae7cedbb4859
+	github.com/StackVista/stackstate-receiver-go-client v0.0.0-20261001074615-fd72bbd18e84
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/collector/component v1.67.0
 	go.opentelemetry.io/collector/component/componentstatus v0.161.0
@@ -16,6 +16,7 @@ require (
 	go.opentelemetry.io/collector/exporter/exporterhelper v0.161.0
 	go.opentelemetry.io/collector/exporter/exportertest v0.161.0
 	go.opentelemetry.io/collector/pdata v1.67.0
+	go.opentelemetry.io/otel/metric v1.46.0
 	go.uber.org/zap v1.28.0
 	k8s.io/api v0.37.0
 	k8s.io/apimachinery v0.37.0
@@ -62,7 +63,6 @@ require (
 	go.opentelemetry.io/collector/receiver/receivertest v0.161.0 // indirect
 	go.opentelemetry.io/collector/receiver/xreceiver v0.161.0 // indirect
 	go.opentelemetry.io/otel v1.46.0 // indirect
-	go.opentelemetry.io/otel/metric v1.46.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.46.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.46.0 // indirect
 	go.opentelemetry.io/otel/trace v1.46.0 // indirect

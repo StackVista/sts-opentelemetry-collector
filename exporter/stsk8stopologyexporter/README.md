@@ -56,6 +56,22 @@ ConfigMaps if those components are required. Its payload budgets drop large
 objects, and dropped objects are deleted from the platform topology, so
 disable or size them for this pipeline.
 
+## Following the platform
+
+With `discovery_enabled` (the default), the exporter reads the Receiver's
+`/stsAgent/features` with its own endpoint and key. While the platform
+advertises `legacy-kubernetes-topology: false`, no legacy topology is sent;
+Kubernetes-V2's auto-expiry then removes the legacy elements, and merged
+components keep their native data. Absent, `true`, unreachable or failing
+answers keep the current mode, which starts as sending: an older platform
+without the capability always receives legacy topology.
+
+The first valid answer, awaited before the first snapshot, decides the mode.
+Later changes need three consecutive matching answers from the one-minute poll.
+A confirmed disable cancels a snapshot that is still being sent. Resuming
+sends a snapshot immediately. The
+`otelcol_stsk8stopology_legacy_export_enabled` gauge reports the current mode.
+
 ## Configuration
 
 | Key | Default | Description |
@@ -75,6 +91,7 @@ disable or size them for this pipeline.
 | `resources.*` | all `true` | Same switches as the cluster-agent check |
 | `configmap_max_datasize` | `102400` | ConfigMap data budget, as in the cluster-agent |
 | `csi_pv_mapper_enabled` | `false` | CSI persistent volume source mapping |
+| `discovery_enabled` | `true` | Follow the platform's `legacy-kubernetes-topology` capability |
 | `proxy_url`, `tls.insecure_skip_verify` | | Receiver transport options |
 
 ## Vendored cluster-agent code
