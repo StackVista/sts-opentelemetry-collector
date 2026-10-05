@@ -40,11 +40,17 @@ func buildPayloads(
 	maxElements int,
 ) []transactional.IntakePayload {
 	var chunks []topology.Topology
-	current := topology.Topology{Instance: instance, Components: []topology.Component{}, Relations: []topology.Relation{}}
+	// The Receiver rejects null lists, so every list is sent, empty if need be.
+	empty := func() topology.Topology {
+		return topology.Topology{
+			Instance: instance, Components: []topology.Component{}, Relations: []topology.Relation{}, DeleteIDs: []string{},
+		}
+	}
+	current := empty()
 	size := 0
 	flush := func() {
 		chunks = append(chunks, current)
-		current = topology.Topology{Instance: instance, Components: []topology.Component{}, Relations: []topology.Relation{}}
+		current = empty()
 		size = 0
 	}
 	for _, component := range components {
