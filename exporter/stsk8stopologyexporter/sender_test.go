@@ -2,6 +2,7 @@ package stsk8stopologyexporter //nolint:testpackage // Exercises the internal pa
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -70,4 +71,28 @@ func TestSenderStopsOnRejectedRequest(t *testing.T) {
 	payloads := buildPayloads("h", topology.Instance{}, components, nil, 1)
 	require.Error(t, testSender(server.URL).sendAll(context.Background(), payloads))
 	assert.Equal(t, int32(1), calls.Load(), "no retry and no later chunks after a rejection")
+}
+
+// The Receiver's intake JSON format rejects null for list fields; the cluster
+// agent's batcher always sends them as empty lists.
+func TestPayloadsSendEmptyListsNotNull(t *testing.T) {
+	for _, payload := range buildPayloads("h", topology.Instance{Type: "kubernetes", URL: "c"}, nil, nil, 10) {
+		body, err := json.Marshal(payload)
+		require.NoError(t, err)
+		var decoded map[string]any
+		require.NoError(t, json.Unmarshal(body, &decoded))
+		for _, field := range []string{"topologies", "health", "metrics"} {
+			assert.IsType(t, []any{}, decoded[field], field)
+		}
+		assert.IsType(t, map[string]any{}, decoded["events"])
+		topologies, ok := decoded["topologies"].([]any)
+		require.True(t, ok)
+		for _, raw := range topologies {
+			chunk, ok := raw.(map[string]any)
+			require.True(t, ok)
+			for _, field := range []string{"components", "relations", "delete_ids"} {
+				assert.IsType(t, []any{}, chunk[field], field)
+			}
+		}
+	}
 }
