@@ -20,6 +20,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -43,7 +44,9 @@ var (
 		"kubectl.kubernetes.io/last-applied-configuration",
 		"openshift.io/token-secret.value",
 	}
-	droppedPattern = regexp.MustCompile(`^\[dropped \d+ chars, hashsum: [0-9a-f]{16}\]$`)
+	// An int length has at most 19 digits, which bounds what a marker can retain.
+	droppedPattern       = regexp.MustCompile(`^\[dropped \d{1,19} chars, hashsum: [0-9a-f]{16}\]$`)
+	droppedSuffixPattern = regexp.MustCompile(`\[dropped \d{1,19} chars, hashsum: [0-9a-f]{16}\]$`)
 )
 
 // Object sanitizes obj in place when it is a core Secret or ConfigMap. It fails
@@ -192,8 +195,13 @@ func configMap(obj map[string]interface{}, maxDataSize int) error {
 		maxPerKey := maxDataSize / len(data)
 		cut := make(map[string]interface{}, len(data))
 		for k, v := range data {
-			if len(v) > maxPerKey && !IsDroppedReplacement([]byte(v[maxPerKey:])) {
-				v = v[:maxPerKey] + DroppedReplacement([]byte(v[maxPerKey:]))
+			if len(v) > maxPerKey && !isCut(v, maxPerKey) {
+				end := maxPerKey
+				// Log bodies must be valid UTF-8, so never split a character.
+				for end > 0 && !utf8.RuneStart(v[end]) {
+					end--
+				}
+				v = v[:end] + DroppedReplacement([]byte(v[end:]))
 			}
 			cut[k] = v
 		}
@@ -220,6 +228,13 @@ func configMap(obj map[string]interface{}, maxDataSize int) error {
 		obj["binaryData"] = replaced
 	}
 	return nil
+}
+
+// isCut reports whether v is a prefix of at most maxPerKey bytes followed by a
+// DroppedReplacement.
+func isCut(v string, maxPerKey int) bool {
+	loc := droppedSuffixPattern.FindStringIndex(v)
+	return loc != nil && loc[0] <= maxPerKey
 }
 
 // DroppedReplacement stands in for content that was dropped.

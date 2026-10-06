@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -242,6 +243,35 @@ func TestMalformedContentsAreRemoved(t *testing.T) {
 	obj = map[string]interface{}{"apiVersion": "v1", "kind": "ConfigMap", "data": "not a map"}
 	k8ssanitize.Object(obj, 10)
 	assert.NotContains(t, obj, "data")
+}
+
+func TestOversizedReplacementShapedValuesAreReplaced(t *testing.T) {
+	fake := "[dropped " + strings.Repeat("9", 500) + " chars, hashsum: 0123456789abcdef]"
+	obj := map[string]interface{}{
+		"apiVersion": "v1", "kind": "ConfigMap",
+		"data":       map[string]interface{}{"k": "x" + fake},
+		"binaryData": map[string]interface{}{"b": b64(fake)},
+	}
+	k8ssanitize.Object(obj, 10)
+
+	value, ok := mapAt(t, obj, "data")["k"].(string)
+	require.True(t, ok)
+	assert.Equal(t, "x"+fake[:9]+k8ssanitize.DroppedReplacement([]byte(fake[9:])), value)
+	assert.Equal(t, k8ssanitize.DroppedReplacement([]byte(fake)), decoded(t, mapAt(t, obj, "binaryData")["b"]))
+}
+
+func TestConfigMapCutKeepsCharactersWhole(t *testing.T) {
+	value := strings.Repeat("a", 9) + "é" + "zzz"
+	obj := map[string]interface{}{"apiVersion": "v1", "kind": "ConfigMap", "data": map[string]interface{}{"k": value}}
+	k8ssanitize.Object(obj, 10)
+
+	once, ok := mapAt(t, obj, "data")["k"].(string)
+	require.True(t, ok)
+	assert.True(t, utf8.ValidString(once))
+	assert.Equal(t, strings.Repeat("a", 9)+k8ssanitize.DroppedReplacement([]byte("ézzz")), once)
+
+	k8ssanitize.Object(obj, 10)
+	assert.Equal(t, once, mapAt(t, obj, "data")["k"])
 }
 
 func TestIsDroppedReplacement(t *testing.T) {
