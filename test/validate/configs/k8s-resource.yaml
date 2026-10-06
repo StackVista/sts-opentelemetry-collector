@@ -39,7 +39,10 @@ receivers:
     peer_sync_port: 4319
     peer_sync_dns: k8s-resource-collector-peers
     k8s_leader_elector: k8s_leader_elector
+    configmap_max_datasize: 102400
     objects:
+      - name: configmaps
+        group: ""
       - name: cronjobs
         group: batch
       - name: daemonsets
@@ -62,6 +65,8 @@ receivers:
         group: ""
       - name: replicasets
         group: apps
+      - name: secrets
+        group: ""
       - name: services
         group: ""
       - name: statefulsets

@@ -4,6 +4,7 @@ package k8sresourcereceiver
 import (
 	"context"
 	"errors"
+	"github.com/stackvista/sts-opentelemetry-collector/common/k8ssanitize"
 	"sync"
 	"testing"
 	"time"
@@ -823,4 +824,36 @@ func TestResourceInformers_ReconcileSkipsForbidden(t *testing.T) {
 	records := rec.snapshot()
 	require.Len(t, records, 1)
 	assert.Equal(t, reconcileRecord{kind: metrics.InformerKindCR, outcome: metrics.InformerForbidden}, records[0])
+}
+
+func TestResourceInformers_StaticInformer_SanitizesSecrets(t *testing.T) {
+	secretsGVR := schema.GroupVersionResource{Version: "v1", Resource: "secrets"}
+	s := testScheme()
+	s.AddKnownTypeWithName(schema.GroupVersionKind{Version: "v1", Kind: "SecretList"}, &unstructured.UnstructuredList{})
+	s.AddKnownTypeWithName(schema.GroupVersionKind{Version: "v1", Kind: "Secret"}, &unstructured.Unstructured{})
+	secret := &unstructured.Unstructured{Object: map[string]interface{}{
+		testAPIVersionKey: "v1",
+		testKindKey:       "Secret",
+		testMetadataKey:   map[string]interface{}{"name": "db", "namespace": "default"},
+		"data":            map[string]interface{}{"password": "aHVudGVyMg=="}, //nolint:gosec // test fixture
+	}}
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(s,
+		map[schema.GroupVersionResource]string{crdGVR: testCRDListKind, secretsGVR: "SecretList"},
+		secret,
+	)
+	resolved := []resolvedObjectWatch{{ObjectWatch: ObjectWatch{Name: "secrets"}, GVR: secretsGVR, Namespaced: true}}
+	ri := newResourceInformers(testSettings(t), testConfig([]string{testExampleGroup}, nil), client, resolved,
+		tracker.NewForbiddenTracker(time.Hour), nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	require.NoError(t, ri.Start(ctx))
+	defer func() { require.NoError(t, ri.Shutdown(ctx)) }()
+
+	objs := ri.ReadObjects()[secretsGVR].Objects
+	require.Len(t, objs, 1)
+	data, _, err := unstructured.NestedStringMap(objs[0].Object, "data")
+	require.NoError(t, err)
+	assert.Len(t, data, 1)
+	assert.Contains(t, data, k8ssanitize.SecretDataHashKey)
 }

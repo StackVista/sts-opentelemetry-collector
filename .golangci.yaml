@@ -49,6 +49,9 @@ linters:
         path: ^receiver/k8sresourcereceiver/.*_test\.go$
       - linters:
           - goconst
+        path: ^common/.*_test\.go$
+      - linters:
+          - goconst
         path: ^test/e2e/.*_test\.go$
     paths:
       - third_party$
