@@ -56,9 +56,8 @@ type Config struct {
 	// capability: legacy topology is not sent while it is false.
 	DiscoveryEnabled bool `mapstructure:"discovery_enabled"`
 
-	Resources            ResourcesConfig `mapstructure:"resources"`
-	ConfigMapMaxDataSize int             `mapstructure:"configmap_max_datasize"`
-	CSIPVMapperEnabled   bool            `mapstructure:"csi_pv_mapper_enabled"`
+	Resources          ResourcesConfig `mapstructure:"resources"`
+	CSIPVMapperEnabled bool            `mapstructure:"csi_pv_mapper_enabled"`
 }
 
 // TLSConfig controls server certificate verification.
@@ -110,9 +109,6 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.MaxElementsPerRequest <= 0 || cfg.MaxAttempts <= 0 {
 		return errors.New("max_elements_per_request and max_attempts must be positive")
-	}
-	if cfg.ConfigMapMaxDataSize <= 0 {
-		return errors.New("configmap_max_datasize must be positive")
 	}
 	return nil
 }

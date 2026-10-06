@@ -39,7 +39,6 @@ func createDefaultConfig() component.Config {
 		CollectTimeout:        10 * time.Minute,
 		MaxElementsPerRequest: 10000,
 		MaxAttempts:           3,
-		ConfigMapMaxDataSize:  100 * 1024,
 		Resources: ResourcesConfig{
 			PersistentVolumes:      true,
 			PersistentVolumeClaims: true,

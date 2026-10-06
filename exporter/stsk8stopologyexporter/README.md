@@ -89,7 +89,6 @@ sends a snapshot immediately. The
 | `max_attempts` | `3` | Attempts per request |
 | `timeout` | `30s` | Per-request timeout |
 | `resources.*` | all `true` | Same switches as the cluster-agent check |
-| `configmap_max_datasize` | `102400` | ConfigMap data budget, as in the cluster-agent |
 | `csi_pv_mapper_enabled` | `false` | CSI persistent volume source mapping |
 | `discovery_enabled` | `true` | Follow the platform's `legacy-kubernetes-topology` capability |
 | `proxy_url`, `tls.insecure_skip_verify` | | Receiver transport options |

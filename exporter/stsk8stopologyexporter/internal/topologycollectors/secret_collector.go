@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"github.com/StackVista/stackstate-receiver-go-client/pkg/model/topology"
+	"github.com/stackvista/sts-opentelemetry-collector/common/k8ssanitize"
 	"sort"
 	"strings"
 	"time"
@@ -73,9 +74,13 @@ func (cmc *SecretCollector) secretToStackStateComponent(secret v1.Secret) (*topo
 			secret.Annotations[annotationName] = redactedMessage
 		}
 	}
-	secretDataHash, err := secure(secret.Data)
-	if err != nil {
-		return nil, err
+	// The Cluster Observer has already replaced the data with its hash.
+	secretDataHash := string(secret.Data[k8ssanitize.SecretDataHashKey])
+	if _, sanitized := secret.Data[k8ssanitize.SecretDataHashKey]; !sanitized {
+		var err error
+		if secretDataHash, err = secure(secret.Data); err != nil {
+			return nil, err
+		}
 	}
 
 	certExpiration := time.Time{}
