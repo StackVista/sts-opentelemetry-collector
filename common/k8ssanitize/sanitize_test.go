@@ -1,10 +1,17 @@
 package k8ssanitize_test
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
+	"math/big"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -81,19 +88,107 @@ func TestSecretWithoutDataGetsEmptyHash(t *testing.T) {
 	assert.Equal(t, k8ssanitize.SecretDataHash(nil), decoded(t, mapAt(t, obj, "data")[k8ssanitize.SecretDataHashKey]))
 }
 
-func TestTLSSecretKeepsCertificateOnly(t *testing.T) {
-	obj := map[string]interface{}{
+func testCertificatePEM(t *testing.T, notAfter time.Time) (string, string) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	template := &x509.Certificate{SerialNumber: big.NewInt(1), NotBefore: notAfter.Add(-time.Hour), NotAfter: notAfter}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	require.NoError(t, err)
+	keyDER, err := x509.MarshalECPrivateKey(key)
+	require.NoError(t, err)
+	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})),
+		string(pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}))
+}
+
+func tlsSecret(cert, key string) map[string]interface{} {
+	return map[string]interface{}{
 		"apiVersion": "v1",
 		"kind":       "Secret",
 		"type":       "kubernetes.io/tls",
 		"metadata":   map[string]interface{}{"name": "tls"},
-		"data":       map[string]interface{}{"tls.crt": b64("CERT"), "tls.key": b64("KEY")},
+		"data":       map[string]interface{}{"tls.crt": b64(cert), "tls.key": b64(key)},
+	}
+}
+
+func TestTLSSecretKeepsOnlyCertificateExpiration(t *testing.T) {
+	notAfter := time.Date(2030, 1, 2, 3, 4, 5, 0, time.UTC)
+	cert, key := testCertificatePEM(t, notAfter)
+	obj := tlsSecret(cert, key)
+	k8ssanitize.Object(obj, 0)
+
+	data := mapAt(t, obj, "data")
+	assert.Len(t, data, 2)
+	assert.Equal(t, k8ssanitize.SecretDataHash(map[string][]byte{"tls.crt": []byte(cert), "tls.key": []byte(key)}),
+		decoded(t, data[k8ssanitize.SecretDataHashKey]))
+	expiration, err := k8ssanitize.ParseCertificateExpiration([]byte(decoded(t, data[k8ssanitize.CertificateExpirationKey])))
+	require.NoError(t, err)
+	assert.True(t, notAfter.Equal(expiration))
+}
+
+func TestTLSSecretWithPrivateMaterialInCertificateKeepsNoExpiration(t *testing.T) {
+	cert, key := testCertificatePEM(t, time.Now().Add(time.Hour))
+	obj := tlsSecret(cert+key, key)
+	k8ssanitize.Object(obj, 0)
+
+	data := mapAt(t, obj, "data")
+	assert.Equal(t, []string{k8ssanitize.SecretDataHashKey}, keys(data))
+	out, err := json.Marshal(obj)
+	require.NoError(t, err)
+	assert.NotContains(t, string(out), b64(key))
+	assert.NotContains(t, string(out), "PRIVATE KEY")
+}
+
+func keys(m map[string]interface{}) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
+func TestSanitizingIsIdempotent(t *testing.T) {
+	cert, key := testCertificatePEM(t, time.Now().Add(time.Hour))
+	long := strings.Repeat("x", 30)
+	for name, obj := range map[string]map[string]interface{}{
+		"opaque secret": {
+			"apiVersion": "v1", "kind": "Secret",
+			"metadata": map[string]interface{}{"name": "s", "annotations": map[string]interface{}{
+				"kubectl.kubernetes.io/last-applied-configuration": "{}"}},
+			"data": map[string]interface{}{"password": b64("hunter2")},
+		},
+		"tls secret": tlsSecret(cert, key),
+		"configmap": {
+			"apiVersion": "v1", "kind": "ConfigMap",
+			"metadata": map[string]interface{}{"name": "c", "annotations": map[string]interface{}{
+				"kubectl.kubernetes.io/last-applied-configuration": long}},
+			"data":       map[string]interface{}{"long": long, "short": "ok"},
+			"binaryData": map[string]interface{}{"logo": b64("PNG")},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			k8ssanitize.Object(obj, 20)
+			once, err := json.Marshal(obj)
+			require.NoError(t, err)
+			k8ssanitize.Object(obj, 20)
+			twice, err := json.Marshal(obj)
+			require.NoError(t, err)
+			assert.JSONEq(t, string(once), string(twice))
+		})
+	}
+}
+
+func TestConfigMapLastAppliedConfigurationIsRedacted(t *testing.T) {
+	obj := map[string]interface{}{
+		"apiVersion": "v1", "kind": "ConfigMap",
+		"metadata": map[string]interface{}{"name": "c", "annotations": map[string]interface{}{
+			"kubectl.kubernetes.io/last-applied-configuration": `{"data":{"big":"contents"}}`, "team": "a"}},
+		"data": map[string]interface{}{"big": "contents"},
 	}
 	k8ssanitize.Object(obj, 0)
-	data := mapAt(t, obj, "data")
-	assert.Equal(t, b64("CERT"), data[k8ssanitize.TLSCertKey])
-	assert.NotContains(t, data, "tls.key")
-	assert.Len(t, data, 2)
+	annotations := mapAt(t, obj, "metadata", "annotations")
+	assert.Equal(t, "<redacted>", annotations["kubectl.kubernetes.io/last-applied-configuration"])
+	assert.Equal(t, "a", annotations["team"])
 }
 
 func TestConfigMapDataIsSharedBetweenKeys(t *testing.T) {

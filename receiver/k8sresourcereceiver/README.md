@@ -188,11 +188,14 @@ See `classifyStaticObjectsCRDOverlap` for the resolution rules.
 Core Secrets and ConfigMaps are sanitized by an informer transform, so their
 contents never reach the cache, the peer sync or any consumer
 (`common/k8ssanitize`). A Secret's data is replaced by the cluster agent's hash
-of it under `<data hash>`; a TLS Secret also keeps its public `tls.crt`.
-Annotations that can carry the data are redacted. ConfigMap data is truncated
-to `ConfigMapMaxDataSize`, shared evenly between the keys, and binary data is
-replaced by its length and hash. Both reproduce the cluster agent, so topology
-built from them matches. Use `DeniedObjects` to keep either out entirely.
+of it under `<data hash>`; a TLS Secret also gets its certificate's expiry
+under `<certificate expiration>`. ConfigMap data is truncated to
+`ConfigMapMaxDataSize`, shared evenly between the keys, and binary data is
+replaced by its length and hash. Annotations that can carry the data are
+redacted on both. Topology built from them matches the cluster agent's.
+Sanitizing is idempotent, because client-go applies the transform twice when an
+informer initialises from a streaming list. Use `DeniedObjects` to keep either
+out entirely.
 
 ## Tunables (Config)
 

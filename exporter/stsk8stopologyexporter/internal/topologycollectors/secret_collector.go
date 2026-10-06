@@ -84,7 +84,11 @@ func (cmc *SecretCollector) secretToStackStateComponent(secret v1.Secret) (*topo
 	}
 
 	certExpiration := time.Time{}
-	if secret.Type == corev1.SecretTypeTLS {
+	if v, ok := secret.Data[k8ssanitize.CertificateExpirationKey]; ok {
+		if parsed, err := k8ssanitize.ParseCertificateExpiration(v); err == nil {
+			certExpiration = parsed
+		}
+	} else if secret.Type == corev1.SecretTypeTLS {
 		if v, ok := secret.Data[corev1.TLSCertKey]; ok {
 			certExpiration = certificateExpiration(v)
 		} else {

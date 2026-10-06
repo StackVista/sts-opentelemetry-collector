@@ -1,7 +1,3 @@
-github.com/StackVista/stackstate-receiver-go-client v0.0.0-20260929090421-82c5cc1db9ee h1:0tcDbrrCV2sD9G9G4aQvxXcnWhgElwR3ZCek60si4/E=
-github.com/StackVista/stackstate-receiver-go-client v0.0.0-20260929090421-82c5cc1db9ee/go.mod h1:pirS1serNZgKV2BJ1JrwGfavhMisccD8ahnxux/hTJk=
-github.com/StackVista/stackstate-receiver-go-client v0.0.0-20261001065453-f2036fa8975f h1:eKSzcQFSZvRcqKQSJenBf8UHrIP6xW9KYIeRtaudaFI=
-github.com/StackVista/stackstate-receiver-go-client v0.0.0-20261001065453-f2036fa8975f/go.mod h1:pirS1serNZgKV2BJ1JrwGfavhMisccD8ahnxux/hTJk=
 github.com/StackVista/stackstate-receiver-go-client v0.0.0-20261001074615-fd72bbd18e84 h1:6g0SPcwpj34GFFgXMek7XCoGoL8J3/JyDUuZCl8MSp4=
 github.com/StackVista/stackstate-receiver-go-client v0.0.0-20261001074615-fd72bbd18e84/go.mod h1:pirS1serNZgKV2BJ1JrwGfavhMisccD8ahnxux/hTJk=
 github.com/cenkalti/backoff/v7 v7.0.0 h1:ZP+QAaaOnVUHo+ufFpZ835hbT3x2fy+h2lecVEosZ6A=
