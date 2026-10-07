@@ -206,7 +206,7 @@ out entirely.
 | `PeerSyncPort`       | 4319    | HTTP server port on each replica.                  |
 | `PeerSyncDNS`        | —       | Headless service FQDN. Empty ⇒ single-replica.    |
 | `MaxCRTotalDataSizeBytes` | 10MiB   | Total CR payload budget per collection cycle.      |
-| `MaxObjectTotalDataSizeBytes` | 10MiB | Total static object payload budget per collection cycle. |
+| `MaxObjectTotalDataSizeBytes` | 10MiB | Total static object payload budget per collection cycle. Zero disables it. |
 | `ConfigMapMaxDataSize` | 100KiB | ConfigMap data kept per object. Zero keeps all. |
 
 Payload budgets are applied after reading informer caches and before diffing

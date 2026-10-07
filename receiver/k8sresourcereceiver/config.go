@@ -59,7 +59,8 @@ type Config struct {
 	MaxCRTotalDataSizeBytes int `mapstructure:"max_cr_total_data_size_bytes"`
 
 	// MaxObjectTotalDataSizeBytes is the total serialized payload budget for statically
-	// configured Kubernetes object watches per collection cycle. Default: 1MiB.
+	// configured Kubernetes object watches per collection cycle. Zero disables it, which
+	// consumers of complete snapshots need: a dropped object reads as deleted.
 	MaxObjectTotalDataSizeBytes int `mapstructure:"max_object_total_data_size_bytes"`
 
 	// PeerSyncPort is the port on which the HTTP server listens for peer sync requests.
@@ -224,9 +225,6 @@ func (c *Config) Validate() error {
 	}
 	if c.MaxCRTotalDataSizeBytes < 0 {
 		return fmt.Errorf("max_cr_total_data_size_bytes must be non-negative, got %d", c.MaxCRTotalDataSizeBytes)
-	}
-	if c.MaxObjectTotalDataSizeBytes == 0 {
-		c.MaxObjectTotalDataSizeBytes = defaultMaxObjectTotalDataSizeBytes
 	}
 	if c.MaxObjectTotalDataSizeBytes < 0 {
 		return fmt.Errorf("max_object_total_data_size_bytes must be non-negative, got %d", c.MaxObjectTotalDataSizeBytes)

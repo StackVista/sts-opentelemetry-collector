@@ -3,6 +3,7 @@ package k8sresourcereceiver
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -765,6 +766,34 @@ func TestResourceCollector_AppliesPayloadBudgets(t *testing.T) {
 	assert.Greater(t, crBudget.used, int64(0))
 }
 
+func TestResourceCollector_ZeroObjectBudgetKeepsEveryObject(t *testing.T) {
+	cfg, ok := createDefaultConfig().(*Config)
+	require.True(t, ok)
+	cfg.ClusterName = "test-cluster"
+	cfg.MaxObjectTotalDataSizeBytes = 0
+	require.NoError(t, cfg.Validate())
+
+	staticGVR := schema.GroupVersionResource{Version: "v1", Resource: "configmaps"}
+	objects := make([]*unstructured.Unstructured, 0, 3)
+	for _, name := range []string{"a", "b", "c"} {
+		obj := makeTestCR(name, "default", "", "v1", "ConfigMap")
+		obj.Object["data"] = map[string]interface{}{"payload": strings.Repeat("x", defaultMaxObjectTotalDataSizeBytes/2)}
+		objects = append(objects, obj)
+	}
+	c := &resourceCollector{
+		logger:   zaptest.NewLogger(t),
+		config:   cfg,
+		consumer: &consumertest.LogsSink{},
+		metrics:  &payloadRecorder{},
+		enricher: noopResourceAttributeEnricher{},
+	}
+
+	filtered := c.applyPayloadBudgets(context.Background(), map[schema.GroupVersionResource]ObjectGroup{
+		staticGVR: {Source: ObjectSourceStatic, Objects: objects},
+	})
+	assert.Len(t, filtered[staticGVR].Objects, 3)
+}
+
 func findPayloadBudget(
 	t *testing.T, budgets []payloadBudgetRecord, source metrics.PayloadSource,
 ) payloadBudgetRecord {
@@ -860,7 +889,15 @@ func TestConfig_Simplified(t *testing.T) {
 		assert.Equal(t, 10*time.Second, cfg.IncrementInterval)
 		assert.Equal(t, 5*time.Minute, cfg.SnapshotInterval)
 		assert.Equal(t, defaultMaxCRTotalDataSizeBytes, cfg.MaxCRTotalDataSizeBytes)
+	})
+
+	t.Run("zero max object total data size disables the budget", func(t *testing.T) {
+		cfg, ok := createDefaultConfig().(*Config)
+		require.True(t, ok)
 		assert.Equal(t, defaultMaxObjectTotalDataSizeBytes, cfg.MaxObjectTotalDataSizeBytes)
+		cfg.MaxObjectTotalDataSizeBytes = 0
+		require.NoError(t, cfg.Validate())
+		assert.Zero(t, cfg.MaxObjectTotalDataSizeBytes)
 	})
 
 	t.Run("negative max CR total data size", func(t *testing.T) {
