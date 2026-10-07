@@ -23,9 +23,8 @@ const (
 	DiscoveryModeAll                   DiscoveryMode = "all"
 	defaultMaxCRTotalDataSizeBytes                   = 10 * 1024 * 1024
 	defaultMaxObjectTotalDataSizeBytes               = 10 * 1024 * 1024
-
-	resourceSecrets   = "secrets"
-	resourceConfigMap = "configmaps"
+	// Matches the cluster agent's ConfigMap collector.
+	defaultConfigMapMaxDataSize = 100 * 1024
 )
 
 // Config defines configuration for the k8sresource receiver.
@@ -84,11 +83,16 @@ type Config struct {
 	// These attributes are added to emitted logs for matching Kubernetes resources.
 	ResourceAttributes []ResourceAttributeEnrichment `mapstructure:"resource_attributes"`
 
-	// DeniedObjects extends the built-in denylist (core Secrets and ConfigMaps)
-	// with additional resources that must not appear under Objects. The built-in
-	// defaults always apply and cannot be removed. Use this to block third-party
-	// resources with sensitive contents (e.g. cert-manager Certificates).
+	// DeniedObjects lists resources that must not appear under Objects. Use this
+	// to block third-party resources with sensitive contents (e.g. cert-manager
+	// Certificates). Core Secrets and ConfigMaps are allowed because they are
+	// sanitized on ingestion: Secret data is replaced by its hash and ConfigMap
+	// data is truncated.
 	DeniedObjects []ObjectMatcher `mapstructure:"denied_objects"`
+
+	// ConfigMapMaxDataSize caps the ConfigMap data kept per object, shared
+	// evenly between its keys. Zero keeps all data. Binary data is never kept.
+	ConfigMapMaxDataSize int `mapstructure:"configmap_max_datasize"`
 
 	// RancherEnrichment controls Rancher Manager URL enrichment. See rancher.go.
 	RancherEnrichment rancherEnrichmentConfig `mapstructure:"rancher_enrichment"`
@@ -275,15 +279,6 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// defaultDeniedObjects are built-in denied resource types whose contents
-// commonly hold sensitive material. Always applied, not removable.
-//
-// nolint:gochecknoglobals
-var defaultDeniedObjects = []ObjectMatcher{
-	{Name: resourceSecrets, Group: ""},
-	{Name: resourceConfigMap, Group: ""},
-}
-
 // reservedResourceAttributeKeys are resource-level attribute keys written by the
 // receiver itself. A user-configured enrichment key that matches one of these
 // would be silently overwritten, so we reject them at validation time.
@@ -352,6 +347,9 @@ func (c *Config) validateResourceAttributes() error {
 // GVR resolution (ambiguity, missing-from-server, version-mismatch) is
 // deferred to receiver startup, where the discovery client is available.
 func (c *Config) validateObjects() error {
+	if c.ConfigMapMaxDataSize < 0 {
+		return errors.New("configmap_max_datasize must not be negative")
+	}
 	for i, m := range c.DeniedObjects {
 		if strings.TrimSpace(m.Name) == "" {
 			return fmt.Errorf("denied_objects[%d]: name is required", i)
@@ -361,10 +359,7 @@ func (c *Config) validateObjects() error {
 	if len(c.Objects) == 0 {
 		return nil
 	}
-	denied := make(map[ObjectMatcher]struct{}, len(defaultDeniedObjects)+len(c.DeniedObjects))
-	for _, m := range defaultDeniedObjects {
-		denied[m] = struct{}{}
-	}
+	denied := make(map[ObjectMatcher]struct{}, len(c.DeniedObjects))
 	for _, m := range c.DeniedObjects {
 		denied[m] = struct{}{}
 	}

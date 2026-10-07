@@ -2,6 +2,7 @@ package stsk8stopologyexporter //nolint:testpackage // Shared fixtures for the i
 
 import (
 	"encoding/json"
+	"github.com/stackvista/sts-opentelemetry-collector/common/k8ssanitize"
 	"os"
 	"sort"
 	"testing"
@@ -27,6 +28,8 @@ func loadFixture(t *testing.T) []*unstructured.Unstructured {
 	for _, raw := range raws {
 		obj := &unstructured.Unstructured{}
 		require.NoError(t, obj.UnmarshalJSON(raw))
+		// As the Cluster Observer does on ingestion.
+		k8ssanitize.Object(obj.Object, 100*1024)
 		objects = append(objects, obj)
 	}
 	return objects

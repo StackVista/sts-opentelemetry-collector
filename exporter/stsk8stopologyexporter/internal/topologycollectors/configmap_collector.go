@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/stackvista/sts-opentelemetry-collector/common/k8ssanitize"
 
 	"github.com/StackVista/stackstate-receiver-go-client/pkg/model/topology"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -68,7 +69,10 @@ func (cmc *ConfigMapCollector) configMapToStackStateComponent(configMap v1.Confi
 	configMapCopy := configMap
 	configMapCopy.Data = cutData(configMap.Data, cmc.maxDataSize)
 	for k, data := range configMapCopy.BinaryData {
-		configMapCopy.BinaryData[k] = []byte(cutReplacement(data))
+		// The Cluster Observer has already replaced it.
+		if !k8ssanitize.IsDroppedReplacement(data) {
+			configMapCopy.BinaryData[k] = []byte(cutReplacement(data))
+		}
 	}
 	component.SourceProperties = makeSourcePropertiesFullDetails(&configMapCopy)
 

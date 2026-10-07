@@ -183,6 +183,20 @@ both the snapshot and increment paths.
 
 See `classifyStaticObjectsCRDOverlap` for the resolution rules.
 
+## Secrets and ConfigMaps
+
+Core Secrets and ConfigMaps are sanitized by an informer transform, so their
+contents never reach the cache, the peer sync or any consumer
+(`common/k8ssanitize`). A Secret's data is replaced by the cluster agent's hash
+of it under `<data hash>`; a TLS Secret also gets its certificate's expiry
+under `<certificate expiration>`. ConfigMap data is truncated to
+`ConfigMapMaxDataSize`, shared evenly between the keys, and binary data is
+replaced by its length and hash. Annotations that can carry the data are
+redacted on both. Topology built from them matches the cluster agent's.
+Sanitizing is idempotent, because client-go applies the transform twice when an
+informer initialises from a streaming list. Use `DeniedObjects` to keep either
+out entirely.
+
 ## Tunables (Config)
 
 | Field                | Default | Notes                                              |
@@ -193,6 +207,7 @@ See `classifyStaticObjectsCRDOverlap` for the resolution rules.
 | `PeerSyncDNS`        | —       | Headless service FQDN. Empty ⇒ single-replica.    |
 | `MaxCRTotalDataSizeBytes` | 10MiB   | Total CR payload budget per collection cycle.      |
 | `MaxObjectTotalDataSizeBytes` | 10MiB | Total static object payload budget per collection cycle. |
+| `ConfigMapMaxDataSize` | 100KiB | ConfigMap data kept per object. Zero keeps all. |
 
 Payload budgets are applied after reading informer caches and before diffing
 against the peer cache. CRDs do not count against the budget. CRs and static

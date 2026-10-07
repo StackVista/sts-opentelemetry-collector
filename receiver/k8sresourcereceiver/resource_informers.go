@@ -896,12 +896,15 @@ func (ri *ResourceInformers) staticMarkForbidden(key string) {
 // no resync (the collector reads the cache directly on its own cadence) and no
 // indexers (lookups are full-store scans, not indexed queries).
 func (ri *ResourceInformers) buildInformer(lw *cache.ListWatch) cache.SharedIndexInformer {
-	return cache.NewSharedIndexInformer(
+	informer := cache.NewSharedIndexInformer(
 		cache.ToListWatcherWithWatchListSemantics(lw, ri.dynamicClient),
 		&unstructured.Unstructured{},
 		0,
 		cache.Indexers{},
 	)
+	// Only fails once the informer has started, which it has not.
+	_ = informer.SetTransform(sanitizeObject(ri.config.ConfigMapMaxDataSize))
+	return informer
 }
 
 // runInformer launches informer.Run in a tracked goroutine so Shutdown can wait

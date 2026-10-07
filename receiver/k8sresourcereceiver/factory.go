@@ -40,6 +40,7 @@ func createDefaultConfig() component.Config {
 		PeerSyncPort:                defaultPeerPort,
 		MaxCRTotalDataSizeBytes:     defaultMaxCRTotalDataSizeBytes,
 		MaxObjectTotalDataSizeBytes: defaultMaxObjectTotalDataSizeBytes,
+		ConfigMapMaxDataSize:        defaultConfigMapMaxDataSize,
 	}
 }
 

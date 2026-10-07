@@ -64,7 +64,7 @@ func collectTopology(
 	}
 	if resources.ConfigMaps {
 		clusterCollectors = append(clusterCollectors,
-			collectors.NewConfigMapCollector(commonCollector, cfg.ConfigMapMaxDataSize))
+			collectors.NewConfigMapCollector(commonCollector, 0))
 	}
 	if resources.Secrets {
 		clusterCollectors = append(clusterCollectors, collectors.NewSecretCollector(commonCollector))

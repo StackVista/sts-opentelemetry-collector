@@ -252,33 +252,22 @@ func TestConfigValidate(t *testing.T) {
 			errMsg:  "objects[1] duplicates objects[0]",
 		},
 		{
-			name: "core secrets denied by default",
+			name: "core secrets and configmaps allowed",
 			config: &Config{
 				DiscoveryMode: DiscoveryModeAll,
 				Objects: []ObjectWatch{
-					{Name: resourceSecrets},
-				},
-			},
-			wantErr: true,
-			errMsg:  `resource "secrets" in group "" is denied`,
-		},
-		{
-			name: "core configmaps denied by default",
-			config: &Config{
-				DiscoveryMode: DiscoveryModeAll,
-				Objects: []ObjectWatch{
+					{Name: "secrets"},
 					{Name: "configmaps", Namespaces: []string{"runtime-enforcer"}},
 				},
 			},
-			wantErr: true,
-			errMsg:  `resource "configmaps" in group "" is denied`,
+			wantErr: false,
 		},
 		{
 			name: "third-party resource named secrets allowed when group differs",
 			config: &Config{
 				DiscoveryMode: DiscoveryModeAll,
 				Objects: []ObjectWatch{
-					{Name: resourceSecrets, Group: "vault.example.com"},
+					{Name: "secrets", Group: "vault.example.com"},
 				},
 			},
 			wantErr: false,
@@ -298,11 +287,11 @@ func TestConfigValidate(t *testing.T) {
 			errMsg:  `resource "certificates" in group "cert-manager.io" is denied`,
 		},
 		{
-			name: "denied_objects cannot remove built-in defaults",
+			name: "denied_objects blocks core secrets",
 			config: &Config{
 				DiscoveryMode: DiscoveryModeAll,
 				DeniedObjects: []ObjectMatcher{
-					{Name: "events", Group: ""},
+					{Name: "secrets", Group: ""},
 				},
 				Objects: []ObjectWatch{
 					{Name: "secrets"},
@@ -310,6 +299,15 @@ func TestConfigValidate(t *testing.T) {
 			},
 			wantErr: true,
 			errMsg:  `resource "secrets" in group "" is denied`,
+		},
+		{
+			name: "negative configmap_max_datasize rejected",
+			config: &Config{
+				DiscoveryMode:        DiscoveryModeAll,
+				ConfigMapMaxDataSize: -1,
+			},
+			wantErr: true,
+			errMsg:  "configmap_max_datasize must not be negative",
 		},
 		{
 			name: "denied_objects entry without name rejected",
