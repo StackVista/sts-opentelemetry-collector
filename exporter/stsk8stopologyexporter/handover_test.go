@@ -18,6 +18,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/exporter/exportertest"
+	"go.opentelemetry.io/collector/pdata/plog"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func TestDeliveryCannotStartFromStateBeingReset(t *testing.T) {
@@ -190,4 +193,67 @@ func TestHandoverDelayKeepsAFormerLeadersLateRequestFromTakingOver(t *testing.T)
 			assert.Equal(t, tc.owner, model.owner())
 		})
 	}
+}
+
+func snapshotStarts(capture *intakeCapture) int {
+	payloads, _ := capture.snapshot()
+	starts := 0
+	for _, payload := range payloads {
+		for _, topology := range payload.Topologies {
+			if topology.StartSnapshot {
+				starts++
+			}
+		}
+	}
+	return starts
+}
+
+// The ticker starts with the exporter, so without a reset its first tick
+// would follow the delayed handover snapshot almost at once.
+func TestPeriodicSnapshotIsAFullIntervalAfterTheHandoverSnapshot(t *testing.T) {
+	capture := &intakeCapture{}
+	server := httptest.NewServer(capture.handler(t))
+	defer server.Close()
+
+	cfg := testConfig()
+	cfg.Endpoint = server.URL + "/stsAgent/intake"
+	cfg.Interval = time.Second
+	cfg.SnapshotMaxAge = time.Hour
+	cfg.HandoverDelay = 600 * time.Millisecond
+	exp, err := NewFactory().CreateLogs(context.Background(), exportertest.NewNopSettings(NewFactory().Type()), cfg)
+	require.NoError(t, err)
+	require.NoError(t, exp.Start(context.Background(), componenttest.NewNopHost()))
+	defer func() { require.NoError(t, exp.Shutdown(context.Background())) }()
+
+	for _, logs := range snapshotRecords(t, "1", loadFixture(t)) {
+		require.NoError(t, exp.ConsumeLogs(context.Background(), logs))
+	}
+	require.Eventually(t, func() bool { return snapshotStarts(capture) == 1 }, 5*time.Second, 5*time.Millisecond)
+	time.Sleep(700 * time.Millisecond)
+	assert.Equal(t, 1, snapshotStarts(capture), "the next snapshot waits a full interval after the handover one")
+	require.Eventually(t, func() bool { return snapshotStarts(capture) == 2 }, 5*time.Second, 10*time.Millisecond)
+}
+
+func TestMissingSnapshotWarningIgnoresAStandbyReplica(t *testing.T) {
+	const warning = "No complete Cluster Observer snapshot received"
+	run := func(t *testing.T, records []plog.Logs) int {
+		t.Helper()
+		core, logs := observer.New(zap.WarnLevel)
+		cfg := testConfig()
+		cfg.Interval = 10 * time.Millisecond
+		cfg.SnapshotMaxAge = 20 * time.Millisecond
+		exp := newTopologyExporter(cfg, zap.New(core), testSender(cfg.Endpoint))
+		for _, record := range records {
+			require.NoError(t, exp.consumeLogs(context.Background(), record))
+		}
+		require.NoError(t, exp.start(context.Background(), nil))
+		time.Sleep(200 * time.Millisecond)
+		require.NoError(t, exp.shutdown(context.Background()))
+		return logs.FilterMessageSnippet(warning).Len()
+	}
+
+	assert.Zero(t, run(t, nil), "a standby replica receives nothing and must not warn")
+	objects := loadFixture(t)
+	assert.Equal(t, 1, run(t, []plog.Logs{objectRecord(t, objects[0], "MODIFIED")}),
+		"objects without snapshot boundaries indicate a misconfigured observer")
 }

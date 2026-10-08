@@ -56,6 +56,8 @@ type topologyExporter struct {
 	delivery          sync.Mutex
 	cancelDelivery    context.CancelFunc
 	handoverScheduled time.Time
+	// deliveries counts snapshots handed to the sender; only the run loop reads it.
+	deliveries int
 
 	testHookDuringReset func()
 }
@@ -190,6 +192,7 @@ func (e *topologyExporter) run(ctx context.Context, initialized <-chan struct{})
 	ticker := time.NewTicker(e.cfg.Interval)
 	defer ticker.Stop()
 	warned := false
+	deliveries := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -198,6 +201,12 @@ func (e *topologyExporter) run(ctx context.Context, initialized <-chan struct{})
 		case <-ticker.C:
 		}
 		sent, err := e.sendSnapshot(ctx)
+		// The interval runs from the last delivery, so a handover or
+		// first-ready snapshot is not followed by an early periodic one.
+		if e.deliveries != deliveries {
+			deliveries = e.deliveries
+			ticker.Reset(e.cfg.Interval)
+		}
 		if errors.Is(err, errCollectPanic) {
 			// A panicking collector may leave correlators blocked; stop rather than leak every cycle.
 			e.logger.Error("Kubernetes topology collection failed permanently; no further topology is sent", zap.Error(err))
@@ -206,7 +215,9 @@ func (e *topologyExporter) run(ctx context.Context, initialized <-chan struct{})
 			}
 			return
 		}
-		if !sent && !warned && e.now().Sub(e.started) > e.cfg.SnapshotMaxAge {
+		// A standby replica receives no records at all, so only warn when
+		// objects arrive without a complete snapshot.
+		if !sent && !warned && e.store.hasObjects() && e.now().Sub(e.started) > e.cfg.SnapshotMaxAge {
 			e.logger.Warn("No complete Cluster Observer snapshot received; check that the observer " +
 				"feeds this exporter with emit_snapshot_boundaries enabled")
 			warned = true
@@ -290,6 +301,7 @@ func (e *topologyExporter) sendSnapshot(ctx context.Context) (bool, error) {
 		relations = append(relations, *relation)
 	}
 	payloads := buildPayloads(e.producer, e.instance, components, relations, e.cfg.MaxElementsPerRequest)
+	e.deliveries++
 	if err := e.sender.sendAll(ctx, payloads); err != nil {
 		e.logger.Warn("Failed to send topology snapshot; retrying at the next interval", zap.Error(err))
 		return true, nil
