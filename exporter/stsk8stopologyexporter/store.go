@@ -81,6 +81,12 @@ func (s *objectStore) endSnapshot(id string, complete bool, now time.Time) bool 
 	return s.ready
 }
 
+func (s *objectStore) hasObjects() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.objects) > 0
+}
+
 func (s *objectStore) reset() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
