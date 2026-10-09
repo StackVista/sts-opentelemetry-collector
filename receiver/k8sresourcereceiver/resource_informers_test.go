@@ -837,8 +837,9 @@ func TestResourceInformers_StaticInformer_SanitizesSecrets(t *testing.T) {
 	secret := &unstructured.Unstructured{Object: map[string]interface{}{
 		testAPIVersionKey: "v1",
 		testKindKey:       "Secret",
-		testMetadataKey:   map[string]interface{}{"name": "db", "namespace": "default"},
-		"data":            map[string]interface{}{"password": "aHVudGVyMg=="}, //nolint:gosec // test fixture
+		testMetadataKey: map[string]interface{}{"name": "db", "namespace": "default",
+			"managedFields": []interface{}{map[string]interface{}{"manager": "kubectl"}}},
+		"data": map[string]interface{}{"password": "aHVudGVyMg=="}, //nolint:gosec // test fixture
 	}}
 	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(s,
 		map[schema.GroupVersionResource]string{crdGVR: testCRDListKind, secretsGVR: "SecretList"},
@@ -859,6 +860,8 @@ func TestResourceInformers_StaticInformer_SanitizesSecrets(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, data, 1)
 	assert.Contains(t, data, k8ssanitize.SecretDataHashKey)
+	_, found, _ := unstructured.NestedFieldNoCopy(objs[0].Object, "metadata", "managedFields")
+	assert.False(t, found, "managedFields are dropped on ingestion")
 }
 
 // watchListClient hides the fake client's opt-out, so informers initialise
