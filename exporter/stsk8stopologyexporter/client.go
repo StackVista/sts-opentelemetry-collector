@@ -1,6 +1,7 @@
 package stsk8stopologyexporter
 
 import (
+	"encoding/json"
 	"sort"
 
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8stopologyexporter/internal/apiserver"
@@ -12,7 +13,6 @@ import (
 	extensionsV1B "k8s.io/api/extensions/v1beta1"
 	netV1 "k8s.io/api/networking/v1"
 	storageV1 "k8s.io/api/storage/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/version"
 )
 
@@ -43,7 +43,7 @@ func listTyped[T any](c *cacheClient, group, kind, version string) []T {
 	out := make([]T, 0, len(keys))
 	for _, key := range keys {
 		var typed T
-		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(c.objects[key].object, &typed); err != nil {
+		if err := json.Unmarshal(c.objects[key].raw, &typed); err != nil {
 			c.logger.Warn("Skipping Kubernetes object that cannot be converted",
 				zap.String("kind", kind), zap.String("namespace", key.namespace),
 				zap.String("name", key.name), zap.Error(err))

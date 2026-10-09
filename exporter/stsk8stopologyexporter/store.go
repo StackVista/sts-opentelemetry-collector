@@ -9,9 +9,12 @@ type objectKey struct {
 	group, kind, namespace, name string
 }
 
+// storedObject keeps the object as JSON: the store holds every object of the
+// cluster for the exporter's lifetime, and JSON is several times smaller than
+// decoded maps.
 type storedObject struct {
 	version string
-	object  map[string]any
+	raw     []byte
 }
 
 // objectStore mirrors the Cluster Observer's object stream. It becomes ready
@@ -31,10 +34,10 @@ func newObjectStore() *objectStore {
 	return &objectStore{objects: map[objectKey]storedObject{}}
 }
 
-func (s *objectStore) upsert(key objectKey, version string, object map[string]any) {
+func (s *objectStore) upsert(key objectKey, version string, raw []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.objects[key] = storedObject{version: version, object: object}
+	s.objects[key] = storedObject{version: version, raw: raw}
 	if s.seen != nil {
 		s.seen[key] = struct{}{}
 	}
