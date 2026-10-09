@@ -12,8 +12,8 @@ func key(name string) objectKey {
 	return objectKey{kind: "Pod", namespace: "default", name: name}
 }
 
-func obj(name string) map[string]any {
-	return map[string]any{"metadata": map[string]any{"name": name}}
+func obj(name string) []byte {
+	return []byte(`{"metadata":{"name":"` + name + `"}}`)
 }
 
 func TestStoreReadyOnlyAfterCompleteSnapshot(t *testing.T) {

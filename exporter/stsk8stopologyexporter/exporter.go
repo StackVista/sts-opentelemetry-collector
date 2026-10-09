@@ -2,6 +2,7 @@ package stsk8stopologyexporter
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sync"
 	"time"
@@ -177,7 +178,15 @@ func (e *topologyExporter) consumeObject(record plog.LogRecord) {
 		e.store.remove(key)
 		return
 	}
-	e.store.upsert(key, stringAttr(attrs, attrVersion), object)
+	// The topology collectors drop managedFields anyway.
+	delete(metadata, "managedFields")
+	raw, err := json.Marshal(object)
+	if err != nil {
+		e.logger.Warn("Skipping Kubernetes object that cannot be encoded",
+			zap.String("kind", key.kind), zap.String("namespace", namespace), zap.String("name", name), zap.Error(err))
+		return
+	}
+	e.store.upsert(key, stringAttr(attrs, attrVersion), raw)
 }
 
 func (e *topologyExporter) run(ctx context.Context, initialized <-chan struct{}) {

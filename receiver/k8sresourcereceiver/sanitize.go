@@ -7,11 +7,14 @@ import (
 )
 
 // sanitizeObject is an informer transform, so raw Secret and ConfigMap contents
-// never reach the cache, the peer sync or any consumer. It never errors, because
-// a transform error would stall the informer.
+// never reach the cache, the peer sync or any consumer. It also drops
+// managedFields, which no consumer reads and which make up a large share of
+// each object. It never errors, because a transform error would stall the
+// informer.
 func sanitizeObject(configMapMaxDataSize int) func(interface{}) (interface{}, error) {
 	return func(obj interface{}) (interface{}, error) {
 		if u, ok := obj.(*unstructured.Unstructured); ok {
+			unstructured.RemoveNestedField(u.Object, "metadata", "managedFields")
 			k8ssanitize.Object(u.Object, configMapMaxDataSize)
 		}
 		return obj, nil
