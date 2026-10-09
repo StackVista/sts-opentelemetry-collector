@@ -9,9 +9,10 @@ import (
 	"go.uber.org/zap"
 )
 
-// capabilityLegacyKubernetesTopology is false when the platform no longer
-// needs legacy Kubernetes topology. Absent means it is still needed.
-const capabilityLegacyKubernetesTopology = "legacy-kubernetes-topology"
+// capabilityOtelClusterTopology is true once the platform maps OTel cluster
+// topology, so legacy Kubernetes topology is no longer needed. Absent means it
+// is still needed.
+const capabilityOtelClusterTopology = "otel-cluster-topology"
 
 type discoveryOptions struct {
 	query              features.QueryOptions
@@ -24,7 +25,7 @@ func defaultDiscoveryOptions() discoveryOptions {
 		query: features.QueryOptions{
 			Timeout: 20 * time.Second, AttemptTimeout: 5 * time.Second, MaxAttempts: 3,
 			InitialBackoff: 500 * time.Millisecond, MaxBackoff: 2 * time.Second,
-			BooleanCapabilities: []string{capabilityLegacyKubernetesTopology},
+			BooleanCapabilities: []string{capabilityOtelClusterTopology},
 		},
 		poll:               features.PollOptions{Interval: time.Minute, Jitter: 0.2},
 		stableObservations: 3,
@@ -83,8 +84,8 @@ func (m *modeSelector) observe(result features.Result) (bool, bool) {
 }
 
 func legacyRequired(advertised map[string]any) bool {
-	value, ok := advertised[capabilityLegacyKubernetesTopology].(bool)
-	return !ok || value
+	otel, ok := advertised[capabilityOtelClusterTopology].(bool)
+	return !ok || !otel
 }
 
 // discover applies the initial query, closes initialized, then follows the
