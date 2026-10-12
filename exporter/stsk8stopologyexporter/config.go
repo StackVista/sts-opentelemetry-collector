@@ -52,8 +52,8 @@ type Config struct {
 	// MaxAttempts is the number of attempts per request before the snapshot is abandoned.
 	MaxAttempts int `mapstructure:"max_attempts"`
 
-	// DiscoveryEnabled follows the platform's legacy-kubernetes-topology
-	// capability: legacy topology is not sent while it is false.
+	// DiscoveryEnabled follows the platform's otel-cluster-topology
+	// capability: legacy topology is not sent while it is true.
 	DiscoveryEnabled bool `mapstructure:"discovery_enabled"`
 
 	Resources          ResourcesConfig `mapstructure:"resources"`

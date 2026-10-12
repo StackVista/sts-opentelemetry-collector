@@ -23,8 +23,8 @@ func valid(advertised map[string]any) features.Result {
 }
 
 func TestModeSelector(t *testing.T) {
-	off := map[string]any{capabilityLegacyKubernetesTopology: false}
-	on := map[string]any{capabilityLegacyKubernetesTopology: true}
+	off := map[string]any{capabilityOtelClusterTopology: true}
+	on := map[string]any{capabilityOtelClusterTopology: false}
 
 	m := newModeSelector(3)
 	assert.True(t, m.legacyEnabled(), "legacy topology is sent until the platform says otherwise")
@@ -137,7 +137,7 @@ func TestOlderPlatformWithoutFeaturesKeepsLegacyTopology(t *testing.T) {
 
 func TestPlatformThatNoLongerNeedsLegacyTopologyReceivesNone(t *testing.T) {
 	p := &platform{}
-	p.set(http.StatusOK, map[string]any{capabilityLegacyKubernetesTopology: false})
+	p.set(http.StatusOK, map[string]any{capabilityOtelClusterTopology: true})
 	stop := startWithDiscovery(t, p, 20*time.Millisecond)
 	defer stop()
 	time.Sleep(300 * time.Millisecond)
@@ -146,31 +146,31 @@ func TestPlatformThatNoLongerNeedsLegacyTopologyReceivesNone(t *testing.T) {
 
 func TestLegacyTopologyFollowsThePlatformSwitch(t *testing.T) {
 	p := &platform{}
-	p.set(http.StatusOK, map[string]any{capabilityLegacyKubernetesTopology: true})
+	p.set(http.StatusOK, map[string]any{capabilityOtelClusterTopology: false})
 	stop := startWithDiscovery(t, p, 20*time.Millisecond)
 	defer stop()
 	require.Eventually(t, func() bool { return p.snapshots.Load() > 2 }, 10*time.Second, 10*time.Millisecond)
 
-	p.set(http.StatusOK, map[string]any{capabilityLegacyKubernetesTopology: false})
+	p.set(http.StatusOK, map[string]any{capabilityOtelClusterTopology: true})
 	time.Sleep(300 * time.Millisecond)
 	sent := p.snapshots.Load()
 	p.set(http.StatusServiceUnavailable, nil)
 	time.Sleep(200 * time.Millisecond)
 	assert.Equal(t, sent, p.snapshots.Load(), "no legacy topology after the switch, including during a features outage")
 
-	p.set(http.StatusOK, map[string]any{capabilityLegacyKubernetesTopology: true})
+	p.set(http.StatusOK, map[string]any{capabilityOtelClusterTopology: false})
 	require.Eventually(t, func() bool { return p.snapshots.Load() > sent }, 10*time.Second, 10*time.Millisecond)
 }
 
 func TestResumingSendsWithoutWaitingForTheInterval(t *testing.T) {
 	p := &platform{}
-	p.set(http.StatusOK, map[string]any{capabilityLegacyKubernetesTopology: false})
+	p.set(http.StatusOK, map[string]any{capabilityOtelClusterTopology: true})
 	stop := startWithDiscovery(t, p, time.Hour)
 	defer stop()
 	time.Sleep(200 * time.Millisecond)
 	require.Zero(t, p.snapshots.Load())
 
-	p.set(http.StatusOK, map[string]any{capabilityLegacyKubernetesTopology: true})
+	p.set(http.StatusOK, map[string]any{capabilityOtelClusterTopology: false})
 	require.Eventually(t, func() bool { return p.snapshots.Load() > 0 }, 10*time.Second, 10*time.Millisecond)
 }
 
@@ -178,7 +178,7 @@ func TestResumingSendsWithoutWaitingForTheInterval(t *testing.T) {
 // platform has confirmed it no longer needs it.
 func TestConfirmedDisableStopsSnapshotDeliveryInFlight(t *testing.T) {
 	p := &platform{holdFirstIntake: make(chan struct{}), firstIntake: make(chan struct{})}
-	p.set(http.StatusOK, map[string]any{capabilityLegacyKubernetesTopology: true})
+	p.set(http.StatusOK, map[string]any{capabilityOtelClusterTopology: false})
 	stop := startWithDiscovery(t, p, time.Hour)
 	defer stop()
 	select {
@@ -187,7 +187,7 @@ func TestConfirmedDisableStopsSnapshotDeliveryInFlight(t *testing.T) {
 		t.Fatal("the first intake request never arrived")
 	}
 
-	p.set(http.StatusOK, map[string]any{capabilityLegacyKubernetesTopology: false})
+	p.set(http.StatusOK, map[string]any{capabilityOtelClusterTopology: true})
 	time.Sleep(300 * time.Millisecond)
 	close(p.holdFirstIntake)
 	time.Sleep(300 * time.Millisecond)
