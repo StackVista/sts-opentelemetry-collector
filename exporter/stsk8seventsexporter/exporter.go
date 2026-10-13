@@ -65,14 +65,18 @@ func (e *eventsExporter) start(_ context.Context, _ component.Host) error {
 	return nil
 }
 
-func (e *eventsExporter) shutdown(_ context.Context) error {
+// shutdown sends what is still buffered, within the shutdown context: the watch
+// starts from "now" after a restart, so unsent events would never be resent.
+func (e *eventsExporter) shutdown(ctx context.Context) error {
 	if e.cancel != nil {
 		e.cancel()
 	}
 	e.wg.Wait()
-	if e.sender != nil {
-		e.sender.client.CloseIdleConnections()
+	if e.sender == nil {
+		return nil
 	}
+	e.flush(ctx)
+	e.sender.client.CloseIdleConnections()
 	return nil
 }
 

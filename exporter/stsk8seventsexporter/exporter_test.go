@@ -160,6 +160,20 @@ func TestBufferDropsOldestEvents(t *testing.T) {
 	assert.Zero(t, exp.dropped)
 }
 
+func TestShutdownSendsBufferedEvents(t *testing.T) {
+	exp, capture := testExporter(t, clusterTypeKubernetes, func(cfg *Config) { cfg.Interval = time.Hour })
+	require.NoError(t, exp.start(context.Background(), nil))
+	consumeFixture(t, exp)
+	payloads, _ := capture.snapshot()
+	require.Empty(t, payloads, "nothing is sent before the interval")
+
+	require.NoError(t, exp.shutdown(context.Background()))
+	payloads, _ = capture.snapshot()
+	require.Len(t, payloads, 1, "shutdown sends what is buffered")
+	assert.NotEmpty(t, payloads[0].Events[clusterTypeKubernetes])
+	assert.Empty(t, exp.pending)
+}
+
 func TestStartAndShutdown(t *testing.T) {
 	exp, capture := testExporter(t, clusterTypeKubernetes, func(cfg *Config) { cfg.Interval = 10 * time.Millisecond })
 	require.NoError(t, exp.start(context.Background(), nil))
