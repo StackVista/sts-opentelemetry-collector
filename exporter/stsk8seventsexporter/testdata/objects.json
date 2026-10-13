@@ -1,0 +1,105 @@
+[
+  {
+    "apiVersion": "v1", "kind": "Event",
+    "metadata": {"name": "web-7d4b9c-abcde.17a1", "namespace": "shop", "uid": "0b1f0a52-0001-4e0e-9a3b-000000000001", "resourceVersion": "1001"},
+    "involvedObject": {"kind": "Pod", "namespace": "shop", "name": "web-7d4b9c-abcde", "uid": "4a9c1d3e-1111-4e0e-9a3b-000000000001", "apiVersion": "v1", "fieldPath": "spec.containers{web}"},
+    "reason": "BackOff", "message": "Back-off restarting failed container web in pod web-7d4b9c-abcde_shop", "type": "Warning", "count": 3,
+    "source": {"component": "kubelet", "host": "node-1"},
+    "firstTimestamp": "2026-10-13T08:00:00Z", "lastTimestamp": "2026-10-13T08:05:00Z"
+  },
+  {
+    "apiVersion": "v1", "kind": "Event",
+    "metadata": {"name": "node-1.17a2", "namespace": "default", "uid": "0b1f0a52-0002-4e0e-9a3b-000000000002", "resourceVersion": "1002"},
+    "involvedObject": {"kind": "Node", "name": "node-1", "uid": "node-1"},
+    "reason": "NodeReady", "message": "Node node-1 status is now: NodeReady", "type": "Normal", "count": 1,
+    "source": {"component": "kubelet", "host": "node-1"},
+    "firstTimestamp": "2026-10-13T08:01:00Z", "lastTimestamp": "2026-10-13T08:01:00Z"
+  },
+  {
+    "apiVersion": "v1", "kind": "Event",
+    "metadata": {"name": "web.17a3", "namespace": "shop", "uid": "0b1f0a52-0003-4e0e-9a3b-000000000003", "resourceVersion": "1003"},
+    "involvedObject": {"kind": "Deployment", "namespace": "shop", "name": "web", "apiVersion": "apps/v1"},
+    "reason": "ScalingReplicaSet", "message": "Scaled up replica set web-7d4b9c to 2", "type": "Normal", "count": 1,
+    "source": {"component": "deployment-controller"},
+    "firstTimestamp": "2026-10-13T08:02:00Z", "lastTimestamp": "2026-10-13T08:02:00Z"
+  },
+  {
+    "apiVersion": "v1", "kind": "Event",
+    "metadata": {"name": "web-hpa.17a4", "namespace": "shop", "uid": "0b1f0a52-0004-4e0e-9a3b-000000000004", "resourceVersion": "1004"},
+    "involvedObject": {"kind": "HorizontalPodAutoscaler", "namespace": "shop", "name": "web-hpa", "apiVersion": "autoscaling/v2"},
+    "reason": "SuccessfulRescale", "message": "New size: 3; reason: cpu resource utilization above target", "type": "Normal", "count": 2,
+    "source": {"component": "horizontal-pod-autoscaler"},
+    "firstTimestamp": "2026-10-13T08:03:00Z", "lastTimestamp": "2026-10-13T08:04:00Z"
+  },
+  {
+    "apiVersion": "v1", "kind": "Event",
+    "metadata": {"name": "web.17a5", "namespace": "shop", "uid": "0b1f0a52-0005-4e0e-9a3b-000000000005", "resourceVersion": "1005"},
+    "involvedObject": {"kind": "Service", "namespace": "shop", "name": "web"},
+    "reason": "MysteryChange", "message": "Something changed", "type": "Normal", "count": 1,
+    "source": {"component": "custom-controller"},
+    "firstTimestamp": "2026-10-13T08:05:00Z", "lastTimestamp": "2026-10-13T08:05:00Z"
+  },
+  {
+    "apiVersion": "v1", "kind": "Event",
+    "metadata": {"name": "web.17a6", "namespace": "shop", "uid": "0b1f0a52-0006-4e0e-9a3b-000000000006", "resourceVersion": "1006"},
+    "involvedObject": {"kind": "Service", "namespace": "shop", "name": "web"},
+    "reason": "UnknownReason", "message": "Something nobody categorised", "type": "Normal", "count": 1,
+    "source": {"component": "custom-controller"},
+    "firstTimestamp": "2026-10-13T08:06:00Z", "lastTimestamp": "2026-10-13T08:06:00Z"
+  },
+  {
+    "apiVersion": "v1", "kind": "Event",
+    "metadata": {"name": "data-0.17a7", "namespace": "shop", "uid": "0b1f0a52-0007-4e0e-9a3b-000000000007", "resourceVersion": "1007"},
+    "involvedObject": {"kind": "Pod", "namespace": "shop", "name": "data-0", "fieldPath": "spec.initContainers{init}"},
+    "reason": "Created", "message": "Created container init", "type": "Warning", "count": 1,
+    "source": {"component": "kubelet", "host": "node-2"},
+    "firstTimestamp": "2026-10-13T08:07:00Z", "lastTimestamp": "2026-10-13T08:07:00Z"
+  },
+  {
+    "apiVersion": "v1", "kind": "Event",
+    "metadata": {"name": "web.17a8", "namespace": "shop", "uid": "0b1f0a52-0008-4e0e-9a3b-000000000008", "resourceVersion": "1008"},
+    "involvedObject": {"kind": "Service", "namespace": "shop", "name": "web"},
+    "reason": "UpdatedLoadBalancer", "message": "", "type": "Normal", "count": 1,
+    "source": {"component": "service-controller"},
+    "firstTimestamp": "2026-10-13T08:08:00Z", "lastTimestamp": "2026-10-13T08:08:00Z"
+  },
+  {
+    "apiVersion": "v1", "kind": "Event",
+    "metadata": {"name": "web-7d4b9c-abcde.17a9", "namespace": "shop", "uid": "0b1f0a52-0009-4e0e-9a3b-000000000009", "resourceVersion": "1009"},
+    "involvedObject": {"kind": "Pod", "namespace": "shop", "name": "web-7d4b9c-abcde"},
+    "reason": "Scheduled", "message": "Successfully assigned shop/web-7d4b9c-abcde to node-1", "type": "Normal", "count": 1,
+    "source": {"component": "default-scheduler"},
+    "eventTime": "2026-10-13T08:09:00.000000Z"
+  },
+  {
+    "apiVersion": "v1", "kind": "Event",
+    "metadata": {"name": "web-pdb.17aa", "namespace": "shop", "uid": "0b1f0a52-0010-4e0e-9a3b-000000000010", "resourceVersion": "1010"},
+    "involvedObject": {"kind": "PodDisruptionBudget", "namespace": "shop", "name": "web-pdb", "apiVersion": "policy/v1"},
+    "reason": "NoPods", "message": "No matching pods found", "type": "Normal", "count": 1,
+    "source": {"component": "controllermanager"},
+    "firstTimestamp": "2026-10-13T08:10:00Z", "lastTimestamp": "2026-10-13T08:10:00Z"
+  },
+  {
+    "apiVersion": "v1", "kind": "Pod",
+    "metadata": {"name": "batch-oom", "namespace": "jobs", "uid": "7c2e1f90-2222-4e0e-9a3b-000000000002", "resourceVersion": "2001"},
+    "spec": {"nodeName": "node-2", "containers": [{"name": "worker", "image": "worker:1"}, {"name": "sidecar", "image": "sidecar:1"}]},
+    "status": {
+      "phase": "Failed",
+      "containerStatuses": [
+        {"name": "worker", "ready": false, "restartCount": 0, "image": "worker:1", "imageID": "", "state": {"terminated": {"exitCode": 137, "reason": "OOMKilled", "startedAt": "2026-10-13T07:50:00Z", "finishedAt": "2026-10-13T07:55:00Z"}}},
+        {"name": "sidecar", "ready": true, "restartCount": 0, "image": "sidecar:1", "imageID": "", "state": {"running": {"startedAt": "2026-10-13T07:50:00Z"}}}
+      ]
+    }
+  },
+  {
+    "apiVersion": "v1", "kind": "Pod",
+    "metadata": {"name": "web-7d4b9c-abcde", "namespace": "shop", "uid": "4a9c1d3e-1111-4e0e-9a3b-000000000001", "resourceVersion": "2002"},
+    "spec": {"nodeName": "node-1", "containers": [{"name": "web", "image": "web:1"}]},
+    "status": {
+      "phase": "Running",
+      "containerStatuses": [
+        {"name": "web", "ready": false, "restartCount": 4, "image": "web:1", "imageID": "", "state": {"waiting": {"reason": "CrashLoopBackOff"}}, "lastState": {"terminated": {"exitCode": 137, "reason": "OOMKilled", "startedAt": "2026-10-13T07:58:00Z", "finishedAt": "2026-10-13T07:59:00Z"}}}
+      ]
+    }
+  }
+]
