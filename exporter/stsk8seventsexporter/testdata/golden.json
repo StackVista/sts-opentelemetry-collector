@@ -1,0 +1,600 @@
+{
+  "kubernetes": {
+    "apiKey": "",
+    "events": {
+      "kubernetes": [
+        {
+          "msg_title": "BackOff - web-7d4b9c-abcde Pod (3x)",
+          "msg_text": "Back-off restarting failed container web in pod web-7d4b9c-abcde_shop",
+          "timestamp": 1791878700,
+          "priority": "normal",
+          "host": "node-1-golden-cluster",
+          "tags": [
+            "alert_type:warning",
+            "kube_cluster_name:golden-cluster",
+            "kube_container_name:web",
+            "kube_namespace:shop",
+            "kube_object_kind:Pod",
+            "kube_object_name:web-7d4b9c-abcde",
+            "kube_reason:BackOff",
+            "source_component:kubelet"
+          ],
+          "alert_type": "warning",
+          "source_type_name": "kubernetes",
+          "event_type": "BackOff",
+          "context": {
+            "source_identifier": "0b1f0a52-0001-4e0e-9a3b-000000000001",
+            "element_identifiers": [
+              "urn:kubernetes:/golden-cluster:shop:pod/web-7d4b9c-abcde:container/web",
+              "urn:kubernetes:/golden-cluster:shop:pod/web-7d4b9c-abcde"
+            ],
+            "source": "kubernetes",
+            "category": "Alerts",
+            "data": {},
+            "source_links": []
+          }
+        },
+        {
+          "msg_title": "NodeReady - node-1 Node (1x)",
+          "msg_text": "Node node-1 status is now: NodeReady",
+          "timestamp": 1791878460,
+          "priority": "normal",
+          "host": "node-1-golden-cluster",
+          "tags": [
+            "alert_type:info",
+            "kube_cluster_name:golden-cluster",
+            "kube_object_kind:Node",
+            "kube_object_name:node-1",
+            "kube_reason:NodeReady",
+            "source_component:kubelet"
+          ],
+          "alert_type": "info",
+          "source_type_name": "kubernetes",
+          "event_type": "NodeReady",
+          "context": {
+            "source_identifier": "0b1f0a52-0002-4e0e-9a3b-000000000002",
+            "element_identifiers": [
+              "urn:kubernetes:/golden-cluster:node/node-1"
+            ],
+            "source": "kubernetes",
+            "category": "Activities",
+            "data": {},
+            "source_links": []
+          }
+        },
+        {
+          "msg_title": "ScalingReplicaSet - web Deployment (1x)",
+          "msg_text": "Scaled up replica set web-7d4b9c to 2",
+          "timestamp": 1791878520,
+          "priority": "normal",
+          "host": "agent-host",
+          "tags": [
+            "alert_type:info",
+            "kube_cluster_name:golden-cluster",
+            "kube_namespace:shop",
+            "kube_object_kind:Deployment",
+            "kube_object_name:web",
+            "kube_reason:ScalingReplicaSet",
+            "source_component:deployment-controller"
+          ],
+          "alert_type": "info",
+          "source_type_name": "kubernetes",
+          "event_type": "ScalingReplicaSet",
+          "context": {
+            "source_identifier": "0b1f0a52-0003-4e0e-9a3b-000000000003",
+            "element_identifiers": [
+              "urn:kubernetes:/golden-cluster:shop:deployment/web"
+            ],
+            "source": "kubernetes",
+            "category": "Activities",
+            "data": {},
+            "source_links": []
+          }
+        },
+        {
+          "msg_title": "SuccessfulRescale - web-hpa HorizontalPodAutoscaler (2x)",
+          "msg_text": "New size: 3; reason: cpu resource utilization above target",
+          "timestamp": 1791878640,
+          "priority": "normal",
+          "host": "agent-host",
+          "tags": [
+            "alert_type:info",
+            "kube_cluster_name:golden-cluster",
+            "kube_namespace:shop",
+            "kube_object_kind:HorizontalPodAutoscaler",
+            "kube_object_name:web-hpa",
+            "kube_reason:SuccessfulRescale",
+            "source_component:horizontal-pod-autoscaler"
+          ],
+          "alert_type": "info",
+          "source_type_name": "kubernetes",
+          "event_type": "SuccessfulRescale",
+          "context": {
+            "source_identifier": "0b1f0a52-0004-4e0e-9a3b-000000000004",
+            "element_identifiers": [
+              "urn:kubernetes:/golden-cluster:shop:pod/web-hpa"
+            ],
+            "source": "kubernetes",
+            "category": "Activities",
+            "data": {},
+            "source_links": []
+          }
+        },
+        {
+          "msg_title": "MysteryChange - web Service (1x)",
+          "msg_text": "Something changed",
+          "timestamp": 1791878700,
+          "priority": "normal",
+          "host": "agent-host",
+          "tags": [
+            "alert_type:info",
+            "kube_cluster_name:golden-cluster",
+            "kube_namespace:shop",
+            "kube_object_kind:Service",
+            "kube_object_name:web",
+            "kube_reason:MysteryChange",
+            "source_component:custom-controller"
+          ],
+          "alert_type": "info",
+          "source_type_name": "kubernetes",
+          "event_type": "MysteryChange",
+          "context": {
+            "source_identifier": "0b1f0a52-0005-4e0e-9a3b-000000000005",
+            "element_identifiers": [
+              "urn:kubernetes:/golden-cluster:shop:service/web"
+            ],
+            "source": "kubernetes",
+            "category": "Changes",
+            "data": {},
+            "source_links": []
+          }
+        },
+        {
+          "msg_title": "UnknownReason - web Service (1x)",
+          "msg_text": "Something nobody categorised",
+          "timestamp": 1791878760,
+          "priority": "normal",
+          "host": "agent-host",
+          "tags": [
+            "alert_type:info",
+            "kube_cluster_name:golden-cluster",
+            "kube_namespace:shop",
+            "kube_object_kind:Service",
+            "kube_object_name:web",
+            "kube_reason:UnknownReason",
+            "source_component:custom-controller"
+          ],
+          "alert_type": "info",
+          "source_type_name": "kubernetes",
+          "event_type": "UnknownReason",
+          "context": {
+            "source_identifier": "0b1f0a52-0006-4e0e-9a3b-000000000006",
+            "element_identifiers": [
+              "urn:kubernetes:/golden-cluster:shop:service/web"
+            ],
+            "source": "kubernetes",
+            "category": "Others",
+            "data": {},
+            "source_links": []
+          }
+        },
+        {
+          "msg_title": "Created - data-0 Pod (1x)",
+          "msg_text": "Created container init",
+          "timestamp": 1791878820,
+          "priority": "normal",
+          "host": "node-2-golden-cluster",
+          "tags": [
+            "alert_type:warning",
+            "kube_cluster_name:golden-cluster",
+            "kube_namespace:shop",
+            "kube_object_kind:Pod",
+            "kube_object_name:data-0",
+            "kube_reason:Created",
+            "source_component:kubelet"
+          ],
+          "alert_type": "warning",
+          "source_type_name": "kubernetes",
+          "event_type": "Created",
+          "context": {
+            "source_identifier": "0b1f0a52-0007-4e0e-9a3b-000000000007",
+            "element_identifiers": [
+              "urn:kubernetes:/golden-cluster:shop:pod/data-0"
+            ],
+            "source": "kubernetes",
+            "category": "Alerts",
+            "data": {},
+            "source_links": []
+          }
+        },
+        {
+          "msg_title": "Scheduled - web-7d4b9c-abcde Pod (1x)",
+          "msg_text": "Successfully assigned shop/web-7d4b9c-abcde to node-1",
+          "timestamp": -62135596800,
+          "priority": "normal",
+          "host": "-golden-cluster",
+          "tags": [
+            "alert_type:info",
+            "kube_cluster_name:golden-cluster",
+            "kube_namespace:shop",
+            "kube_object_kind:Pod",
+            "kube_object_name:web-7d4b9c-abcde",
+            "kube_reason:Scheduled",
+            "source_component:default-scheduler"
+          ],
+          "alert_type": "info",
+          "source_type_name": "kubernetes",
+          "event_type": "Scheduled",
+          "context": {
+            "source_identifier": "0b1f0a52-0009-4e0e-9a3b-000000000009",
+            "element_identifiers": [
+              "urn:kubernetes:/golden-cluster:shop:pod/web-7d4b9c-abcde"
+            ],
+            "source": "kubernetes",
+            "category": "Activities",
+            "data": {},
+            "source_links": []
+          }
+        },
+        {
+          "msg_title": "NoPods - web-pdb PodDisruptionBudget (1x)",
+          "msg_text": "No matching pods found",
+          "timestamp": 1791879000,
+          "priority": "normal",
+          "host": "agent-host",
+          "tags": [
+            "alert_type:info",
+            "kube_cluster_name:golden-cluster",
+            "kube_namespace:shop",
+            "kube_object_kind:PodDisruptionBudget",
+            "kube_object_name:web-pdb",
+            "kube_reason:NoPods",
+            "source_component:controllermanager"
+          ],
+          "alert_type": "info",
+          "source_type_name": "kubernetes",
+          "event_type": "NoPods",
+          "context": {
+            "source_identifier": "0b1f0a52-0010-4e0e-9a3b-000000000010",
+            "element_identifiers": [
+              "",
+              ""
+            ],
+            "source": "kubernetes",
+            "category": "Activities",
+            "data": {},
+            "source_links": []
+          }
+        },
+        {
+          "msg_title": "OOMKilled - batch-oom Pod (1x)",
+          "msg_text": "Container 'worker' was killed due to an out of memory (OOM) condition",
+          "timestamp": 1791878100,
+          "priority": "normal",
+          "host": "node-2-golden-cluster",
+          "tags": [
+            "alert_type:warning",
+            "kube_cluster_name:golden-cluster",
+            "kube_namespace:jobs",
+            "kube_object_kind:Pod",
+            "kube_object_name:batch-oom",
+            "kube_reason:OOMKilled",
+            "source_component:"
+          ],
+          "alert_type": "warning",
+          "source_type_name": "kubernetes",
+          "event_type": "OOMKilled",
+          "context": {
+            "element_identifiers": [
+              "urn:kubernetes:/golden-cluster:jobs:pod/batch-oom"
+            ],
+            "source": "kubernetes",
+            "category": "Alerts",
+            "data": {},
+            "source_links": []
+          }
+        }
+      ]
+    },
+    "internalHostname": "collector-pod"
+  },
+  "openshift": {
+    "apiKey": "",
+    "events": {
+      "openshift": [
+        {
+          "msg_title": "BackOff - web-7d4b9c-abcde Pod (3x)",
+          "msg_text": "Back-off restarting failed container web in pod web-7d4b9c-abcde_shop",
+          "timestamp": 1791878700,
+          "priority": "normal",
+          "host": "node-1-golden-cluster",
+          "tags": [
+            "alert_type:warning",
+            "kube_cluster_name:golden-cluster",
+            "kube_container_name:web",
+            "kube_namespace:shop",
+            "kube_object_kind:Pod",
+            "kube_object_name:web-7d4b9c-abcde",
+            "kube_reason:BackOff",
+            "source_component:kubelet"
+          ],
+          "alert_type": "warning",
+          "source_type_name": "openshift",
+          "event_type": "BackOff",
+          "context": {
+            "source_identifier": "0b1f0a52-0001-4e0e-9a3b-000000000001",
+            "element_identifiers": [
+              "urn:openshift:/golden-cluster:shop:pod/web-7d4b9c-abcde:container/web",
+              "urn:openshift:/golden-cluster:shop:pod/web-7d4b9c-abcde"
+            ],
+            "source": "openshift",
+            "category": "Alerts",
+            "data": {},
+            "source_links": []
+          }
+        },
+        {
+          "msg_title": "NodeReady - node-1 Node (1x)",
+          "msg_text": "Node node-1 status is now: NodeReady",
+          "timestamp": 1791878460,
+          "priority": "normal",
+          "host": "node-1-golden-cluster",
+          "tags": [
+            "alert_type:info",
+            "kube_cluster_name:golden-cluster",
+            "kube_object_kind:Node",
+            "kube_object_name:node-1",
+            "kube_reason:NodeReady",
+            "source_component:kubelet"
+          ],
+          "alert_type": "info",
+          "source_type_name": "openshift",
+          "event_type": "NodeReady",
+          "context": {
+            "source_identifier": "0b1f0a52-0002-4e0e-9a3b-000000000002",
+            "element_identifiers": [
+              "urn:openshift:/golden-cluster:node/node-1"
+            ],
+            "source": "openshift",
+            "category": "Activities",
+            "data": {},
+            "source_links": []
+          }
+        },
+        {
+          "msg_title": "ScalingReplicaSet - web Deployment (1x)",
+          "msg_text": "Scaled up replica set web-7d4b9c to 2",
+          "timestamp": 1791878520,
+          "priority": "normal",
+          "host": "agent-host",
+          "tags": [
+            "alert_type:info",
+            "kube_cluster_name:golden-cluster",
+            "kube_namespace:shop",
+            "kube_object_kind:Deployment",
+            "kube_object_name:web",
+            "kube_reason:ScalingReplicaSet",
+            "source_component:deployment-controller"
+          ],
+          "alert_type": "info",
+          "source_type_name": "openshift",
+          "event_type": "ScalingReplicaSet",
+          "context": {
+            "source_identifier": "0b1f0a52-0003-4e0e-9a3b-000000000003",
+            "element_identifiers": [
+              "urn:openshift:/golden-cluster:shop:deployment/web"
+            ],
+            "source": "openshift",
+            "category": "Activities",
+            "data": {},
+            "source_links": []
+          }
+        },
+        {
+          "msg_title": "SuccessfulRescale - web-hpa HorizontalPodAutoscaler (2x)",
+          "msg_text": "New size: 3; reason: cpu resource utilization above target",
+          "timestamp": 1791878640,
+          "priority": "normal",
+          "host": "agent-host",
+          "tags": [
+            "alert_type:info",
+            "kube_cluster_name:golden-cluster",
+            "kube_namespace:shop",
+            "kube_object_kind:HorizontalPodAutoscaler",
+            "kube_object_name:web-hpa",
+            "kube_reason:SuccessfulRescale",
+            "source_component:horizontal-pod-autoscaler"
+          ],
+          "alert_type": "info",
+          "source_type_name": "openshift",
+          "event_type": "SuccessfulRescale",
+          "context": {
+            "source_identifier": "0b1f0a52-0004-4e0e-9a3b-000000000004",
+            "element_identifiers": [
+              "urn:openshift:/golden-cluster:shop:pod/web-hpa"
+            ],
+            "source": "openshift",
+            "category": "Activities",
+            "data": {},
+            "source_links": []
+          }
+        },
+        {
+          "msg_title": "MysteryChange - web Service (1x)",
+          "msg_text": "Something changed",
+          "timestamp": 1791878700,
+          "priority": "normal",
+          "host": "agent-host",
+          "tags": [
+            "alert_type:info",
+            "kube_cluster_name:golden-cluster",
+            "kube_namespace:shop",
+            "kube_object_kind:Service",
+            "kube_object_name:web",
+            "kube_reason:MysteryChange",
+            "source_component:custom-controller"
+          ],
+          "alert_type": "info",
+          "source_type_name": "openshift",
+          "event_type": "MysteryChange",
+          "context": {
+            "source_identifier": "0b1f0a52-0005-4e0e-9a3b-000000000005",
+            "element_identifiers": [
+              "urn:openshift:/golden-cluster:shop:service/web"
+            ],
+            "source": "openshift",
+            "category": "Changes",
+            "data": {},
+            "source_links": []
+          }
+        },
+        {
+          "msg_title": "UnknownReason - web Service (1x)",
+          "msg_text": "Something nobody categorised",
+          "timestamp": 1791878760,
+          "priority": "normal",
+          "host": "agent-host",
+          "tags": [
+            "alert_type:info",
+            "kube_cluster_name:golden-cluster",
+            "kube_namespace:shop",
+            "kube_object_kind:Service",
+            "kube_object_name:web",
+            "kube_reason:UnknownReason",
+            "source_component:custom-controller"
+          ],
+          "alert_type": "info",
+          "source_type_name": "openshift",
+          "event_type": "UnknownReason",
+          "context": {
+            "source_identifier": "0b1f0a52-0006-4e0e-9a3b-000000000006",
+            "element_identifiers": [
+              "urn:openshift:/golden-cluster:shop:service/web"
+            ],
+            "source": "openshift",
+            "category": "Others",
+            "data": {},
+            "source_links": []
+          }
+        },
+        {
+          "msg_title": "Created - data-0 Pod (1x)",
+          "msg_text": "Created container init",
+          "timestamp": 1791878820,
+          "priority": "normal",
+          "host": "node-2-golden-cluster",
+          "tags": [
+            "alert_type:warning",
+            "kube_cluster_name:golden-cluster",
+            "kube_namespace:shop",
+            "kube_object_kind:Pod",
+            "kube_object_name:data-0",
+            "kube_reason:Created",
+            "source_component:kubelet"
+          ],
+          "alert_type": "warning",
+          "source_type_name": "openshift",
+          "event_type": "Created",
+          "context": {
+            "source_identifier": "0b1f0a52-0007-4e0e-9a3b-000000000007",
+            "element_identifiers": [
+              "urn:openshift:/golden-cluster:shop:pod/data-0"
+            ],
+            "source": "openshift",
+            "category": "Alerts",
+            "data": {},
+            "source_links": []
+          }
+        },
+        {
+          "msg_title": "Scheduled - web-7d4b9c-abcde Pod (1x)",
+          "msg_text": "Successfully assigned shop/web-7d4b9c-abcde to node-1",
+          "timestamp": -62135596800,
+          "priority": "normal",
+          "host": "-golden-cluster",
+          "tags": [
+            "alert_type:info",
+            "kube_cluster_name:golden-cluster",
+            "kube_namespace:shop",
+            "kube_object_kind:Pod",
+            "kube_object_name:web-7d4b9c-abcde",
+            "kube_reason:Scheduled",
+            "source_component:default-scheduler"
+          ],
+          "alert_type": "info",
+          "source_type_name": "openshift",
+          "event_type": "Scheduled",
+          "context": {
+            "source_identifier": "0b1f0a52-0009-4e0e-9a3b-000000000009",
+            "element_identifiers": [
+              "urn:openshift:/golden-cluster:shop:pod/web-7d4b9c-abcde"
+            ],
+            "source": "openshift",
+            "category": "Activities",
+            "data": {},
+            "source_links": []
+          }
+        },
+        {
+          "msg_title": "NoPods - web-pdb PodDisruptionBudget (1x)",
+          "msg_text": "No matching pods found",
+          "timestamp": 1791879000,
+          "priority": "normal",
+          "host": "agent-host",
+          "tags": [
+            "alert_type:info",
+            "kube_cluster_name:golden-cluster",
+            "kube_namespace:shop",
+            "kube_object_kind:PodDisruptionBudget",
+            "kube_object_name:web-pdb",
+            "kube_reason:NoPods",
+            "source_component:controllermanager"
+          ],
+          "alert_type": "info",
+          "source_type_name": "openshift",
+          "event_type": "NoPods",
+          "context": {
+            "source_identifier": "0b1f0a52-0010-4e0e-9a3b-000000000010",
+            "element_identifiers": [
+              "",
+              ""
+            ],
+            "source": "openshift",
+            "category": "Activities",
+            "data": {},
+            "source_links": []
+          }
+        },
+        {
+          "msg_title": "OOMKilled - batch-oom Pod (1x)",
+          "msg_text": "Container 'worker' was killed due to an out of memory (OOM) condition",
+          "timestamp": 1791878100,
+          "priority": "normal",
+          "host": "node-2-golden-cluster",
+          "tags": [
+            "alert_type:warning",
+            "kube_cluster_name:golden-cluster",
+            "kube_namespace:jobs",
+            "kube_object_kind:Pod",
+            "kube_object_name:batch-oom",
+            "kube_reason:OOMKilled",
+            "source_component:"
+          ],
+          "alert_type": "warning",
+          "source_type_name": "openshift",
+          "event_type": "OOMKilled",
+          "context": {
+            "element_identifiers": [
+              "urn:openshift:/golden-cluster:jobs:pod/batch-oom"
+            ],
+            "source": "openshift",
+            "category": "Alerts",
+            "data": {},
+            "source_links": []
+          }
+        }
+      ]
+    },
+    "internalHostname": "collector-pod"
+  }
+}

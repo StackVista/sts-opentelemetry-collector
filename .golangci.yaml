@@ -60,6 +60,7 @@ linters:
       - connector/topologyconnector/generated/
       - extension/settingsproviderextension/generated/
       - exporter/stsk8stopologyexporter/internal/(topologycollectors|urn|hostname|dns|apiserver)/
+      - exporter/stsk8seventsexporter/internal/(eventmapper|urn|hostname)/
   settings:
     gomoddirectives:
       replace-local: true
@@ -79,3 +80,4 @@ formatters:
       - builtin$
       - examples$
       - exporter/stsk8stopologyexporter/internal/(topologycollectors|urn|hostname|dns|apiserver)/
+      - exporter/stsk8seventsexporter/internal/(eventmapper|urn|hostname)/
