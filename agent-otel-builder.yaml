@@ -23,6 +23,8 @@ connectors:
 exporters:
   - gomod: github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8slogsexporter v0.0.0
     path: ./exporter/stsk8slogsexporter
+  - gomod: github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8seventsexporter v0.0.0
+    path: ./exporter/stsk8seventsexporter
   - gomod: github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8stopologyexporter v0.0.0
     path: ./exporter/stsk8stopologyexporter
   - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.161.0
@@ -35,6 +37,7 @@ receivers:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.161.0
   - gomod: github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver v0.0.0
     path: ./receiver/k8sresourcereceiver
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sobjectsreceiver v0.161.0
 
 extensions:
   - gomod: github.com/stackvista/sts-opentelemetry-collector/extension/stslogsagentextension v0.0.0

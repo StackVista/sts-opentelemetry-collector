@@ -6,7 +6,8 @@
 # load it. Leader election is enabled here so the validate run covers the
 # k8s_leader_elector extension. The HTTP OTLP exporter (otlphttp) is used so this
 # fixture exercises the otlphttp exporter from the BOM. The experimental
-# Kubernetes topology branch (stsk8stopology exporter) is enabled.
+# Kubernetes topology branch (stsk8stopology exporter) is enabled, and so is the
+# experimental Kubernetes events branch (k8sobjects receiver, stsk8sevents exporter).
 receivers:
   prometheus/self:
     config:
@@ -73,6 +74,17 @@ receivers:
         group: apps
       - name: volumeattachments
         group: storage.k8s.io
+  k8sobjects/kubernetes-events:
+    k8s_leader_elector: k8s_leader_elector
+    objects:
+      - name: events
+        group: ""
+        mode: watch
+        exclude_watch_type: [DELETED]
+      - name: pods
+        group: ""
+        mode: watch
+        exclude_watch_type: [DELETED]
 
 processors:
   transform/pre-k8sattributes:
@@ -148,6 +160,16 @@ exporters:
       ingresses: true
       jobs: true
       cronjobs: true
+  stsk8sevents:
+    endpoint: https://suse-observability/receiver/stsAgent/intake
+    api_key: test-api-key
+    tls:
+      insecure_skip_verify: true
+    cluster_name: test-cluster
+    cluster_type: kubernetes
+    default_host: test-node-test-cluster
+    event_categories:
+      MysteryChange: Changes
 
 extensions:
   health_check:
@@ -185,6 +207,9 @@ service:
     logs/kubernetes-topology:
       receivers: [k8sresource]
       exporters: [stsk8stopology]
+    logs/kubernetes-events:
+      receivers: [k8sobjects/kubernetes-events]
+      exporters: [stsk8sevents]
     metrics/self:
       receivers: [prometheus/self]
       processors: [transform/pre-k8sattributes, k8s_attributes, transform/self-metrics, batch]
