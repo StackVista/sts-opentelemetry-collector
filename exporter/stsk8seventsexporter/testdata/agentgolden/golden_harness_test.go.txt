@@ -1,0 +1,125 @@
+//go:build kubeapiserver
+
+// Copied into stackstate-agent pkg/collector/corechecks/cluster/kubeapi by
+// generate.sh. It maps testdata/objects.json with the cluster agent's event
+// mapper and OOM synthesis, applies what checkSender.Event and
+// BufferedAggregator.addEvent do next, and records the body the serializer
+// sends to the intake.
+package kubeapi
+
+import (
+	"encoding/json"
+	"os"
+	"testing"
+
+	logmock "github.com/DataDog/datadog-agent/comp/core/log/mock"
+	forwarder "github.com/DataDog/datadog-agent/comp/forwarder/defaultforwarder"
+	"github.com/DataDog/datadog-agent/comp/forwarder/defaultforwarder/transaction"
+	metricscompressionimpl "github.com/DataDog/datadog-agent/comp/serializer/metricscompression/impl"
+	"github.com/DataDog/datadog-agent/pkg/collector/corechecks/cluster/urn"
+	core "github.com/DataDog/datadog-agent/pkg/collector/corechecks"
+	configmock "github.com/DataDog/datadog-agent/pkg/config/mock"
+	"github.com/DataDog/datadog-agent/pkg/metrics/event"
+	"github.com/DataDog/datadog-agent/pkg/serializer"
+	"github.com/DataDog/datadog-agent/pkg/tagset"
+	"github.com/stretchr/testify/mock"
+	v1 "k8s.io/api/core/v1"
+)
+
+const (
+	goldenClusterName      = "golden-cluster"
+	goldenDefaultHost      = "agent-host"
+	goldenInternalHostname = "collector-pod"
+)
+
+func TestGenerateEventsExporterGolden(t *testing.T) {
+	raw, err := os.ReadFile(os.Getenv("GOLDEN_FIXTURE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var objects []json.RawMessage
+	if err := json.Unmarshal(raw, &objects); err != nil {
+		t.Fatal(err)
+	}
+	check := NewKubernetesAPIEventsCheck(core.NewCheckBase(KubernetesAPIEventsCheckName), &EventsConfig{})
+	out := map[string]json.RawMessage{}
+	for _, clusterType := range []urn.ClusterType{urn.Kubernetes, urn.OpenShift} {
+		mapper := &kubernetesEventMapper{
+			urn:                     urn.NewURNBuilder(clusterType, goldenClusterName),
+			clusterName:             goldenClusterName,
+			sourceType:              string(clusterType),
+			eventCategoriesOverride: map[string]EventCategory{"MysteryChange": Changes},
+		}
+		var events []event.Event
+		for _, object := range objects {
+			var kind struct {
+				Kind string `json:"kind"`
+			}
+			if err := json.Unmarshal(object, &kind); err != nil {
+				t.Fatal(err)
+			}
+			switch kind.Kind {
+			case "Event":
+				var ev v1.Event
+				if err := json.Unmarshal(object, &ev); err != nil {
+					t.Fatal(err)
+				}
+				mapped, err := mapper.mapKubernetesEvent(&ev)
+				if err != nil {
+					continue
+				}
+				events = append(events, mapped)
+			case "Pod":
+				var pod v1.Pod
+				if err := json.Unmarshal(object, &pod); err != nil {
+					t.Fatal(err)
+				}
+				events = append(events, check.podToEventMapper(&pod, mapper, nil)...)
+			}
+		}
+		submitted := make(event.Events, 0, len(events))
+		for i := range events {
+			e := events[i]
+			if e.Host == "" {
+				e.Host = goldenDefaultHost
+			}
+			tb := tagset.NewHashlessTagsAccumulatorFromSlice(e.Tags)
+			tb.SortUniq()
+			e.Tags = tb.Get()
+			submitted = append(submitted, &e)
+		}
+		out[string(clusterType)] = serializeEvents(t, submitted)
+	}
+	data, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(os.Getenv("GOLDEN_OUTPUT"), append(data, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func serializeEvents(t *testing.T, events event.Events) json.RawMessage {
+	cfg := configmock.New(t)
+	compressor := metricscompressionimpl.NewCompressorReq(metricscompressionimpl.Requires{Cfg: cfg}).Comp
+	f := &forwarder.MockedForwarder{}
+	var payloads transaction.BytesPayloads
+	f.On("SubmitV1Intake", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+		payloads = append(payloads, args.Get(0).(transaction.BytesPayloads)...)
+	}).Return(nil)
+	s := serializer.NewSerializer(f, nil, compressor, cfg, logmock.New(t), goldenInternalHostname)
+	if err := s.SendEvents(events); err != nil {
+		t.Fatal(err)
+	}
+	if len(payloads) != 1 {
+		t.Fatalf("expected one intake payload, got %d", len(payloads))
+	}
+	body, err := compressor.Decompress(payloads[0].GetContent())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !json.Valid(body) {
+		t.Fatalf("serializer produced invalid JSON: %s", body)
+	}
+	return body
+}
