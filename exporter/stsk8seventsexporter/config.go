@@ -17,6 +17,10 @@ const (
 	intakeSuffix          = "/stsAgent/intake"
 	clusterTypeKubernetes = "kubernetes"
 	clusterTypeOpenShift  = "openshift"
+
+	authTypeServiceAccount = "serviceAccount"
+	authTypeKubeConfig     = "kubeConfig"
+	authTypeNone           = "none"
 )
 
 // Config configures the cluster-agent-compatible Kubernetes events exporter.
@@ -35,6 +39,9 @@ type Config struct {
 	// ClusterType is kubernetes or openshift; it sets the URN prefix and the
 	// event source type.
 	ClusterType string `mapstructure:"cluster_type"`
+	// AuthType is how the exporter reads the kube-system namespace UID for the
+	// orch_cluster_id tag: serviceAccount, kubeConfig, or none to omit the tag.
+	AuthType string `mapstructure:"auth_type"`
 	// InternalHostname identifies the producer; the default is the pod hostname.
 	InternalHostname string `mapstructure:"internal_hostname"`
 	// DefaultHost is set on events without a host, which the cluster agent fills
@@ -74,6 +81,11 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.ClusterType != clusterTypeKubernetes && cfg.ClusterType != clusterTypeOpenShift {
 		return errors.New("cluster_type must be kubernetes or openshift")
+	}
+	switch cfg.AuthType {
+	case authTypeServiceAccount, authTypeKubeConfig, authTypeNone:
+	default:
+		return errors.New("auth_type must be serviceAccount, kubeConfig or none")
 	}
 	for reason, category := range cfg.EventCategories {
 		if !slices.Contains(eventmapper.ValidCategories, eventmapper.EventCategory(category)) {

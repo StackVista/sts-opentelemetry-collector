@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.uber.org/zap"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8seventsexporter/internal/eventmapper"
 )
@@ -35,6 +36,8 @@ type eventsExporter struct {
 	producer    string
 	defaultHost string
 	now         func() time.Time
+	kubeClient  func() (kubernetes.Interface, error)
+	clusterTag  string
 
 	mu      sync.Mutex
 	pending []telemetry.Event
@@ -57,12 +60,31 @@ func newEventsExporter(
 	}
 }
 
-func (e *eventsExporter) start(_ context.Context, _ component.Host) error {
-	ctx, cancel := context.WithCancel(context.Background())
+func (e *eventsExporter) start(ctx context.Context, _ component.Host) error {
+	e.resolveClusterTag(ctx)
+	runCtx, cancel := context.WithCancel(context.Background())
 	e.cancel = cancel
 	e.wg.Add(1)
-	go e.run(ctx)
+	go e.run(runCtx)
 	return nil
+}
+
+// resolveClusterTag sets the orch_cluster_id tag that the cluster agent's
+// aggregator adds to every event. Without it, events are sent untagged, as the
+// agent does when the cluster ID is unavailable.
+func (e *eventsExporter) resolveClusterTag(ctx context.Context) {
+	if e.kubeClient == nil || e.cfg.AuthType == authTypeNone {
+		return
+	}
+	client, err := e.kubeClient()
+	if err == nil {
+		var clusterID string
+		if clusterID, err = lookupClusterID(ctx, client); err == nil {
+			e.clusterTag = orchClusterIDTag + ":" + clusterID
+			return
+		}
+	}
+	e.logger.Warn("Cannot read the cluster ID; events are sent without the orch_cluster_id tag", zap.Error(err))
 }
 
 // shutdown sends what is still buffered, within the shutdown context: the watch
@@ -155,8 +177,8 @@ func (e *eventsExporter) decode(object pcommon.Map, into any) bool {
 }
 
 // enqueue applies what the cluster agent's sender and aggregator do after
-// mapping: a default host, a timestamp for events without one, and sorted,
-// deduplicated tags.
+// mapping: a default host, a timestamp for events without one, the cluster ID
+// tag, and sorted, deduplicated tags.
 func (e *eventsExporter) enqueue(events ...telemetry.Event) {
 	if len(events) == 0 {
 		return
@@ -167,6 +189,9 @@ func (e *eventsExporter) enqueue(events ...telemetry.Event) {
 		}
 		if events[i].Ts == 0 {
 			events[i].Ts = e.now().Unix()
+		}
+		if e.clusterTag != "" {
+			events[i].Tags = append(events[i].Tags, e.clusterTag)
 		}
 		slices.Sort(events[i].Tags)
 		events[i].Tags = slices.Compact(events[i].Tags)
