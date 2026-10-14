@@ -61,6 +61,7 @@ replaces:
   - google.golang.org/grpc => google.golang.org/grpc v1.83.2
   - github.com/klauspost/compress => github.com/klauspost/compress v1.20.0
   - golang.org/x/crypto => golang.org/x/crypto v0.56.0
+  - github.com/goccy/go-json => github.com/goccy/go-json v0.11.2
   # The agent does not include the server modules that select these fixed exporters.
   # Keep its generated distribution on the patched OTel SDK release as well.
   - go.opentelemetry.io/otel/exporters/otlp/otlptrace => go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.45.0
