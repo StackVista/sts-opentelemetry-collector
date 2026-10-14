@@ -10,6 +10,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/plog"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 func fixtureEvents(t *testing.T) []map[string]any {
@@ -183,4 +187,53 @@ func TestStartAndShutdown(t *testing.T) {
 		return len(payloads) == 1
 	}, 5*time.Second, 10*time.Millisecond)
 	require.NoError(t, exp.shutdown(context.Background()))
+}
+
+func TestEventsCarryClusterID(t *testing.T) {
+	exp, capture := testExporter(t, clusterTypeKubernetes, func(cfg *Config) { cfg.Interval = time.Hour })
+	exp.kubeClient = func() (kubernetes.Interface, error) {
+		return fake.NewClientset(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system", UID: "4a7394ae-dc2e-4b36-aca9-47222b432701"}}), nil
+	}
+	require.NoError(t, exp.start(context.Background(), nil))
+	consumeFixture(t, exp)
+	require.NoError(t, exp.shutdown(context.Background()))
+
+	payloads, _ := capture.snapshot()
+	require.Len(t, payloads, 1)
+	events := payloads[0].Events[clusterTypeKubernetes]
+	require.NotEmpty(t, events)
+	for _, event := range events {
+		assert.Contains(t, event.Tags, "orch_cluster_id:4a7394ae-dc2e-4b36-aca9-47222b432701")
+		assert.IsNonDecreasing(t, event.Tags)
+	}
+}
+
+func TestEventsAreSentWithoutClusterIDWhenUnavailable(t *testing.T) {
+	for name, tc := range map[string]struct {
+		client kubernetes.Interface
+		err    error
+	}{
+		"no client":    {err: assert.AnError},
+		"no namespace": {client: fake.NewClientset()},
+	} {
+		t.Run(name, func(t *testing.T) {
+			exp, _ := testExporter(t, clusterTypeKubernetes, func(cfg *Config) { cfg.Interval = time.Hour })
+			exp.kubeClient = func() (kubernetes.Interface, error) { return tc.client, tc.err }
+			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			defer cancel()
+			require.NoError(t, exp.start(ctx, nil))
+			defer func() { require.NoError(t, exp.shutdown(context.Background())) }()
+			assert.Empty(t, exp.clusterTag)
+		})
+	}
+}
+
+func TestAuthTypeNoneSkipsClusterID(t *testing.T) {
+	exp, _ := testExporter(t, clusterTypeKubernetes, func(cfg *Config) { cfg.AuthType = authTypeNone })
+	exp.kubeClient = func() (kubernetes.Interface, error) {
+		t.Fatal("no Kubernetes client is created")
+		return nil, assert.AnError
+	}
+	exp.resolveClusterTag(context.Background())
+	assert.Empty(t, exp.clusterTag)
 }

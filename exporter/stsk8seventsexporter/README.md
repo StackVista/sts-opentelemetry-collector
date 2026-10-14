@@ -17,7 +17,10 @@ The exporter consumes `k8sobjectsreceiver` watch-mode log records for core
 - `DELETED` watch events and other records are ignored.
 
 After mapping, the exporter applies what the agent's sender and aggregator do:
-events without a host get `default_host`, and tags are sorted and deduplicated.
+events without a host get `default_host`, every event gets the
+`orch_cluster_id:<kube-system namespace UID>` tag, and tags are sorted and
+deduplicated. The exporter reads the UID once at startup, which needs `get` on
+namespaces. If it cannot, events are sent without the tag, as the agent does.
 Events are buffered and sent every `interval`, grouped under the source type
 (`kubernetes` or `openshift`), in requests of at most `max_events_per_request`.
 
@@ -68,6 +71,7 @@ receivers:
 | `api_key` | | Receiver API key |
 | `cluster_name` | | Must match the topology's cluster name |
 | `cluster_type` | `kubernetes` | `kubernetes` or `openshift` |
+| `auth_type` | `serviceAccount` | How to read the cluster ID: `serviceAccount`, `kubeConfig`, or `none` to omit the tag |
 | `internal_hostname` | pod hostname | Producer identity |
 | `default_host` | `internal_hostname` | Host for events the agent would assign its own hostname |
 | `event_categories` | | Category per event reason: `Alerts`, `Changes`, `Activities` or `Others` |

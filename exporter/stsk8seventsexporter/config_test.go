@@ -27,6 +27,7 @@ func TestConfigValidate(t *testing.T) {
 		"api key with control char":    func(c *Config) { c.APIKey = "key\n" },
 		"missing cluster name":         func(c *Config) { c.ClusterName = "" },
 		"unknown cluster type":         func(c *Config) { c.ClusterType = "eks" },
+		"unknown auth type":            func(c *Config) { c.AuthType = "token" },
 		"unknown event category":       func(c *Config) { c.EventCategories = map[string]string{"DarkMystery": "V0ID"} },
 		"zero timeout":                 func(c *Config) { c.TimeoutSettings.Timeout = 0 },
 		"zero interval":                func(c *Config) { c.Interval = 0 },
@@ -64,6 +65,7 @@ func TestFactoryCreatesLogsExporter(t *testing.T) {
 	factory := NewFactory()
 	cfg := validConfig()
 	cfg.InternalHostname = "collector"
+	cfg.AuthType = authTypeNone
 	exp, err := factory.CreateLogs(context.Background(), exportertest.NewNopSettings(factory.Type()), cfg)
 	require.NoError(t, err)
 	require.NoError(t, exp.Start(context.Background(), componenttest.NewNopHost()))

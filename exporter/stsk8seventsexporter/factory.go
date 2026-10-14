@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8seventsexporter/internal/eventmapper"
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8seventsexporter/internal/urn"
@@ -33,6 +34,7 @@ func createDefaultConfig() component.Config {
 	return &Config{
 		TimeoutSettings:     exporterhelper.TimeoutConfig{Timeout: 30 * time.Second},
 		ClusterType:         clusterTypeKubernetes,
+		AuthType:            authTypeServiceAccount,
 		Interval:            15 * time.Second,
 		MaxEventsPerRequest: 1000,
 		MaxBufferedEvents:   10000,
@@ -80,6 +82,7 @@ func createLogsExporter(ctx context.Context, set exporter.Settings, config compo
 	clusterType := urn.ClusterTypeFromString(cfg.ClusterType)
 	mapper := eventmapper.New(clusterType, cfg.ClusterName, cfg.categoryOverrides(), set.Logger)
 	exp := newEventsExporter(cfg, set.Logger, sender, mapper, producer)
+	exp.kubeClient = func() (kubernetes.Interface, error) { return newKubeClient(cfg.AuthType) }
 	return exporterhelper.NewLogs(ctx, set, cfg, exp.consumeLogs,
 		exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
 		exporterhelper.WithTimeout(exporterhelper.TimeoutConfig{Timeout: 0}),
