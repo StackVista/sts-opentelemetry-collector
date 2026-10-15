@@ -9,8 +9,7 @@ dist:
 
 # Strict Bill of Materials for the agent-side collectors shipped by the
 # suse-observability-agent Helm chart: the Prometheus scraper, the k8s-resource
-# collector, and the node collector's kubelet and host scrapers. The node collector's
-# chart wiring does not exist yet, so its components are included here ahead of it.
+# collector, and the node collector's kubelet and host scrapers.
 # Server-side components (clickhouse, kafka, topology, servicegraph, settingsprovider,
 # prometheusremotewrite, forward, servicetokenauth, stsusage) live in
 # sts-otel-builder.yaml and are intentionally absent here.
