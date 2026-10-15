@@ -1,0 +1,225 @@
+# Where each Agent V2 metric can come from in an OpenTelemetry pipeline.
+#
+# One row per metric or glob pattern. The build script matches the most specific pattern
+# first (exact name beats glob, longer glob beats shorter), so a family default can be
+# overridden by a single name above it.
+#
+# columns
+#   pattern         metric name or glob, matched against the dotted Agent V2 name
+#   otel_source     receiver and metric that carries the data, or "none"
+#   compat_action   one or more operations joined with "+", see below
+#   unit            unit of the Agent V2 series, for the diff harness
+#   notes           anything a reviewer needs in order to disagree
+#
+# compat_action is a "+" joined list of operations the pipeline has to apply:
+#   rename          the name changes
+#   split           one OTel metric with an attribute becomes several Agent V2 names
+#   scale           a numeric factor or unit conversion is required
+#   rate            OTel ships a cumulative counter, Agent V2 ships a per-second rate
+#   derive          arithmetic over one or more OTel metrics
+#   no-source       nothing in the chosen receivers produces it
+#   undecided       needs a decision, usually recorded in the doc open questions
+#
+# Units are the Agent V2 units as submitted, which are not always the natural OTel unit:
+# the memory and swap checks divide bytes by 1024^2 before submitting, and the disk checks
+# divide by 1024, so those series are MiB and KiB rather than bytes.
+pattern,otel_source,compat_action,unit,notes
+# ---------------------------------------------------------------- kubernetes.* (kubelet)
+kubernetes.kubelet.pod.start.duration.sum,prometheus:kubelet_pod_start_duration_seconds_sum,rename+scale,microseconds,histogram sum converted from seconds to microseconds
+kubernetes.kubelet.pod.start.duration.count,prometheus:kubelet_pod_start_duration_seconds_count,rename,count,histogram count
+kubernetes.kubelet.pod.worker.duration.sum,prometheus:kubelet_pod_worker_duration_seconds_sum,rename+scale,microseconds,histogram sum converted from seconds to microseconds
+kubernetes.kubelet.pod.worker.duration.count,prometheus:kubelet_pod_worker_duration_seconds_count,rename,count,histogram count
+kubernetes.kubelet.pod.worker.start.duration.sum,prometheus:kubelet_pod_worker_start_duration_seconds_sum,rename+scale,microseconds,histogram sum converted from seconds to microseconds
+kubernetes.kubelet.pod.worker.start.duration.count,prometheus:kubelet_pod_worker_start_duration_seconds_count,rename,count,histogram count
+kubernetes.kubelet.network_plugin.latency.sum,prometheus:kubelet_network_plugin_operations_duration_seconds_sum,rename+scale,microseconds,histogram sum converted from seconds to microseconds
+kubernetes.kubelet.network_plugin.latency.count,prometheus:kubelet_network_plugin_operations_duration_seconds_count,rename,count,histogram count
+kubernetes.kubelet.runtime.operations.duration.sum,prometheus:kubelet_runtime_operations_duration_seconds_sum,rename+scale,microseconds,histogram sum converted from seconds to microseconds
+kubernetes.kubelet.runtime.operations.duration.count,prometheus:kubelet_runtime_operations_duration_seconds_count,rename,count,histogram count
+kubernetes.cpu.usage.total,kubeletstats:container.cpu.usage,rename+scale,nanocores,cores to nanocores multiply by 1e9
+kubernetes.cpu.user.total,prometheus:container_cpu_user_seconds_total,rename+rate,seconds per second,cadvisor endpoint
+kubernetes.cpu.system.total,prometheus:container_cpu_system_seconds_total,rename+rate,seconds per second,cadvisor endpoint
+kubernetes.cpu.cfs.periods,prometheus:container_cpu_cfs_periods_total,rename+rate,count per second,cadvisor endpoint
+kubernetes.cpu.cfs.throttled.periods,prometheus:container_cpu_cfs_throttled_periods_total,rename+rate,count per second,cadvisor endpoint
+kubernetes.cpu.cfs.throttled.seconds,prometheus:container_cpu_cfs_throttled_seconds_total,rename+rate,seconds per second,cadvisor endpoint
+kubernetes.cpu.load.10s.avg,prometheus:container_cpu_load_average_10s,rename,count,cadvisor endpoint
+kubernetes.cpu.capacity,none,undecided,cores,node capacity is not a kubeletstats metric, may need the pod-spec reader
+kubernetes.memory.capacity,none,undecided,bytes,same as cpu.capacity
+kubernetes.memory.usage,kubeletstats:container.memory.usage,rename,bytes,
+kubernetes.memory.working_set,kubeletstats:container.memory.working_set,rename,bytes,
+kubernetes.memory.rss,kubeletstats:container.memory.rss,rename,bytes,
+kubernetes.memory.cache,prometheus:container_memory_cache,rename,bytes,cadvisor endpoint
+kubernetes.memory.swap,prometheus:container_memory_swap,rename,bytes,cadvisor endpoint
+kubernetes.memory.limits,prometheus:container_spec_memory_limit_bytes,rename,bytes,cadvisor endpoint
+kubernetes.memory.sw_limit,prometheus:container_spec_memory_swap_limit_bytes,rename,bytes,cadvisor endpoint
+kubernetes.memory.usage_pct,kubeletstats:k8s.container.memory_limit_utilization,rename,fraction,usage over limit as a 0 to 1 fraction in both
+kubernetes.memory.sw_in_use,prometheus:container_memory_swap,derive,fraction,swap usage over swap limit as a 0 to 1 fraction
+kubernetes.filesystem.usage,kubeletstats:container.filesystem.usage,rename,bytes,
+kubernetes.filesystem.usage_pct,kubeletstats:container.filesystem.usage,derive,fraction,usage over capacity as a 0 to 1 fraction
+kubernetes.ephemeral_storage.usage,kubeletstats:k8s.container.ephemeral_storage.usage,rename,bytes,
+kubernetes.io.read_bytes,prometheus:container_fs_reads_bytes_total,rename+rate,bytes per second,keep the device label
+kubernetes.io.write_bytes,prometheus:container_fs_writes_bytes_total,rename+rate,bytes per second,keep the device label
+kubernetes.network.rx_bytes,kubeletstats:k8s.pod.network.io,split+rate,bytes per second,direction receive, kubeletstats ships a cumulative sum
+kubernetes.network.tx_bytes,kubeletstats:k8s.pod.network.io,split+rate,bytes per second,direction transmit, kubeletstats ships a cumulative sum
+kubernetes.network.rx_errors,kubeletstats:k8s.pod.network.errors,split+rate,count per second,direction receive, kubeletstats ships a cumulative sum
+kubernetes.network.tx_errors,kubeletstats:k8s.pod.network.errors,split+rate,count per second,direction transmit, kubeletstats ships a cumulative sum
+kubernetes.network.rx_dropped,prometheus:container_network_receive_packets_dropped_total,rename+rate,count per second,cadvisor endpoint
+kubernetes.network.tx_dropped,prometheus:container_network_transmit_packets_dropped_total,rename+rate,count per second,cadvisor endpoint
+kubernetes.node.filesystem.*,kubeletstats:k8s.node.filesystem.usage,derive,bytes,node level, percentage variant needs capacity
+kubernetes.node.image.filesystem.*,none,no-source,bytes,image filesystem is not exposed by kubeletstats
+kubernetes.runtime.*,kubeletstats:k8s.node.system_container.*,rename,mixed,system container metric group must be enabled
+kubernetes.kubelet.memory.*,kubeletstats:k8s.node.system_container.memory.*,rename,bytes,system container metric group
+kubernetes.kubelet.cpu.usage,kubeletstats:k8s.node.system_container.cpu.usage,rename,cores,system container metric group
+kubernetes.containers.restarts,none,undecided,count,pod spec derived, see doc section 7.4 and NA-8
+kubernetes.containers.running,none,undecided,count,derive server side or from the pod-spec reader
+kubernetes.containers.*.waiting,none,undecided,count,reason fan-out, see NA-8
+kubernetes.containers.*.terminated,none,undecided,count,reason fan-out, see NA-8
+kubernetes.pods.running,none,undecided,count,derive server side or from the pod-spec reader
+kubernetes.pods.expired,none,no-source,count,kubelet cache bookkeeping with no OTel equivalent
+kubernetes.pod.terminating.duration,none,undecided,seconds,pod status derived
+kubernetes.pod.resize.pending,none,undecided,count,pod condition derived
+kubernetes.cpu.requests,none,undecided,cores,pod spec derived, see NA-8
+kubernetes.cpu.limits,none,undecided,cores,pod spec derived, see NA-8
+kubernetes.memory.requests,none,undecided,bytes,pod spec derived, see NA-8
+kubernetes.ephemeral-storage.*,none,undecided,bytes,pod spec derived, see NA-8
+kubernetes.kubelet.volume.stats.*,prometheus:kubelet_volume_stats_*,rename,mixed,kubelet /metrics endpoint
+kubernetes.kubelet.pleg.*,prometheus:kubelet_pleg_*,rename,mixed,kubelet /metrics endpoint
+kubernetes.kubelet.runtime.*,prometheus:kubelet_runtime_operations*,rename,mixed,kubelet /metrics endpoint
+kubernetes.kubelet.docker.*,prometheus:kubelet_docker_operations*,rename,mixed,kubelet /metrics endpoint, dockershim only
+kubernetes.kubelet.pod.*,prometheus:kubelet_pod_*,rename,mixed,kubelet /metrics endpoint, histogram variants are listed separately above
+kubernetes.kubelet.evictions,prometheus:kubelet_evictions,rename,count,kubelet /metrics endpoint
+kubernetes.kubelet.network_plugin.latency,prometheus:kubelet_network_plugin_operations_duration_seconds,rename,mixed,kubelet /metrics endpoint, histogram variants are listed separately above
+kubernetes.kubelet.cpu_manager.*,prometheus:kubelet_cpu_manager_pinning_*,rename,count,kubelet /metrics endpoint
+kubernetes.kubelet.container.log_filesystem.used_bytes,prometheus:kubelet_container_log_filesystem_used_bytes,rename,bytes,kubelet /metrics endpoint
+kubernetes.apiserver.certificate.expiration,prometheus:apiserver_client_certificate_expiration_seconds,rename,seconds,kubelet /metrics endpoint
+kubernetes.rest.client.*,prometheus:rest_client_*,rename,mixed,kubelet /metrics endpoint
+kubernetes.*_probe.*,prometheus:prober_probe_total,split,count,probe type and result become separate names
+kubernetes.slis.*,prometheus:kubernetes_healthcheck*,rename,mixed,kubelet /metrics/slis endpoint
+kubernetes.kubelet.check*,none,no-source,service check,no OTLP equivalent, see doc section 7.3 and NA-9
+# ------------------------------------------------------- container.* (generic container)
+container.cpu.usage,kubeletstats:container.cpu.usage,rename+scale,nanocores,duplicates kubernetes.cpu.usage.total
+container.cpu.limit,none,undecided,nanocores,pod spec derived
+container.memory.usage,kubeletstats:container.memory.usage,rename,bytes,duplicates kubernetes.memory.usage
+container.memory.working_set,kubeletstats:container.memory.working_set,rename,bytes,
+container.memory.rss,kubeletstats:container.memory.rss,rename,bytes,
+container.memory.cache,prometheus:container_memory_cache,rename,bytes,cadvisor endpoint
+container.memory.swap,prometheus:container_memory_swap,rename,bytes,cadvisor endpoint
+container.memory.limit,prometheus:container_spec_memory_limit_bytes,rename,bytes,cadvisor endpoint
+container.memory.page_faults,kubeletstats:container.memory.page_faults,rename,count,
+container.memory.major_page_faults,kubeletstats:container.memory.major_page_faults,rename,count,
+container.memory.oom_events,prometheus:container_oom_events_total,rename+rate,count per second,cadvisor endpoint
+container.io.*,prometheus:container_fs_*,rename+rate,mixed,cadvisor endpoint
+container.net.*,kubeletstats:k8s.pod.network.*,split+rate,mixed,pod level only rather than per container, cumulative sum needs rating
+container.uptime,kubeletstats:container.uptime,rename,seconds,optional metric, enable it
+container.restarts,none,undecided,count,pod spec derived, see NA-8
+container.cpu.partial_stall,none,no-source,seconds,PSI, no OTel source
+container.memory.partial_stall,none,no-source,seconds,PSI, no OTel source
+container.io.partial_stall,none,no-source,seconds,PSI, no OTel source
+container.memory.commit*,none,no-source,bytes,Windows commit accounting
+container.memory.refault_*,none,no-source,count,cgroup v2 refault counters
+container.pid.*,none,no-source,count,thread and fd counts are not exposed by kubeletstats
+container.*,none,undecided,mixed,default for anything not classified above
+# ------------------------------------------------------------------ system.* (host checks)
+system.uptime,hostmetrics:system.uptime,rename,seconds,
+system.load.1,hostmetrics:system.cpu.load_average.1m,rename,count,
+system.load.5,hostmetrics:system.cpu.load_average.5m,rename,count,
+system.load.15,hostmetrics:system.cpu.load_average.15m,rename,count,
+system.load.norm.*,hostmetrics:system.cpu.load_average.*,derive,count,divide by system.cpu.logical.count
+system.cpu.num_cores,hostmetrics:system.cpu.logical.count,rename,count,
+system.cpu.guest,none,no-source,percent,gopsutil has Guest, the scraper drops it, see doc section 7.9
+system.cpu.guest.total,none,no-source,jiffies,see doc section 7.9
+system.cpu.guestnice.total,none,no-source,jiffies,see doc section 7.9
+system.cpu.context_switches,none,no-source,count,load.MiscStat.Ctxt, see doc section 7.9
+system.cpu.*.total,hostmetrics:system.cpu.time,split,jiffies,state attribute, irq maps to interrupt and iowait maps to wait
+system.cpu.*,hostmetrics:system.cpu.utilization,derive,percent,ratio to percent per state
+system.mem.total,hostmetrics:system.memory.limit,rename+scale,MiB,agent divides bytes by 1024^2
+system.mem.usable,hostmetrics:system.linux.memory.available,rename+scale,MiB,agent divides bytes by 1024^2
+system.mem.pct_usable,hostmetrics:system.linux.memory.available,derive,fraction,available over limit as a 0 to 1 fraction
+system.mem.shared,hostmetrics:system.memory.linux.shared,rename+scale,MiB,optional metric, agent divides bytes by 1024^2
+system.mem.slab,hostmetrics:system.memory.usage,derive,MiB,sum of slab_reclaimable and slab_unreclaimable then divide by 1024^2
+system.mem.slab_reclaimable,hostmetrics:system.memory.usage,split+scale,MiB,state slab_reclaimable
+system.mem.free,hostmetrics:system.memory.usage,split+scale,MiB,state free
+system.mem.used,hostmetrics:system.memory.usage,split+scale,MiB,state used
+system.mem.cached,hostmetrics:system.memory.usage,split+scale,MiB,state cached
+system.mem.buffered,hostmetrics:system.memory.usage,split+scale,MiB,state buffered
+system.mem.page_tables,none,no-source,MiB,mem.VirtualMemoryStat.PageTables, see doc section 7.9
+system.mem.commit_limit,none,no-source,MiB,see doc section 7.9
+system.mem.committed_as,none,no-source,MiB,see doc section 7.9
+system.mem.committed,none,no-source,MiB,Windows only
+system.mem.allocstall,none,no-source,count,/proc/vmstat, submitted as a monotonic count
+system.mem.pgscan_direct,none,no-source,count,/proc/vmstat, submitted as a monotonic count
+system.mem.pgscan_kswapd,none,no-source,count,/proc/vmstat, submitted as a monotonic count
+system.mem.pgsteal_direct,none,no-source,count,/proc/vmstat, submitted as a monotonic count
+system.mem.pgsteal_kswapd,none,no-source,count,/proc/vmstat, submitted as a monotonic count
+system.mem.paged,none,no-source,MiB,Windows only
+system.mem.nonpaged,none,no-source,MiB,Windows only
+system.mem.pagefile.pct_free,none,no-source,fraction,Windows only, 0 to 1 fraction
+system.mem.pagefile.total,none,no-source,MiB,Windows only
+system.mem.pagefile.free,none,no-source,MiB,Windows only
+system.mem.pagefile.used,none,no-source,MiB,Windows only
+system.swap.cached,none,no-source,MiB,mem.VirtualMemoryStat.SwapCached, see doc section 7.9
+system.swap.total,hostmetrics:system.paging.usage,split+scale,MiB,state, agent divides bytes by 1024^2
+system.swap.free,hostmetrics:system.paging.usage,split+scale,MiB,state free
+system.swap.used,hostmetrics:system.paging.usage,split+scale,MiB,state used
+system.swap.pct_free,hostmetrics:system.paging.utilization,derive,fraction,0 to 1 fraction
+system.swap.swap_in,hostmetrics:system.paging.operations,split+rate+scale,MiB per second,direction page_in, cumulative counter and agent divides by 1024^2
+system.swap.swap_out,hostmetrics:system.paging.operations,split+rate+scale,MiB per second,direction page_out, cumulative counter and agent divides by 1024^2
+system.paging.pct_free,hostmetrics:system.paging.utilization,derive,fraction,Windows naming for swap, 0 to 1 fraction
+system.paging.total,hostmetrics:system.paging.usage,split+scale,MiB,Windows naming for swap
+system.paging.free,hostmetrics:system.paging.usage,split+scale,MiB,Windows naming for swap
+system.paging.used,hostmetrics:system.paging.usage,split+scale,MiB,Windows naming for swap
+system.disk.in_use,hostmetrics:system.filesystem.usage,derive,fraction,used over total as a 0 to 1 fraction
+system.disk.utilized,hostmetrics:system.filesystem.utilization,rename+scale,percent,ratio to percent
+system.disk.total,hostmetrics:system.filesystem.usage,split+scale,KiB,state, agent divides bytes by 1024
+system.disk.used,hostmetrics:system.filesystem.usage,split+scale,KiB,state used
+system.disk.free,hostmetrics:system.filesystem.usage,split+scale,KiB,state free
+system.disk.read_time,hostmetrics:system.disk.operation_time,split+scale,milliseconds,direction read, cumulative seconds to milliseconds, submitted as a monotonic count
+system.disk.write_time,hostmetrics:system.disk.operation_time,split+scale,milliseconds,direction write, cumulative seconds to milliseconds, submitted as a monotonic count
+system.disk.read_time_pct,hostmetrics:system.disk.operation_time,derive,percent,rate of read time scaled to a percentage
+system.disk.write_time_pct,hostmetrics:system.disk.operation_time,derive,percent,rate of write time scaled to a percentage
+system.fs.inodes.in_use,hostmetrics:system.filesystem.inodes.usage,derive,fraction,used over total as a 0 to 1 fraction
+system.fs.inodes.utilized,hostmetrics:system.filesystem.inodes.usage,derive,percent,used over total as a percentage
+system.fs.inodes.total,hostmetrics:system.filesystem.inodes.usage,split,count,state, inode counts rather than bytes
+system.fs.inodes.used,hostmetrics:system.filesystem.inodes.usage,split,count,state used
+system.fs.inodes.free,hostmetrics:system.filesystem.inodes.usage,split,count,state free
+system.fs.file_handles.*,none,no-source,count,/proc/sys/fs/file-nr, see doc section 7.9
+system.io.block_in,none,no-source,count per second,pgpgin via SwapMemoryStat.PgIn, see doc section 7.9
+system.io.block_out,none,no-source,count per second,pgpgout via SwapMemoryStat.PgOut, see doc section 7.9
+system.io.r_s,hostmetrics:system.disk.operations,derive,count per second,rate by direction read
+system.io.w_s,hostmetrics:system.disk.operations,derive,count per second,rate by direction write
+system.io.rkb_s,hostmetrics:system.disk.io,derive,kilobytes per second,rate by direction read divided by 1024
+system.io.wkb_s,hostmetrics:system.disk.io,derive,kilobytes per second,rate by direction write divided by 1024
+system.io.rrqm_s,hostmetrics:system.disk.merged,derive,count per second,rate by direction read
+system.io.wrqm_s,hostmetrics:system.disk.merged,derive,count per second,rate by direction write
+system.io.await,hostmetrics:system.disk.operation_time,derive,milliseconds,delta operation_time over delta operations
+system.io.r_await,hostmetrics:system.disk.operation_time,derive,milliseconds,per direction read
+system.io.w_await,hostmetrics:system.disk.operation_time,derive,milliseconds,per direction write
+system.io.avg_q_sz,hostmetrics:system.disk.weighted_io_time,derive,count,rate of weighted_io_time
+system.io.avg_rq_sz,hostmetrics:system.disk.io,derive,sectors,delta io over delta operations
+system.io.util,hostmetrics:system.disk.io_time,derive,percent,rate of io_time
+system.io.svctm,hostmetrics:system.disk.io_time,derive,milliseconds,approximation, iostat dropped this metric
+system.proc.count,hostmetrics:system.processes.count,rename,count,
+system.proc.queue_length,none,no-source,count,load.MiscStat.ProcsBlocked, see doc section 7.9
+system.net.bytes_rcvd,hostmetrics:system.network.io,split+rate,bytes per second,direction receive
+system.net.bytes_sent,hostmetrics:system.network.io,split+rate,bytes per second,direction transmit
+system.net.packets_in.count,hostmetrics:system.network.packets,split+rate,count per second,direction receive
+system.net.packets_out.count,hostmetrics:system.network.packets,split+rate,count per second,direction transmit
+system.net.packets_in.error,hostmetrics:system.network.errors,split+rate,count per second,direction receive
+system.net.packets_out.error,hostmetrics:system.network.errors,split+rate,count per second,direction transmit
+system.net.packets_in.drop,hostmetrics:system.network.dropped,split+rate,count per second,direction receive
+system.net.packets_out.drop,hostmetrics:system.network.dropped,split+rate,count per second,direction transmit
+system.net.conntrack.count,hostmetrics:system.network.conntrack.count,rename,count,optional metric
+system.net.conntrack.max,hostmetrics:system.network.conntrack.max,rename,count,optional metric
+system.net.tcp.current_established,none,no-source,count,connection state counters come from ss or netstat rather than procfs
+system.net.tcp.recv_q,none,no-source,mixed,submitted through the client side histogram so the aggregate suffixes depend on histogram_aggregates
+system.net.tcp.send_q,none,no-source,mixed,submitted through the client side histogram so the aggregate suffixes depend on histogram_aggregates
+system.net.*.count,none,no-source,count,protocol counters also submitted as a monotonic count, gated by collect_count_metrics on the v2 check
+system.net.conntrack.*,none,no-source,count,conntrack -S detail via net.ConntrackStats, see doc section 7.9
+system.net.ip.*,none,no-source,count per second,/proc/net/snmp via net.ProtoCounters, see doc section 7.9
+system.net.tcp.*,none,no-source,count per second,/proc/net/snmp via net.ProtoCounters, see doc section 7.9
+system.net.tcp4.*,none,no-source,count per second,connection state counters per address family
+system.net.tcp6.*,none,no-source,count per second,connection state counters per address family
+system.net.udp.*,none,no-source,count per second,/proc/net/snmp via net.ProtoCounters, see doc section 7.9
+system.net.ena.*,none,no-source,mixed,ethtool ioctls, scrape node-exporter instead
+system.net.iface.*,none,no-source,count,sysfs queue counts
+system.net.*,none,undecided,mixed,default for anything not classified above
+system.*,none,undecided,mixed,default for anything not classified above

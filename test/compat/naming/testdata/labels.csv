@@ -1,0 +1,11 @@
+variant,strategy,prw,input_attributes,observed_labels
+dotted_gauge_with_attrs,default,v1,direction k8s.pod.name,direction k8s_pod_name
+dotted_gauge_with_attrs,UnderscoreEscapingWithSuffixes,v1,direction k8s.pod.name,direction k8s_pod_name
+dotted_gauge_with_attrs,UnderscoreEscapingWithoutSuffixes,v1,direction k8s.pod.name,direction k8s_pod_name
+dotted_gauge_with_attrs,NoUTF8EscapingWithSuffixes,v2,direction k8s.pod.name,direction k8s.pod.name
+dotted_gauge_with_attrs,NoTranslation,v2,direction k8s.pod.name,direction k8s.pod.name
+dotted_gauge_with_resource_attrs,default,v1,k8s.namespace.name k8s.pod.name,
+dotted_gauge_with_resource_attrs,UnderscoreEscapingWithSuffixes,v1,k8s.namespace.name k8s.pod.name,
+dotted_gauge_with_resource_attrs,UnderscoreEscapingWithoutSuffixes,v1,k8s.namespace.name k8s.pod.name,
+dotted_gauge_with_resource_attrs,NoUTF8EscapingWithSuffixes,v2,k8s.namespace.name k8s.pod.name,
+dotted_gauge_with_resource_attrs,NoTranslation,v2,k8s.namespace.name k8s.pod.name,
