@@ -57,6 +57,7 @@ var extendedCollectors = map[string]string{
 	"jobs":         "batch/v1, Resource=jobs_extended",
 	"nodes":        "core/v1, Resource=nodes_extended",
 	"pods":         "core/v1, Resource=pods_extended",
+	"endpoints":    "core/v1, Resource=endpoints_extended",
 }
 
 // collectorNameReplacement contains a mapping of collector names as they would appear in the KSM config to what
@@ -234,7 +235,8 @@ func (k *KSMCheck) BuildStores(ctx context.Context, client clientset.Interface) 
 
 	// Enable the KSM default collectors if the config collectors list is empty.
 	if len(collectors) == 0 {
-		collectors = options.DefaultResources.AsSlice()
+		// KSM dropped endpoints from its defaults after v2.13.
+		collectors = append(options.DefaultResources.AsSlice(), "endpoints")
 	}
 
 	builder.WithKubeClient(client)
@@ -367,6 +369,7 @@ func (k *KSMCheck) discoverCustomResources(c clientset.Interface, collectors []s
 		customresources.NewExtendedJobFactory(c),
 		customresources.NewExtendedNodeFactory(c),
 		customresources.NewExtendedPodFactory(c),
+		customresources.NewExtendedEndpointFactory(c),
 		customresources.NewDeploymentRolloutFactory(c, k.rolloutTracker),
 		customresources.NewReplicaSetRolloutFactory(c, k.rolloutTracker),
 		customresources.NewStatefulSetRolloutFactory(c, k.rolloutTracker),

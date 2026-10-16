@@ -86,6 +86,9 @@ func (d *DDMetricsFam) extract(f metric.Family) {
 			log.Errorf("Could not retrieve the labels for %s: %v", f.Name, err)
 			continue
 		}
+		if !agentKSMCompat(f.Name, s.Labels) {
+			continue
+		}
 		d.ListMetrics = append(d.ListMetrics, s)
 	}
 }
