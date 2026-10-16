@@ -7,7 +7,8 @@
 # k8s_leader_elector extension. The HTTP OTLP exporter (otlphttp) is used so this
 # fixture exercises the otlphttp exporter from the BOM. The experimental
 # Kubernetes topology branch (stsk8stopology exporter) is enabled, and so is the
-# experimental Kubernetes events branch (k8sobjects receiver, stsk8sevents exporter).
+# experimental Kubernetes events branch (k8sobjects receiver, stsk8sevents exporter),
+# and so is the experimental Kubernetes state metrics branch (stsksm receiver).
 receivers:
   prometheus/self:
     config:
@@ -74,6 +75,12 @@ receivers:
         group: apps
       - name: volumeattachments
         group: storage.k8s.io
+  stsksm:
+    auth_type: serviceAccount
+    cluster_name: test-cluster
+    collection_interval: 40s
+    resync_period: 300s
+    k8s_leader_elector: k8s_leader_elector
   k8sobjects/kubernetes-events:
     k8s_leader_elector: k8s_leader_elector
     objects:
@@ -210,6 +217,10 @@ service:
     logs/kubernetes-events:
       receivers: [k8sobjects/kubernetes-events]
       exporters: [stsk8sevents]
+    metrics/kubernetes-state:
+      receivers: [stsksm]
+      processors: [batch]
+      exporters: [otlphttp/suse-observability]
     metrics/self:
       receivers: [prometheus/self]
       processors: [transform/pre-k8sattributes, k8s_attributes, transform/self-metrics, batch]

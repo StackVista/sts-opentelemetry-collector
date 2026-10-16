@@ -39,6 +39,8 @@ receivers:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.161.0
   - gomod: github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver v0.0.0
     path: ./receiver/k8sresourcereceiver
+  - gomod: github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver v0.0.0
+    path: ./receiver/stsksmreceiver
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sobjectsreceiver v0.161.0
 
 extensions:
