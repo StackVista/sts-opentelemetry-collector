@@ -141,11 +141,7 @@ func (r *ksmReceiver) stopCollection() {
 // run owns one check and its informers; cancelling ctx stops both.
 func (r *ksmReceiver) run(ctx context.Context, done chan struct{}) {
 	defer close(done)
-	check := ksm.New(r.instanceConfig(), ksm.Options{
-		ClusterName:           r.clusterName,
-		RFC1123ClusterNameTag: true,
-		ClusterID:             r.clusterID,
-	})
+	check := r.newCheck()
 	var stores [][]cache.Store
 	buildStores := func() {
 		var err error
@@ -196,6 +192,14 @@ func (r *ksmReceiver) setResource(md pmetric.Metrics) {
 	attrs.PutStr(serviceNamespaceAttribute, "")
 	// Must equal kube_cluster_name: vmagent builds the RBAC _scope_ from k8s_cluster_name when present.
 	attrs.PutStr(clusterNameAttribute, ksm.RFC1123ClusterName(r.clusterName))
+}
+
+func (r *ksmReceiver) newCheck() *ksm.KSMCheck {
+	return ksm.New(r.instanceConfig(), ksm.Options{
+		ClusterName:           r.clusterName,
+		RFC1123ClusterNameTag: true,
+		ClusterID:             r.clusterID,
+	})
 }
 
 // instanceConfig returns a fresh check configuration: the check mutates it.
