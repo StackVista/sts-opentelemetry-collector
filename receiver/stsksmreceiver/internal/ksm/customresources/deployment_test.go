@@ -3,8 +3,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build kubeapiserver
-
 package customresources
 
 import (
@@ -17,14 +15,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/kube-state-metrics/v2/pkg/metric"
-
-	"github.com/DataDog/datadog-agent/pkg/util/kubernetes/apiserver"
 )
 
 func TestDeploymentRolloutFactory_Name(t *testing.T) {
-	client := &apiserver.APIClient{
-		Cl: fake.NewSimpleClientset(),
-	}
+	client := fake.NewSimpleClientset()
 	tracker := NewRolloutTracker()
 	factory := NewDeploymentRolloutFactory(client, tracker)
 
@@ -32,9 +26,7 @@ func TestDeploymentRolloutFactory_Name(t *testing.T) {
 }
 
 func TestDeploymentRolloutFactory_ExpectedType(t *testing.T) {
-	client := &apiserver.APIClient{
-		Cl: fake.NewSimpleClientset(),
-	}
+	client := fake.NewSimpleClientset()
 	tracker := NewRolloutTracker()
 	factory := NewDeploymentRolloutFactory(client, tracker)
 
@@ -44,9 +36,7 @@ func TestDeploymentRolloutFactory_ExpectedType(t *testing.T) {
 }
 
 func TestDeploymentRolloutFactory_MetricFamilyGenerators(t *testing.T) {
-	client := &apiserver.APIClient{
-		Cl: fake.NewSimpleClientset(),
-	}
+	client := fake.NewSimpleClientset()
 	tracker := NewRolloutTracker()
 	factory := NewDeploymentRolloutFactory(client, tracker)
 
@@ -61,9 +51,7 @@ func TestDeploymentRolloutFactory_MetricFamilyGenerators(t *testing.T) {
 
 func TestDeploymentRolloutGeneration_OngoingRollout(t *testing.T) {
 
-	client := &apiserver.APIClient{
-		Cl: fake.NewSimpleClientset(),
-	}
+	client := fake.NewSimpleClientset()
 	tracker := NewRolloutTracker()
 	factory := NewDeploymentRolloutFactory(client, tracker)
 
@@ -107,9 +95,7 @@ func TestDeploymentRolloutGeneration_OngoingRollout(t *testing.T) {
 
 func TestDeploymentRolloutGeneration_CompletedRollout(t *testing.T) {
 
-	client := &apiserver.APIClient{
-		Cl: fake.NewSimpleClientset(),
-	}
+	client := fake.NewSimpleClientset()
 	tracker := NewRolloutTracker()
 	factory := NewDeploymentRolloutFactory(client, tracker)
 
@@ -150,9 +136,7 @@ func TestDeploymentRolloutGeneration_CompletedRollout(t *testing.T) {
 
 func TestDeploymentRolloutGeneration_OngoingRollout_ReplicasMismatch(t *testing.T) {
 
-	client := &apiserver.APIClient{
-		Cl: fake.NewSimpleClientset(),
-	}
+	client := fake.NewSimpleClientset()
 	tracker := NewRolloutTracker()
 	factory := NewDeploymentRolloutFactory(client, tracker)
 
@@ -192,9 +176,7 @@ func TestDeploymentRolloutGeneration_OngoingRollout_ReplicasMismatch(t *testing.
 
 func TestDeploymentRolloutGeneration_NilReplicas(t *testing.T) {
 
-	client := &apiserver.APIClient{
-		Cl: fake.NewSimpleClientset(),
-	}
+	client := fake.NewSimpleClientset()
 	tracker := NewRolloutTracker()
 	factory := NewDeploymentRolloutFactory(client, tracker)
 

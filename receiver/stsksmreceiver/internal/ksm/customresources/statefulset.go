@@ -3,8 +3,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build kubeapiserver
-
 package customresources
 
 import (
@@ -21,14 +19,12 @@ import (
 	"k8s.io/kube-state-metrics/v2/pkg/customresource"
 	"k8s.io/kube-state-metrics/v2/pkg/metric"
 	generator "k8s.io/kube-state-metrics/v2/pkg/metric_generator"
-
-	"github.com/DataDog/datadog-agent/pkg/util/kubernetes/apiserver"
 )
 
 // NewStatefulSetRolloutFactory returns a new StatefulSet rollout factory that provides rollout duration metrics
-func NewStatefulSetRolloutFactory(client *apiserver.APIClient, rolloutTracker RolloutOperations) customresource.RegistryFactory {
+func NewStatefulSetRolloutFactory(client kubernetes.Interface, rolloutTracker RolloutOperations) customresource.RegistryFactory {
 	return &statefulSetRolloutFactory{
-		client:         client.Cl,
+		client:         client,
 		rolloutTracker: rolloutTracker,
 	}
 }

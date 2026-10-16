@@ -3,8 +3,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build kubeapiserver
-
 package customresources
 
 import (
@@ -16,14 +14,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/kube-state-metrics/v2/pkg/metric"
-
-	"github.com/DataDog/datadog-agent/pkg/util/kubernetes/apiserver"
 )
 
 func TestStatefulSetRolloutFactory_Name(t *testing.T) {
-	client := &apiserver.APIClient{
-		Cl: fake.NewSimpleClientset(),
-	}
+	client := fake.NewSimpleClientset()
 	tracker := NewRolloutTracker()
 	factory := NewStatefulSetRolloutFactory(client, tracker)
 
@@ -31,9 +25,7 @@ func TestStatefulSetRolloutFactory_Name(t *testing.T) {
 }
 
 func TestStatefulSetRolloutFactory_ExpectedType(t *testing.T) {
-	client := &apiserver.APIClient{
-		Cl: fake.NewSimpleClientset(),
-	}
+	client := fake.NewSimpleClientset()
 	tracker := NewRolloutTracker()
 	factory := NewStatefulSetRolloutFactory(client, tracker)
 
@@ -43,9 +35,7 @@ func TestStatefulSetRolloutFactory_ExpectedType(t *testing.T) {
 }
 
 func TestStatefulSetRolloutFactory_MetricFamilyGenerators(t *testing.T) {
-	client := &apiserver.APIClient{
-		Cl: fake.NewSimpleClientset(),
-	}
+	client := fake.NewSimpleClientset()
 	tracker := NewRolloutTracker()
 	factory := NewStatefulSetRolloutFactory(client, tracker)
 
@@ -59,9 +49,7 @@ func TestStatefulSetRolloutFactory_MetricFamilyGenerators(t *testing.T) {
 }
 
 func TestStatefulSetRolloutTracking_OngoingRollout(t *testing.T) {
-	client := &apiserver.APIClient{
-		Cl: fake.NewSimpleClientset(),
-	}
+	client := fake.NewSimpleClientset()
 	tracker := NewRolloutTracker()
 	factory := NewStatefulSetRolloutFactory(client, tracker).(*statefulSetRolloutFactory)
 
@@ -105,9 +93,7 @@ func TestStatefulSetRolloutTracking_OngoingRollout(t *testing.T) {
 }
 
 func TestStatefulSetRolloutTracking_CompletedRollout(t *testing.T) {
-	client := &apiserver.APIClient{
-		Cl: fake.NewSimpleClientset(),
-	}
+	client := fake.NewSimpleClientset()
 	tracker := NewRolloutTracker()
 	factory := NewStatefulSetRolloutFactory(client, tracker).(*statefulSetRolloutFactory)
 

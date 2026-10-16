@@ -3,8 +3,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build kubeapiserver
-
 package builder
 
 import (
@@ -35,9 +33,8 @@ import (
 	"k8s.io/kube-state-metrics/v2/pkg/options"
 	"k8s.io/kube-state-metrics/v2/pkg/watch"
 
-	workloadmeta "github.com/DataDog/datadog-agent/comp/core/workloadmeta/def"
-	"github.com/DataDog/datadog-agent/pkg/kubestatemetrics/store"
-	"github.com/DataDog/datadog-agent/pkg/util/log"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ddcompat/log"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ksm/store"
 )
 
 // Builder struct represents the metric store generator
@@ -56,9 +53,6 @@ type Builder struct {
 	resync time.Duration
 
 	collectOnlyUnassignedPods bool
-	useWorkloadmetaForPods    bool
-	WorkloadmetaReflector     *workloadmetaReflector
-	workloadmetaStore         workloadmeta.Component
 
 	callbackEnabledResources map[string]bool // resource types that should have callbacks enabled
 
@@ -184,14 +178,6 @@ func (b *Builder) WithAllowAnnotations(l map[string][]string) {
 	_ = b.ksmBuilder.WithAllowAnnotations(l)
 }
 
-// WithPodCollectionFromWorkloadmeta configures the builder to collect pods from
-// workloadmeta instead of the API server. This has no effect if pod collection
-// is disabled.
-func (b *Builder) WithPodCollectionFromWorkloadmeta(store workloadmeta.Component) {
-	b.useWorkloadmetaForPods = true
-	b.workloadmetaStore = store
-}
-
 // WithUnassignedPodsCollection configures the builder to only collect pods that
 // are not assigned to any node. This has no effect if pod collection is
 // disabled.
@@ -208,17 +194,7 @@ func (b *Builder) Build() metricsstore.MetricsWriterList {
 // BuildStores initializes and registers all enabled stores.
 // It returns metric cache stores.
 func (b *Builder) BuildStores() [][]cache.Store {
-	stores := b.ksmBuilder.BuildStores()
-
-	if b.WorkloadmetaReflector != nil {
-		// Starting the workloadmeta reflector here allows us to start just one for all stores.
-		err := b.WorkloadmetaReflector.start(b.ctx)
-		if err != nil {
-			log.Errorf("Failed to start the workloadmeta reflector: %s", err)
-		}
-	}
-
-	return stores
+	return b.ksmBuilder.BuildStores()
 }
 
 // WithResync is used if a resync period is configured
@@ -263,8 +239,6 @@ func GenerateStores[T any](
 		store := b.createStoreForType(composedMetricGenFuncs, expectedType)
 
 		if isPod {
-			// Pods are handled differently because depending on the configuration
-			// they're collected from the API server or the Kubelet.
 			handlePodCollection(b, store, client, listWatchFunc, corev1.NamespaceAll, useAPIServerCache)
 		} else {
 			listWatcher := listWatchFunc(client, corev1.NamespaceAll, b.fieldSelectorFilter)
@@ -278,8 +252,6 @@ func GenerateStores[T any](
 	for _, ns := range b.namespaces {
 		store := b.createStoreForType(composedMetricGenFuncs, expectedType)
 		if isPod {
-			// Pods are handled differently because depending on the configuration
-			// they're collected from the API server or the Kubelet.
 			handlePodCollection(b, store, client, listWatchFunc, ns, useAPIServerCache)
 		} else {
 			listWatcher := listWatchFunc(client, ns, b.fieldSelectorFilter)
@@ -296,7 +268,7 @@ func (b *Builder) GenerateStores(
 	metricFamilies []generator.FamilyGenerator,
 	expectedType interface{},
 	listWatchFunc func(kubeClient clientset.Interface, ns string, fieldSelector string) cache.ListerWatcher,
-	useAPIServerCache bool,
+	useAPIServerCache bool, _ int64,
 ) []cache.Store {
 	return GenerateStores(b, metricFamilies, expectedType, b.kubeClient, listWatchFunc, useAPIServerCache)
 }
@@ -315,7 +287,7 @@ func (b *Builder) GenerateCustomResourceStoresFunc(
 	metricFamilies []generator.FamilyGenerator,
 	expectedType interface{},
 	listWatchFunc func(kubeClient interface{}, ns string, fieldSelector string) cache.ListerWatcher,
-	useAPIServerCache bool,
+	useAPIServerCache bool, _ int64,
 ) []cache.Store {
 	return GenerateStores(b, metricFamilies,
 		expectedType,
@@ -381,26 +353,6 @@ func (c *cacheEnabledListerWatcher) Watch(options v1.ListOptions) (apiwatch.Inte
 }
 
 func handlePodCollection[T any](b *Builder, store cache.Store, client T, listWatchFunc func(kubeClient T, ns string, fieldSelector string) cache.ListerWatcher, namespace string, useAPIServerCache bool) {
-	if b.useWorkloadmetaForPods {
-		if b.WorkloadmetaReflector == nil {
-			wr, err := newWorkloadmetaReflector(b.workloadmetaStore, b.namespaces)
-			if err != nil {
-				log.Errorf("Failed to create workloadmetaReflector: %s", err)
-				return
-			}
-			b.WorkloadmetaReflector = &wr
-		}
-
-		err := b.WorkloadmetaReflector.addStore(store)
-		if err != nil {
-			log.Errorf("Failed to add store to workloadmetaReflector: %s", err)
-			return
-		}
-
-		// The workloadmeta reflector will be started when all stores are added.
-		return
-	}
-
 	fieldSelector := b.fieldSelectorFilter
 	if b.collectOnlyUnassignedPods {
 		// spec.nodeName is set to empty for unassigned pods. This ignores

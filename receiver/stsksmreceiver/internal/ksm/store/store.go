@@ -3,8 +3,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build kubeapiserver
-
 // Package store implements the store used by the Kubernetes State Core cluster
 // check.
 package store
@@ -13,7 +11,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/DataDog/datadog-agent/pkg/util/log"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ddcompat/log"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
@@ -37,6 +35,9 @@ type MetricsStore struct {
 	// generateMetricsFunc generates metrics based on a given Kubernetes object
 	// and returns them grouped by metric family.
 	generateMetricsFunc func(interface{}) []metric.FamilyInterface
+
+	rvMutex             sync.RWMutex
+	lastResourceVersion string
 
 	MetricsType     string
 	enableCallbacks bool          // flag to enable event callback functionality
@@ -103,6 +104,8 @@ func (s *MetricsStore) Add(obj interface{}) error {
 		s.eventNotifier.NotifyStoreEvent(EventAdd, s.MetricsType, obj)
 	}
 
+	s.setLastResourceVersion(o.GetResourceVersion())
+
 	metricsForUID := s.generateMetricsFunc(obj)
 	convertedMetricsForUID := make([]DDMetricsFam, len(metricsForUID))
 	for i, f := range metricsForUID {
@@ -155,6 +158,8 @@ func (s *MetricsStore) Delete(obj interface{}) error {
 		s.eventNotifier.NotifyStoreEvent(EventDelete, s.MetricsType, obj)
 	}
 
+	s.setLastResourceVersion(o.GetResourceVersion())
+
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -185,7 +190,7 @@ func (s *MetricsStore) GetByKey(_ string) (item interface{}, exists bool, err er
 
 // Replace will delete the contents of the store, using instead the
 // given list.
-func (s *MetricsStore) Replace(list []interface{}, _ string) error {
+func (s *MetricsStore) Replace(list []interface{}, resourceVersion string) error {
 	s.mutex.Lock()
 	s.metrics = map[types.UID][]DDMetricsFam{}
 	s.mutex.Unlock()
@@ -197,7 +202,27 @@ func (s *MetricsStore) Replace(list []interface{}, _ string) error {
 		}
 	}
 
+	s.setLastResourceVersion(resourceVersion)
+
 	return nil
+}
+
+// Bookmark implements the client-go >= 0.36 Store interface.
+func (s *MetricsStore) Bookmark(resourceVersion string) {
+	s.setLastResourceVersion(resourceVersion)
+}
+
+// LastStoreSyncResourceVersion implements the client-go >= 0.36 Store interface.
+func (s *MetricsStore) LastStoreSyncResourceVersion() string {
+	s.rvMutex.RLock()
+	defer s.rvMutex.RUnlock()
+	return s.lastResourceVersion
+}
+
+func (s *MetricsStore) setLastResourceVersion(rv string) {
+	s.rvMutex.Lock()
+	defer s.rvMutex.Unlock()
+	s.lastResourceVersion = rv
 }
 
 // Resync implements the Resync method of the store interface.

@@ -3,8 +3,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build kubeapiserver
-
 package customresources
 
 import (
@@ -22,16 +20,14 @@ import (
 	"k8s.io/kube-state-metrics/v2/pkg/customresource"
 	"k8s.io/kube-state-metrics/v2/pkg/metric"
 	generator "k8s.io/kube-state-metrics/v2/pkg/metric_generator"
-
-	"github.com/DataDog/datadog-agent/pkg/util/kubernetes/apiserver"
 )
 
 var descJobLabelsDefaultLabels = []string{"namespace", "job_name"}
 
 // NewExtendedJobFactory returns a new Job metric family generator factory.
-func NewExtendedJobFactory(client *apiserver.APIClient) customresource.RegistryFactory {
+func NewExtendedJobFactory(client kubernetes.Interface) customresource.RegistryFactory {
 	return &extendedJobFactory{
-		client: client.Cl,
+		client: client,
 	}
 }
 

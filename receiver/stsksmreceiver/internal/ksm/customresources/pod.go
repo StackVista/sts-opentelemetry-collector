@@ -3,16 +3,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build kubeapiserver
-
 package customresources
 
 import (
 	"context"
 
-	"github.com/DataDog/datadog-agent/pkg/util/kubernetes"
-	"github.com/DataDog/datadog-agent/pkg/util/kubernetes/apiserver"
-	"github.com/DataDog/datadog-agent/pkg/util/log"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ddcompat/kubernetes"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ddcompat/log"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,9 +33,9 @@ const (
 var descPodLabelsDefaultLabels = []string{"namespace", "pod", "uid"}
 
 // NewExtendedPodFactory returns a new Pod metric family generator factory.
-func NewExtendedPodFactory(client *apiserver.APIClient) customresource.RegistryFactory {
+func NewExtendedPodFactory(client clientset.Interface) customresource.RegistryFactory {
 	return &extendedPodFactory{
-		client: client.Cl,
+		client: client,
 	}
 }
 

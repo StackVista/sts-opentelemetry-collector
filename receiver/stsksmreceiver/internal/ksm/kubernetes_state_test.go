@@ -3,8 +3,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build kubeapiserver
-
 package ksm
 
 import (
@@ -19,13 +17,9 @@ import (
 	"k8s.io/kube-state-metrics/v2/pkg/allowdenylist"
 	"k8s.io/kube-state-metrics/v2/pkg/options"
 
-	taggerfxmock "github.com/DataDog/datadog-agent/comp/core/tagger/fx-mock"
-	"github.com/DataDog/datadog-agent/pkg/aggregator/mocksender"
-	"github.com/DataDog/datadog-agent/pkg/aggregator/sender"
-	core "github.com/DataDog/datadog-agent/pkg/collector/corechecks"
-	configmock "github.com/DataDog/datadog-agent/pkg/config/mock"
-	ksmstore "github.com/DataDog/datadog-agent/pkg/kubestatemetrics/store"
-	"github.com/DataDog/datadog-agent/pkg/util/kubernetes/apiserver"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ddcompat/mocksender"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ddcompat/sender"
+	ksmstore "github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ksm/store"
 )
 
 type metricsExpected struct {
@@ -777,9 +771,9 @@ func TestProcessMetrics(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		fakeTagger := taggerfxmock.SetupFakeTagger(t)
-		kubeStateMetricsCheck := newKSMCheck(core.NewCheckBase(CheckName), test.config, fakeTagger, nil)
-		mocked := mocksender.NewMockSender(kubeStateMetricsCheck.ID())
+
+		kubeStateMetricsCheck := newKSMCheck(test.config, nil)
+		mocked := mocksender.NewMockSender("ksm")
 		mocked.SetupAcceptAll()
 
 		if _, ok := test.metricsToProcess["kube_customresource_metric_info"]; ok {
@@ -978,8 +972,8 @@ func TestProcessTelemetry(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		fakeTagger := taggerfxmock.SetupFakeTagger(t)
-		kubeStateMetricsSCheck := newKSMCheck(core.NewCheckBase(CheckName), test.config, fakeTagger, nil)
+
+		kubeStateMetricsSCheck := newKSMCheck(test.config, nil)
 		kubeStateMetricsSCheck.processTelemetry(test.metrics)
 		t.Run(test.name, func(t *testing.T) {
 			assert.Equal(t, test.expected.getTotal(), kubeStateMetricsSCheck.telemetry.getTotal())
@@ -1041,9 +1035,9 @@ func TestSendTelemetry(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		fakeTagger := taggerfxmock.SetupFakeTagger(t)
-		kubeStateMetricsSCheck := newKSMCheck(core.NewCheckBase(CheckName), test.config, fakeTagger, nil)
-		mocked := mocksender.NewMockSender(kubeStateMetricsSCheck.ID())
+
+		kubeStateMetricsSCheck := newKSMCheck(test.config, nil)
+		mocked := mocksender.NewMockSender("ksm")
 		mocked.SetupAcceptAll()
 
 		kubeStateMetricsSCheck.telemetry = test.cache
@@ -1353,8 +1347,8 @@ func TestKSMCheck_hostnameAndTags(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fakeTagger := taggerfxmock.SetupFakeTagger(t)
-			kubeStateMetricsSCheck := newKSMCheck(core.NewCheckBase(CheckName), tt.config, fakeTagger, nil)
+
+			kubeStateMetricsSCheck := newKSMCheck(tt.config, nil)
 			kubeStateMetricsSCheck.clusterNameRFC1123 = tt.args.clusterName
 			labelJoiner := newLabelJoiner(tt.config.labelJoins)
 			for _, metricFam := range tt.args.metricsToGet {
@@ -1702,12 +1696,13 @@ func TestKSMCheck_mergeLabelsOrAnnotationAsTags(t *testing.T) {
 		},
 	}
 
-	err := apiserver.InitializeGlobalResourceTypeCache(fakeDiscoveryClient)
+	_, resources, err := fakeDiscoveryClient.ServerGroupsAndResources()
 	assert.NoError(t, err)
+	resolver := newResourceKindResolver(resources)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			annotationsAsTags := mergeLabelsOrAnnotationAsTags(tt.extra, tt.conf, tt.shouldTransformResource, tt.isNodeAgent)
+			annotationsAsTags := mergeLabelsOrAnnotationAsTags(tt.extra, tt.conf, tt.shouldTransformResource && !tt.isNodeAgent, resolver)
 			assert.Truef(t, reflect.DeepEqual(tt.expected, annotationsAsTags), "expected %v, found %v", tt.expected, annotationsAsTags)
 		})
 	}
@@ -1733,8 +1728,8 @@ var metadataMetrics = []string{
 }
 
 func TestMetadataMetricsRegex(t *testing.T) {
-	fakeTagger := taggerfxmock.SetupFakeTagger(t)
-	check := newKSMCheck(core.NewCheckBase(CheckName), &KSMConfig{}, fakeTagger, nil)
+
+	check := newKSMCheck(&KSMConfig{}, nil)
 	for _, m := range metadataMetrics {
 		assert.True(t, check.metadataMetricsRegex.MatchString(m))
 	}
@@ -1769,31 +1764,32 @@ func TestAllowDeny(t *testing.T) {
 	// Make sure denied metrics have been parsed and excluded
 	assert.NotEqual(t, "", allowDenyList.Status())
 	for metric := range deniedMetrics {
-		assert.False(t, allowDenyList.IsIncluded(metric))
-		assert.True(t, allowDenyList.IsExcluded(metric))
+		assert.False(t, must(allowDenyList.IsIncluded(metric)))
+		assert.True(t, must(allowDenyList.IsExcluded(metric)))
 	}
 
 	// Make sure we don't exclude metrics by mistake
 	for metric := range defaultMetricNamesMapper() {
-		assert.True(t, allowDenyList.IsIncluded(metric))
-		assert.False(t, allowDenyList.IsExcluded(metric))
+		assert.True(t, must(allowDenyList.IsIncluded(metric)))
+		assert.False(t, must(allowDenyList.IsExcluded(metric)))
 	}
 
 	// Make sure we don't exclude metric transformers
 	for metric := range defaultMetricTransformers(nil) {
-		assert.True(t, allowDenyList.IsIncluded(metric))
-		assert.False(t, allowDenyList.IsExcluded(metric))
+		assert.True(t, must(allowDenyList.IsIncluded(metric)))
+		assert.False(t, must(allowDenyList.IsExcluded(metric)))
 	}
 
 	// Make sure we don't exclude metadata metrics
 	for _, metric := range metadataMetrics {
-		assert.True(t, allowDenyList.IsIncluded(metric))
-		assert.False(t, allowDenyList.IsExcluded(metric))
+		assert.True(t, must(allowDenyList.IsIncluded(metric)))
+		assert.False(t, must(allowDenyList.IsExcluded(metric)))
 	}
 }
 
 func TestCreationMetricsFiltering(t *testing.T) {
-	allowDenyList, err := allowdenylist.New(options.MetricSet{}, buildDeniedMetricsSet(options.DefaultResources.AsSlice()))
+	// KSM 2.20 dropped endpoints from its default resources; it is still in our collector list.
+	allowDenyList, err := allowdenylist.New(options.MetricSet{}, buildDeniedMetricsSet(append(options.DefaultResources.AsSlice(), "endpoints")))
 	assert.NoError(t, err)
 
 	err = allowDenyList.Parse()
@@ -1801,8 +1797,8 @@ func TestCreationMetricsFiltering(t *testing.T) {
 
 	included := []string{"kube_node_created", "kube_pod_created"}
 	for _, metric := range included {
-		assert.True(t, allowDenyList.IsIncluded(metric))
-		assert.False(t, allowDenyList.IsExcluded(metric))
+		assert.True(t, must(allowDenyList.IsIncluded(metric)))
+		assert.False(t, must(allowDenyList.IsExcluded(metric)))
 	}
 
 	excluded := []string{
@@ -1817,8 +1813,8 @@ func TestCreationMetricsFiltering(t *testing.T) {
 		"kube_replicationcontroller_created",
 	}
 	for _, metric := range excluded {
-		assert.True(t, allowDenyList.IsExcluded(metric))
-		assert.False(t, allowDenyList.IsIncluded(metric))
+		assert.True(t, must(allowDenyList.IsExcluded(metric)))
+		assert.False(t, must(allowDenyList.IsIncluded(metric)))
 	}
 }
 
@@ -1890,14 +1886,11 @@ func TestKSMCheckInitTags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			conf := configmock.New(t)
-			conf.SetWithoutSource("tags", tt.tagsInConfig)
-
 			k := &KSMCheck{
 				instance:            tt.fields.instance,
 				clusterNameTagValue: tt.fields.clusterName,
 				clusterIDTagValue:   tt.fields.clusterID,
-				agentConfig:         conf,
+				globalTags:          tt.tagsInConfig,
 			}
 
 			k.initTags()
@@ -1977,4 +1970,11 @@ func BenchmarkOwnerTags(b *testing.B) {
 			_ = ownerTags("Job", "foo-1627309500")
 		}
 	})
+}
+
+func must(b bool, err error) bool {
+	if err != nil {
+		panic(err)
+	}
+	return b
 }

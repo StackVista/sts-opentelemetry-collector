@@ -3,8 +3,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build kubeapiserver
-
 package customresources
 
 import (
@@ -18,14 +16,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/kube-state-metrics/v2/pkg/metric"
-
-	"github.com/DataDog/datadog-agent/pkg/util/kubernetes/apiserver"
 )
 
 func TestControllerRevisionRolloutFactory_Name(t *testing.T) {
-	client := &apiserver.APIClient{
-		Cl: fake.NewSimpleClientset(),
-	}
+	client := fake.NewSimpleClientset()
 	tracker := NewRolloutTracker()
 	factory := NewControllerRevisionRolloutFactory(client, tracker)
 
@@ -33,9 +27,7 @@ func TestControllerRevisionRolloutFactory_Name(t *testing.T) {
 }
 
 func TestControllerRevisionRolloutFactory_ExpectedType(t *testing.T) {
-	client := &apiserver.APIClient{
-		Cl: fake.NewSimpleClientset(),
-	}
+	client := fake.NewSimpleClientset()
 	tracker := NewRolloutTracker()
 	factory := NewControllerRevisionRolloutFactory(client, tracker)
 
@@ -45,9 +37,7 @@ func TestControllerRevisionRolloutFactory_ExpectedType(t *testing.T) {
 }
 
 func TestControllerRevisionRolloutFactory_MetricFamilyGenerators(t *testing.T) {
-	client := &apiserver.APIClient{
-		Cl: fake.NewSimpleClientset(),
-	}
+	client := fake.NewSimpleClientset()
 	tracker := NewRolloutTracker()
 	factory := NewControllerRevisionRolloutFactory(client, tracker)
 
@@ -61,9 +51,7 @@ func TestControllerRevisionRolloutFactory_MetricFamilyGenerators(t *testing.T) {
 }
 
 func TestControllerRevisionTracking(t *testing.T) {
-	client := &apiserver.APIClient{
-		Cl: fake.NewSimpleClientset(),
-	}
+	client := fake.NewSimpleClientset()
 	tracker := NewRolloutTracker()
 	factory := NewControllerRevisionRolloutFactory(client, tracker).(*controllerRevisionRolloutFactory)
 

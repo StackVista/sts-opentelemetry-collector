@@ -3,19 +3,15 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2021-present Datadog, Inc.
 
-//go:build kubeapiserver
-
 package ksm
 
 import (
 	"gotest.tools/assert"
 	"testing"
 
-	taggerfxmock "github.com/DataDog/datadog-agent/comp/core/tagger/fx-mock"
-	"github.com/DataDog/datadog-agent/pkg/aggregator/mocksender"
-	core "github.com/DataDog/datadog-agent/pkg/collector/corechecks"
-	ksmstore "github.com/DataDog/datadog-agent/pkg/kubestatemetrics/store"
-	"github.com/DataDog/datadog-agent/pkg/metrics/servicecheck"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ddcompat/mocksender"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ddcompat/servicecheck"
+	ksmstore "github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ksm/store"
 )
 
 var _ metricAggregator = &sumValuesAggregator{}
@@ -173,8 +169,7 @@ func Test_counterAggregator(t *testing.T) {
 		},
 	}
 
-	fakeTagger := taggerfxmock.SetupFakeTagger(t)
-	ksmCheck := newKSMCheck(core.NewCheckBase(CheckName), &KSMConfig{}, fakeTagger, nil)
+	ksmCheck := newKSMCheck(&KSMConfig{}, nil)
 
 	for _, tt := range tests {
 		s := mocksender.NewMockSender("ksm")
@@ -279,8 +274,7 @@ func Test_lastCronJobAggregator(t *testing.T) {
 		},
 	}
 
-	fakeTagger := taggerfxmock.SetupFakeTagger(t)
-	ksmCheck := newKSMCheck(core.NewCheckBase(CheckName), &KSMConfig{}, fakeTagger, nil)
+	ksmCheck := newKSMCheck(&KSMConfig{}, nil)
 
 	for _, tt := range tests {
 		s := mocksender.NewMockSender("ksm")

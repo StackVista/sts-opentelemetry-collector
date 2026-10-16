@@ -9,8 +9,8 @@ package kubetags
 import (
 	"fmt"
 
-	"github.com/DataDog/datadog-agent/comp/core/tagger/tags"
-	"github.com/DataDog/datadog-agent/pkg/util/kubernetes"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ddcompat/kubernetes"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ddcompat/tags"
 )
 
 var kubernetesKindToTagName = map[string]string{

@@ -61,6 +61,7 @@ linters:
       - extension/settingsproviderextension/generated/
       - exporter/stsk8stopologyexporter/internal/(topologycollectors|urn|hostname|dns|apiserver)/
       - exporter/stsk8seventsexporter/internal/(eventmapper|urn|hostname)/
+      - receiver/stsksmreceiver/internal/(ksm|ddcompat)/
   settings:
     gomoddirectives:
       replace-local: true
@@ -81,3 +82,4 @@ formatters:
       - examples$
       - exporter/stsk8stopologyexporter/internal/(topologycollectors|urn|hostname|dns|apiserver)/
       - exporter/stsk8seventsexporter/internal/(eventmapper|urn|hostname)/
+      - receiver/stsksmreceiver/internal/(ksm|ddcompat)/

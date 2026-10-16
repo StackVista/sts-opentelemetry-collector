@@ -3,13 +3,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build kubeapiserver
-
 package ksm
 
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,13 +16,11 @@ import (
 	// (e.g. US/Central) used in upstream cronjob scheduling metric calculations
 	_ "time/tzdata"
 
-	"github.com/samber/lo"
-
-	"github.com/DataDog/datadog-agent/pkg/aggregator/sender"
-	crs "github.com/DataDog/datadog-agent/pkg/collector/corechecks/cluster/ksm/customresources"
-	ksmstore "github.com/DataDog/datadog-agent/pkg/kubestatemetrics/store"
-	"github.com/DataDog/datadog-agent/pkg/metrics/servicecheck"
-	"github.com/DataDog/datadog-agent/pkg/util/log"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ddcompat/log"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ddcompat/sender"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ddcompat/servicecheck"
+	crs "github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ksm/customresources"
+	ksmstore "github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ksm/store"
 )
 
 // metricTransformerFunc is used to tweak or generate new metrics from a given KSM metric
@@ -610,7 +607,7 @@ func serviceTypeTransformer(s sender.Sender, _ string, metric ksmstore.DDMetric,
 // removeSecretTransformer removes the secret tag from the kube_ingress_tls metric
 func removeSecretTransformer(s sender.Sender, _ string, metric ksmstore.DDMetric, hostname string, tags []string, _ time.Time) {
 	if len(tags) > 0 {
-		tags = lo.Filter(tags, func(x string, _ int) bool { return !strings.HasPrefix(x, "secret:") })
+		tags = slices.DeleteFunc(tags, func(x string) bool { return strings.HasPrefix(x, "secret:") })
 	}
 	s.Gauge(ksmMetricPrefix+"ingress.tls", metric.Val, hostname, tags)
 }

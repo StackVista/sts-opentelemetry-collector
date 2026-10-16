@@ -3,8 +3,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build kubeapiserver
-
 package customresources
 
 import (
@@ -21,14 +19,12 @@ import (
 	"k8s.io/kube-state-metrics/v2/pkg/customresource"
 	"k8s.io/kube-state-metrics/v2/pkg/metric"
 	generator "k8s.io/kube-state-metrics/v2/pkg/metric_generator"
-
-	"github.com/DataDog/datadog-agent/pkg/util/kubernetes/apiserver"
 )
 
 // NewControllerRevisionRolloutFactory returns a new ControllerRevision rollout factory that tracks ControllerRevision events for StatefulSet rollouts
-func NewControllerRevisionRolloutFactory(client *apiserver.APIClient, rolloutTracker RolloutOperations) customresource.RegistryFactory {
+func NewControllerRevisionRolloutFactory(client kubernetes.Interface, rolloutTracker RolloutOperations) customresource.RegistryFactory {
 	return &controllerRevisionRolloutFactory{
-		client:         client.Cl,
+		client:         client,
 		rolloutTracker: rolloutTracker,
 	}
 }
