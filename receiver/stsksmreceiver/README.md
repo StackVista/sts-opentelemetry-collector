@@ -139,3 +139,21 @@ Differences from v2.13 that are left in place:
   validates all of these.
 - Label names generated from Kubernetes labels and annotations differ only
   when a `_conflictN` suffix would collide with another label.
+
+`testdata/golden.json` holds the series the agent's `kubernetes_state_core`
+check sends for `testdata/objects.json`, configured as the cluster agent chart
+configures it: the check builds its stores and runs against a fake clientset,
+and each gauge gets the check tags, sorted and de-duplicated tags and, per
+context, its last value, as the agent's sender and aggregator do. Regenerate it
+with `testdata/agentgolden/generate.sh <stackstate-agent checkout>`, which runs
+the harness in a temporary worktree of the checkout's `HEAD` with the agent's Go
+version. `TestSeriesMatchClusterAgent` requires the receiver to send the same
+series, compared by name, host, tags and value.
+
+- Both sides run in a `testing/synctest` bubble whose clock does not move, so
+  ages, uptimes, job and rollout durations and the time since a CronJob's last
+  schedule are compared exactly.
+- A CronJob without `suspend` gets the API server's default before either side
+  sees it: v2.13's `kube_cronjob_next_schedule_time` dereferences the field. The
+  unset case is covered by the unit tests only.
+- Storage classes and volume attachments produce no gauges on either side.
