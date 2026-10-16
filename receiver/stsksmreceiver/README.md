@@ -18,8 +18,9 @@ series to a sender.
 `pmetricsender` turns the series into OTLP gauges:
 
 - the metric name is the agent's (`kubernetes_state.<name>`);
-- every Datadog tag becomes a data point attribute (`key:value` → `key`);
-  where a tag key repeats, the last value wins;
+- every Datadog tag becomes a data point attribute (`key:value` → `key`), as
+  the Receiver stores it: tags are sorted and the last value of a repeated key
+  wins, and a tag without a value becomes `label_<tag>: "true"`;
 - `sts_host` carries the host the check assigns (`<node>-<cluster name>`), when
   it assigns one;
 - `interval` is `"0"`, as the Receiver labels agent check series;
@@ -79,5 +80,7 @@ Changes from the original:
     did not emit;
   - `endpoints` is added to KSM's default collector list, used when no
     collectors are configured.
+  The `endpoints_extended` factory reads `v1.Endpoints`, deprecated since
+  Kubernetes 1.33, as the agent does.
 - `slices.DeleteFunc` replaces `lo.Filter`, and the unused CRD and APIService
   condition helpers are removed.

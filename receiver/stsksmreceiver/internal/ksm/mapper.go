@@ -2,6 +2,7 @@ package ksm
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -92,9 +93,11 @@ type checkTagsSender struct {
 }
 
 func (s *checkTagsSender) Gauge(metric string, value float64, hostname string, tags []string) {
-	s.Sender.Gauge(metric, value, hostname, append(tags, s.tags...))
+	s.Sender.Gauge(metric, value, hostname, append(slices.Clip(tags), s.tags...))
 }
 
-func (s *checkTagsSender) ServiceCheck(checkName string, status servicecheck.ServiceCheckStatus, hostname string, tags []string, message string) {
-	s.Sender.ServiceCheck(checkName, status, hostname, append(tags, s.tags...), message)
+func (s *checkTagsSender) ServiceCheck(
+	checkName string, status servicecheck.ServiceCheckStatus, hostname string, tags []string, message string,
+) {
+	s.Sender.ServiceCheck(checkName, status, hostname, append(slices.Clip(tags), s.tags...), message)
 }

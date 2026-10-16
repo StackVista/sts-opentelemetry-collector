@@ -11,13 +11,15 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/pmetricsender"
 )
 
+const shopNamespace = "kube_namespace:shop"
+
 func TestGauge(t *testing.T) {
 	s := pmetricsender.New(pcommon.Timestamp(42))
 	s.Gauge("kubernetes_state.container.restarts", 3, "node-1-prod", []string{
-		"kube_namespace:shop", "pod_name:web-0", "uid:pod-uid", "kube_container_name:app",
+		shopNamespace, "pod_name:web-0", "uid:pod-uid", "kube_container_name:app",
 		"container_id:containerd://abc123", "kube_cluster_name:prod", "kube_namespace:other",
 	})
-	s.Gauge("kubernetes_state.container.restarts", 1, "", []string{"kube_namespace:shop", "pod_name:web-1"})
+	s.Gauge("kubernetes_state.container.restarts", 1, "", []string{shopNamespace, "pod_name:web-1"})
 	s.Gauge("kubernetes_state.node.count", 2, "", []string{"uid:not-a-pod"})
 
 	md := s.Metrics()
@@ -34,8 +36,8 @@ func TestGauge(t *testing.T) {
 	assert.Equal(t, pcommon.Timestamp(42), dp.Timestamp())
 	assert.Equal(t, 3.0, dp.DoubleValue())
 	assert.Equal(t, map[string]any{
-		"kube_namespace":      "other",
-		"k8s.namespace.name":  "other",
+		"kube_namespace":      "shop",
+		"k8s.namespace.name":  "shop",
 		"pod_name":            "web-0",
 		"k8s.pod.name":        "web-0",
 		"uid":                 "pod-uid",
@@ -61,4 +63,16 @@ func TestServiceCheckIsDropped(t *testing.T) {
 	s := pmetricsender.New(pcommon.Timestamp(0))
 	s.ServiceCheck("kubernetes_state.node.ready", servicecheck.ServiceCheckOK, "node-1", []string{"node:node-1"}, "")
 	assert.Equal(t, 0, s.Metrics().MetricCount())
+}
+
+func TestTagWithoutValue(t *testing.T) {
+	s := pmetricsender.New(pcommon.Timestamp(1))
+	s.Gauge("kubernetes_state.pod.count", 1, "", []string{"orphaned", shopNamespace})
+
+	attrs := s.Metrics().ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0).Gauge().DataPoints().At(0).Attributes()
+	v, ok := attrs.Get("label_orphaned")
+	require.True(t, ok)
+	assert.Equal(t, "true", v.Str())
+	_, ok = attrs.Get("orphaned")
+	assert.False(t, ok)
 }

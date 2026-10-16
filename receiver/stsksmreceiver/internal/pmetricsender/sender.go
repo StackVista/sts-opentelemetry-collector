@@ -3,6 +3,7 @@
 package pmetricsender
 
 import (
+	"slices"
 	"strings"
 
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -79,9 +80,15 @@ func putAttributes(attrs pcommon.Map, hostname string, tags []string) {
 	attrs.EnsureCapacity(2*len(tags) + 2)
 	podName := false
 	uid := ""
-	for _, tag := range tags {
-		k, v, _ := strings.Cut(tag, ":")
-		// Datadog permits repeated keys; OTLP attributes do not. The last value wins.
+	// The agent's aggregator sorts tags and the Receiver keeps the last value of a
+	// repeated key, so sorting first resolves repeats the same way.
+	sorted := slices.Sorted(slices.Values(tags))
+	for _, tag := range sorted {
+		k, v, hasValue := strings.Cut(tag, ":")
+		if !hasValue {
+			// The Receiver stores a tag without a value as label_<tag>="true".
+			k, v = "label_"+k, "true"
+		}
 		attrs.PutStr(k, v)
 		if sc, ok := semconv[k]; ok {
 			attrs.PutStr(sc, v)
