@@ -1,0 +1,6871 @@
+[
+  {
+    "metric": "kubernetes_state.container.cpu_limit",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "env:prod",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_region:eu-central-1",
+      "kube_replica_set:web-7c9f8d6b5",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "resource:cpu",
+      "uid:uid-pod-web-1",
+      "unit:core"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.cpu_limit",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:postgres",
+      "kube_namespace:shop",
+      "kube_region:eu-central-1",
+      "kube_stateful_set:db",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "pod_name:db-0",
+      "pod_phase:Running",
+      "resource:cpu",
+      "uid:uid-pod-db-0",
+      "unit:core"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.cpu_limit",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:api",
+      "kube_namespace:shop",
+      "kube_region:eu-central-1",
+      "kube_replica_set:api-5d4c3b2a19",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "pod_name:api-5d4c3b2a19-klmno",
+      "pod_phase:Pending",
+      "resource:cpu",
+      "uid:uid-pod-api-1",
+      "unit:core"
+    ],
+    "value": 0.5
+  },
+  {
+    "metric": "kubernetes_state.container.cpu_limit.total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:api",
+      "kube_namespace:shop",
+      "kube_replica_set:api-5d4c3b2a19",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0.5
+  },
+  {
+    "metric": "kubernetes_state.container.cpu_limit.total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.cpu_limit.total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:postgres",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.cpu_requested",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_namespace:shop",
+      "node:",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:big",
+      "pod_phase:Pending",
+      "resource:cpu",
+      "uid:uid-pod-big",
+      "unit:core"
+    ],
+    "value": 64
+  },
+  {
+    "metric": "kubernetes_state.container.cpu_requested",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "env:prod",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_region:eu-central-1",
+      "kube_replica_set:web-7c9f8d6b5",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "resource:cpu",
+      "uid:uid-pod-web-1",
+      "unit:core"
+    ],
+    "value": 0.25
+  },
+  {
+    "metric": "kubernetes_state.container.cpu_requested",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "env:prod",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:sidecar",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_region:eu-central-1",
+      "kube_replica_set:web-7c9f8d6b5",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "resource:cpu",
+      "uid:uid-pod-web-1",
+      "unit:core"
+    ],
+    "value": 0.05
+  },
+  {
+    "metric": "kubernetes_state.container.cpu_requested",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:postgres",
+      "kube_namespace:shop",
+      "kube_region:eu-central-1",
+      "kube_stateful_set:db",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "pod_name:db-0",
+      "pod_phase:Running",
+      "resource:cpu",
+      "uid:uid-pod-db-0",
+      "unit:core"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.cpu_requested",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:api",
+      "kube_namespace:shop",
+      "kube_region:eu-central-1",
+      "kube_replica_set:api-5d4c3b2a19",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "pod_name:api-5d4c3b2a19-klmno",
+      "pod_phase:Pending",
+      "resource:cpu",
+      "uid:uid-pod-api-1",
+      "unit:core"
+    ],
+    "value": 0.5
+  },
+  {
+    "metric": "kubernetes_state.container.cpu_requested",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:agent",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "kube_priority_class:system-node-critical",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "pod_name:node-agent-x1",
+      "pod_phase:Running",
+      "resource:cpu",
+      "uid:uid-pod-agent-1",
+      "unit:core"
+    ],
+    "value": 0.1
+  },
+  {
+    "metric": "kubernetes_state.container.cpu_requested",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_region:eu-central-1",
+      "kube_replica_set:web-7c9f8d6b5",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "pod_name:web-7c9f8d6b5-fghij",
+      "pod_phase:Running",
+      "resource:cpu",
+      "uid:uid-pod-web-2",
+      "unit:core"
+    ],
+    "value": 0.25
+  },
+  {
+    "metric": "kubernetes_state.container.cpu_requested.total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:agent",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0.1
+  },
+  {
+    "metric": "kubernetes_state.container.cpu_requested.total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:api",
+      "kube_namespace:shop",
+      "kube_replica_set:api-5d4c3b2a19",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0.5
+  },
+  {
+    "metric": "kubernetes_state.container.cpu_requested.total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0.5
+  },
+  {
+    "metric": "kubernetes_state.container.cpu_requested.total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:postgres",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.cpu_requested.total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:sidecar",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0.05
+  },
+  {
+    "metric": "kubernetes_state.container.gpu_limit",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "env:prod",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_region:eu-central-1",
+      "kube_replica_set:web-7c9f8d6b5",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "resource:nvidia_com_gpu",
+      "uid:uid-pod-web-1",
+      "unit:integer"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.memory_limit",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "env:prod",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_region:eu-central-1",
+      "kube_replica_set:web-7c9f8d6b5",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "resource:memory",
+      "uid:uid-pod-web-1",
+      "unit:byte"
+    ],
+    "value": 536870912
+  },
+  {
+    "metric": "kubernetes_state.container.memory_limit",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "env:prod",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:sidecar",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_region:eu-central-1",
+      "kube_replica_set:web-7c9f8d6b5",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "resource:memory",
+      "uid:uid-pod-web-1",
+      "unit:byte"
+    ],
+    "value": 33554432
+  },
+  {
+    "metric": "kubernetes_state.container.memory_limit",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:postgres",
+      "kube_namespace:shop",
+      "kube_region:eu-central-1",
+      "kube_stateful_set:db",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "pod_name:db-0",
+      "pod_phase:Running",
+      "resource:memory",
+      "uid:uid-pod-db-0",
+      "unit:byte"
+    ],
+    "value": 2147483648
+  },
+  {
+    "metric": "kubernetes_state.container.memory_limit",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:api",
+      "kube_namespace:shop",
+      "kube_region:eu-central-1",
+      "kube_replica_set:api-5d4c3b2a19",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "pod_name:api-5d4c3b2a19-klmno",
+      "pod_phase:Pending",
+      "resource:memory",
+      "uid:uid-pod-api-1",
+      "unit:byte"
+    ],
+    "value": 1073741824
+  },
+  {
+    "metric": "kubernetes_state.container.memory_limit.total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:api",
+      "kube_namespace:shop",
+      "kube_replica_set:api-5d4c3b2a19",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1073741824
+  },
+  {
+    "metric": "kubernetes_state.container.memory_limit.total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 536870912
+  },
+  {
+    "metric": "kubernetes_state.container.memory_limit.total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:postgres",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 2147483648
+  },
+  {
+    "metric": "kubernetes_state.container.memory_limit.total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:sidecar",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 33554432
+  },
+  {
+    "metric": "kubernetes_state.container.memory_requested",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_namespace:shop",
+      "node:",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:big",
+      "pod_phase:Pending",
+      "resource:memory",
+      "uid:uid-pod-big",
+      "unit:byte"
+    ],
+    "value": 549755813888
+  },
+  {
+    "metric": "kubernetes_state.container.memory_requested",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "env:prod",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_region:eu-central-1",
+      "kube_replica_set:web-7c9f8d6b5",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "resource:memory",
+      "uid:uid-pod-web-1",
+      "unit:byte"
+    ],
+    "value": 268435456
+  },
+  {
+    "metric": "kubernetes_state.container.memory_requested",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "env:prod",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:sidecar",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_region:eu-central-1",
+      "kube_replica_set:web-7c9f8d6b5",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "resource:memory",
+      "uid:uid-pod-web-1",
+      "unit:byte"
+    ],
+    "value": 33554432
+  },
+  {
+    "metric": "kubernetes_state.container.memory_requested",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:postgres",
+      "kube_namespace:shop",
+      "kube_region:eu-central-1",
+      "kube_stateful_set:db",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "pod_name:db-0",
+      "pod_phase:Running",
+      "resource:memory",
+      "uid:uid-pod-db-0",
+      "unit:byte"
+    ],
+    "value": 2147483648
+  },
+  {
+    "metric": "kubernetes_state.container.memory_requested",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:agent",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "kube_priority_class:system-node-critical",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "pod_name:node-agent-x1",
+      "pod_phase:Running",
+      "resource:memory",
+      "uid:uid-pod-agent-1",
+      "unit:byte"
+    ],
+    "value": 134217728
+  },
+  {
+    "metric": "kubernetes_state.container.memory_requested",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_region:eu-central-1",
+      "kube_replica_set:web-7c9f8d6b5",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "pod_name:web-7c9f8d6b5-fghij",
+      "pod_phase:Running",
+      "resource:memory",
+      "uid:uid-pod-web-2",
+      "unit:byte"
+    ],
+    "value": 268435456
+  },
+  {
+    "metric": "kubernetes_state.container.memory_requested.total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:agent",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 134217728
+  },
+  {
+    "metric": "kubernetes_state.container.memory_requested.total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 536870912
+  },
+  {
+    "metric": "kubernetes_state.container.memory_requested.total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:postgres",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 2147483648
+  },
+  {
+    "metric": "kubernetes_state.container.memory_requested.total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:sidecar",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 33554432
+  },
+  {
+    "metric": "kubernetes_state.container.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:sidecar",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:postgres",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:db-0",
+      "pod_phase:Running",
+      "uid:uid-pod-db-0"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:api",
+      "kube_namespace:shop",
+      "kube_replica_set:api-5d4c3b2a19",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:api-5d4c3b2a19-klmno",
+      "pod_phase:Pending",
+      "uid:uid-pod-api-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:hello",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684200",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684200-pqrst",
+      "pod_phase:Succeeded",
+      "uid:uid-pod-hello-done"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:agent",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "kube_priority_class:system-node-critical",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x1",
+      "pod_phase:Running",
+      "uid:uid-pod-agent-1"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-fghij",
+      "pod_phase:Running",
+      "uid:uid-pod-web-2"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:hello",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684500",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684500-uvwxy",
+      "pod_phase:Running",
+      "uid:uid-pod-hello-run"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:legacy",
+      "kube_namespace:shop",
+      "kube_replication_controller:legacy",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:legacy-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-legacy"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.ready",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:agent",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x2",
+      "pod_phase:Failed",
+      "reason:Evicted",
+      "uid:uid-pod-agent-2"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.restarts",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.restarts",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:sidecar",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 7
+  },
+  {
+    "metric": "kubernetes_state.container.restarts",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:postgres",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:db-0",
+      "pod_phase:Running",
+      "uid:uid-pod-db-0"
+    ],
+    "value": 12
+  },
+  {
+    "metric": "kubernetes_state.container.restarts",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:api",
+      "kube_namespace:shop",
+      "kube_replica_set:api-5d4c3b2a19",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:api-5d4c3b2a19-klmno",
+      "pod_phase:Pending",
+      "uid:uid-pod-api-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.restarts",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:hello",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684200",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684200-pqrst",
+      "pod_phase:Succeeded",
+      "uid:uid-pod-hello-done"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.restarts",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:agent",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "kube_priority_class:system-node-critical",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x1",
+      "pod_phase:Running",
+      "uid:uid-pod-agent-1"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.container.restarts",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-fghij",
+      "pod_phase:Running",
+      "uid:uid-pod-web-2"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.restarts",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:hello",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684500",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684500-uvwxy",
+      "pod_phase:Running",
+      "uid:uid-pod-hello-run"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.restarts",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:legacy",
+      "kube_namespace:shop",
+      "kube_replication_controller:legacy",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:legacy-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-legacy"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.restarts",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:agent",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x2",
+      "pod_phase:Failed",
+      "reason:Evicted",
+      "uid:uid-pod-agent-2"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.running",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.running",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:sidecar",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.running",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:postgres",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:db-0",
+      "pod_phase:Running",
+      "uid:uid-pod-db-0"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.running",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:api",
+      "kube_namespace:shop",
+      "kube_replica_set:api-5d4c3b2a19",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:api-5d4c3b2a19-klmno",
+      "pod_phase:Pending",
+      "uid:uid-pod-api-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.running",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:hello",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684200",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684200-pqrst",
+      "pod_phase:Succeeded",
+      "uid:uid-pod-hello-done"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.running",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:agent",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "kube_priority_class:system-node-critical",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x1",
+      "pod_phase:Running",
+      "uid:uid-pod-agent-1"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.running",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-fghij",
+      "pod_phase:Running",
+      "uid:uid-pod-web-2"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.running",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:hello",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684500",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684500-uvwxy",
+      "pod_phase:Running",
+      "uid:uid-pod-hello-run"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.running",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:legacy",
+      "kube_namespace:shop",
+      "kube_replication_controller:legacy",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:legacy-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-legacy"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.running",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:agent",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x2",
+      "pod_phase:Failed",
+      "reason:Evicted",
+      "uid:uid-pod-agent-2"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.status_report.count.terminated",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:postgres",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:db-0",
+      "pod_phase:Running",
+      "reason:OOMKilled",
+      "uid:uid-pod-db-0"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.status_report.count.waiting",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:sidecar",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "reason:CrashLoopBackOff",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.status_report.count.waiting",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:api",
+      "kube_namespace:shop",
+      "kube_replica_set:api-5d4c3b2a19",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:api-5d4c3b2a19-klmno",
+      "pod_phase:Pending",
+      "reason:ErrImagePull",
+      "uid:uid-pod-api-1"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.terminated",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.terminated",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:sidecar",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.terminated",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:postgres",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:db-0",
+      "pod_phase:Running",
+      "uid:uid-pod-db-0"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.terminated",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:api",
+      "kube_namespace:shop",
+      "kube_replica_set:api-5d4c3b2a19",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:api-5d4c3b2a19-klmno",
+      "pod_phase:Pending",
+      "uid:uid-pod-api-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.terminated",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:hello",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684200",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684200-pqrst",
+      "pod_phase:Succeeded",
+      "uid:uid-pod-hello-done"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.terminated",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:agent",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "kube_priority_class:system-node-critical",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x1",
+      "pod_phase:Running",
+      "uid:uid-pod-agent-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.terminated",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-fghij",
+      "pod_phase:Running",
+      "uid:uid-pod-web-2"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.terminated",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:hello",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684500",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684500-uvwxy",
+      "pod_phase:Running",
+      "uid:uid-pod-hello-run"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.terminated",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:legacy",
+      "kube_namespace:shop",
+      "kube_replication_controller:legacy",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:legacy-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-legacy"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.terminated",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:agent",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x2",
+      "pod_phase:Failed",
+      "reason:Evicted",
+      "uid:uid-pod-agent-2"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.waiting",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.waiting",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:sidecar",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.waiting",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:postgres",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:db-0",
+      "pod_phase:Running",
+      "uid:uid-pod-db-0"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.waiting",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:api",
+      "kube_namespace:shop",
+      "kube_replica_set:api-5d4c3b2a19",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:api-5d4c3b2a19-klmno",
+      "pod_phase:Pending",
+      "uid:uid-pod-api-1"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.container.waiting",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:hello",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684200",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684200-pqrst",
+      "pod_phase:Succeeded",
+      "uid:uid-pod-hello-done"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.waiting",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:agent",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "kube_priority_class:system-node-critical",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x1",
+      "pod_phase:Running",
+      "uid:uid-pod-agent-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.waiting",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:app",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-fghij",
+      "pod_phase:Running",
+      "uid:uid-pod-web-2"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.waiting",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:hello",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684500",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684500-uvwxy",
+      "pod_phase:Running",
+      "uid:uid-pod-hello-run"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.waiting",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:legacy",
+      "kube_namespace:shop",
+      "kube_replication_controller:legacy",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:legacy-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-legacy"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.container.waiting",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:agent",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x2",
+      "pod_phase:Failed",
+      "reason:Evicted",
+      "uid:uid-pod-agent-2"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.cronjob.count",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:batch",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.cronjob.duration_since_last_schedule",
+    "host": "",
+    "tags": [
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_namespace:batch",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 300
+  },
+  {
+    "metric": "kubernetes_state.cronjob.duration_since_last_schedule",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:nightly",
+      "kube_namespace:batch",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 75600
+  },
+  {
+    "metric": "kubernetes_state.cronjob.duration_since_last_successful",
+    "host": "",
+    "tags": [
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_namespace:batch",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 540
+  },
+  {
+    "metric": "kubernetes_state.cronjob.spec_suspend",
+    "host": "",
+    "tags": [
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_namespace:batch",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.cronjob.spec_suspend",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:nightly",
+      "kube_namespace:batch",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.daemonset.count",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:kube-system",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.daemonset.daemons_available",
+    "host": "",
+    "tags": [
+      "kube_app_managed_by:Helm",
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.daemonset.daemons_unavailable",
+    "host": "",
+    "tags": [
+      "kube_app_managed_by:Helm",
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.daemonset.desired",
+    "host": "",
+    "tags": [
+      "kube_app_managed_by:Helm",
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.daemonset.misscheduled",
+    "host": "",
+    "tags": [
+      "kube_app_managed_by:Helm",
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.daemonset.ready",
+    "host": "",
+    "tags": [
+      "kube_app_managed_by:Helm",
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.daemonset.scheduled",
+    "host": "",
+    "tags": [
+      "kube_app_managed_by:Helm",
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.daemonset.updated",
+    "host": "",
+    "tags": [
+      "kube_app_managed_by:Helm",
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.deployment.condition",
+    "host": "",
+    "tags": [
+      "condition:Available",
+      "env:prod",
+      "helm_chart:web-1.4.2",
+      "kube_app_component:frontend",
+      "kube_app_instance:web-prod",
+      "kube_app_managed_by:Helm",
+      "kube_app_name:web",
+      "kube_app_part_of:webshop",
+      "kube_app_version:1.4.2",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "service:web",
+      "status:false",
+      "version:1.4.2"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.deployment.condition",
+    "host": "",
+    "tags": [
+      "condition:Available",
+      "env:prod",
+      "helm_chart:web-1.4.2",
+      "kube_app_component:frontend",
+      "kube_app_instance:web-prod",
+      "kube_app_managed_by:Helm",
+      "kube_app_name:web",
+      "kube_app_part_of:webshop",
+      "kube_app_version:1.4.2",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "service:web",
+      "status:true",
+      "version:1.4.2"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.deployment.condition",
+    "host": "",
+    "tags": [
+      "condition:Available",
+      "env:prod",
+      "helm_chart:web-1.4.2",
+      "kube_app_component:frontend",
+      "kube_app_instance:web-prod",
+      "kube_app_managed_by:Helm",
+      "kube_app_name:web",
+      "kube_app_part_of:webshop",
+      "kube_app_version:1.4.2",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "service:web",
+      "status:unknown",
+      "version:1.4.2"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.deployment.condition",
+    "host": "",
+    "tags": [
+      "condition:Available",
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:api",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "status:false"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.deployment.condition",
+    "host": "",
+    "tags": [
+      "condition:Available",
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:api",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "status:true"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.deployment.condition",
+    "host": "",
+    "tags": [
+      "condition:Available",
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:api",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "status:unknown"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.deployment.condition",
+    "host": "",
+    "tags": [
+      "condition:Progressing",
+      "env:prod",
+      "helm_chart:web-1.4.2",
+      "kube_app_component:frontend",
+      "kube_app_instance:web-prod",
+      "kube_app_managed_by:Helm",
+      "kube_app_name:web",
+      "kube_app_part_of:webshop",
+      "kube_app_version:1.4.2",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "service:web",
+      "status:false",
+      "version:1.4.2"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.deployment.condition",
+    "host": "",
+    "tags": [
+      "condition:Progressing",
+      "env:prod",
+      "helm_chart:web-1.4.2",
+      "kube_app_component:frontend",
+      "kube_app_instance:web-prod",
+      "kube_app_managed_by:Helm",
+      "kube_app_name:web",
+      "kube_app_part_of:webshop",
+      "kube_app_version:1.4.2",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "service:web",
+      "status:true",
+      "version:1.4.2"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.deployment.condition",
+    "host": "",
+    "tags": [
+      "condition:Progressing",
+      "env:prod",
+      "helm_chart:web-1.4.2",
+      "kube_app_component:frontend",
+      "kube_app_instance:web-prod",
+      "kube_app_managed_by:Helm",
+      "kube_app_name:web",
+      "kube_app_part_of:webshop",
+      "kube_app_version:1.4.2",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "service:web",
+      "status:unknown",
+      "version:1.4.2"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.deployment.condition",
+    "host": "",
+    "tags": [
+      "condition:Progressing",
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:api",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "status:false"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.deployment.condition",
+    "host": "",
+    "tags": [
+      "condition:Progressing",
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:api",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "status:true"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.deployment.condition",
+    "host": "",
+    "tags": [
+      "condition:Progressing",
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:api",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "status:unknown"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.deployment.condition",
+    "host": "",
+    "tags": [
+      "condition:ReplicaFailure",
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:api",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "status:false"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.deployment.condition",
+    "host": "",
+    "tags": [
+      "condition:ReplicaFailure",
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:api",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "status:true"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.deployment.condition",
+    "host": "",
+    "tags": [
+      "condition:ReplicaFailure",
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:api",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "status:unknown"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.deployment.count",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.deployment.paused",
+    "host": "",
+    "tags": [
+      "env:prod",
+      "helm_chart:web-1.4.2",
+      "kube_app_component:frontend",
+      "kube_app_instance:web-prod",
+      "kube_app_managed_by:Helm",
+      "kube_app_name:web",
+      "kube_app_part_of:webshop",
+      "kube_app_version:1.4.2",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "service:web",
+      "version:1.4.2"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.deployment.paused",
+    "host": "",
+    "tags": [
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:api",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.deployment.replicas",
+    "host": "",
+    "tags": [
+      "env:prod",
+      "helm_chart:web-1.4.2",
+      "kube_app_component:frontend",
+      "kube_app_instance:web-prod",
+      "kube_app_managed_by:Helm",
+      "kube_app_name:web",
+      "kube_app_part_of:webshop",
+      "kube_app_version:1.4.2",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "service:web",
+      "version:1.4.2"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.deployment.replicas",
+    "host": "",
+    "tags": [
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:api",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 3
+  },
+  {
+    "metric": "kubernetes_state.deployment.replicas_available",
+    "host": "",
+    "tags": [
+      "env:prod",
+      "helm_chart:web-1.4.2",
+      "kube_app_component:frontend",
+      "kube_app_instance:web-prod",
+      "kube_app_managed_by:Helm",
+      "kube_app_name:web",
+      "kube_app_part_of:webshop",
+      "kube_app_version:1.4.2",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "service:web",
+      "version:1.4.2"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.deployment.replicas_available",
+    "host": "",
+    "tags": [
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:api",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.deployment.replicas_desired",
+    "host": "",
+    "tags": [
+      "env:prod",
+      "helm_chart:web-1.4.2",
+      "kube_app_component:frontend",
+      "kube_app_instance:web-prod",
+      "kube_app_managed_by:Helm",
+      "kube_app_name:web",
+      "kube_app_part_of:webshop",
+      "kube_app_version:1.4.2",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "service:web",
+      "version:1.4.2"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.deployment.replicas_desired",
+    "host": "",
+    "tags": [
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:api",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 3
+  },
+  {
+    "metric": "kubernetes_state.deployment.replicas_ready",
+    "host": "",
+    "tags": [
+      "env:prod",
+      "helm_chart:web-1.4.2",
+      "kube_app_component:frontend",
+      "kube_app_instance:web-prod",
+      "kube_app_managed_by:Helm",
+      "kube_app_name:web",
+      "kube_app_part_of:webshop",
+      "kube_app_version:1.4.2",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "service:web",
+      "version:1.4.2"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.deployment.replicas_ready",
+    "host": "",
+    "tags": [
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:api",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.deployment.replicas_unavailable",
+    "host": "",
+    "tags": [
+      "env:prod",
+      "helm_chart:web-1.4.2",
+      "kube_app_component:frontend",
+      "kube_app_instance:web-prod",
+      "kube_app_managed_by:Helm",
+      "kube_app_name:web",
+      "kube_app_part_of:webshop",
+      "kube_app_version:1.4.2",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "service:web",
+      "version:1.4.2"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.deployment.replicas_unavailable",
+    "host": "",
+    "tags": [
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:api",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.deployment.replicas_updated",
+    "host": "",
+    "tags": [
+      "env:prod",
+      "helm_chart:web-1.4.2",
+      "kube_app_component:frontend",
+      "kube_app_instance:web-prod",
+      "kube_app_managed_by:Helm",
+      "kube_app_name:web",
+      "kube_app_part_of:webshop",
+      "kube_app_version:1.4.2",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "service:web",
+      "version:1.4.2"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.deployment.replicas_updated",
+    "host": "",
+    "tags": [
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:api",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.deployment.rollingupdate.max_surge",
+    "host": "",
+    "tags": [
+      "env:prod",
+      "helm_chart:web-1.4.2",
+      "kube_app_component:frontend",
+      "kube_app_instance:web-prod",
+      "kube_app_managed_by:Helm",
+      "kube_app_name:web",
+      "kube_app_part_of:webshop",
+      "kube_app_version:1.4.2",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "service:web",
+      "version:1.4.2"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.deployment.rollingupdate.max_unavailable",
+    "host": "",
+    "tags": [
+      "env:prod",
+      "helm_chart:web-1.4.2",
+      "kube_app_component:frontend",
+      "kube_app_instance:web-prod",
+      "kube_app_managed_by:Helm",
+      "kube_app_name:web",
+      "kube_app_part_of:webshop",
+      "kube_app_version:1.4.2",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "service:web",
+      "version:1.4.2"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.deployment.rollout_duration",
+    "host": "",
+    "tags": [
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:api",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.endpoint.address_available",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_endpoint:db",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.endpoint.address_available",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_endpoint:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 4
+  },
+  {
+    "metric": "kubernetes_state.endpoint.address_not_ready",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_endpoint:db",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.endpoint.address_not_ready",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_endpoint:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.endpoint.count",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.hpa.condition",
+    "host": "",
+    "tags": [
+      "condition:AbleToScale",
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "status:false"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.hpa.condition",
+    "host": "",
+    "tags": [
+      "condition:AbleToScale",
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "status:true"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.hpa.condition",
+    "host": "",
+    "tags": [
+      "condition:AbleToScale",
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "status:unknown"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.hpa.condition",
+    "host": "",
+    "tags": [
+      "condition:ScalingActive",
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "status:false"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.hpa.condition",
+    "host": "",
+    "tags": [
+      "condition:ScalingActive",
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "status:true"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.hpa.condition",
+    "host": "",
+    "tags": [
+      "condition:ScalingActive",
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "status:unknown"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.hpa.condition",
+    "host": "",
+    "tags": [
+      "condition:ScalingLimited",
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "status:false"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.hpa.condition",
+    "host": "",
+    "tags": [
+      "condition:ScalingLimited",
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "status:true"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.hpa.condition",
+    "host": "",
+    "tags": [
+      "condition:ScalingLimited",
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "status:unknown"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.hpa.count",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.hpa.current_replicas",
+    "host": "",
+    "tags": [
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.hpa.desired_replicas",
+    "host": "",
+    "tags": [
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 3
+  },
+  {
+    "metric": "kubernetes_state.hpa.max_replicas",
+    "host": "",
+    "tags": [
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 10
+  },
+  {
+    "metric": "kubernetes_state.hpa.min_replicas",
+    "host": "",
+    "tags": [
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.hpa.spec_target_metric",
+    "host": "",
+    "tags": [
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "metric_name:cpu",
+      "metric_target_type:utilization",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 80
+  },
+  {
+    "metric": "kubernetes_state.hpa.spec_target_metric",
+    "host": "",
+    "tags": [
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "metric_name:hits",
+      "metric_target_type:value",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 2000
+  },
+  {
+    "metric": "kubernetes_state.hpa.spec_target_metric",
+    "host": "",
+    "tags": [
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "metric_name:memory",
+      "metric_target_type:average",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 419430400
+  },
+  {
+    "metric": "kubernetes_state.hpa.spec_target_metric",
+    "host": "",
+    "tags": [
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "metric_name:queue_depth",
+      "metric_target_type:value",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 30
+  },
+  {
+    "metric": "kubernetes_state.hpa.spec_target_metric",
+    "host": "",
+    "tags": [
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "metric_name:requests_per_second",
+      "metric_target_type:average",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 100
+  },
+  {
+    "metric": "kubernetes_state.hpa.status_target_metric",
+    "host": "",
+    "tags": [
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "metric_name:cpu",
+      "metric_target_type:average",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0.238
+  },
+  {
+    "metric": "kubernetes_state.hpa.status_target_metric",
+    "host": "",
+    "tags": [
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "metric_name:cpu",
+      "metric_target_type:utilization",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 95
+  },
+  {
+    "metric": "kubernetes_state.hpa.status_target_metric",
+    "host": "",
+    "tags": [
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "metric_name:hits",
+      "metric_target_type:value",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1500
+  },
+  {
+    "metric": "kubernetes_state.hpa.status_target_metric",
+    "host": "",
+    "tags": [
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "metric_name:memory",
+      "metric_target_type:average",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 314572800
+  },
+  {
+    "metric": "kubernetes_state.hpa.status_target_metric",
+    "host": "",
+    "tags": [
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "metric_name:queue_depth",
+      "metric_target_type:average",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 6
+  },
+  {
+    "metric": "kubernetes_state.hpa.status_target_metric",
+    "host": "",
+    "tags": [
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "metric_name:queue_depth",
+      "metric_target_type:value",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 12
+  },
+  {
+    "metric": "kubernetes_state.hpa.status_target_metric",
+    "host": "",
+    "tags": [
+      "horizontalpodautoscaler:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "metric_name:requests_per_second",
+      "metric_target_type:average",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 120
+  },
+  {
+    "metric": "kubernetes_state.ingress.count",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.ingress.path",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_ingress:web",
+      "kube_ingress_host:shop.example",
+      "kube_ingress_path:/",
+      "kube_namespace:shop",
+      "kube_service:web",
+      "kube_service_port:80",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.ingress.path",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_ingress:web",
+      "kube_ingress_host:shop.example",
+      "kube_ingress_path:/api",
+      "kube_namespace:shop",
+      "kube_service:api",
+      "kube_service_port:0",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.ingress.path",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_ingress:web",
+      "kube_ingress_host:www.shop.example",
+      "kube_ingress_path:/",
+      "kube_namespace:shop",
+      "kube_service:web",
+      "kube_service_port:80",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.ingress.tls",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_ingress:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "tls_host:shop.example"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.ingress.tls",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_ingress:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "tls_host:www.shop.example"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.initcontainer.cpu_requested",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "env:prod",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:init-db",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_region:eu-central-1",
+      "kube_replica_set:web-7c9f8d6b5",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "resource:cpu",
+      "uid:uid-pod-web-1",
+      "unit:core"
+    ],
+    "value": 0.1
+  },
+  {
+    "metric": "kubernetes_state.initcontainer.memory_requested",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "env:prod",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:init-db",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_region:eu-central-1",
+      "kube_replica_set:web-7c9f8d6b5",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "resource:memory",
+      "uid:uid-pod-web-1",
+      "unit:byte"
+    ],
+    "value": 67108864
+  },
+  {
+    "metric": "kubernetes_state.initcontainer.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:init-db",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.initcontainer.restarts",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:init-db",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.initcontainer.running",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:init-db",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.initcontainer.waiting",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_container_name:init-db",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.job.completion.failed",
+    "host": "",
+    "tags": [
+      "condition:false",
+      "kube_app_name:migrate",
+      "kube_cluster_name:golden-cluster",
+      "kube_job:migrate",
+      "kube_namespace:batch",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.job.completion.failed",
+    "host": "",
+    "tags": [
+      "condition:unknown",
+      "kube_app_name:migrate",
+      "kube_cluster_name:golden-cluster",
+      "kube_job:migrate",
+      "kube_namespace:batch",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.job.completion.failed",
+    "host": "",
+    "tags": [
+      "kube_app_name:migrate",
+      "kube_cluster_name:golden-cluster",
+      "kube_job:migrate",
+      "kube_namespace:batch",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.job.completion.succeeded",
+    "host": "",
+    "tags": [
+      "condition:false",
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684200",
+      "kube_namespace:batch",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.job.completion.succeeded",
+    "host": "",
+    "tags": [
+      "condition:unknown",
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684200",
+      "kube_namespace:batch",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.job.completion.succeeded",
+    "host": "",
+    "tags": [
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684200",
+      "kube_namespace:batch",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.job.count",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_namespace:batch",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.job.count",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:batch",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.job.duration",
+    "host": "",
+    "tags": [
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684200",
+      "kube_namespace:batch",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 60
+  },
+  {
+    "metric": "kubernetes_state.job.duration",
+    "host": "",
+    "tags": [
+      "kube_app_name:migrate",
+      "kube_cluster_name:golden-cluster",
+      "kube_job:migrate",
+      "kube_namespace:batch",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 7200
+  },
+  {
+    "metric": "kubernetes_state.job.duration",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684500",
+      "kube_namespace:batch",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 300
+  },
+  {
+    "metric": "kubernetes_state.job.failed",
+    "host": "",
+    "tags": [
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684200",
+      "kube_namespace:batch",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.job.failed",
+    "host": "",
+    "tags": [
+      "kube_app_name:migrate",
+      "kube_cluster_name:golden-cluster",
+      "kube_job:migrate",
+      "kube_namespace:batch",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "reason:BackoffLimitExceeded"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.job.succeeded",
+    "host": "",
+    "tags": [
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684200",
+      "kube_namespace:batch",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.job.succeeded",
+    "host": "",
+    "tags": [
+      "kube_app_name:migrate",
+      "kube_cluster_name:golden-cluster",
+      "kube_job:migrate",
+      "kube_namespace:batch",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.job.succeeded",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684500",
+      "kube_namespace:batch",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.limitrange.cpu.default",
+    "host": "",
+    "tags": [
+      "constraint:default",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "limitrange:defaults",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:cpu",
+      "type:Container"
+    ],
+    "value": 0.5
+  },
+  {
+    "metric": "kubernetes_state.limitrange.cpu.default_request",
+    "host": "",
+    "tags": [
+      "constraint:defaultRequest",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "limitrange:defaults",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:cpu",
+      "type:Container"
+    ],
+    "value": 0.1
+  },
+  {
+    "metric": "kubernetes_state.limitrange.cpu.max",
+    "host": "",
+    "tags": [
+      "constraint:max",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "limitrange:defaults",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:cpu",
+      "type:Container"
+    ],
+    "value": 4
+  },
+  {
+    "metric": "kubernetes_state.limitrange.cpu.max",
+    "host": "",
+    "tags": [
+      "constraint:max",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "limitrange:defaults",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:cpu",
+      "type:Pod"
+    ],
+    "value": 8
+  },
+  {
+    "metric": "kubernetes_state.limitrange.cpu.max_limit_request_ratio",
+    "host": "",
+    "tags": [
+      "constraint:maxLimitRequestRatio",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "limitrange:defaults",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:cpu",
+      "type:Container"
+    ],
+    "value": 10
+  },
+  {
+    "metric": "kubernetes_state.limitrange.cpu.min",
+    "host": "",
+    "tags": [
+      "constraint:min",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "limitrange:defaults",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:cpu",
+      "type:Container"
+    ],
+    "value": 0.01
+  },
+  {
+    "metric": "kubernetes_state.limitrange.memory.default",
+    "host": "",
+    "tags": [
+      "constraint:default",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "limitrange:defaults",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:memory",
+      "type:Container"
+    ],
+    "value": 536870912
+  },
+  {
+    "metric": "kubernetes_state.limitrange.memory.default_request",
+    "host": "",
+    "tags": [
+      "constraint:defaultRequest",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "limitrange:defaults",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:memory",
+      "type:Container"
+    ],
+    "value": 134217728
+  },
+  {
+    "metric": "kubernetes_state.limitrange.memory.max",
+    "host": "",
+    "tags": [
+      "constraint:max",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "limitrange:defaults",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:memory",
+      "type:Container"
+    ],
+    "value": 8589934592
+  },
+  {
+    "metric": "kubernetes_state.limitrange.memory.max",
+    "host": "",
+    "tags": [
+      "constraint:max",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "limitrange:defaults",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:memory",
+      "type:Pod"
+    ],
+    "value": 17179869184
+  },
+  {
+    "metric": "kubernetes_state.limitrange.memory.min",
+    "host": "",
+    "tags": [
+      "constraint:min",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "limitrange:defaults",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:memory",
+      "type:Container"
+    ],
+    "value": 16777216
+  },
+  {
+    "metric": "kubernetes_state.limitrange.storage.max",
+    "host": "",
+    "tags": [
+      "constraint:max",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "limitrange:defaults",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:storage",
+      "type:PersistentVolumeClaim"
+    ],
+    "value": 107374182400
+  },
+  {
+    "metric": "kubernetes_state.limitrange.storage.min",
+    "host": "",
+    "tags": [
+      "constraint:min",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "limitrange:defaults",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:storage",
+      "type:PersistentVolumeClaim"
+    ],
+    "value": 1073741824
+  },
+  {
+    "metric": "kubernetes_state.namespace.count",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "phase:Active"
+    ],
+    "value": 3
+  },
+  {
+    "metric": "kubernetes_state.namespace.count",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "phase:Terminating"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.node.age",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6"
+    ],
+    "value": 2678400
+  },
+  {
+    "metric": "kubernetes_state.node.age",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.6.28",
+      "kernel_version:5.14.21",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1b",
+      "kubelet_version:v1.30.8",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Micro 5.5"
+    ],
+    "value": 1425600
+  },
+  {
+    "metric": "kubernetes_state.node.by_condition",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:DiskPressure",
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "status:false"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.node.by_condition",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:MemoryPressure",
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "status:false"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.node.by_condition",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:NetworkUnavailable",
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "status:false"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.node.by_condition",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:PIDPressure",
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "status:false"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.node.by_condition",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:Ready",
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "status:true"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.node.by_condition",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "condition:DiskPressure",
+      "container_runtime_version:containerd://1.6.28",
+      "kernel_version:5.14.21",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1b",
+      "kubelet_version:v1.30.8",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Micro 5.5",
+      "status:true"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.node.by_condition",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "condition:MemoryPressure",
+      "container_runtime_version:containerd://1.6.28",
+      "kernel_version:5.14.21",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1b",
+      "kubelet_version:v1.30.8",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Micro 5.5",
+      "status:unknown"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.node.by_condition",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "condition:Ready",
+      "container_runtime_version:containerd://1.6.28",
+      "kernel_version:5.14.21",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1b",
+      "kubelet_version:v1.30.8",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Micro 5.5",
+      "status:unknown"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.node.count",
+    "host": "",
+    "tags": [
+      "container_runtime_version:containerd://1.6.28",
+      "kernel_version:5.14.21",
+      "kube_cluster_name:golden-cluster",
+      "kubelet_version:v1.30.8",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Micro 5.5"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.node.count",
+    "host": "",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kubelet_version:v1.31.4",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.node.cpu_allocatable",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "resource:cpu",
+      "unit:core"
+    ],
+    "value": 3.92
+  },
+  {
+    "metric": "kubernetes_state.node.cpu_allocatable",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.6.28",
+      "kernel_version:5.14.21",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1b",
+      "kubelet_version:v1.30.8",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Micro 5.5",
+      "resource:cpu",
+      "unit:core"
+    ],
+    "value": 1.93
+  },
+  {
+    "metric": "kubernetes_state.node.cpu_allocatable.total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 5.85
+  },
+  {
+    "metric": "kubernetes_state.node.cpu_capacity",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "resource:cpu",
+      "unit:core"
+    ],
+    "value": 4
+  },
+  {
+    "metric": "kubernetes_state.node.cpu_capacity",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.6.28",
+      "kernel_version:5.14.21",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1b",
+      "kubelet_version:v1.30.8",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Micro 5.5",
+      "resource:cpu",
+      "unit:core"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.node.cpu_capacity.total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 6
+  },
+  {
+    "metric": "kubernetes_state.node.ephemeral_storage_allocatable",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "resource:ephemeral_storage",
+      "unit:byte"
+    ],
+    "value": 96636764160
+  },
+  {
+    "metric": "kubernetes_state.node.ephemeral_storage_capacity",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "resource:ephemeral_storage",
+      "unit:byte"
+    ],
+    "value": 107374182400
+  },
+  {
+    "metric": "kubernetes_state.node.gpu_allocatable",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "resource:nvidia_com_gpu",
+      "unit:integer"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.node.gpu_allocatable.total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.node.gpu_capacity",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "resource:nvidia_com_gpu",
+      "unit:integer"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.node.gpu_capacity.total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.node.memory_allocatable",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "resource:memory",
+      "unit:byte"
+    ],
+    "value": 16106127360
+  },
+  {
+    "metric": "kubernetes_state.node.memory_allocatable",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.6.28",
+      "kernel_version:5.14.21",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1b",
+      "kubelet_version:v1.30.8",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Micro 5.5",
+      "resource:memory",
+      "unit:byte"
+    ],
+    "value": 7516192768
+  },
+  {
+    "metric": "kubernetes_state.node.memory_allocatable.total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 23622320128
+  },
+  {
+    "metric": "kubernetes_state.node.memory_capacity",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "resource:memory",
+      "unit:byte"
+    ],
+    "value": 17179869184
+  },
+  {
+    "metric": "kubernetes_state.node.memory_capacity",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.6.28",
+      "kernel_version:5.14.21",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1b",
+      "kubelet_version:v1.30.8",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Micro 5.5",
+      "resource:memory",
+      "unit:byte"
+    ],
+    "value": 8589934592
+  },
+  {
+    "metric": "kubernetes_state.node.memory_capacity.total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 25769803776
+  },
+  {
+    "metric": "kubernetes_state.node.pods_allocatable",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "resource:pods",
+      "unit:integer"
+    ],
+    "value": 110
+  },
+  {
+    "metric": "kubernetes_state.node.pods_allocatable",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.6.28",
+      "kernel_version:5.14.21",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1b",
+      "kubelet_version:v1.30.8",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Micro 5.5",
+      "resource:pods",
+      "unit:integer"
+    ],
+    "value": 58
+  },
+  {
+    "metric": "kubernetes_state.node.pods_capacity",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "resource:pods",
+      "unit:integer"
+    ],
+    "value": 110
+  },
+  {
+    "metric": "kubernetes_state.node.pods_capacity",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.6.28",
+      "kernel_version:5.14.21",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1b",
+      "kubelet_version:v1.30.8",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Micro 5.5",
+      "resource:pods",
+      "unit:integer"
+    ],
+    "value": 58
+  },
+  {
+    "metric": "kubernetes_state.node.status",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6",
+      "status:schedulable"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.node.status",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.6.28",
+      "kernel_version:5.14.21",
+      "kube_cluster_name:golden-cluster",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1b",
+      "kubelet_version:v1.30.8",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Micro 5.5",
+      "status:unschedulable"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pdb.disruptions_allowed",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "poddisruptionbudget:db"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pdb.disruptions_allowed",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "poddisruptionbudget:web"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pdb.pods_desired",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "poddisruptionbudget:db"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pdb.pods_desired",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "poddisruptionbudget:web"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pdb.pods_healthy",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "poddisruptionbudget:db"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pdb.pods_healthy",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "poddisruptionbudget:web"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pdb.pods_total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "poddisruptionbudget:db"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pdb.pods_total",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "poddisruptionbudget:web"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.persistentvolume.by_phase",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolume:pv-db",
+      "phase:Bound",
+      "storageclass:standard"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.persistentvolume.by_phase",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolume:pv-nfs",
+      "phase:Released"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.persistentvolume.by_phase",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolume:pv-spare",
+      "phase:Available",
+      "storageclass:standard"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.persistentvolume.capacity",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolume:pv-db",
+      "storageclass:standard"
+    ],
+    "value": 21474836480
+  },
+  {
+    "metric": "kubernetes_state.persistentvolume.capacity",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolume:pv-nfs"
+    ],
+    "value": 107374182400
+  },
+  {
+    "metric": "kubernetes_state.persistentvolume.capacity",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolume:pv-spare",
+      "storageclass:standard"
+    ],
+    "value": 10737418240
+  },
+  {
+    "metric": "kubernetes_state.persistentvolumeclaim.access_mode",
+    "host": "",
+    "tags": [
+      "access_mode:ReadOnlyMany",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolumeclaim:web-data"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.persistentvolumeclaim.access_mode",
+    "host": "",
+    "tags": [
+      "access_mode:ReadWriteMany",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolumeclaim:web-data"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.persistentvolumeclaim.access_mode",
+    "host": "",
+    "tags": [
+      "access_mode:ReadWriteOnce",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolumeclaim:data-db-0",
+      "storageclass:standard"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.persistentvolumeclaim.access_mode",
+    "host": "",
+    "tags": [
+      "access_mode:ReadWriteOnce",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolumeclaim:web-7c9f8d6b5-abcde-scratch",
+      "storageclass:standard"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.persistentvolumeclaim.request_storage",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolumeclaim:data-db-0",
+      "storageclass:standard"
+    ],
+    "value": 21474836480
+  },
+  {
+    "metric": "kubernetes_state.persistentvolumeclaim.request_storage",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolumeclaim:web-7c9f8d6b5-abcde-scratch",
+      "storageclass:standard"
+    ],
+    "value": 1073741824
+  },
+  {
+    "metric": "kubernetes_state.persistentvolumeclaim.request_storage",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolumeclaim:web-data"
+    ],
+    "value": 5368709120
+  },
+  {
+    "metric": "kubernetes_state.persistentvolumeclaim.status",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolumeclaim:data-db-0",
+      "phase:Bound",
+      "storageclass:standard"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.persistentvolumeclaim.status",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolumeclaim:data-db-0",
+      "phase:Lost",
+      "storageclass:standard"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.persistentvolumeclaim.status",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolumeclaim:data-db-0",
+      "phase:Pending",
+      "storageclass:standard"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.persistentvolumeclaim.status",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolumeclaim:web-7c9f8d6b5-abcde-scratch",
+      "phase:Bound",
+      "storageclass:standard"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.persistentvolumeclaim.status",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolumeclaim:web-7c9f8d6b5-abcde-scratch",
+      "phase:Lost",
+      "storageclass:standard"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.persistentvolumeclaim.status",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolumeclaim:web-7c9f8d6b5-abcde-scratch",
+      "phase:Pending",
+      "storageclass:standard"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.persistentvolumeclaim.status",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolumeclaim:web-data",
+      "phase:Bound"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.persistentvolumeclaim.status",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolumeclaim:web-data",
+      "phase:Lost"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.persistentvolumeclaim.status",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolumeclaim:web-data",
+      "phase:Pending"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.persistentvolumes.by_phase",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "phase:Available",
+      "storageclass:"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.persistentvolumes.by_phase",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "phase:Bound",
+      "storageclass:"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.persistentvolumes.by_phase",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "phase:Failed",
+      "storageclass:"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.persistentvolumes.by_phase",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "phase:Pending",
+      "storageclass:"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.persistentvolumes.by_phase",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "phase:Released",
+      "storageclass:"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.age",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:big",
+      "pod_phase:Pending",
+      "uid:uid-pod-big"
+    ],
+    "value": 1800
+  },
+  {
+    "metric": "kubernetes_state.pod.age",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:gated",
+      "pod_phase:Pending",
+      "uid:uid-pod-gated"
+    ],
+    "value": 3600
+  },
+  {
+    "metric": "kubernetes_state.pod.age",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 172800
+  },
+  {
+    "metric": "kubernetes_state.pod.age",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:db-0",
+      "pod_phase:Running",
+      "uid:uid-pod-db-0"
+    ],
+    "value": 2332800
+  },
+  {
+    "metric": "kubernetes_state.pod.age",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replica_set:api-5d4c3b2a19",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:api-5d4c3b2a19-klmno",
+      "pod_phase:Pending",
+      "uid:uid-pod-api-1"
+    ],
+    "value": 1200
+  },
+  {
+    "metric": "kubernetes_state.pod.age",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684200",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684200-pqrst",
+      "pod_phase:Succeeded",
+      "uid:uid-pod-hello-done"
+    ],
+    "value": 600
+  },
+  {
+    "metric": "kubernetes_state.pod.age",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "kube_priority_class:system-node-critical",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x1",
+      "pod_phase:Running",
+      "uid:uid-pod-agent-1"
+    ],
+    "value": 2678400
+  },
+  {
+    "metric": "kubernetes_state.pod.age",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-fghij",
+      "pod_phase:Running",
+      "uid:uid-pod-web-2"
+    ],
+    "value": 172800
+  },
+  {
+    "metric": "kubernetes_state.pod.age",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684500",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684500-uvwxy",
+      "pod_phase:Running",
+      "uid:uid-pod-hello-run"
+    ],
+    "value": 300
+  },
+  {
+    "metric": "kubernetes_state.pod.age",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replication_controller:legacy",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:legacy-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-legacy"
+    ],
+    "value": 1036800
+  },
+  {
+    "metric": "kubernetes_state.pod.age",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x2",
+      "pod_phase:Failed",
+      "reason:Evicted",
+      "uid:uid-pod-agent-2"
+    ],
+    "value": 1425600
+  },
+  {
+    "metric": "kubernetes_state.pod.count",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "node:",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.pod.count",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684200",
+      "kube_namespace:batch",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.count",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684500",
+      "kube_namespace:batch",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.count",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.count",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_region:eu-central-1",
+      "kube_replica_set:web-7c9f8d6b5",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.pod.count",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_region:eu-central-1",
+      "kube_replica_set:api-5d4c3b2a19",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.count",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_region:eu-central-1",
+      "kube_replication_controller:legacy",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.count",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.7.21",
+      "kernel_version:6.4.0-150600.23-default",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_region:eu-central-1",
+      "kube_stateful_set:db",
+      "kube_zone:eu-central-1a",
+      "kubelet_version:v1.31.4",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Server 15 SP6"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.count",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "container_runtime_version:containerd://1.6.28",
+      "kernel_version:5.14.21",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "kube_region:eu-central-1",
+      "kube_zone:eu-central-1b",
+      "kubelet_version:v1.30.8",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "os_image:SUSE Linux Enterprise Micro 5.5"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:false",
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:false",
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:db-0",
+      "pod_phase:Running",
+      "uid:uid-pod-db-0"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:false",
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replica_set:api-5d4c3b2a19",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:api-5d4c3b2a19-klmno",
+      "pod_phase:Pending",
+      "uid:uid-pod-api-1"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:false",
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684200",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684200-pqrst",
+      "pod_phase:Succeeded",
+      "uid:uid-pod-hello-done"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:false",
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "kube_priority_class:system-node-critical",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x1",
+      "pod_phase:Running",
+      "uid:uid-pod-agent-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:false",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-fghij",
+      "pod_phase:Running",
+      "uid:uid-pod-web-2"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:false",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684500",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684500-uvwxy",
+      "pod_phase:Running",
+      "uid:uid-pod-hello-run"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:false",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replication_controller:legacy",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:legacy-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-legacy"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:true",
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:true",
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:db-0",
+      "pod_phase:Running",
+      "uid:uid-pod-db-0"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:true",
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replica_set:api-5d4c3b2a19",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:api-5d4c3b2a19-klmno",
+      "pod_phase:Pending",
+      "uid:uid-pod-api-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:true",
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684200",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684200-pqrst",
+      "pod_phase:Succeeded",
+      "uid:uid-pod-hello-done"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:true",
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "kube_priority_class:system-node-critical",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x1",
+      "pod_phase:Running",
+      "uid:uid-pod-agent-1"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:true",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-fghij",
+      "pod_phase:Running",
+      "uid:uid-pod-web-2"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:true",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684500",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684500-uvwxy",
+      "pod_phase:Running",
+      "uid:uid-pod-hello-run"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:true",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replication_controller:legacy",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:legacy-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-legacy"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:unknown",
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:unknown",
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:db-0",
+      "pod_phase:Running",
+      "uid:uid-pod-db-0"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:unknown",
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replica_set:api-5d4c3b2a19",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:api-5d4c3b2a19-klmno",
+      "pod_phase:Pending",
+      "uid:uid-pod-api-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:unknown",
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684200",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684200-pqrst",
+      "pod_phase:Succeeded",
+      "uid:uid-pod-hello-done"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:unknown",
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "kube_priority_class:system-node-critical",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x1",
+      "pod_phase:Running",
+      "uid:uid-pod-agent-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:unknown",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-fghij",
+      "pod_phase:Running",
+      "uid:uid-pod-web-2"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:unknown",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684500",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684500-uvwxy",
+      "pod_phase:Running",
+      "uid:uid-pod-hello-run"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:unknown",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replication_controller:legacy",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:legacy-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-legacy"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "condition:false",
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x2",
+      "pod_phase:Failed",
+      "reason:Evicted",
+      "uid:uid-pod-agent-2"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "condition:true",
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x2",
+      "pod_phase:Failed",
+      "reason:Evicted",
+      "uid:uid-pod-agent-2"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.ready",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "condition:unknown",
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x2",
+      "pod_phase:Failed",
+      "reason:Evicted",
+      "uid:uid-pod-agent-2"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "",
+    "tags": [
+      "condition:false",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:big",
+      "pod_phase:Pending",
+      "uid:uid-pod-big"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "",
+    "tags": [
+      "condition:false",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:gated",
+      "pod_phase:Pending",
+      "uid:uid-pod-gated"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "",
+    "tags": [
+      "condition:true",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:big",
+      "pod_phase:Pending",
+      "uid:uid-pod-big"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "",
+    "tags": [
+      "condition:true",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:gated",
+      "pod_phase:Pending",
+      "uid:uid-pod-gated"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "",
+    "tags": [
+      "condition:unknown",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:big",
+      "pod_phase:Pending",
+      "uid:uid-pod-big"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "",
+    "tags": [
+      "condition:unknown",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:gated",
+      "pod_phase:Pending",
+      "uid:uid-pod-gated"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:false",
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:false",
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:db-0",
+      "pod_phase:Running",
+      "uid:uid-pod-db-0"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:false",
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replica_set:api-5d4c3b2a19",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:api-5d4c3b2a19-klmno",
+      "pod_phase:Pending",
+      "uid:uid-pod-api-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:false",
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684200",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684200-pqrst",
+      "pod_phase:Succeeded",
+      "uid:uid-pod-hello-done"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:false",
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "kube_priority_class:system-node-critical",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x1",
+      "pod_phase:Running",
+      "uid:uid-pod-agent-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:false",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-fghij",
+      "pod_phase:Running",
+      "uid:uid-pod-web-2"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:false",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684500",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684500-uvwxy",
+      "pod_phase:Running",
+      "uid:uid-pod-hello-run"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:false",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replication_controller:legacy",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:legacy-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-legacy"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:true",
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:true",
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:db-0",
+      "pod_phase:Running",
+      "uid:uid-pod-db-0"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:true",
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replica_set:api-5d4c3b2a19",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:api-5d4c3b2a19-klmno",
+      "pod_phase:Pending",
+      "uid:uid-pod-api-1"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:true",
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684200",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684200-pqrst",
+      "pod_phase:Succeeded",
+      "uid:uid-pod-hello-done"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:true",
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "kube_priority_class:system-node-critical",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x1",
+      "pod_phase:Running",
+      "uid:uid-pod-agent-1"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:true",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-fghij",
+      "pod_phase:Running",
+      "uid:uid-pod-web-2"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:true",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684500",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684500-uvwxy",
+      "pod_phase:Running",
+      "uid:uid-pod-hello-run"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:true",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replication_controller:legacy",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:legacy-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-legacy"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:unknown",
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:unknown",
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:db-0",
+      "pod_phase:Running",
+      "uid:uid-pod-db-0"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:unknown",
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replica_set:api-5d4c3b2a19",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:api-5d4c3b2a19-klmno",
+      "pod_phase:Pending",
+      "uid:uid-pod-api-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:unknown",
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684200",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684200-pqrst",
+      "pod_phase:Succeeded",
+      "uid:uid-pod-hello-done"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:unknown",
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "kube_priority_class:system-node-critical",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x1",
+      "pod_phase:Running",
+      "uid:uid-pod-agent-1"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:unknown",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-fghij",
+      "pod_phase:Running",
+      "uid:uid-pod-web-2"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:unknown",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684500",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684500-uvwxy",
+      "pod_phase:Running",
+      "uid:uid-pod-hello-run"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "condition:unknown",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replication_controller:legacy",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:legacy-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-legacy"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "condition:false",
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x2",
+      "pod_phase:Failed",
+      "reason:Evicted",
+      "uid:uid-pod-agent-2"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "condition:true",
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x2",
+      "pod_phase:Failed",
+      "reason:Evicted",
+      "uid:uid-pod-agent-2"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.scheduled",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "condition:unknown",
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x2",
+      "pod_phase:Failed",
+      "reason:Evicted",
+      "uid:uid-pod-agent-2"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.pod.status_phase",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:big",
+      "pod_phase:Pending",
+      "uid:uid-pod-big"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.status_phase",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:gated",
+      "pod_phase:Pending",
+      "uid:uid-pod-gated"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.status_phase",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.status_phase",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:db-0",
+      "pod_phase:Running",
+      "uid:uid-pod-db-0"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.status_phase",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replica_set:api-5d4c3b2a19",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:api-5d4c3b2a19-klmno",
+      "pod_phase:Pending",
+      "uid:uid-pod-api-1"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.status_phase",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684200",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684200-pqrst",
+      "pod_phase:Succeeded",
+      "uid:uid-pod-hello-done"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.status_phase",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "kube_priority_class:system-node-critical",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x1",
+      "pod_phase:Running",
+      "uid:uid-pod-agent-1"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.status_phase",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-fghij",
+      "pod_phase:Running",
+      "uid:uid-pod-web-2"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.status_phase",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684500",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684500-uvwxy",
+      "pod_phase:Running",
+      "uid:uid-pod-hello-run"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.status_phase",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replication_controller:legacy",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:legacy-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-legacy"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.status_phase",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x2",
+      "pod_phase:Failed",
+      "reason:Evicted",
+      "uid:uid-pod-agent-2"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.tolerations",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "effect:NoExecute",
+      "env:prod",
+      "key:node.kubernetes.io/not-ready",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "operator:Exists",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "toleration_seconds:300",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.tolerations",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "effect:PreferNoSchedule",
+      "env:prod",
+      "key:dedicated",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "operator:Equal",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1",
+      "value:web"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.tolerations",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "kube_priority_class:system-node-critical",
+      "node:node-1",
+      "operator:Exists",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x1",
+      "pod_phase:Running",
+      "uid:uid-pod-agent-1"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.unschedulable",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:big",
+      "pod_phase:Pending",
+      "uid:uid-pod-big"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.unschedulable",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:gated",
+      "pod_phase:Pending",
+      "uid:uid-pod-gated"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.uptime",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1"
+    ],
+    "value": 172795
+  },
+  {
+    "metric": "kubernetes_state.pod.uptime",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:db-0",
+      "pod_phase:Running",
+      "uid:uid-pod-db-0"
+    ],
+    "value": 2332797
+  },
+  {
+    "metric": "kubernetes_state.pod.uptime",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replica_set:api-5d4c3b2a19",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:api-5d4c3b2a19-klmno",
+      "pod_phase:Pending",
+      "uid:uid-pod-api-1"
+    ],
+    "value": 1198
+  },
+  {
+    "metric": "kubernetes_state.pod.uptime",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:hello",
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684200",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684200-pqrst",
+      "pod_phase:Succeeded",
+      "uid:uid-pod-hello-done"
+    ],
+    "value": 599
+  },
+  {
+    "metric": "kubernetes_state.pod.uptime",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "kube_priority_class:system-node-critical",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x1",
+      "pod_phase:Running",
+      "uid:uid-pod-agent-1"
+    ],
+    "value": 2678398
+  },
+  {
+    "metric": "kubernetes_state.pod.uptime",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:web-7c9f8d6b5-fghij",
+      "pod_phase:Running",
+      "uid:uid-pod-web-2"
+    ],
+    "value": 172796
+  },
+  {
+    "metric": "kubernetes_state.pod.uptime",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_cronjob:hello",
+      "kube_job:hello-946684500",
+      "kube_namespace:batch",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:hello-946684500-uvwxy",
+      "pod_phase:Running",
+      "uid:uid-pod-hello-run"
+    ],
+    "value": 299
+  },
+  {
+    "metric": "kubernetes_state.pod.uptime",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replication_controller:legacy",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:legacy-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-legacy"
+    ],
+    "value": 1036799
+  },
+  {
+    "metric": "kubernetes_state.pod.uptime",
+    "host": "node-2-golden-cluster",
+    "tags": [
+      "kube_app_name:node-agent",
+      "kube_cluster_name:golden-cluster",
+      "kube_daemon_set:node-agent",
+      "kube_namespace:kube-system",
+      "node:node-2",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "pod_name:node-agent-x2",
+      "pod_phase:Failed",
+      "reason:Evicted",
+      "uid:uid-pod-agent-2"
+    ],
+    "value": 1425598
+  },
+  {
+    "metric": "kubernetes_state.pod.volumes.persistentvolumeclaims_readonly",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "env:prod",
+      "kube_app_instance:web-prod",
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "kube_priority_class:high",
+      "kube_replica_set:web-7c9f8d6b5",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolumeclaim:web-data",
+      "pod_name:web-7c9f8d6b5-abcde",
+      "pod_phase:Running",
+      "uid:uid-pod-web-1",
+      "volume:data"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.pod.volumes.persistentvolumeclaims_readonly",
+    "host": "node-1-golden-cluster",
+    "tags": [
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "node:node-1",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "persistentvolumeclaim:data-db-0",
+      "pod_name:db-0",
+      "pod_phase:Running",
+      "storageclass:standard",
+      "uid:uid-pod-db-0",
+      "volume:data"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.replicaset.count",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:api",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.replicaset.count",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_deployment:web",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.replicaset.count",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.replicaset.fully_labeled_replicas",
+    "host": "",
+    "tags": [
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replica_set:api-5d4c3b2a19",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 3
+  },
+  {
+    "metric": "kubernetes_state.replicaset.fully_labeled_replicas",
+    "host": "",
+    "tags": [
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replica_set:web-7c9f8d6b5",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.replicaset.fully_labeled_replicas",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replica_set:orphan",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.replicaset.replicas",
+    "host": "",
+    "tags": [
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replica_set:api-5d4c3b2a19",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 3
+  },
+  {
+    "metric": "kubernetes_state.replicaset.replicas",
+    "host": "",
+    "tags": [
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replica_set:web-7c9f8d6b5",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.replicaset.replicas",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replica_set:orphan",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.replicaset.replicas_desired",
+    "host": "",
+    "tags": [
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replica_set:api-5d4c3b2a19",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 3
+  },
+  {
+    "metric": "kubernetes_state.replicaset.replicas_desired",
+    "host": "",
+    "tags": [
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replica_set:web-7c9f8d6b5",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.replicaset.replicas_desired",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replica_set:orphan",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.replicaset.replicas_ready",
+    "host": "",
+    "tags": [
+      "kube_app_name:api",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replica_set:api-5d4c3b2a19",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.replicaset.replicas_ready",
+    "host": "",
+    "tags": [
+      "kube_app_name:web",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replica_set:web-7c9f8d6b5",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.replicaset.replicas_ready",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replica_set:orphan",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.replicationcontroller.fully_labeled_replicas",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replication_controller:legacy",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.replicationcontroller.replicas",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replication_controller:legacy",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.replicationcontroller.replicas_available",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replication_controller:legacy",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.replicationcontroller.replicas_desired",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replication_controller:legacy",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.replicationcontroller.replicas_ready",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_replication_controller:legacy",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.resourcequota.count/deployments.apps.limit",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:count/deployments.apps",
+      "resourcequota:compute",
+      "type:hard"
+    ],
+    "value": 10
+  },
+  {
+    "metric": "kubernetes_state.resourcequota.count/deployments.apps.used",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:count/deployments.apps",
+      "resourcequota:compute",
+      "type:used"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.resourcequota.limits.cpu.limit",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:limits.cpu",
+      "resourcequota:compute",
+      "type:hard"
+    ],
+    "value": 20
+  },
+  {
+    "metric": "kubernetes_state.resourcequota.limits.cpu.used",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:limits.cpu",
+      "resourcequota:compute",
+      "type:used"
+    ],
+    "value": 2.5
+  },
+  {
+    "metric": "kubernetes_state.resourcequota.limits.memory.limit",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:limits.memory",
+      "resourcequota:compute",
+      "type:hard"
+    ],
+    "value": 42949672960
+  },
+  {
+    "metric": "kubernetes_state.resourcequota.limits.memory.used",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:limits.memory",
+      "resourcequota:compute",
+      "type:used"
+    ],
+    "value": 3791650816
+  },
+  {
+    "metric": "kubernetes_state.resourcequota.pods.limit",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:pods",
+      "resourcequota:compute",
+      "type:hard"
+    ],
+    "value": 50
+  },
+  {
+    "metric": "kubernetes_state.resourcequota.pods.used",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:pods",
+      "resourcequota:compute",
+      "type:used"
+    ],
+    "value": 7
+  },
+  {
+    "metric": "kubernetes_state.resourcequota.requests.cpu.limit",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:requests.cpu",
+      "resourcequota:compute",
+      "type:hard"
+    ],
+    "value": 10
+  },
+  {
+    "metric": "kubernetes_state.resourcequota.requests.cpu.used",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:requests.cpu",
+      "resourcequota:compute",
+      "type:used"
+    ],
+    "value": 2.35
+  },
+  {
+    "metric": "kubernetes_state.resourcequota.requests.memory.limit",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:requests.memory",
+      "resourcequota:compute",
+      "type:hard"
+    ],
+    "value": 21474836480
+  },
+  {
+    "metric": "kubernetes_state.resourcequota.requests.memory.used",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "resource:requests.memory",
+      "resourcequota:compute",
+      "type:used"
+    ],
+    "value": 2986344448
+  },
+  {
+    "metric": "kubernetes_state.secret.count",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.secret.type",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "secret:app-config",
+      "type:Opaque"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.secret.type",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "secret:web-tls",
+      "type:kubernetes.io/tls"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.service.count",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "type:ClusterIP"
+    ],
+    "value": 2
+  },
+  {
+    "metric": "kubernetes_state.service.count",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "type:ExternalName"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.service.count",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "type:LoadBalancer"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.service.type",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_service:db",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "type:ClusterIP",
+      "uid:uid-svc-db"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.service.type",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_service:upstream",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "type:ExternalName",
+      "uid:uid-svc-upstream"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.service.type",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_service:web",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "type:ClusterIP",
+      "uid:uid-svc-web"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.service.type",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_service:web-public",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555",
+      "type:LoadBalancer",
+      "uid:uid-svc-web-public"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.statefulset.count",
+    "host": "",
+    "tags": [
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.statefulset.replicas",
+    "host": "",
+    "tags": [
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.statefulset.replicas_current",
+    "host": "",
+    "tags": [
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.statefulset.replicas_desired",
+    "host": "",
+    "tags": [
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.statefulset.replicas_ready",
+    "host": "",
+    "tags": [
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0
+  },
+  {
+    "metric": "kubernetes_state.statefulset.replicas_updated",
+    "host": "",
+    "tags": [
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 1
+  },
+  {
+    "metric": "kubernetes_state.statefulset.rollout_duration",
+    "host": "",
+    "tags": [
+      "kube_app_component:database",
+      "kube_app_name:db",
+      "kube_cluster_name:golden-cluster",
+      "kube_namespace:shop",
+      "kube_stateful_set:db",
+      "orch_cluster_id:11111111-2222-3333-4444-555555555555"
+    ],
+    "value": 0
+  }
+]
