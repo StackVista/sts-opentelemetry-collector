@@ -43,6 +43,12 @@ func startFakeKSM(t *testing.T, check *KSMCheck, objects ...runtime.Object) [][]
 		{GroupVersion: "networking.k8s.io/v1", APIResources: []metav1.APIResource{
 			{Name: "ingresses", Kind: "Ingress"},
 		}},
+		{GroupVersion: "batch/v1", APIResources: []metav1.APIResource{
+			{Name: "jobs", Kind: "Job"}, {Name: "cronjobs", Kind: "CronJob"},
+		}},
+		{GroupVersion: "autoscaling/v2", APIResources: []metav1.APIResource{
+			{Name: "horizontalpodautoscalers", Kind: "HorizontalPodAutoscaler"},
+		}},
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

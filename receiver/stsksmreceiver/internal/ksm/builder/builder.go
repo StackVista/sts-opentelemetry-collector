@@ -34,6 +34,7 @@ import (
 	"k8s.io/kube-state-metrics/v2/pkg/watch"
 
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ddcompat/log"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ksm/ksm213"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ksm/store"
 )
 
@@ -217,7 +218,7 @@ func GenerateStores[T any](
 	listWatchFunc func(kubeClient T, ns string, fieldSelector string) cache.ListerWatcher,
 	useAPIServerCache bool,
 ) []cache.Store {
-	filteredMetricFamilies := generator.FilterFamilyGenerators(b.allowDenyList, metricFamilies)
+	filteredMetricFamilies := generator.FilterFamilyGenerators(b.allowDenyList, ksm213.Replace(metricFamilies))
 	composedMetricGenFuncs := generator.ComposeMetricGenFuncs(filteredMetricFamilies)
 
 	isPod := false
