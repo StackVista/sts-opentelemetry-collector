@@ -76,3 +76,16 @@ func TestTagWithoutValue(t *testing.T) {
 	_, ok = attrs.Get("orphaned")
 	assert.False(t, ok)
 }
+
+func TestRepeatedSeriesKeepLastValue(t *testing.T) {
+	const name, op, pod = "kubernetes_state.pod.tolerations", "operator:Exists", "pod_name:a"
+	s := pmetricsender.New(pcommon.Timestamp(0))
+	s.Gauge(name, 1, "", []string{op, pod})
+	s.Gauge(name, 2, "", []string{pod, op, pod})
+	s.Gauge(name, 3, "node-1", []string{pod, op})
+
+	dps := s.Metrics().ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0).Gauge().DataPoints()
+	require.Equal(t, 2, dps.Len())
+	assert.Equal(t, 2.0, dps.At(0).DoubleValue())
+	assert.Equal(t, 3.0, dps.At(1).DoubleValue())
+}

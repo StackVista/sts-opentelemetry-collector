@@ -45,21 +45,33 @@ var semconv = map[string]string{ //nolint:gochecknoglobals
 
 // Sender accumulates one collection run into a pmetric.Metrics.
 type Sender struct {
-	metrics pmetric.Metrics
-	scope   pmetric.MetricSlice
-	byName  map[string]pmetric.NumberDataPointSlice
-	ts      pcommon.Timestamp
+	metrics  pmetric.Metrics
+	scope    pmetric.MetricSlice
+	byName   map[string]pmetric.NumberDataPointSlice
+	contexts map[string]int
+	ts       pcommon.Timestamp
 }
 
 func New(ts pcommon.Timestamp) *Sender {
 	md := pmetric.NewMetrics()
 	scope := md.ResourceMetrics().AppendEmpty().ScopeMetrics().AppendEmpty().Metrics()
-	return &Sender{metrics: md, scope: scope, byName: map[string]pmetric.NumberDataPointSlice{}, ts: ts}
+	return &Sender{
+		metrics:  md,
+		scope:    scope,
+		byName:   map[string]pmetric.NumberDataPointSlice{},
+		contexts: map[string]int{},
+		ts:       ts,
+	}
 }
 
 func (s *Sender) Metrics() pmetric.Metrics { return s.metrics }
 
 func (s *Sender) Gauge(metric string, value float64, hostname string, tags []string) {
+	// The agent's aggregator sorts and deduplicates tags, and keeps the last
+	// value of a gauge submitted twice with the same name, host and tags.
+	sorted := slices.Compact(slices.Sorted(slices.Values(tags)))
+	key := metric + "\x00" + hostname + "\x00" + strings.Join(sorted, "\x00")
+
 	dps, ok := s.byName[metric]
 	if !ok {
 		m := s.scope.AppendEmpty()
@@ -67,22 +79,26 @@ func (s *Sender) Gauge(metric string, value float64, hostname string, tags []str
 		dps = m.SetEmptyGauge().DataPoints()
 		s.byName[metric] = dps
 	}
+	if i, seen := s.contexts[key]; seen {
+		dps.At(i).SetDoubleValue(value)
+		return
+	}
+	s.contexts[key] = dps.Len()
 	dp := dps.AppendEmpty()
 	dp.SetTimestamp(s.ts)
 	dp.SetDoubleValue(value)
-	putAttributes(dp.Attributes(), hostname, tags)
+	putAttributes(dp.Attributes(), hostname, sorted)
 }
 
 // ServiceCheck drops the check: the cluster agent's serializer never forwards them.
 func (s *Sender) ServiceCheck(string, servicecheck.ServiceCheckStatus, string, []string, string) {}
 
-func putAttributes(attrs pcommon.Map, hostname string, tags []string) {
-	attrs.EnsureCapacity(2*len(tags) + 2)
+// putAttributes expects sorted tags: the Receiver keeps the last value of a
+// repeated key, so sorted order resolves repeats the same way.
+func putAttributes(attrs pcommon.Map, hostname string, sorted []string) {
+	attrs.EnsureCapacity(2*len(sorted) + 2)
 	podName := false
 	uid := ""
-	// The agent's aggregator sorts tags and the Receiver keeps the last value of a
-	// repeated key, so sorting first resolves repeats the same way.
-	sorted := slices.Sorted(slices.Values(tags))
 	for _, tag := range sorted {
 		k, v, hasValue := strings.Cut(tag, ":")
 		if !hasValue {
