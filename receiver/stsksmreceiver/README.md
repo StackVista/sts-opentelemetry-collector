@@ -1,11 +1,28 @@
-# Cluster-agent-compatible Kubernetes state metrics
+# Cluster-agent-compatible Kubernetes state metrics receiver
 
-This module produces the `kubernetes_state.*` series that the cluster agent's
+`stsksm` produces the `kubernetes_state.*` series that the cluster agent's
 `kubernetes_state_core` check sends, from the same kube-state-metrics (KSM)
-library and the agent's own mapping code. It does not yet register a collector
-component.
+library and the agent's own mapping code. It is a temporary compatibility path.
+
+## Configuration
+
+| Key | Default | Description |
+|---|---|---|
+| `cluster_name` | (required) | The cluster agent's cluster name; lowercased, as the agent does |
+| `auth_type` | `serviceAccount` | `serviceAccount` or `kubeConfig` |
+| `collection_interval` | `40s` | Interval between collections, the check interval |
+| `resync_period` | `300s` | Informer resync period, in whole seconds |
+| `collectors` | the cluster agent chart's list | kube-state-metrics resources to collect |
+| `labels_as_tags`, `annotations_as_tags` | | Per resource kind, label or annotation → tag, as in the check's instance config |
+| `k8s_leader_elector` | | ID of a `k8sleaderelector` extension; only the leader collects |
 
 ## How it works
+
+At start, the receiver reads the kube-system namespace UID as the cluster ID,
+retrying for up to 10 seconds. If it cannot, it warns and sends the series
+without `orch_cluster_id`, as the cluster agent does. Without a leader elector,
+collection starts with the receiver; with one, it starts when the replica
+becomes leader and stops, with the informers, when it loses leadership.
 
 `ksm.New` takes the check configuration (`KSMConfig`) and the values the agent
 read from its own configuration and the cluster agent (`Options`: cluster name
@@ -13,7 +30,8 @@ and ID, global tags, global labels and annotations as tags, namespace tags).
 `BuildStores` starts the KSM informers for the configured collectors.
 `Collect` applies the agent's label joins, label mapping, owner tags,
 transformers and aggregators to the current store contents and passes each
-series to a sender.
+series to a sender. A failed collection is logged and retried at the next
+interval.
 
 `pmetricsender` turns the series into OTLP gauges:
 
@@ -32,7 +50,10 @@ series to a sender.
 - service checks are dropped, because the cluster agent's serializer does not
   forward them.
 
-No resource or scope attributes are set.
+The receiver sends each collection as one resource with two attributes,
+`k8s.cluster.name` and an empty `service.namespace`. The platform collector
+inserts `service.namespace=default` only where the attribute is absent, and the
+empty value is dropped when stored. The scope name is empty.
 
 ## Vendored cluster-agent code
 
