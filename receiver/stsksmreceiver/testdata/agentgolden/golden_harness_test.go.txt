@@ -1,0 +1,233 @@
+//go:build kubeapiserver
+
+// Copied into stackstate-agent pkg/collector/corechecks/cluster/ksm by
+// generate.sh. It configures the kubernetes_state_core check as the cluster
+// agent chart does, runs it against a fake clientset holding
+// testdata/objects.json, and records the gauges as the aggregator keeps them.
+package ksm
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"slices"
+	"strings"
+	"testing"
+	"testing/synctest"
+	"time"
+
+	"github.com/stretchr/testify/mock"
+	batchv1 "k8s.io/api/batch/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	fakediscovery "k8s.io/client-go/discovery/fake"
+	fakeclientset "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/kubernetes/scheme"
+
+	taggerfxmock "github.com/DataDog/datadog-agent/comp/core/tagger/fx-mock"
+	"github.com/DataDog/datadog-agent/pkg/aggregator/mocksender"
+	"github.com/DataDog/datadog-agent/comp/core/autodiscovery/integration"
+	"github.com/DataDog/datadog-agent/pkg/config/env"
+	configmock "github.com/DataDog/datadog-agent/pkg/config/mock"
+	ksmstore "github.com/DataDog/datadog-agent/pkg/kubestatemetrics/store"
+	"github.com/DataDog/datadog-agent/pkg/tagset"
+	"github.com/DataDog/datadog-agent/pkg/util/flavor"
+	"github.com/DataDog/datadog-agent/pkg/util/kubernetes/apiserver"
+)
+
+const (
+	goldenClusterName = "golden_cluster"
+	goldenClusterID   = "11111111-2222-3333-4444-555555555555"
+)
+
+// The chart's kube_state_metrics_core_conf with default values.
+const goldenInstance = `
+collectors:
+  - nodes
+  - pods
+  - services
+  - persistentvolumeclaims
+  - persistentvolumes
+  - namespaces
+  - endpoints
+  - daemonsets
+  - deployments
+  - replicasets
+  - statefulsets
+  - cronjobs
+  - jobs
+  - ingresses
+  - secrets
+  - resourcequotas
+  - replicationcontrollers
+  - limitranges
+  - horizontalpodautoscalers
+  - poddisruptionbudgets
+  - storageclasses
+  - volumeattachments
+labels_as_tags:
+  {}
+annotations_as_tags:
+  {}
+`
+
+type goldenSeries struct {
+	Metric string   `json:"metric"`
+	Host   string   `json:"host"`
+	Tags   []string `json:"tags"`
+	Value  float64  `json:"value"`
+}
+
+// goldenSender stands in for the check sender: it appends the check's custom
+// tags and keeps one gauge per context, the last, as the check sampler does.
+type goldenSender struct {
+	*mocksender.MockSender
+	checkTags []string
+	series    map[string]goldenSeries
+}
+
+func (s *goldenSender) SetCheckCustomTags(tags []string) { s.checkTags = tags }
+
+func (s *goldenSender) DisableDefaultHostname(bool) {}
+
+func (s *goldenSender) Commit() {}
+
+func (s *goldenSender) Gauge(metric string, value float64, hostname string, tags []string) {
+	acc := tagset.NewHashlessTagsAccumulatorFromSlice(append(slices.Clone(tags), s.checkTags...))
+	acc.SortUniq()
+	sorted := slices.Clone(acc.Get())
+	key := metric + "\x00" + hostname + "\x00" + strings.Join(sorted, "\x00")
+	s.series[key] = goldenSeries{Metric: metric, Host: hostname, Tags: sorted, Value: value}
+}
+
+func TestGenerateKSMGolden(t *testing.T) {
+	resources, objects := loadGoldenFixture(t, os.Getenv("GOLDEN_FIXTURE"))
+
+	// The fake clientset does not send the bookmark that ends a watch-list stream.
+	t.Setenv("KUBE_FEATURE_WatchListClient", "false")
+	t.Setenv("DD_ORCHESTRATOR_CLUSTER_ID", goldenClusterID)
+	cfg := configmock.New(t)
+	cfg.SetWithoutSource("cluster_name", goldenClusterName)
+	cfg.SetWithoutSource("skip_validate_clustername", true)
+	cfg.SetWithoutSource("hostname", "cluster-agent")
+	env.SetFeatures(t, env.Kubernetes)
+	flavor.SetFlavor(flavor.ClusterAgent)
+	t.Cleanup(func() { flavor.SetFlavor(flavor.DefaultAgent) })
+
+	client := fakeclientset.NewClientset(objects...)
+	client.Discovery().(*fakediscovery.FakeDiscovery).Resources = resources
+	if err := apiserver.SetGoldenAPIClient(client); err != nil {
+		t.Fatal(err)
+	}
+
+	k := newCheck(taggerfxmock.SetupFakeTagger(t), nil).(*KSMCheck)
+	demux := mocksender.CreateDefaultDemultiplexer()
+	if err := k.Configure(demux, nil, 1, integration.Data(goldenInstance), nil, "golden", "golden"); err != nil {
+		t.Fatal(err)
+	}
+	// Run skips leader election only for a cluster check runner.
+	k.isCLCRunner = true
+	k.instance.LeaderSkip = true
+
+	s := &goldenSender{MockSender: mocksender.NewMockSenderWithSenderManager(k.ID(), demux)}
+	s.On("ServiceCheck", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return()
+	if err := demux.SetSender(s, k.ID()); err != nil {
+		t.Fatal(err)
+	}
+
+	// The bubble's clock stands still while the informers fill the stores, so
+	// every duration and age the check derives from time.Now is fixed.
+	synctest.Test(t, func(t *testing.T) {
+		start := time.Now()
+
+		s.series = map[string]goldenSeries{}
+		t.Cleanup(k.Cancel)
+		if err := k.Run(); err != nil {
+			t.Fatal(err)
+		}
+		synctest.Wait()
+		requireStoresSynced(t, k, objects)
+
+		s.series = map[string]goldenSeries{}
+		if err := k.Run(); err != nil {
+			t.Fatal(err)
+		}
+		if !time.Now().Equal(start) {
+			t.Fatalf("clock moved from %v to %v", start, time.Now())
+		}
+	})
+
+	out := make([]goldenSeries, 0, len(s.series))
+	for _, series := range s.series {
+		out = append(out, series)
+	}
+	slices.SortFunc(out, func(a, b goldenSeries) int {
+		return strings.Compare(a.Metric+"\x00"+a.Host+"\x00"+strings.Join(a.Tags, "\x00"),
+			b.Metric+"\x00"+b.Host+"\x00"+strings.Join(b.Tags, "\x00"))
+	})
+	data, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(os.Getenv("GOLDEN_OUTPUT"), append(data, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func loadGoldenFixture(t *testing.T, path string) ([]*metav1.APIResourceList, []runtime.Object) {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var items []json.RawMessage
+	if err := json.Unmarshal(raw, &items); err != nil {
+		t.Fatal(err)
+	}
+	var resources []*metav1.APIResourceList
+	var objects []runtime.Object
+	for _, item := range items {
+		var meta metav1.TypeMeta
+		if err := json.Unmarshal(item, &meta); err != nil {
+			t.Fatal(err)
+		}
+		if meta.Kind == "APIResourceList" {
+			var list metav1.APIResourceList
+			if err := json.Unmarshal(item, &list); err != nil {
+				t.Fatal(err)
+			}
+			resources = append(resources, &list)
+			continue
+		}
+		obj, _, err := scheme.Codecs.UniversalDeserializer().Decode(item, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// The API server defaults suspend; v2.13's kube_cronjob_next_schedule_time
+		// dereferences it.
+		if cj, ok := obj.(*batchv1.CronJob); ok && cj.Spec.Suspend == nil {
+			cj.Spec.Suspend = new(bool)
+		}
+		objects = append(objects, obj)
+	}
+	return resources, objects
+}
+
+// requireStoresSynced fails unless every fixture object type has a store with
+// metrics in it.
+func requireStoresSynced(t *testing.T, k *KSMCheck, objects []runtime.Object) {
+	t.Helper()
+	filled := map[string]bool{}
+	for _, stores := range k.allStores {
+		for _, store := range stores {
+			if ms, ok := store.(*ksmstore.MetricsStore); ok && len(ms.Push(ksmstore.GetAllFamilies, ksmstore.GetAllMetrics)) > 0 {
+				filled[ms.MetricsType] = true
+			}
+		}
+	}
+	for _, obj := range objects {
+		if kind := fmt.Sprintf("%T", obj); !filled[kind] {
+			t.Fatalf("no store holds %s objects", kind)
+		}
+	}
+}

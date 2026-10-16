@@ -1,0 +1,29 @@
+//go:build kubeapiserver
+
+// Copied into stackstate-agent pkg/util/kubernetes/apiserver by generate.sh, so
+// that the KSM check's buildStores gets a fake clientset from GetAPIClient.
+package apiserver
+
+import (
+	"k8s.io/client-go/kubernetes"
+
+	"github.com/DataDog/datadog-agent/pkg/util/retry"
+)
+
+// SetGoldenAPIClient makes GetAPIClient return a client backed by cl.
+func SetGoldenAPIClient(cl kubernetes.Interface) error {
+	globalAPIClientOnce.Do(initAPIClient)
+	globalAPIClient.Cl = cl
+	globalAPIClient.InformerCl = cl
+	if err := globalAPIClient.initRetry.SetupRetrier(&retry.Config{
+		Name:          "golden-apiserver",
+		AttemptMethod: func() error { return nil },
+		Strategy:      retry.JustTesting,
+	}); err != nil {
+		return err
+	}
+	if err := globalAPIClient.initRetry.TriggerRetry(); err != nil {
+		return err
+	}
+	return nil
+}

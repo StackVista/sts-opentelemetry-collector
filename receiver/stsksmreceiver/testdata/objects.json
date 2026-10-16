@@ -1,0 +1,1144 @@
+[
+  {
+    "kind": "APIResourceList",
+    "groupVersion": "v1",
+    "resources": [
+      {"name": "nodes", "kind": "Node", "namespaced": false, "verbs": ["list", "watch"]},
+      {"name": "pods", "kind": "Pod", "namespaced": true, "verbs": ["list", "watch"]},
+      {"name": "services", "kind": "Service", "namespaced": true, "verbs": ["list", "watch"]},
+      {"name": "persistentvolumeclaims", "kind": "PersistentVolumeClaim", "namespaced": true, "verbs": ["list", "watch"]},
+      {"name": "persistentvolumes", "kind": "PersistentVolume", "namespaced": false, "verbs": ["list", "watch"]},
+      {"name": "namespaces", "kind": "Namespace", "namespaced": false, "verbs": ["list", "watch"]},
+      {"name": "endpoints", "kind": "Endpoints", "namespaced": true, "verbs": ["list", "watch"]},
+      {"name": "secrets", "kind": "Secret", "namespaced": true, "verbs": ["list", "watch"]},
+      {"name": "resourcequotas", "kind": "ResourceQuota", "namespaced": true, "verbs": ["list", "watch"]},
+      {"name": "replicationcontrollers", "kind": "ReplicationController", "namespaced": true, "verbs": ["list", "watch"]},
+      {"name": "limitranges", "kind": "LimitRange", "namespaced": true, "verbs": ["list", "watch"]}
+    ]
+  },
+  {
+    "kind": "APIResourceList",
+    "groupVersion": "apps/v1",
+    "resources": [
+      {"name": "daemonsets", "kind": "DaemonSet", "namespaced": true, "verbs": ["list", "watch"]},
+      {"name": "deployments", "kind": "Deployment", "namespaced": true, "verbs": ["list", "watch"]},
+      {"name": "replicasets", "kind": "ReplicaSet", "namespaced": true, "verbs": ["list", "watch"]},
+      {"name": "statefulsets", "kind": "StatefulSet", "namespaced": true, "verbs": ["list", "watch"]},
+      {"name": "controllerrevisions", "kind": "ControllerRevision", "namespaced": true, "verbs": ["list", "watch"]}
+    ]
+  },
+  {
+    "kind": "APIResourceList",
+    "groupVersion": "batch/v1",
+    "resources": [
+      {"name": "cronjobs", "kind": "CronJob", "namespaced": true, "verbs": ["list", "watch"]},
+      {"name": "jobs", "kind": "Job", "namespaced": true, "verbs": ["list", "watch"]}
+    ]
+  },
+  {
+    "kind": "APIResourceList",
+    "groupVersion": "networking.k8s.io/v1",
+    "resources": [
+      {"name": "ingresses", "kind": "Ingress", "namespaced": true, "verbs": ["list", "watch"]}
+    ]
+  },
+  {
+    "kind": "APIResourceList",
+    "groupVersion": "autoscaling/v2",
+    "resources": [
+      {"name": "horizontalpodautoscalers", "kind": "HorizontalPodAutoscaler", "namespaced": true, "verbs": ["list", "watch"]}
+    ]
+  },
+  {
+    "kind": "APIResourceList",
+    "groupVersion": "policy/v1",
+    "resources": [
+      {"name": "poddisruptionbudgets", "kind": "PodDisruptionBudget", "namespaced": true, "verbs": ["list", "watch"]}
+    ]
+  },
+  {
+    "kind": "APIResourceList",
+    "groupVersion": "storage.k8s.io/v1",
+    "resources": [
+      {"name": "storageclasses", "kind": "StorageClass", "namespaced": false, "verbs": ["list", "watch"]},
+      {"name": "volumeattachments", "kind": "VolumeAttachment", "namespaced": false, "verbs": ["list", "watch"]}
+    ]
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Namespace",
+    "metadata": {"name": "kube-system", "uid": "11111111-2222-3333-4444-555555555555", "creationTimestamp": "1999-12-01T00:00:00Z"},
+    "status": {"phase": "Active"}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Namespace",
+    "metadata": {
+      "name": "shop",
+      "uid": "uid-ns-shop",
+      "creationTimestamp": "1999-12-01T00:00:00Z",
+      "labels": {"team": "shop", "app.kubernetes.io/part-of": "webshop"}
+    },
+    "status": {"phase": "Active"}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Namespace",
+    "metadata": {"name": "batch", "uid": "uid-ns-batch", "creationTimestamp": "1999-12-01T00:00:00Z"},
+    "status": {"phase": "Active"}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Namespace",
+    "metadata": {"name": "old", "uid": "uid-ns-old", "creationTimestamp": "1999-11-01T00:00:00Z", "deletionTimestamp": "1999-12-31T23:00:00Z"},
+    "status": {"phase": "Terminating"}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Node",
+    "metadata": {
+      "name": "node-1",
+      "uid": "uid-node-1",
+      "creationTimestamp": "1999-12-01T00:00:00Z",
+      "labels": {
+        "topology.kubernetes.io/zone": "eu-central-1a",
+        "topology.kubernetes.io/region": "eu-central-1",
+        "node.kubernetes.io/instance-type": "m5.xlarge",
+        "kubernetes.io/os": "linux",
+        "kubernetes.io/hostname": "node-1",
+        "node-role.kubernetes.io/worker": ""
+      },
+      "annotations": {"node.alpha.kubernetes.io/ttl": "0"}
+    },
+    "spec": {
+      "podCIDR": "10.244.0.0/24",
+      "providerID": "aws:///eu-central-1a/i-0123456789abcdef0",
+      "taints": [{"key": "dedicated", "value": "web", "effect": "PreferNoSchedule"}]
+    },
+    "status": {
+      "capacity": {"cpu": "4", "memory": "16Gi", "pods": "110", "ephemeral-storage": "100Gi", "nvidia.com/gpu": "1"},
+      "allocatable": {"cpu": "3920m", "memory": "15Gi", "pods": "110", "ephemeral-storage": "90Gi", "nvidia.com/gpu": "1"},
+      "conditions": [
+        {"type": "MemoryPressure", "status": "False", "reason": "KubeletHasSufficientMemory", "lastTransitionTime": "1999-12-01T00:00:00Z"},
+        {"type": "DiskPressure", "status": "False", "reason": "KubeletHasNoDiskPressure", "lastTransitionTime": "1999-12-01T00:00:00Z"},
+        {"type": "PIDPressure", "status": "False", "reason": "KubeletHasSufficientPID", "lastTransitionTime": "1999-12-01T00:00:00Z"},
+        {"type": "NetworkUnavailable", "status": "False", "reason": "RouteCreated", "lastTransitionTime": "1999-12-01T00:00:00Z"},
+        {"type": "Ready", "status": "True", "reason": "KubeletReady", "lastTransitionTime": "1999-12-01T00:00:00Z"}
+      ],
+      "addresses": [{"type": "InternalIP", "address": "10.0.1.10"}, {"type": "Hostname", "address": "node-1"}],
+      "nodeInfo": {
+        "kernelVersion": "6.4.0-150600.23-default",
+        "osImage": "SUSE Linux Enterprise Server 15 SP6",
+        "containerRuntimeVersion": "containerd://1.7.21",
+        "kubeletVersion": "v1.31.4",
+        "kubeProxyVersion": "v1.31.4",
+        "operatingSystem": "linux",
+        "architecture": "amd64",
+        "systemUUID": "ec2-uuid-1",
+        "bootID": "boot-1",
+        "machineID": "machine-1"
+      }
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Node",
+    "metadata": {
+      "name": "node-2",
+      "uid": "uid-node-2",
+      "creationTimestamp": "1999-12-15T12:00:00Z",
+      "labels": {
+        "failure-domain.beta.kubernetes.io/zone": "eu-central-1b",
+        "failure-domain.beta.kubernetes.io/region": "eu-central-1",
+        "kubernetes.io/os": "linux"
+      }
+    },
+    "spec": {
+      "unschedulable": true,
+      "taints": [
+        {"key": "node.kubernetes.io/unschedulable", "effect": "NoSchedule"},
+        {"key": "node.kubernetes.io/unreachable", "effect": "NoExecute"}
+      ]
+    },
+    "status": {
+      "capacity": {"cpu": "2", "memory": "8Gi", "pods": "58"},
+      "allocatable": {"cpu": "1930m", "memory": "7Gi", "pods": "58"},
+      "conditions": [
+        {"type": "MemoryPressure", "status": "Unknown", "reason": "NodeStatusUnknown"},
+        {"type": "DiskPressure", "status": "True", "reason": "KubeletHasDiskPressure"},
+        {"type": "Ready", "status": "Unknown", "reason": "NodeStatusUnknown"}
+      ],
+      "nodeInfo": {
+        "kernelVersion": "5.14.21",
+        "osImage": "SUSE Linux Enterprise Micro 5.5",
+        "containerRuntimeVersion": "containerd://1.6.28",
+        "kubeletVersion": "v1.30.8",
+        "kubeProxyVersion": "v1.30.8",
+        "operatingSystem": "linux",
+        "architecture": "arm64"
+      }
+    }
+  },
+  {
+    "apiVersion": "apps/v1",
+    "kind": "Deployment",
+    "metadata": {
+      "name": "web",
+      "namespace": "shop",
+      "uid": "uid-deploy-web",
+      "generation": 4,
+      "creationTimestamp": "1999-12-10T00:00:00Z",
+      "labels": {
+        "app.kubernetes.io/name": "web",
+        "app.kubernetes.io/instance": "web-prod",
+        "app.kubernetes.io/version": "1.4.2",
+        "app.kubernetes.io/component": "frontend",
+        "app.kubernetes.io/part-of": "webshop",
+        "app.kubernetes.io/managed-by": "Helm",
+        "helm.sh/chart": "web-1.4.2",
+        "tags.datadoghq.com/env": "prod",
+        "tags.datadoghq.com/service": "web",
+        "tags.datadoghq.com/version": "1.4.2"
+      },
+      "annotations": {"deployment.kubernetes.io/revision": "4"}
+    },
+    "spec": {
+      "replicas": 2,
+      "selector": {"matchLabels": {"app.kubernetes.io/name": "web"}},
+      "strategy": {"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%", "maxSurge": 1}},
+      "template": {"metadata": {"labels": {"app.kubernetes.io/name": "web"}}, "spec": {"containers": [{"name": "app", "image": "registry.example/web:1.4.2"}]}}
+    },
+    "status": {
+      "observedGeneration": 4,
+      "replicas": 2,
+      "updatedReplicas": 2,
+      "readyReplicas": 1,
+      "availableReplicas": 1,
+      "unavailableReplicas": 1,
+      "conditions": [
+        {"type": "Available", "status": "True", "reason": "MinimumReplicasAvailable", "lastUpdateTime": "1999-12-30T00:00:00Z", "lastTransitionTime": "1999-12-30T00:00:00Z"},
+        {"type": "Progressing", "status": "True", "reason": "NewReplicaSetAvailable", "lastUpdateTime": "1999-12-30T00:00:00Z", "lastTransitionTime": "1999-12-10T00:00:00Z"}
+      ]
+    }
+  },
+  {
+    "apiVersion": "apps/v1",
+    "kind": "Deployment",
+    "metadata": {
+      "name": "api",
+      "namespace": "shop",
+      "uid": "uid-deploy-api",
+      "generation": 7,
+      "creationTimestamp": "1999-12-10T00:00:00Z",
+      "labels": {"app.kubernetes.io/name": "api"}
+    },
+    "spec": {
+      "replicas": 3,
+      "paused": true,
+      "selector": {"matchLabels": {"app.kubernetes.io/name": "api"}},
+      "strategy": {"type": "Recreate"},
+      "template": {"metadata": {"labels": {"app.kubernetes.io/name": "api"}}, "spec": {"containers": [{"name": "api", "image": "registry.example/api:2"}]}}
+    },
+    "status": {
+      "observedGeneration": 6,
+      "replicas": 3,
+      "updatedReplicas": 1,
+      "readyReplicas": 2,
+      "availableReplicas": 2,
+      "unavailableReplicas": 1,
+      "conditions": [
+        {"type": "Available", "status": "False", "reason": "MinimumReplicasUnavailable", "lastUpdateTime": "1999-12-31T23:50:00Z", "lastTransitionTime": "1999-12-31T23:50:00Z"},
+        {"type": "Progressing", "status": "Unknown", "reason": "DeploymentPaused", "lastUpdateTime": "1999-12-31T23:40:00Z", "lastTransitionTime": "1999-12-31T23:40:00Z"},
+        {"type": "ReplicaFailure", "status": "True", "reason": "FailedCreate", "message": "quota exceeded"}
+      ]
+    }
+  },
+  {
+    "apiVersion": "apps/v1",
+    "kind": "ReplicaSet",
+    "metadata": {
+      "name": "web-7c9f8d6b5",
+      "namespace": "shop",
+      "uid": "uid-rs-web",
+      "generation": 1,
+      "creationTimestamp": "1999-12-30T00:00:00Z",
+      "labels": {"app.kubernetes.io/name": "web", "pod-template-hash": "7c9f8d6b5"},
+      "annotations": {"deployment.kubernetes.io/revision": "4"},
+      "ownerReferences": [{"apiVersion": "apps/v1", "kind": "Deployment", "name": "web", "uid": "uid-deploy-web", "controller": true}]
+    },
+    "spec": {"replicas": 2, "selector": {"matchLabels": {"app.kubernetes.io/name": "web"}}},
+    "status": {"replicas": 2, "fullyLabeledReplicas": 2, "readyReplicas": 1, "availableReplicas": 1, "observedGeneration": 1}
+  },
+  {
+    "apiVersion": "apps/v1",
+    "kind": "ReplicaSet",
+    "metadata": {
+      "name": "api-5d4c3b2a19",
+      "namespace": "shop",
+      "uid": "uid-rs-api",
+      "generation": 2,
+      "creationTimestamp": "1999-12-31T23:40:00Z",
+      "labels": {"app.kubernetes.io/name": "api"},
+      "ownerReferences": [{"apiVersion": "apps/v1", "kind": "Deployment", "name": "api", "uid": "uid-deploy-api", "controller": true}]
+    },
+    "spec": {"replicas": 3, "selector": {"matchLabels": {"app.kubernetes.io/name": "api"}}},
+    "status": {"replicas": 3, "fullyLabeledReplicas": 3, "readyReplicas": 2, "availableReplicas": 2, "observedGeneration": 1}
+  },
+  {
+    "apiVersion": "apps/v1",
+    "kind": "ReplicaSet",
+    "metadata": {"name": "orphan", "namespace": "shop", "uid": "uid-rs-orphan", "creationTimestamp": "1999-12-20T00:00:00Z"},
+    "spec": {"replicas": 0, "selector": {"matchLabels": {"app": "orphan"}}},
+    "status": {"replicas": 0}
+  },
+  {
+    "apiVersion": "apps/v1",
+    "kind": "StatefulSet",
+    "metadata": {
+      "name": "db",
+      "namespace": "shop",
+      "uid": "uid-sts-db",
+      "generation": 3,
+      "creationTimestamp": "1999-12-05T00:00:00Z",
+      "labels": {"app.kubernetes.io/name": "db", "app.kubernetes.io/component": "database"}
+    },
+    "spec": {
+      "replicas": 1,
+      "serviceName": "db",
+      "selector": {"matchLabels": {"app.kubernetes.io/name": "db"}},
+      "updateStrategy": {"type": "RollingUpdate", "rollingUpdate": {"partition": 0}},
+      "template": {"metadata": {"labels": {"app.kubernetes.io/name": "db"}}, "spec": {"containers": [{"name": "postgres", "image": "registry.example/postgres:16"}]}}
+    },
+    "status": {
+      "observedGeneration": 3,
+      "replicas": 1,
+      "readyReplicas": 0,
+      "currentReplicas": 1,
+      "updatedReplicas": 1,
+      "availableReplicas": 0,
+      "currentRevision": "db-6f7d8c9b",
+      "updateRevision": "db-6f7d8c9b"
+    }
+  },
+  {
+    "apiVersion": "apps/v1",
+    "kind": "DaemonSet",
+    "metadata": {
+      "name": "node-agent",
+      "namespace": "kube-system",
+      "uid": "uid-ds-agent",
+      "generation": 2,
+      "creationTimestamp": "1999-12-01T00:00:00Z",
+      "labels": {"app.kubernetes.io/name": "node-agent", "app.kubernetes.io/managed-by": "Helm"}
+    },
+    "spec": {
+      "selector": {"matchLabels": {"app.kubernetes.io/name": "node-agent"}},
+      "updateStrategy": {"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": 1}},
+      "template": {"metadata": {"labels": {"app.kubernetes.io/name": "node-agent"}}, "spec": {"containers": [{"name": "agent", "image": "registry.example/agent:7"}]}}
+    },
+    "status": {
+      "observedGeneration": 2,
+      "currentNumberScheduled": 2,
+      "desiredNumberScheduled": 2,
+      "numberMisscheduled": 0,
+      "numberReady": 1,
+      "updatedNumberScheduled": 2,
+      "numberAvailable": 1,
+      "numberUnavailable": 1
+    }
+  },
+  {
+    "apiVersion": "batch/v1",
+    "kind": "CronJob",
+    "metadata": {
+      "name": "hello",
+      "namespace": "batch",
+      "uid": "uid-cj-hello",
+      "creationTimestamp": "1999-12-20T00:00:00Z",
+      "labels": {"app.kubernetes.io/name": "hello"}
+    },
+    "spec": {
+      "schedule": "*/5 * * * *",
+      "concurrencyPolicy": "Forbid",
+      "jobTemplate": {"spec": {"template": {"spec": {"restartPolicy": "Never", "containers": [{"name": "hello", "image": "registry.example/hello:1"}]}}}}
+    },
+    "status": {
+      "active": [{"kind": "Job", "namespace": "batch", "name": "hello-946684500", "apiVersion": "batch/v1", "uid": "uid-job-hello-run"}],
+      "lastScheduleTime": "1999-12-31T23:55:00Z",
+      "lastSuccessfulTime": "1999-12-31T23:51:00Z"
+    }
+  },
+  {
+    "apiVersion": "batch/v1",
+    "kind": "CronJob",
+    "metadata": {"name": "nightly", "namespace": "batch", "uid": "uid-cj-nightly", "creationTimestamp": "1999-12-20T00:00:00Z"},
+    "spec": {
+      "schedule": "0 3 * * *",
+      "suspend": true,
+      "jobTemplate": {"spec": {"template": {"spec": {"restartPolicy": "OnFailure", "containers": [{"name": "nightly", "image": "registry.example/nightly:1"}]}}}}
+    },
+    "status": {"lastScheduleTime": "1999-12-31T03:00:00Z"}
+  },
+  {
+    "apiVersion": "batch/v1",
+    "kind": "Job",
+    "metadata": {
+      "name": "hello-946684200",
+      "namespace": "batch",
+      "uid": "uid-job-hello-done",
+      "creationTimestamp": "1999-12-31T23:50:00Z",
+      "labels": {"app.kubernetes.io/name": "hello"},
+      "ownerReferences": [{"apiVersion": "batch/v1", "kind": "CronJob", "name": "hello", "uid": "uid-cj-hello", "controller": true}]
+    },
+    "spec": {"parallelism": 1, "completions": 1, "backoffLimit": 6, "template": {"spec": {"restartPolicy": "Never", "containers": [{"name": "hello", "image": "registry.example/hello:1"}]}}},
+    "status": {
+      "startTime": "1999-12-31T23:50:00Z",
+      "completionTime": "1999-12-31T23:51:00Z",
+      "succeeded": 1,
+      "conditions": [{"type": "Complete", "status": "True", "lastProbeTime": "1999-12-31T23:51:00Z", "lastTransitionTime": "1999-12-31T23:51:00Z"}]
+    }
+  },
+  {
+    "apiVersion": "batch/v1",
+    "kind": "Job",
+    "metadata": {
+      "name": "hello-946684500",
+      "namespace": "batch",
+      "uid": "uid-job-hello-run",
+      "creationTimestamp": "1999-12-31T23:55:00Z",
+      "ownerReferences": [{"apiVersion": "batch/v1", "kind": "CronJob", "name": "hello", "uid": "uid-cj-hello", "controller": true}]
+    },
+    "spec": {"parallelism": 1, "completions": 1, "backoffLimit": 6, "template": {"spec": {"restartPolicy": "Never", "containers": [{"name": "hello", "image": "registry.example/hello:1"}]}}},
+    "status": {"startTime": "1999-12-31T23:55:00Z", "active": 1, "failed": 1}
+  },
+  {
+    "apiVersion": "batch/v1",
+    "kind": "Job",
+    "metadata": {"name": "migrate", "namespace": "batch", "uid": "uid-job-migrate", "creationTimestamp": "1999-12-31T22:00:00Z", "labels": {"app.kubernetes.io/name": "migrate"}},
+    "spec": {"parallelism": 1, "completions": 1, "backoffLimit": 2, "template": {"spec": {"restartPolicy": "Never", "containers": [{"name": "migrate", "image": "registry.example/migrate:1"}]}}},
+    "status": {
+      "startTime": "1999-12-31T22:00:00Z",
+      "failed": 3,
+      "conditions": [{"type": "Failed", "status": "True", "reason": "BackoffLimitExceeded", "lastProbeTime": "1999-12-31T22:30:00Z", "lastTransitionTime": "1999-12-31T22:30:00Z"}]
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "name": "web-7c9f8d6b5-abcde",
+      "namespace": "shop",
+      "uid": "uid-pod-web-1",
+      "creationTimestamp": "1999-12-30T00:00:00Z",
+      "labels": {
+        "app.kubernetes.io/name": "web",
+        "app.kubernetes.io/instance": "web-prod",
+        "tags.datadoghq.com/env": "prod",
+        "pod-template-hash": "7c9f8d6b5"
+      },
+      "annotations": {"kubernetes.io/psp": "restricted"},
+      "ownerReferences": [{"apiVersion": "apps/v1", "kind": "ReplicaSet", "name": "web-7c9f8d6b5", "uid": "uid-rs-web", "controller": true}]
+    },
+    "spec": {
+      "nodeName": "node-1",
+      "priorityClassName": "high",
+      "priority": 1000,
+      "serviceAccountName": "web",
+      "restartPolicy": "Always",
+      "initContainers": [
+        {"name": "init-db", "image": "registry.example/migrate:1", "resources": {"requests": {"cpu": "100m", "memory": "64Mi"}}}
+      ],
+      "containers": [
+        {
+          "name": "app",
+          "image": "registry.example/web:1.4.2",
+          "resources": {"requests": {"cpu": "250m", "memory": "256Mi", "ephemeral-storage": "1Gi"}, "limits": {"cpu": "1", "memory": "512Mi", "nvidia.com/gpu": "1"}}
+        },
+        {
+          "name": "sidecar",
+          "image": "registry.example/proxy:3",
+          "resources": {"requests": {"cpu": "50m", "memory": "32Mi"}, "limits": {"memory": "32Mi"}}
+        }
+      ],
+      "volumes": [
+        {"name": "data", "persistentVolumeClaim": {"claimName": "web-data", "readOnly": true}},
+        {"name": "scratch", "ephemeral": {"volumeClaimTemplate": {"spec": {"accessModes": ["ReadWriteOnce"], "resources": {"requests": {"storage": "1Gi"}}}}}},
+        {"name": "config", "configMap": {"name": "web-config"}}
+      ],
+      "tolerations": [
+        {},
+        {"key": "node.kubernetes.io/not-ready", "operator": "Exists", "effect": "NoExecute", "tolerationSeconds": 300},
+        {"key": "node.kubernetes.io/not-ready", "operator": "Exists", "effect": "NoExecute", "tolerationSeconds": 300},
+        {"key": "dedicated", "operator": "Equal", "value": "web", "effect": "PreferNoSchedule"}
+      ]
+    },
+    "status": {
+      "phase": "Running",
+      "qosClass": "Burstable",
+      "hostIP": "10.0.1.10",
+      "podIP": "10.244.0.5",
+      "podIPs": [{"ip": "10.244.0.5"}],
+      "startTime": "1999-12-30T00:00:05Z",
+      "conditions": [
+        {"type": "PodReadyToStartContainers", "status": "True", "lastTransitionTime": "1999-12-30T00:00:06Z"},
+        {"type": "Initialized", "status": "True", "lastTransitionTime": "1999-12-30T00:00:10Z"},
+        {"type": "Ready", "status": "False", "reason": "ContainersNotReady", "lastTransitionTime": "1999-12-31T23:00:00Z"},
+        {"type": "ContainersReady", "status": "False", "reason": "ContainersNotReady", "lastTransitionTime": "1999-12-31T23:00:00Z"},
+        {"type": "PodScheduled", "status": "True", "lastTransitionTime": "1999-12-30T00:00:01Z"}
+      ],
+      "initContainerStatuses": [
+        {
+          "name": "init-db",
+          "image": "registry.example/migrate:1",
+          "imageID": "registry.example/migrate@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "containerID": "containerd://init0000000000000000000000000000000000000000000000000000000000000",
+          "ready": true,
+          "restartCount": 1,
+          "state": {"terminated": {"exitCode": 0, "reason": "Completed", "startedAt": "1999-12-30T00:00:06Z", "finishedAt": "1999-12-30T00:00:09Z"}},
+          "lastState": {"terminated": {"exitCode": 1, "reason": "Error", "startedAt": "1999-12-30T00:00:05Z", "finishedAt": "1999-12-30T00:00:06Z"}}
+        }
+      ],
+      "containerStatuses": [
+        {
+          "name": "app",
+          "image": "registry.example/web:1.4.2",
+          "imageID": "registry.example/web@sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "containerID": "containerd://app00000000000000000000000000000000000000000000000000000000000000",
+          "ready": true,
+          "started": true,
+          "restartCount": 0,
+          "state": {"running": {"startedAt": "1999-12-30T00:00:11Z"}}
+        },
+        {
+          "name": "sidecar",
+          "image": "registry.example/proxy:3",
+          "imageID": "registry.example/proxy@sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "containerID": "containerd://side0000000000000000000000000000000000000000000000000000000000000",
+          "ready": false,
+          "started": false,
+          "restartCount": 7,
+          "state": {"waiting": {"reason": "CrashLoopBackOff", "message": "back-off 5m0s restarting failed container"}},
+          "lastState": {"terminated": {"exitCode": 137, "reason": "OOMKilled", "startedAt": "1999-12-31T23:40:00Z", "finishedAt": "1999-12-31T23:41:00Z"}}
+        }
+      ]
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "name": "web-7c9f8d6b5-fghij",
+      "namespace": "shop",
+      "uid": "uid-pod-web-2",
+      "creationTimestamp": "1999-12-30T00:00:00Z",
+      "labels": {"app.kubernetes.io/name": "web", "pod-template-hash": "7c9f8d6b5"},
+      "ownerReferences": [{"apiVersion": "apps/v1", "kind": "ReplicaSet", "name": "web-7c9f8d6b5", "uid": "uid-rs-web", "controller": true}]
+    },
+    "spec": {
+      "nodeName": "node-1",
+      "containers": [{"name": "app", "image": "registry.example/web:1.4.2", "resources": {"requests": {"cpu": "250m", "memory": "256Mi"}}}]
+    },
+    "status": {
+      "phase": "Running",
+      "qosClass": "Burstable",
+      "startTime": "1999-12-30T00:00:04Z",
+      "conditions": [
+        {"type": "Initialized", "status": "True"},
+        {"type": "Ready", "status": "True"},
+        {"type": "ContainersReady", "status": "True"},
+        {"type": "PodScheduled", "status": "True"}
+      ],
+      "containerStatuses": [
+        {
+          "name": "app",
+          "image": "registry.example/web:1.4.2",
+          "imageID": "registry.example/web@sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "containerID": "containerd://app10000000000000000000000000000000000000000000000000000000000000",
+          "ready": true,
+          "started": true,
+          "restartCount": 0,
+          "state": {"running": {"startedAt": "1999-12-30T00:00:08Z"}}
+        }
+      ]
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "name": "api-5d4c3b2a19-klmno",
+      "namespace": "shop",
+      "uid": "uid-pod-api-1",
+      "creationTimestamp": "1999-12-31T23:40:00Z",
+      "labels": {"app.kubernetes.io/name": "api"},
+      "ownerReferences": [{"apiVersion": "apps/v1", "kind": "ReplicaSet", "name": "api-5d4c3b2a19", "uid": "uid-rs-api", "controller": true}]
+    },
+    "spec": {
+      "nodeName": "node-1",
+      "containers": [{"name": "api", "image": "registry.example/api:2", "resources": {"requests": {"cpu": "500m"}, "limits": {"cpu": "500m", "memory": "1Gi"}}}]
+    },
+    "status": {
+      "phase": "Pending",
+      "qosClass": "Burstable",
+      "startTime": "1999-12-31T23:40:02Z",
+      "conditions": [
+        {"type": "Initialized", "status": "True"},
+        {"type": "Ready", "status": "False", "reason": "ContainersNotReady"},
+        {"type": "ContainersReady", "status": "False", "reason": "ContainersNotReady"},
+        {"type": "PodScheduled", "status": "True"}
+      ],
+      "containerStatuses": [
+        {
+          "name": "api",
+          "image": "registry.example/api:2",
+          "imageID": "",
+          "ready": false,
+          "started": false,
+          "restartCount": 0,
+          "state": {"waiting": {"reason": "ErrImagePull", "message": "pull access denied"}}
+        }
+      ]
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "name": "db-0",
+      "namespace": "shop",
+      "uid": "uid-pod-db-0",
+      "creationTimestamp": "1999-12-05T00:00:00Z",
+      "labels": {"app.kubernetes.io/name": "db", "app.kubernetes.io/component": "database", "statefulset.kubernetes.io/pod-name": "db-0"},
+      "ownerReferences": [{"apiVersion": "apps/v1", "kind": "StatefulSet", "name": "db", "uid": "uid-sts-db", "controller": true}]
+    },
+    "spec": {
+      "nodeName": "node-1",
+      "containers": [{"name": "postgres", "image": "registry.example/postgres:16", "resources": {"requests": {"cpu": "1", "memory": "2Gi"}, "limits": {"cpu": "1", "memory": "2Gi"}}}],
+      "volumes": [{"name": "data", "persistentVolumeClaim": {"claimName": "data-db-0"}}]
+    },
+    "status": {
+      "phase": "Running",
+      "qosClass": "Guaranteed",
+      "startTime": "1999-12-05T00:00:03Z",
+      "conditions": [
+        {"type": "Initialized", "status": "True"},
+        {"type": "Ready", "status": "False", "reason": "ContainersNotReady"},
+        {"type": "ContainersReady", "status": "False", "reason": "ContainersNotReady"},
+        {"type": "PodScheduled", "status": "True"}
+      ],
+      "containerStatuses": [
+        {
+          "name": "postgres",
+          "image": "registry.example/postgres:16",
+          "imageID": "registry.example/postgres@sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "containerID": "containerd://pg000000000000000000000000000000000000000000000000000000000000000",
+          "ready": false,
+          "started": false,
+          "restartCount": 12,
+          "state": {"terminated": {"exitCode": 137, "reason": "OOMKilled", "startedAt": "1999-12-31T23:58:00Z", "finishedAt": "1999-12-31T23:59:00Z"}},
+          "lastState": {"terminated": {"exitCode": 137, "reason": "OOMKilled", "startedAt": "1999-12-31T23:50:00Z", "finishedAt": "1999-12-31T23:51:00Z"}}
+        }
+      ]
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "name": "node-agent-x1",
+      "namespace": "kube-system",
+      "uid": "uid-pod-agent-1",
+      "creationTimestamp": "1999-12-01T00:00:00Z",
+      "labels": {"app.kubernetes.io/name": "node-agent"},
+      "ownerReferences": [{"apiVersion": "apps/v1", "kind": "DaemonSet", "name": "node-agent", "uid": "uid-ds-agent", "controller": true}]
+    },
+    "spec": {
+      "nodeName": "node-1",
+      "priorityClassName": "system-node-critical",
+      "containers": [{"name": "agent", "image": "registry.example/agent:7", "resources": {"requests": {"cpu": "100m", "memory": "128Mi"}}}],
+      "tolerations": [{"operator": "Exists"}]
+    },
+    "status": {
+      "phase": "Running",
+      "qosClass": "Burstable",
+      "startTime": "1999-12-01T00:00:02Z",
+      "conditions": [{"type": "Ready", "status": "True"}, {"type": "PodScheduled", "status": "True"}],
+      "containerStatuses": [
+        {
+          "name": "agent",
+          "image": "registry.example/agent:7",
+          "imageID": "registry.example/agent@sha256:5555555555555555555555555555555555555555555555555555555555555555",
+          "containerID": "containerd://agt0000000000000000000000000000000000000000000000000000000000000",
+          "ready": true,
+          "started": true,
+          "restartCount": 2,
+          "state": {"running": {"startedAt": "1999-12-01T00:00:03Z"}},
+          "lastState": {"terminated": {"exitCode": 2, "reason": "Error", "startedAt": "1999-12-01T00:00:02Z", "finishedAt": "1999-12-01T00:00:03Z"}}
+        }
+      ]
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "name": "node-agent-x2",
+      "namespace": "kube-system",
+      "uid": "uid-pod-agent-2",
+      "creationTimestamp": "1999-12-15T12:00:00Z",
+      "labels": {"app.kubernetes.io/name": "node-agent"},
+      "ownerReferences": [{"apiVersion": "apps/v1", "kind": "DaemonSet", "name": "node-agent", "uid": "uid-ds-agent", "controller": true}]
+    },
+    "spec": {
+      "nodeName": "node-2",
+      "containers": [{"name": "agent", "image": "registry.example/agent:7"}]
+    },
+    "status": {
+      "phase": "Failed",
+      "reason": "Evicted",
+      "message": "The node was low on resource: ephemeral-storage.",
+      "startTime": "1999-12-15T12:00:02Z",
+      "conditions": [{"type": "Ready", "status": "False"}, {"type": "PodScheduled", "status": "True"}],
+      "containerStatuses": [
+        {
+          "name": "agent",
+          "image": "registry.example/agent:7",
+          "imageID": "registry.example/agent@sha256:5555555555555555555555555555555555555555555555555555555555555555",
+          "containerID": "containerd://agt1000000000000000000000000000000000000000000000000000000000000",
+          "ready": false,
+          "restartCount": 0,
+          "state": {"terminated": {"exitCode": 137, "reason": "ContainerStatusUnknown", "startedAt": "1999-12-15T12:00:03Z", "finishedAt": "1999-12-31T10:00:00Z"}}
+        }
+      ]
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "name": "gated",
+      "namespace": "shop",
+      "uid": "uid-pod-gated",
+      "creationTimestamp": "1999-12-31T23:00:00Z"
+    },
+    "spec": {
+      "schedulingGates": [{"name": "example.com/quota"}],
+      "containers": [{"name": "app", "image": "registry.example/web:1.4.2"}]
+    },
+    "status": {
+      "phase": "Pending",
+      "reason": "",
+      "qosClass": "BestEffort",
+      "conditions": [{"type": "PodScheduled", "status": "False", "reason": "SchedulingGated", "message": "Scheduling is blocked due to non-empty scheduling gates", "lastTransitionTime": "1999-12-31T23:00:00Z"}]
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "name": "big",
+      "namespace": "shop",
+      "uid": "uid-pod-big",
+      "creationTimestamp": "1999-12-31T23:30:00Z"
+    },
+    "spec": {
+      "containers": [{"name": "app", "image": "registry.example/big:1", "resources": {"requests": {"cpu": "64", "memory": "512Gi"}}}]
+    },
+    "status": {
+      "phase": "Pending",
+      "qosClass": "Burstable",
+      "conditions": [{"type": "PodScheduled", "status": "False", "reason": "Unschedulable", "message": "0/2 nodes are available", "lastTransitionTime": "1999-12-31T23:30:00Z"}]
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "name": "hello-946684200-pqrst",
+      "namespace": "batch",
+      "uid": "uid-pod-hello-done",
+      "creationTimestamp": "1999-12-31T23:50:00Z",
+      "labels": {"app.kubernetes.io/name": "hello", "job-name": "hello-946684200"},
+      "ownerReferences": [{"apiVersion": "batch/v1", "kind": "Job", "name": "hello-946684200", "uid": "uid-job-hello-done", "controller": true}]
+    },
+    "spec": {"nodeName": "node-1", "restartPolicy": "Never", "containers": [{"name": "hello", "image": "registry.example/hello:1"}]},
+    "status": {
+      "phase": "Succeeded",
+      "qosClass": "BestEffort",
+      "startTime": "1999-12-31T23:50:01Z",
+      "conditions": [{"type": "Ready", "status": "False", "reason": "PodCompleted"}, {"type": "PodScheduled", "status": "True"}],
+      "containerStatuses": [
+        {
+          "name": "hello",
+          "image": "registry.example/hello:1",
+          "imageID": "registry.example/hello@sha256:6666666666666666666666666666666666666666666666666666666666666666",
+          "containerID": "containerd://hel0000000000000000000000000000000000000000000000000000000000000",
+          "ready": false,
+          "restartCount": 0,
+          "state": {"terminated": {"exitCode": 0, "reason": "Completed", "startedAt": "1999-12-31T23:50:02Z", "finishedAt": "1999-12-31T23:50:59Z"}}
+        }
+      ]
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "name": "hello-946684500-uvwxy",
+      "namespace": "batch",
+      "uid": "uid-pod-hello-run",
+      "creationTimestamp": "1999-12-31T23:55:00Z",
+      "labels": {"job-name": "hello-946684500"},
+      "ownerReferences": [{"apiVersion": "batch/v1", "kind": "Job", "name": "hello-946684500", "uid": "uid-job-hello-run", "controller": true}]
+    },
+    "spec": {"nodeName": "node-1", "restartPolicy": "Never", "containers": [{"name": "hello", "image": "registry.example/hello:1"}]},
+    "status": {
+      "phase": "Running",
+      "qosClass": "BestEffort",
+      "startTime": "1999-12-31T23:55:01Z",
+      "conditions": [{"type": "Ready", "status": "True"}, {"type": "PodScheduled", "status": "True"}],
+      "containerStatuses": [
+        {
+          "name": "hello",
+          "image": "registry.example/hello:1",
+          "imageID": "registry.example/hello@sha256:6666666666666666666666666666666666666666666666666666666666666666",
+          "containerID": "containerd://hel1000000000000000000000000000000000000000000000000000000000000",
+          "ready": true,
+          "started": true,
+          "restartCount": 0,
+          "state": {"running": {"startedAt": "1999-12-31T23:55:02Z"}}
+        }
+      ]
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "name": "legacy-abcde",
+      "namespace": "shop",
+      "uid": "uid-pod-legacy",
+      "creationTimestamp": "1999-12-20T00:00:00Z",
+      "labels": {"app": "legacy"},
+      "ownerReferences": [{"apiVersion": "v1", "kind": "ReplicationController", "name": "legacy", "uid": "uid-rc-legacy", "controller": true}]
+    },
+    "spec": {"nodeName": "node-1", "containers": [{"name": "legacy", "image": "registry.example/legacy:1"}]},
+    "status": {
+      "phase": "Running",
+      "qosClass": "BestEffort",
+      "startTime": "1999-12-20T00:00:01Z",
+      "conditions": [{"type": "Ready", "status": "True"}, {"type": "PodScheduled", "status": "True"}],
+      "containerStatuses": [
+        {
+          "name": "legacy",
+          "image": "registry.example/legacy:1",
+          "imageID": "registry.example/legacy@sha256:7777777777777777777777777777777777777777777777777777777777777777",
+          "containerID": "containerd://leg0000000000000000000000000000000000000000000000000000000000000",
+          "ready": true,
+          "started": true,
+          "restartCount": 0,
+          "state": {"running": {"startedAt": "1999-12-20T00:00:02Z"}}
+        }
+      ]
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {"name": "web", "namespace": "shop", "uid": "uid-svc-web", "creationTimestamp": "1999-12-10T00:00:00Z", "labels": {"app.kubernetes.io/name": "web"}},
+    "spec": {
+      "type": "ClusterIP",
+      "clusterIP": "10.96.0.10",
+      "clusterIPs": ["10.96.0.10"],
+      "selector": {"app.kubernetes.io/name": "web"},
+      "ports": [{"name": "http", "port": 80, "targetPort": 8080, "protocol": "TCP"}]
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {"name": "web-public", "namespace": "shop", "uid": "uid-svc-web-public", "creationTimestamp": "1999-12-10T00:00:00Z"},
+    "spec": {
+      "type": "LoadBalancer",
+      "clusterIP": "10.96.0.11",
+      "externalTrafficPolicy": "Local",
+      "selector": {"app.kubernetes.io/name": "web"},
+      "ports": [{"name": "https", "port": 443, "targetPort": 8443, "nodePort": 30443, "protocol": "TCP"}]
+    },
+    "status": {"loadBalancer": {"ingress": [{"ip": "203.0.113.10"}, {"hostname": "lb.example"}]}}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {"name": "upstream", "namespace": "shop", "uid": "uid-svc-upstream", "creationTimestamp": "1999-12-10T00:00:00Z"},
+    "spec": {"type": "ExternalName", "externalName": "api.partner.example"}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {"name": "db", "namespace": "shop", "uid": "uid-svc-db", "creationTimestamp": "1999-12-05T00:00:00Z"},
+    "spec": {"type": "ClusterIP", "clusterIP": "None", "selector": {"app.kubernetes.io/name": "db"}, "ports": [{"port": 5432}]}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Endpoints",
+    "metadata": {"name": "web", "namespace": "shop", "uid": "uid-ep-web", "creationTimestamp": "1999-12-10T00:00:00Z", "labels": {"app.kubernetes.io/name": "web"}},
+    "subsets": [
+      {
+        "addresses": [
+          {"ip": "10.244.0.6", "nodeName": "node-1", "targetRef": {"kind": "Pod", "namespace": "shop", "name": "web-7c9f8d6b5-fghij"}}
+        ],
+        "notReadyAddresses": [
+          {"ip": "10.244.0.5", "nodeName": "node-1", "targetRef": {"kind": "Pod", "namespace": "shop", "name": "web-7c9f8d6b5-abcde"}}
+        ],
+        "ports": [{"name": "http", "port": 8080, "protocol": "TCP"}, {"name": "metrics", "port": 9090, "protocol": "TCP"}]
+      },
+      {
+        "addresses": [{"ip": "10.244.0.7"}, {"ip": "10.244.0.8"}],
+        "ports": [{"name": "admin", "port": 8081, "protocol": "TCP"}]
+      }
+    ]
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Endpoints",
+    "metadata": {"name": "db", "namespace": "shop", "uid": "uid-ep-db", "creationTimestamp": "1999-12-05T00:00:00Z"},
+    "subsets": [{"notReadyAddresses": [{"ip": "10.244.0.9"}], "ports": [{"port": 5432}]}]
+  },
+  {
+    "apiVersion": "networking.k8s.io/v1",
+    "kind": "Ingress",
+    "metadata": {"name": "web", "namespace": "shop", "uid": "uid-ing-web", "creationTimestamp": "1999-12-10T00:00:00Z", "labels": {"app.kubernetes.io/name": "web"}},
+    "spec": {
+      "ingressClassName": "nginx",
+      "tls": [{"hosts": ["shop.example", "www.shop.example"], "secretName": "web-tls"}],
+      "rules": [
+        {
+          "host": "shop.example",
+          "http": {
+            "paths": [
+              {"path": "/", "pathType": "Prefix", "backend": {"service": {"name": "web", "port": {"number": 80}}}},
+              {"path": "/api", "pathType": "ImplementationSpecific", "backend": {"service": {"name": "api", "port": {"name": "http"}}}}
+            ]
+          }
+        },
+        {
+          "host": "www.shop.example",
+          "http": {"paths": [{"path": "/", "pathType": "Exact", "backend": {"service": {"name": "web", "port": {"number": 80}}}}]}
+        }
+      ]
+    },
+    "status": {"loadBalancer": {"ingress": [{"ip": "203.0.113.20"}]}}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "PersistentVolumeClaim",
+    "metadata": {
+      "name": "data-db-0",
+      "namespace": "shop",
+      "uid": "uid-pvc-db",
+      "creationTimestamp": "1999-12-05T00:00:00Z",
+      "labels": {"app.kubernetes.io/name": "db"}
+    },
+    "spec": {
+      "accessModes": ["ReadWriteOnce"],
+      "storageClassName": "standard",
+      "volumeName": "pv-db",
+      "resources": {"requests": {"storage": "20Gi"}}
+    },
+    "status": {"phase": "Bound", "accessModes": ["ReadWriteOnce"], "capacity": {"storage": "20Gi"}}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "PersistentVolumeClaim",
+    "metadata": {
+      "name": "web-7c9f8d6b5-abcde-scratch",
+      "namespace": "shop",
+      "uid": "uid-pvc-scratch",
+      "creationTimestamp": "1999-12-30T00:00:00Z",
+      "ownerReferences": [{"apiVersion": "v1", "kind": "Pod", "name": "web-7c9f8d6b5-abcde", "uid": "uid-pod-web-1", "controller": true, "blockOwnerDeletion": true}]
+    },
+    "spec": {"accessModes": ["ReadWriteOnce"], "storageClassName": "standard", "resources": {"requests": {"storage": "1Gi"}}},
+    "status": {"phase": "Pending"}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "PersistentVolumeClaim",
+    "metadata": {"name": "web-data", "namespace": "shop", "uid": "uid-pvc-web-data", "creationTimestamp": "1999-12-10T00:00:00Z"},
+    "spec": {"accessModes": ["ReadOnlyMany", "ReadWriteMany"], "storageClassName": "", "volumeName": "pv-nfs", "resources": {"requests": {"storage": "5Gi"}}},
+    "status": {"phase": "Lost"}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "PersistentVolume",
+    "metadata": {"name": "pv-db", "uid": "uid-pv-db", "creationTimestamp": "1999-12-05T00:00:00Z", "labels": {"topology.kubernetes.io/zone": "eu-central-1a"}},
+    "spec": {
+      "capacity": {"storage": "20Gi"},
+      "accessModes": ["ReadWriteOnce"],
+      "persistentVolumeReclaimPolicy": "Delete",
+      "storageClassName": "standard",
+      "claimRef": {"kind": "PersistentVolumeClaim", "namespace": "shop", "name": "data-db-0", "uid": "uid-pvc-db"},
+      "csi": {"driver": "ebs.csi.aws.com", "volumeHandle": "vol-0123456789abcdef0"}
+    },
+    "status": {"phase": "Bound"}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "PersistentVolume",
+    "metadata": {"name": "pv-nfs", "uid": "uid-pv-nfs", "creationTimestamp": "1999-12-01T00:00:00Z"},
+    "spec": {
+      "capacity": {"storage": "100Gi"},
+      "accessModes": ["ReadWriteMany"],
+      "persistentVolumeReclaimPolicy": "Retain",
+      "nfs": {"server": "nfs.example", "path": "/exports/web"}
+    },
+    "status": {"phase": "Released"}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "PersistentVolume",
+    "metadata": {"name": "pv-spare", "uid": "uid-pv-spare", "creationTimestamp": "1999-12-01T00:00:00Z"},
+    "spec": {
+      "capacity": {"storage": "10Gi"},
+      "accessModes": ["ReadWriteOnce"],
+      "persistentVolumeReclaimPolicy": "Delete",
+      "storageClassName": "standard",
+      "hostPath": {"path": "/mnt/spare"}
+    },
+    "status": {"phase": "Available"}
+  },
+  {
+    "apiVersion": "storage.k8s.io/v1",
+    "kind": "StorageClass",
+    "metadata": {
+      "name": "standard",
+      "uid": "uid-sc-standard",
+      "creationTimestamp": "1999-12-01T00:00:00Z",
+      "annotations": {"storageclass.kubernetes.io/is-default-class": "true"}
+    },
+    "provisioner": "ebs.csi.aws.com",
+    "reclaimPolicy": "Delete",
+    "volumeBindingMode": "WaitForFirstConsumer",
+    "allowVolumeExpansion": true
+  },
+  {
+    "apiVersion": "storage.k8s.io/v1",
+    "kind": "StorageClass",
+    "metadata": {"name": "archive", "uid": "uid-sc-archive", "creationTimestamp": "1999-12-01T00:00:00Z"},
+    "provisioner": "nfs.example/provisioner",
+    "reclaimPolicy": "Retain",
+    "volumeBindingMode": "Immediate"
+  },
+  {
+    "apiVersion": "storage.k8s.io/v1",
+    "kind": "VolumeAttachment",
+    "metadata": {"name": "csi-attach-db", "uid": "uid-va-db", "creationTimestamp": "1999-12-05T00:00:00Z"},
+    "spec": {"attacher": "ebs.csi.aws.com", "nodeName": "node-1", "source": {"persistentVolumeName": "pv-db"}},
+    "status": {"attached": true, "attachmentMetadata": {"devicePath": "/dev/xvdba"}}
+  },
+  {
+    "apiVersion": "storage.k8s.io/v1",
+    "kind": "VolumeAttachment",
+    "metadata": {"name": "csi-attach-pending", "uid": "uid-va-pending", "creationTimestamp": "1999-12-31T23:59:00Z"},
+    "spec": {"attacher": "ebs.csi.aws.com", "nodeName": "node-2", "source": {"persistentVolumeName": "pv-spare"}},
+    "status": {"attached": false}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Secret",
+    "metadata": {"name": "web-tls", "namespace": "shop", "uid": "uid-secret-tls", "creationTimestamp": "1999-12-10T00:00:00Z", "labels": {"app.kubernetes.io/name": "web"}},
+    "type": "kubernetes.io/tls"
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Secret",
+    "metadata": {"name": "app-config", "namespace": "shop", "uid": "uid-secret-opaque", "creationTimestamp": "1999-12-10T00:00:00Z"},
+    "type": "Opaque"
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "ResourceQuota",
+    "metadata": {"name": "compute", "namespace": "shop", "uid": "uid-rq-compute", "creationTimestamp": "1999-12-01T00:00:00Z"},
+    "spec": {
+      "hard": {"requests.cpu": "10", "requests.memory": "20Gi", "limits.cpu": "20", "limits.memory": "40Gi", "pods": "50", "count/deployments.apps": "10"}
+    },
+    "status": {
+      "hard": {"requests.cpu": "10", "requests.memory": "20Gi", "limits.cpu": "20", "limits.memory": "40Gi", "pods": "50", "count/deployments.apps": "10"},
+      "used": {"requests.cpu": "2350m", "requests.memory": "2848Mi", "limits.cpu": "2500m", "limits.memory": "3616Mi", "pods": "7", "count/deployments.apps": "2"}
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "ReplicationController",
+    "metadata": {"name": "legacy", "namespace": "shop", "uid": "uid-rc-legacy", "generation": 2, "creationTimestamp": "1999-12-20T00:00:00Z", "labels": {"app": "legacy"}},
+    "spec": {"replicas": 2, "selector": {"app": "legacy"}, "template": {"metadata": {"labels": {"app": "legacy"}}, "spec": {"containers": [{"name": "legacy", "image": "registry.example/legacy:1"}]}}},
+    "status": {"replicas": 1, "fullyLabeledReplicas": 1, "readyReplicas": 1, "availableReplicas": 1, "observedGeneration": 2}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "LimitRange",
+    "metadata": {"name": "defaults", "namespace": "shop", "uid": "uid-lr-defaults", "creationTimestamp": "1999-12-01T00:00:00Z"},
+    "spec": {
+      "limits": [
+        {
+          "type": "Container",
+          "default": {"cpu": "500m", "memory": "512Mi"},
+          "defaultRequest": {"cpu": "100m", "memory": "128Mi"},
+          "max": {"cpu": "4", "memory": "8Gi"},
+          "min": {"cpu": "10m", "memory": "16Mi"},
+          "maxLimitRequestRatio": {"cpu": "10"}
+        },
+        {"type": "Pod", "max": {"cpu": "8", "memory": "16Gi"}},
+        {"type": "PersistentVolumeClaim", "min": {"storage": "1Gi"}, "max": {"storage": "100Gi"}}
+      ]
+    }
+  },
+  {
+    "apiVersion": "autoscaling/v2",
+    "kind": "HorizontalPodAutoscaler",
+    "metadata": {"name": "web", "namespace": "shop", "uid": "uid-hpa-web", "generation": 1, "creationTimestamp": "1999-12-10T00:00:00Z", "labels": {"app.kubernetes.io/name": "web"}},
+    "spec": {
+      "scaleTargetRef": {"apiVersion": "apps/v1", "kind": "Deployment", "name": "web"},
+      "minReplicas": 2,
+      "maxReplicas": 10,
+      "metrics": [
+        {"type": "Resource", "resource": {"name": "cpu", "target": {"type": "Utilization", "averageUtilization": 80}}},
+        {"type": "ContainerResource", "containerResource": {"name": "memory", "container": "app", "target": {"type": "AverageValue", "averageValue": "400Mi"}}},
+        {"type": "Pods", "pods": {"metric": {"name": "requests_per_second"}, "target": {"type": "AverageValue", "averageValue": "100"}}},
+        {"type": "External", "external": {"metric": {"name": "queue_depth", "selector": {"matchLabels": {"queue": "orders"}}}, "target": {"type": "Value", "value": "30"}}},
+        {"type": "Object", "object": {"describedObject": {"apiVersion": "networking.k8s.io/v1", "kind": "Ingress", "name": "web"}, "metric": {"name": "hits"}, "target": {"type": "Value", "value": "2k"}}}
+      ]
+    },
+    "status": {
+      "observedGeneration": 1,
+      "currentReplicas": 2,
+      "desiredReplicas": 3,
+      "currentMetrics": [
+        {"type": "Resource", "resource": {"name": "cpu", "current": {"averageUtilization": 95, "averageValue": "238m"}}},
+        {"type": "ContainerResource", "containerResource": {"name": "memory", "container": "app", "current": {"averageValue": "300Mi"}}},
+        {"type": "Pods", "pods": {"metric": {"name": "requests_per_second"}, "current": {"averageValue": "120"}}},
+        {"type": "External", "external": {"metric": {"name": "queue_depth"}, "current": {"value": "12", "averageValue": "6"}}},
+        {"type": "Object", "object": {"describedObject": {"apiVersion": "networking.k8s.io/v1", "kind": "Ingress", "name": "web"}, "metric": {"name": "hits"}, "current": {"value": "1500"}}}
+      ],
+      "conditions": [
+        {"type": "AbleToScale", "status": "True", "reason": "ReadyForNewScale"},
+        {"type": "ScalingActive", "status": "True", "reason": "ValidMetricFound"},
+        {"type": "ScalingLimited", "status": "False", "reason": "DesiredWithinRange"}
+      ]
+    }
+  },
+  {
+    "apiVersion": "policy/v1",
+    "kind": "PodDisruptionBudget",
+    "metadata": {"name": "web", "namespace": "shop", "uid": "uid-pdb-web", "generation": 1, "creationTimestamp": "1999-12-10T00:00:00Z", "labels": {"app.kubernetes.io/name": "web"}},
+    "spec": {"minAvailable": 1, "selector": {"matchLabels": {"app.kubernetes.io/name": "web"}}},
+    "status": {"observedGeneration": 1, "currentHealthy": 1, "desiredHealthy": 1, "disruptionsAllowed": 0, "expectedPods": 2}
+  },
+  {
+    "apiVersion": "policy/v1",
+    "kind": "PodDisruptionBudget",
+    "metadata": {"name": "db", "namespace": "shop", "uid": "uid-pdb-db", "generation": 1, "creationTimestamp": "1999-12-05T00:00:00Z"},
+    "spec": {"maxUnavailable": "50%", "selector": {"matchLabels": {"app.kubernetes.io/name": "db"}}},
+    "status": {"observedGeneration": 1, "currentHealthy": 0, "desiredHealthy": 0, "disruptionsAllowed": 0, "expectedPods": 1}
+  }
+]
