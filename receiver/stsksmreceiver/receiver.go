@@ -194,7 +194,8 @@ func (r *ksmReceiver) setResource(md pmetric.Metrics) {
 	attrs := md.ResourceMetrics().At(0).Resource().Attributes()
 	// Empty blocks the platform collector's service.namespace=default insert; VictoriaMetrics drops empty labels.
 	attrs.PutStr(serviceNamespaceAttribute, "")
-	attrs.PutStr(clusterNameAttribute, r.clusterName)
+	// Must equal kube_cluster_name: vmagent builds the RBAC _scope_ from k8s_cluster_name when present.
+	attrs.PutStr(clusterNameAttribute, ksm.RFC1123ClusterName(r.clusterName))
 }
 
 // instanceConfig returns a fresh check configuration: the check mutates it.

@@ -108,7 +108,7 @@ func TestCollectionPayloadShape(t *testing.T) {
 	md := waitForMetric(t, sink, "kubernetes_state.node.cpu_allocatable")
 	require.Equal(t, 1, md.ResourceMetrics().Len())
 	rm := md.ResourceMetrics().At(0)
-	assert.Equal(t, map[string]any{"service.namespace": "", "k8s.cluster.name": "prod_eu"}, rm.Resource().Attributes().AsRaw())
+	assert.Equal(t, map[string]any{"service.namespace": "", "k8s.cluster.name": "prod-eu"}, rm.Resource().Attributes().AsRaw())
 	require.Equal(t, 1, rm.ScopeMetrics().Len())
 	scope := rm.ScopeMetrics().At(0).Scope()
 	assert.Empty(t, scope.Name())

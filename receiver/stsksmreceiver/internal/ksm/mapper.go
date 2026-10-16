@@ -41,7 +41,7 @@ type Options struct {
 // New prepares the mapping configuration as the agent check's Configure does.
 func New(instance *KSMConfig, opts Options) *KSMCheck {
 	k := newKSMCheck(instance, opts.NamespaceTagger)
-	k.clusterNameRFC1123 = strings.ReplaceAll(opts.ClusterName, "_", "-")
+	k.clusterNameRFC1123 = RFC1123ClusterName(opts.ClusterName)
 	k.clusterNameTagValue = opts.ClusterName
 	if opts.RFC1123ClusterNameTag {
 		k.clusterNameTagValue = k.clusterNameRFC1123
@@ -62,6 +62,11 @@ func New(instance *KSMConfig, opts Options) *KSMCheck {
 	k.mergeLabelJoins(defaultLabelJoins())
 	k.mergeLabelsMapper(defaultLabelsMapper())
 	return k
+}
+
+// RFC1123ClusterName is the agent's MakeClusterNameRFC1123Compliant.
+func RFC1123ClusterName(name string) string {
+	return strings.ReplaceAll(name, "_", "-")
 }
 
 // resourceKindResolver replaces the agent's global API resource type cache.
