@@ -16,6 +16,7 @@ use (
 	./extension/settingsproviderextension
 	./processor/stsusageprocessor
 	./receiver/k8sresourcereceiver
+	./receiver/stsksmreceiver
 	./test/e2e
 	./test/logsagent
 )

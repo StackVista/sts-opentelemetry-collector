@@ -1,0 +1,1012 @@
+// Unless explicitly stated otherwise all files in this repository are licensed
+// under the Apache License Version 2.0.
+// This product includes software developed at Datadog (https://www.datadoghq.com/).
+// Copyright 2016-present Datadog, Inc.
+
+// Package ksm is the mapping layer of the agent's Kubernetes State Core check.
+package ksm
+
+import (
+	"context"
+	"fmt"
+	"maps"
+	"regexp"
+	"slices"
+	"strings"
+	"time"
+
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/discovery"
+	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/kube-state-metrics/v2/pkg/allowdenylist"
+	"k8s.io/kube-state-metrics/v2/pkg/customresource"
+	"k8s.io/kube-state-metrics/v2/pkg/options"
+
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ddcompat/kubernetes"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ddcompat/kubetags"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ddcompat/log"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ddcompat/sender"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ddcompat/tags"
+	kubestatemetrics "github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ksm/builder"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ksm/customresources"
+	ksmstore "github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ksm/store"
+)
+
+const (
+	// CheckName is the name of the check
+	CheckName = "kubernetes_state_core"
+
+	// createdByKindKey represents the KSM label key created_by_kind
+	createdByKindKey = "created_by_kind"
+	// createdByNameKey represents the KSM label key created_by_name
+	createdByNameKey = "created_by_name"
+	// ownerKindKey represents the KSM label key owner_kind
+	ownerKindKey = "owner_kind"
+	// ownerNameKey represents the KSM label key owner_name
+	ownerNameKey = "owner_name"
+	// namespaceKey represents the KSM label key namespace
+	namespaceKey = "namespace"
+)
+
+var extendedCollectors = map[string]string{
+	"deployments":  "apps/v1, Resource=deployments_extended",
+	"replicasets":  "apps/v1, Resource=replicasets_extended",
+	"statefulsets": "apps/v1, Resource=statefulsets_extended",
+	"daemonsets":   "apps/v1, Resource=daemonsets_extended",
+	"jobs":         "batch/v1, Resource=jobs_extended",
+	"nodes":        "core/v1, Resource=nodes_extended",
+	"pods":         "core/v1, Resource=pods_extended",
+	"endpoints":    "core/v1, Resource=endpoints_extended",
+}
+
+// collectorNameReplacement contains a mapping of collector names as they would appear in the KSM config to what
+// their new collector name would be. For backwards compatibility.
+var collectorNameReplacement = map[string]string{
+	"apiservices":               "apiregistration.k8s.io/v1, Resource=apiservices",
+	"customresourcedefinitions": "apiextensions.k8s.io/v1, Resource=customresourcedefinitions",
+	// verticalpodautoscalers were removed from the built-in KSM metrics in KSM 2.9, and the changes made to
+	// the KSM builder in KSM 2.9 result in the detected custom resource store name being different.
+	"verticalpodautoscalers": "autoscaling.k8s.io/v1, Resource=verticalpodautoscalers",
+	// controllerrevisions are not natively supported by KSM as a collector, so we register it as a custom resource
+	"controllerrevisions": "apps/v1, Resource=controllerrevisions",
+}
+
+var matchAllCap = regexp.MustCompile("([a-z0-9])([A-Z])")
+
+// KSMConfig contains the check config parameters
+type KSMConfig struct {
+	// Collectors defines the resource type collectors.
+	// Example: Enable pods and nodes collectors.
+	// collectors:
+	//   - nodes
+	//   - pods
+	Collectors []string `yaml:"collectors"`
+
+	// LabelJoins allows adding the tags to join from other KSM metrics.
+	// Example: Joining for deployment metrics. Based on:
+	// kube_deployment_labels{deployment="kube-dns",label_addonmanager_kubernetes_io_mode="Reconcile"}
+	// Use the following config to add the value of label_addonmanager_kubernetes_io_mode as a tag to your KSM
+	// deployment metrics.
+	// label_joins:
+	//   kube_deployment_labels:
+	//     labels_to_match:
+	//       - deployment
+	//     labels_to_get:
+	//       - label_addonmanager_kubernetes_io_mode
+	LabelJoins map[string]*JoinsConfigWithoutLabelsMapping `yaml:"label_joins"`
+
+	// LabelsAsTags
+	// Example:
+	// labels_as_tags:
+	//   pod:
+	//     app: pod_app
+	//   node:
+	//     app: node_app
+	//     team: node_team
+	LabelsAsTags map[string]map[string]string `yaml:"labels_as_tags"`
+
+	// AnnotationsAsTags
+	// Example:
+	// annotations_as_tags:
+	//   pod:
+	//     app: pod_app
+	//   node:
+	//     app: node_app
+	//     team: node_team
+	AnnotationsAsTags map[string]map[string]string `yaml:"annotations_as_tags"`
+
+	// LabelsMapper can be used to translate kube-state-metrics labels to other tags.
+	// Example: Adding kube_namespace tag instead of namespace.
+	// labels_mapper:
+	//   namespace: kube_namespace
+	LabelsMapper map[string]string `yaml:"labels_mapper"`
+
+	// Tags contains the list of tags to attach to every metric, event and service check emitted by this integration.
+	// It is also enriched in `initTags` with `kube_cluster_name` and global tags.
+	// Example:
+	// tags:
+	//   - env:prod
+	//   - zone:eu
+	Tags []string `yaml:"tags"`
+
+	// DisableGlobalTags disables adding the global host tags defined via tags/DD_TAG in the Agent config, default false.
+	DisableGlobalTags bool `yaml:"disable_global_tags"`
+
+	// Namespaces contains the namespaces from which we collect metrics
+	// Example: Enable metric collection for objects in prod and kube-system namespaces.
+	// namespaces:
+	//   - prod
+	//   - kube-system
+	Namespaces []string `yaml:"namespaces"`
+
+	// ResyncPeriod is the frequency of resync'ing the metrics cache in seconds, default 5 minutes (kubernetes_informers_resync_period).
+	ResyncPeriod int `yaml:"resync_period"`
+
+	// Telemetry enables telemetry check's metrics, default false.
+	// Metrics can be found under kubernetes_state.telemetry
+	Telemetry bool `yaml:"telemetry"`
+
+	// Private field containing the label joins configuration built from `LabelJoins`, `LabelsAsTags` and `AnnotationsAsTags`.
+	labelJoins map[string]*joinsConfig
+
+	// UseAPIServerCache enables the use of the API server cache for the check
+	UseAPIServerCache bool `yaml:"use_apiserver_cache"`
+}
+
+// KSMCheck wraps the config and the metric stores needed to run the check
+type KSMCheck struct {
+	instance                *KSMConfig
+	telemetry               *telemetryCache
+	tagger                  NamespaceTagger
+	clusterIDTagValue       string
+	clusterNameTagValue     string
+	clusterNameRFC1123      string
+	globalTags              []string
+	globalLabelsAsTags      map[string]map[string]string
+	globalAnnotationsAsTags map[string]map[string]string
+	resourceKind            resourceKindResolver
+	metricNamesMapper       map[string]string
+	metricAggregators       map[string]metricAggregator
+	metricTransformers      map[string]metricTransformerFunc
+	metadataMetricsRegex    *regexp.Regexp
+	rolloutTracker          *customresources.RolloutTracker
+}
+
+// JoinsConfigWithoutLabelsMapping contains the config parameters for label joins
+type JoinsConfigWithoutLabelsMapping struct {
+	// LabelsToMatch contains the labels that must
+	// match the labels of the targeted metric
+	LabelsToMatch []string `yaml:"labels_to_match"`
+
+	// LabelsToGet contains the labels we want to get from the targeted metric
+	LabelsToGet []string `yaml:"labels_to_get"`
+
+	// GetAllLabels replaces LabelsToGet if enabled
+	GetAllLabels bool `yaml:"get_all_labels"`
+}
+
+func (jc *JoinsConfigWithoutLabelsMapping) setupGetAllLabels() {
+	if jc.GetAllLabels {
+		return
+	}
+
+	if slices.Contains(jc.LabelsToGet, "*") {
+		jc.GetAllLabels = true
+		return
+	}
+}
+
+var labelRegexp *regexp.Regexp
+
+func init() {
+	labelRegexp = regexp.MustCompile(`[\/]|[\.]|[\-]`)
+}
+
+func (k *KSMCheck) setupLabelsAndAnnotationsAsTagsFunc() {
+	k.processLabelJoins()
+	k.instance.LabelsAsTags = mergeLabelsOrAnnotationAsTags(k.globalLabelsAsTags, k.instance.LabelsAsTags, true, k.resourceKind)
+	k.processLabelsAsTags()
+
+	// We need to merge the user-defined annotations as tags with the default annotations first
+	mergedAnnotationsAsTags := mergeLabelsOrAnnotationAsTags(k.instance.AnnotationsAsTags, defaultAnnotationsAsTags(), false, k.resourceKind)
+	k.instance.AnnotationsAsTags = mergeLabelsOrAnnotationAsTags(k.globalAnnotationsAsTags, mergedAnnotationsAsTags, true, k.resourceKind)
+	k.processAnnotationsAsTags()
+}
+
+// BuildStores starts the KSM reflectors; cancelling ctx stops them.
+func (k *KSMCheck) BuildStores(ctx context.Context, client clientset.Interface) ([][]cache.Store, error) {
+	builder := kubestatemetrics.New()
+	builder.WithUsingAPIServerCache(k.instance.UseAPIServerCache)
+
+	resources, err := discoverResources(client.Discovery())
+	if err != nil {
+		return nil, err
+	}
+	k.resourceKind = newResourceKindResolver(resources)
+
+	k.setupLabelsAndAnnotationsAsTagsFunc()
+
+	// Prepare the collectors for the resources specified in the configuration file.
+	collectors, err := filterUnknownCollectors(k.instance.Collectors, resources)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enable the KSM default collectors if the config collectors list is empty.
+	if len(collectors) == 0 {
+		// KSM dropped endpoints from its defaults after v2.13.
+		collectors = append(options.DefaultResources.AsSlice(), "endpoints")
+	}
+
+	builder.WithKubeClient(client)
+
+	// Prepare watched namespaces
+	namespaces := k.instance.Namespaces
+
+	// Enable the KSM default namespaces if the config namespaces list is empty.
+	if len(namespaces) == 0 {
+		namespaces = options.DefaultNamespaces
+	}
+
+	builder.WithNamespaces(namespaces)
+	allowDenyList, err := allowdenylist.New(options.MetricSet{}, buildDeniedMetricsSet(collectors))
+	if err != nil {
+		return nil, err
+	}
+
+	if err := allowDenyList.Parse(); err != nil {
+		return nil, err
+	}
+
+	builder.WithFamilyGeneratorFilter(allowDenyList)
+	builder.WithContext(ctx)
+	builder.WithResync(time.Duration(k.instance.ResyncPeriod) * time.Second)
+	builder.WithGenerateStoresFunc(builder.GenerateStores)
+
+	// configure custom resources required for extended features and
+	// compatibility across deprecated/removed versions of APIs
+	cr := k.discoverCustomResources(client, collectors)
+	builder.WithGenerateCustomResourceStoresFunc(builder.GenerateCustomResourceStoresFunc)
+	builder.WithCustomResourceStoreFactories(cr.factories...)
+	builder.WithCustomResourceClients(cr.clients)
+
+	// Enable exposing resource annotations explicitly for kube_<resource>_annotations metadata metrics.
+	// Equivalent to configuring --metric-annotations-allowlist.
+	allowedAnnotations := map[string][]string{}
+	for _, collector := range collectors {
+		// Any annotation can be used for label joins.
+		allowedAnnotations[collector] = []string{"*"}
+	}
+
+	builder.WithAllowAnnotations(allowedAnnotations)
+
+	// Enable exposing resource labels explicitly for kube_<resource>_labels metadata metrics.
+	// Equivalent to configuring --metric-labels-allowlist.
+	allowedLabels := map[string][]string{}
+	for _, collector := range collectors {
+		// Any label can be used for label joins.
+		allowedLabels[collector] = []string{"*"}
+	}
+
+	if err = builder.WithAllowLabels(allowedLabels); err != nil {
+		return nil, err
+	}
+
+	if err := builder.WithEnabledResources(cr.collectors); err != nil {
+		return nil, err
+	}
+
+	// Register event callbacks before building stores
+	eventCallbacks := k.getEventCallbacks()
+
+	var callbackResourceTypes []string
+	for resourceType, config := range eventCallbacks {
+		builder.RegisterStoreEventCallback(resourceType, config.EventType, config.Handler)
+		callbackResourceTypes = append(callbackResourceTypes, resourceType)
+	}
+
+	// Configure builder to enable callbacks for specific resource types
+	builder.WithCallbacksForResources(callbackResourceTypes)
+
+	return builder.BuildStores(), nil
+}
+
+func discoverResources(client discovery.DiscoveryInterface) ([]*v1.APIResourceList, error) {
+	_, resources, err := client.ServerGroupsAndResources()
+	if err != nil {
+		if !discovery.IsGroupDiscoveryFailedError(err) {
+			return nil, fmt.Errorf("unable to perform resource discovery: %s", err)
+		}
+
+		for group, apiGroupErr := range err.(*discovery.ErrGroupDiscoveryFailed).Groups {
+			log.Warnf("unable to perform resource discovery for group %s: %s", group, apiGroupErr)
+		}
+	}
+	return resources, nil
+}
+
+func filterUnknownCollectors(collectors []string, resources []*v1.APIResourceList) ([]string, error) {
+	resourcesSet := make(map[string]struct{}, len(collectors))
+	for _, resourceList := range resources {
+		for _, resource := range resourceList.APIResources {
+			resourcesSet[resource.Name] = struct{}{}
+		}
+	}
+
+	filteredCollectors := make([]string, 0, len(collectors))
+	for i := range collectors {
+		if _, ok := resourcesSet[collectors[i]]; ok {
+			if _, okRepl := collectorNameReplacement[collectors[i]]; okRepl {
+				filteredCollectors = append(filteredCollectors, collectorNameReplacement[collectors[i]])
+			} else {
+				filteredCollectors = append(filteredCollectors, collectors[i])
+			}
+		} else {
+			log.Warnf("resource %v is unknown and will not be collected", collectors[i])
+		}
+	}
+	return filteredCollectors, nil
+}
+
+type customResources struct {
+	collectors []string
+	factories  []customresource.RegistryFactory
+	clients    map[string]interface{}
+}
+
+func (k *KSMCheck) discoverCustomResources(c clientset.Interface, collectors []string) customResources {
+	// automatically add extended collectors if their standard ones are
+	// enabled
+	for _, c := range collectors {
+		if extended, ok := extendedCollectors[c]; ok {
+			collectors = append(collectors, extended)
+		}
+	}
+
+	// extended resource collectors always have a factory registered
+	factories := []customresource.RegistryFactory{
+		customresources.NewExtendedJobFactory(c),
+		customresources.NewExtendedNodeFactory(c),
+		customresources.NewExtendedPodFactory(c),
+		customresources.NewExtendedEndpointFactory(c),
+		customresources.NewDeploymentRolloutFactory(c, k.rolloutTracker),
+		customresources.NewReplicaSetRolloutFactory(c, k.rolloutTracker),
+		customresources.NewStatefulSetRolloutFactory(c, k.rolloutTracker),
+		customresources.NewDaemonSetRolloutFactory(c, k.rolloutTracker),
+		customresources.NewControllerRevisionRolloutFactory(c, k.rolloutTracker),
+	}
+
+	clients := make(map[string]interface{}, len(factories))
+	for _, f := range factories {
+		client, _ := f.CreateClient(nil)
+		clients[f.Name()] = client
+	}
+
+	return customResources{
+		collectors: collectors,
+		clients:    clients,
+		factories:  factories,
+	}
+}
+
+func (k *KSMCheck) shouldDropForMetadata(name string) bool {
+	if strings.HasPrefix(name, "kube_customresource") {
+		return false
+	}
+	return k.metadataMetricsRegex.MatchString(name)
+}
+
+// Collect maps the current content of the stores to Datadog-style series.
+func (k *KSMCheck) Collect(s sender.Sender, allStores [][]cache.Store, currentTime time.Time) {
+	sender := &checkTagsSender{Sender: s, tags: k.instance.Tags}
+
+	labelJoiner := newLabelJoiner(k.instance.labelJoins)
+	for _, stores := range allStores {
+		for _, store := range stores {
+			var metricsStore *ksmstore.MetricsStore
+			if ms, ok := store.(*ksmstore.MetricsStore); ok {
+				metricsStore = ms
+			}
+
+			if metricsStore != nil {
+				metrics := metricsStore.Push(k.familyFilter, k.metricFilter)
+				labelJoiner.insertFamilies(metrics)
+			}
+		}
+	}
+
+	for _, stores := range allStores {
+		for _, store := range stores {
+			var metricsStore *ksmstore.MetricsStore
+			if ms, ok := store.(*ksmstore.MetricsStore); ok {
+				metricsStore = ms
+			}
+
+			if metricsStore != nil {
+				metrics := metricsStore.Push(ksmstore.GetAllFamilies, ksmstore.GetAllMetrics)
+				k.processMetrics(sender, metrics, labelJoiner, currentTime)
+				k.processTelemetry(metrics)
+			}
+		}
+	}
+
+	k.sendTelemetry(sender)
+}
+
+// processMetrics attaches tags and forwards metrics to the aggregator
+func (k *KSMCheck) processMetrics(sender sender.Sender, metrics map[string][]ksmstore.DDMetricsFam, labelJoiner *labelJoiner, now time.Time) {
+	for _, metricsList := range metrics {
+		// Create a new aggregated metric from all the reason metrics
+		aggregatedMetricList := aggregateStatusReasonMetrics(metricsList)
+
+		for _, metricFamily := range aggregatedMetricList {
+			// First check for aggregator, because the check use _labels metrics to aggregate values.
+			if aggregator, found := k.metricAggregators[metricFamily.Name]; found {
+				for _, m := range metricFamily.ListMetrics {
+					aggregator.accumulate(m)
+				}
+				// Some metrics can be aggregated and consumed as-is or by a transformer.
+				// So, let’s continue the processing.
+			}
+			if transform, found := k.metricTransformers[metricFamily.Name]; found {
+				lMapperOverride := labelsMapperOverride(metricFamily.Name)
+				for _, m := range metricFamily.ListMetrics {
+					hostname, tagList := k.hostnameAndTags(m.Labels, labelJoiner, lMapperOverride)
+					transform(sender, metricFamily.Name, m, hostname, tagList, now)
+				}
+				continue
+			}
+			metricPrefix := ksmMetricPrefix
+			if ddname, found := k.metricNamesMapper[metricFamily.Name]; found && strings.HasPrefix(ddname, "customresource.") {
+				metricPrefix = metricPrefix[:len(metricPrefix)-1] + "_"
+			}
+			if ddname, found := k.metricNamesMapper[metricFamily.Name]; found {
+				lMapperOverride := labelsMapperOverride(metricFamily.Name)
+				for _, m := range metricFamily.ListMetrics {
+					hostname, tagList := k.hostnameAndTags(m.Labels, labelJoiner, lMapperOverride)
+					sender.Gauge(metricPrefix+ddname, m.Val, hostname, tagList)
+				}
+				continue
+			}
+			if _, found := k.metricAggregators[metricFamily.Name]; found {
+				continue
+			}
+			if k.shouldDropForMetadata(metricFamily.Name) {
+				// metadata metrics are only used by the check for label joins
+				// they shouldn't be forwarded to Datadog unless they're customresource metrics
+				continue
+			}
+			// ignore the metric if it doesn't have a transformer
+			// or if it isn't mapped to a datadog metric name
+			log.Tracef("KSM metric '%s' is unknown for the check, ignoring it", metricFamily.Name)
+		}
+	}
+	for _, aggregator := range k.metricAggregators {
+		aggregator.flush(sender, k, labelJoiner)
+	}
+}
+
+// hostnameAndTags returns the tags and the hostname for a metric based on the metric labels and the check configuration.
+//
+// This function must always return a "fresh" slice of tags, that will not be accessed after return.
+func (k *KSMCheck) hostnameAndTags(labels map[string]string, labelJoiner *labelJoiner, lMapperOverride map[string]string) (string, []string) {
+	hostname := ""
+
+	labelsToAdd := labelJoiner.getLabelsToAdd(labels)
+
+	// generate a dedicated tags slice
+	tagList := make([]string, 0, len(labels)+len(labelsToAdd))
+
+	ownerKind, ownerName, resourceNamespace := "", "", ""
+
+	for key, value := range labels {
+
+		if key == namespaceKey {
+			resourceNamespace = value
+		}
+
+		switch key {
+		case createdByKindKey, ownerKindKey:
+			ownerKind = value
+		case createdByNameKey, ownerNameKey:
+			ownerName = value
+		default:
+			tag, hostTag := k.buildTag(key, value, lMapperOverride)
+			tagList = append(tagList, tag)
+			if hostTag != "" {
+				if k.clusterNameRFC1123 != "" {
+					hostname = hostTag + "-" + k.clusterNameRFC1123
+				} else {
+					hostname = hostTag
+				}
+			}
+		}
+	}
+
+	// apply label joins
+	for _, label := range labelsToAdd {
+
+		if label.key == namespaceKey {
+			resourceNamespace = label.value
+		}
+
+		switch label.key {
+		case createdByKindKey, ownerKindKey:
+			ownerKind = label.value
+		case createdByNameKey, ownerNameKey:
+			ownerName = label.value
+		default:
+			tag, hostTag := k.buildTag(label.key, label.value, lMapperOverride)
+			tagList = append(tagList, tag)
+			if hostTag != "" {
+				if k.clusterNameRFC1123 != "" {
+					hostname = hostTag + "-" + k.clusterNameRFC1123
+				} else {
+					hostname = hostTag
+				}
+			}
+		}
+	}
+
+	if owners := ownerTags(ownerKind, ownerName); len(owners) != 0 {
+		tagList = append(tagList, owners...)
+	}
+
+	var namespaceTags []string
+	var tagErr error
+
+	if resourceNamespace != "" && k.tagger != nil {
+		namespaceTags, tagErr = k.tagger.NamespaceTags(resourceNamespace)
+	}
+
+	if tagErr != nil {
+		log.Debugf("failed to get namespace tags for %q: %v", resourceNamespace, tagErr)
+	} else if len(namespaceTags) > 0 {
+		tagList = append(tagList, namespaceTags...)
+	}
+
+	return hostname, tagList
+}
+
+// familyFilter is a metric families filter for label joins
+// It ensures that we only get the configured metric names to
+// get labels based on the label joins config
+func (k *KSMCheck) familyFilter(f ksmstore.DDMetricsFam) bool {
+	_, found := k.instance.labelJoins[f.Name]
+	return found
+}
+
+// metricFilter is a metrics filter for label joins
+// It ensures that we only get metadata-only metrics for label joins
+// metadata-only metrics that are used for label joins are always equal to 1
+// this is required for metrics where all combinations of a state are sent
+// but only the active one is set to 1 (others are set to 0)
+// example: kube_pod_status_phase
+func (k *KSMCheck) metricFilter(m ksmstore.DDMetric) bool {
+	return m.Val == float64(1)
+}
+
+// [STS] build multiple tags for the original label key
+// buildTag applies the LabelsMapper config and returns the tag in a key:value string format
+// The second return value is the hostname of the metric if a 'node' or 'host' tag is found, empty string otherwise
+func (k *KSMCheck) buildTag(key, value string, lMapperOverride map[string]string) (tag, hostname string) {
+	if newKey, found := k.instance.LabelsMapper[key]; found {
+		key = newKey
+	}
+
+	if lMapperOverride != nil {
+		if keyOverride, found := lMapperOverride[key]; found {
+			key = keyOverride
+		}
+	}
+
+	var sb strings.Builder
+	sb.Grow(len(key) + 1 + len(value))
+	sb.WriteString(key)
+	sb.WriteByte(':')
+	sb.WriteString(value)
+	tag = sb.String()
+
+	if key == "host" || key == "node" {
+		hostname = value
+	}
+	return
+}
+
+// mergeLabelsMapper adds extra label mappings to the configured labels mapper
+// User-defined mappings are prioritized over additional mappings
+func (k *KSMCheck) mergeLabelsMapper(extra map[string]string) {
+	for key, value := range extra {
+		if _, found := k.instance.LabelsMapper[key]; !found {
+			k.instance.LabelsMapper[key] = value
+		}
+	}
+}
+
+// mergeLabelJoins adds extra label joins to the configured label joins
+// User-defined label joins are prioritized over additional label joins
+func (k *KSMCheck) mergeLabelJoins(extra map[string]*JoinsConfigWithoutLabelsMapping) {
+	for key, value := range extra {
+		if _, found := k.instance.LabelJoins[key]; !found {
+			k.instance.LabelJoins[key] = value
+		}
+	}
+}
+
+func (k *KSMCheck) processLabelJoins() {
+	k.instance.labelJoins = make(map[string]*joinsConfig)
+	for metric, joinConf := range k.instance.LabelJoins {
+		labelsToGet := make(map[string]string)
+		for _, label := range joinConf.LabelsToGet {
+			labelsToGet[label] = label
+		}
+		k.instance.labelJoins[metric] = &joinsConfig{
+			labelsToMatch: joinConf.LabelsToMatch,
+			labelsToGet:   labelsToGet,
+			getAllLabels:  joinConf.GetAllLabels,
+		}
+	}
+}
+
+func (k *KSMCheck) processLabelsAsTags() {
+	k.processLabelsOrAnnotationsAsTags("label", k.instance.LabelsAsTags)
+}
+
+func (k *KSMCheck) processAnnotationsAsTags() {
+	k.processLabelsOrAnnotationsAsTags("annotation", k.instance.AnnotationsAsTags)
+}
+
+// parseLabels parses the labels mapper and returns the labels, wildcard template and getAllLabels flag.
+func parseLabels(what string, labelsMapper map[string]string) (map[string]string, string, bool) {
+	labels := make(map[string]string)
+	var wildcardTemplate string
+	var getAllLabels bool
+
+	for label, tag := range labelsMapper {
+		if label == "*" {
+			wildcardTemplate = tag
+			getAllLabels = true
+			continue
+		}
+		// KSM converts labels to snake case.
+		// Ref: https://github.com/kubernetes/kube-state-metrics/blob/v2.2.2/internal/store/utils.go#L133
+		label = what + "_" + toSnakeCase(labelRegexp.ReplaceAllString(label, "_"))
+		labels[label] = tag
+	}
+
+	return labels, wildcardTemplate, getAllLabels
+}
+
+func (k *KSMCheck) processLabelsOrAnnotationsAsTags(what string, configStuffAsTags map[string]map[string]string) {
+	for resourceKind, labelsMapper := range configStuffAsTags {
+		labels, wildcardTemplate, getAllLabels := parseLabels(what, labelsMapper)
+
+		if joinsCfg, ok := k.instance.labelJoins["kube_"+resourceKind+"_"+what+"s"]; ok {
+			maps.Copy(joinsCfg.labelsToGet, labels)
+			joinsCfg.wildcardTemplate = wildcardTemplate
+			joinsCfg.getAllLabels = getAllLabels
+		} else {
+			joinsConfig := &joinsConfig{
+				labelsToMatch:    getLabelToMatchForKind(resourceKind),
+				labelsToGet:      labels,
+				wildcardTemplate: wildcardTemplate,
+				getAllLabels:     getAllLabels,
+			}
+			k.instance.labelJoins["kube_"+resourceKind+"_"+what+"s"] = joinsConfig
+		}
+	}
+}
+
+// initTags avoids keeping a nil Tags field in the check instance
+// Sets the kube_cluster_name tag for all metrics.
+// Sets the orch_cluster_id tag for all metrics.
+// Adds the global user-defined tags.
+func (k *KSMCheck) initTags() {
+	if k.clusterNameTagValue != "" {
+		k.instance.Tags = append(k.instance.Tags, tags.KubeClusterName+":"+k.clusterNameTagValue)
+	}
+
+	if k.clusterIDTagValue != "" {
+		k.instance.Tags = append(k.instance.Tags, tags.OrchClusterID+":"+k.clusterIDTagValue)
+	}
+
+	if !k.instance.DisableGlobalTags {
+		k.instance.Tags = append(k.instance.Tags, k.globalTags...)
+	}
+}
+
+// processTelemetry accumulates the telemetry metric values, it can be called multiple times
+// during a check run then sendTelemetry should be called to forward the calculated values
+func (k *KSMCheck) processTelemetry(metrics map[string][]ksmstore.DDMetricsFam) {
+	if !k.instance.Telemetry {
+		return
+	}
+
+	for name, list := range metrics {
+		isMetadataMetric := k.metadataMetricsRegex.MatchString(name)
+		if !k.isKnownMetric(name) && !isMetadataMetric {
+			k.telemetry.incUnknown()
+			continue
+		}
+		if isMetadataMetric {
+			continue
+		}
+		count := 0
+		for _, family := range list {
+			count += len(family.ListMetrics)
+		}
+		k.telemetry.incTotal(count)
+		if resource := resourceNameFromMetric(name); resource != "" {
+			k.telemetry.incResource(resourceNameFromMetric(name), count)
+		}
+	}
+}
+
+// sendTelemetry converts the cached telemetry values and forwards them as telemetry metrics
+func (k *KSMCheck) sendTelemetry(s sender.Sender) {
+	if !k.instance.Telemetry {
+		return
+	}
+
+	// reset the cache for the next check run
+	defer k.telemetry.reset()
+
+	s.Gauge(ksmMetricPrefix+"telemetry.metrics.count.total", float64(k.telemetry.getTotal()), "", nil)
+	s.Gauge(ksmMetricPrefix+"telemetry.unknown_metrics.count", float64(k.telemetry.getUnknown()), "", nil) // useful to track metrics that aren't mapped to DD metrics
+	for resource, count := range k.telemetry.getResourcesCount() {
+		s.Gauge(ksmMetricPrefix+"telemetry.metrics.count", float64(count), "", []string{"resource_name:" + resource})
+	}
+}
+
+func newKSMCheck(instance *KSMConfig, tagger NamespaceTagger) *KSMCheck {
+	if instance.LabelsMapper == nil {
+		instance.LabelsMapper = make(map[string]string)
+	}
+	if instance.LabelJoins == nil {
+		instance.LabelJoins = make(map[string]*JoinsConfigWithoutLabelsMapping)
+	}
+	k := &KSMCheck{
+		instance:          instance,
+		telemetry:         newTelemetryCache(),
+		tagger:            tagger,
+		metricNamesMapper: defaultMetricNamesMapper(),
+		metricAggregators: defaultMetricAggregators(),
+		rolloutTracker:    customresources.NewRolloutTracker(),
+		resourceKind:      newResourceKindResolver(nil),
+
+		// metadata metrics are useful for label joins
+		// but shouldn't be submitted to Datadog
+		metadataMetricsRegex: regexp.MustCompile(".*_(info|labels|status_reason)"),
+	}
+
+	// Initialize metricTransformers after k is created since it needs a reference to k
+	k.metricTransformers = defaultMetricTransformers(k)
+
+	return k
+}
+
+// mergeLabelsOrAnnotationAsTags adds extra labels or annotations to the instance mapping
+func mergeLabelsOrAnnotationAsTags(extra, instanceMap map[string]map[string]string, shouldTransformResource bool, resourceKind resourceKindResolver) map[string]map[string]string {
+	if instanceMap == nil {
+		instanceMap = make(map[string]map[string]string)
+	}
+	// In the case of a misconfiguration issue, the value could be explicitly set to nil
+	for resource, mapping := range instanceMap {
+		if mapping == nil {
+			delete(instanceMap, resource)
+		}
+	}
+
+	for resource, mapping := range extra {
+		singularName := resource
+		var err error
+		if shouldTransformResource {
+			// modify the resource name to the singular form of the resource
+			singularName, err = toSingularResourceName(resource, resourceKind)
+			if err != nil {
+				log.Errorf("failed to get singular resource name for %q: %v", resource, err)
+				continue
+			}
+		}
+
+		_, found := instanceMap[singularName]
+		if !found {
+			instanceMap[singularName] = make(map[string]string)
+			instanceMap[singularName] = mapping
+			continue
+		}
+		for key, value := range mapping {
+			if _, found := instanceMap[singularName][key]; !found {
+				instanceMap[singularName][key] = value
+			}
+		}
+	}
+
+	return instanceMap
+}
+
+// resourceNameFromMetric returns the resource name based on the metric name
+// It relies on the conventional KSM naming format kube_<resource>_suffix
+// returns an empty string otherwise
+func resourceNameFromMetric(name string) string {
+	parts := strings.SplitN(name, "_", 3)
+	if len(parts) < 2 {
+		return ""
+	}
+	return parts[1]
+}
+
+// isKnownMetric returns whether the KSM metric name is known by the check
+// A known metric should satisfy one of the conditions:
+//   - has a datadog metric name
+//   - has a metric transformer
+//   - has a metric aggregator
+func (k *KSMCheck) isKnownMetric(name string) bool {
+	if _, found := k.metricNamesMapper[name]; found {
+		return true
+	}
+	if _, found := k.metricTransformers[name]; found {
+		return true
+	}
+	if _, found := k.metricAggregators[name]; found {
+		return true
+	}
+	return false
+}
+
+// buildDeniedMetricsSet adds *_created metrics to the default denied metric rules.
+// It allows us to get kube_node_created and kube_pod_created and deny
+// the rest of *_created metrics without relying on a unmaintainable and unreadable regex.
+func buildDeniedMetricsSet(collectors []string) options.MetricSet {
+	deniedMetrics := options.MetricSet{
+		".*_generation":                                    {},
+		".*_metadata_resource_version":                     {},
+		"kube_pod_owner":                                   {},
+		"kube_pod_restart_policy":                          {},
+		"kube_pod_completion_time":                         {},
+		"kube_pod_status_scheduled_time":                   {},
+		"kube_cronjob_status_active":                       {},
+		"kube_node_status_phase":                           {},
+		"kube_cronjob_spec_starting_deadline_seconds":      {},
+		"kube_job_spec_active_dealine_seconds":             {},
+		"kube_job_spec_completions":                        {},
+		"kube_job_spec_parallelism":                        {},
+		"kube_job_status_active":                           {},
+		"kube_job_status_.*_time":                          {},
+		"kube_service_spec_external_ip":                    {},
+		"kube_service_status_load_balancer_ingress":        {},
+		"kube_statefulset_status_current_revision":         {},
+		"kube_statefulset_status_update_revision":          {},
+		"kube_pod_container_status_last_terminated_reason": {},
+		"kube_lease_renew_time":                            {},
+	}
+	for _, resource := range collectors {
+		// resource format: pods, nodes, jobs, deployments...
+		if resource == "pods" || resource == "nodes" {
+			continue
+		}
+		deniedMetrics["kube_"+strings.TrimRight(resource, "s")+"_created"] = struct{}{}
+	}
+
+	return deniedMetrics
+}
+
+// ownerTags returns kube_<kind> tags based on given kind and name.
+// If the owner is a replicaset, it tries to get the kube_deployment tag in addition to kube_replica_set.
+// If the owner is a job, it tries to get the kube_cronjob tag in addition to kube_job.
+func ownerTags(kind, name string) []string {
+	if kind == "" || name == "" {
+		return nil
+	}
+
+	tagKey, err := kubetags.GetTagForKubernetesKind(kind)
+	if err != nil {
+		return nil
+	}
+
+	switch kind {
+	case kubernetes.JobKind:
+		if cronjob, _ := kubernetes.ParseCronJobForJob(name); cronjob != "" {
+			return []string{tagKey + ":" + name, tags.KubeCronjob + ":" + cronjob}
+		}
+	case kubernetes.ReplicaSetKind:
+		if deployment := kubernetes.ParseDeploymentForReplicaSet(name); deployment != "" {
+			return []string{tagKey + ":" + name, tags.KubeDeployment + ":" + deployment}
+		}
+	}
+
+	return []string{tagKey + ":" + name}
+}
+
+// labelsMapperOverride allows overriding the default label mapping for
+// a given metric depending on the metric family.
+// Current use-cases:
+//   - `phase` tag should be mapped to `pod_phase` on pod metrics only.
+//   - Ingress metrics have generic tag names (host/path/service_name/service_port).
+//     It's important to have them in a dedicated mapper override for ingresses.
+func labelsMapperOverride(metricName string) map[string]string {
+	if strings.HasPrefix(metricName, "kube_pod") {
+		return map[string]string{"phase": "pod_phase"}
+	}
+
+	if strings.HasPrefix(metricName, "kube_ingress") {
+		return map[string]string{
+			"host":         "kube_ingress_host",
+			"path":         "kube_ingress_path",
+			"service_name": "kube_service",
+			"service_port": "kube_service_port",
+		}
+	}
+
+	if strings.HasPrefix(metricName, "kube_service") {
+		return map[string]string{
+			"service": "kube_service",
+		}
+	}
+	return nil
+}
+
+func toSnakeCase(s string) string {
+	snake := matchAllCap.ReplaceAllString(s, "${1}_${2}")
+	return strings.ToLower(snake)
+}
+
+func toSingularResourceName(resourceGroup string, resourceKind resourceKindResolver) (string, error) {
+	// Expected input in the form of: resourceTypePlural.apiGroup
+	resourceType, group, _ := strings.Cut(resourceGroup, ".")
+	kind, err := resourceKind(resourceType, group)
+	return strings.ToLower(kind), err
+}
+
+// EventCallbackConfig holds the configuration for a resource event callback
+type EventCallbackConfig struct {
+	EventType ksmstore.StoreEventType
+	Handler   ksmstore.StoreEventCallback
+}
+
+// getEventCallbacks returns a map of resource types to their corresponding event callback configurations
+func (k *KSMCheck) getEventCallbacks() map[string]EventCallbackConfig {
+	return map[string]EventCallbackConfig{
+		"*v1.Deployment":         {ksmstore.EventDelete, k.handleDeploymentEvent},
+		"*v1.ReplicaSet":         {ksmstore.EventDelete, k.handleReplicaSetEvent},
+		"*v1.StatefulSet":        {ksmstore.EventDelete, k.handleStatefulSetEvent},
+		"*v1.DaemonSet":          {ksmstore.EventDelete, k.handleDaemonSetEvent},
+		"*v1.ControllerRevision": {ksmstore.EventDelete, k.handleControllerRevisionEvent},
+	}
+}
+
+// handleDeploymentEvent handles events for deployments
+func (k *KSMCheck) handleDeploymentEvent(eventType ksmstore.StoreEventType, _, namespace, name string, _ interface{}) {
+	if eventType == ksmstore.EventDelete {
+		k.rolloutTracker.CleanupDeployment(namespace, name)
+	}
+}
+
+// handleReplicaSetEvent handles events for replicasets
+func (k *KSMCheck) handleReplicaSetEvent(eventType ksmstore.StoreEventType, _, namespace, name string, _ interface{}) {
+	if eventType == ksmstore.EventDelete {
+		k.rolloutTracker.CleanupReplicaSet(namespace, name)
+	}
+}
+
+// handleStatefulSetEvent handles events for statefulsets
+func (k *KSMCheck) handleStatefulSetEvent(eventType ksmstore.StoreEventType, _, namespace, name string, _ interface{}) {
+	if eventType == ksmstore.EventDelete {
+		k.rolloutTracker.CleanupStatefulSet(namespace, name)
+	}
+}
+
+// handleDaemonSetEvent handles events for daemonsets
+func (k *KSMCheck) handleDaemonSetEvent(eventType ksmstore.StoreEventType, _, namespace, name string, _ interface{}) {
+	if eventType == ksmstore.EventDelete {
+		k.rolloutTracker.CleanupDaemonSet(namespace, name)
+	}
+}
+
+// handleControllerRevisionEvent handles events for controllerrevisions
+func (k *KSMCheck) handleControllerRevisionEvent(eventType ksmstore.StoreEventType, _, namespace, name string, _ interface{}) {
+	if eventType == ksmstore.EventDelete {
+		k.rolloutTracker.CleanupControllerRevision(namespace, name)
+	}
+}
