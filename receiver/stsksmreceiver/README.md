@@ -162,6 +162,7 @@ series, compared by name, host, tags and value.
 - Storage classes and volume attachments produce no gauges on either side.
 - A label or annotation with an empty value produces no tag, so the usual
   empty `node-role.kubernetes.io/<role>` labels are not tagged.
-- A `*` entry for `namespace` panics in both: the namespace join matches on
-  `namespace` twice, and a namespace without labels gives a negative slice
-  capacity. The tags case uses a `statefulset` wildcard instead.
+- A `*` entry for `namespace` panics in the agent: the namespace join matches
+  on `namespace` twice, and a namespace without labels gives a negative slice
+  capacity. The receiver rejects it in configuration validation instead, so the
+  tags case uses a `statefulset` wildcard.
