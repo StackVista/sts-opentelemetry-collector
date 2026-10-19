@@ -144,10 +144,13 @@ Differences from v2.13 that are left in place:
 check sends for `testdata/objects.json`, configured as the cluster agent chart
 configures it: the check builds its stores and runs against a fake clientset,
 and each gauge gets the check tags, sorted and de-duplicated tags and, per
-context, its last value, as the agent's sender and aggregator do. Regenerate it
-with `testdata/agentgolden/generate.sh <stackstate-agent checkout>`, which runs
-the harness in a temporary worktree of the checkout's `HEAD` with the agent's Go
-version. `TestSeriesMatchClusterAgent` requires the receiver to send the same
+context, its last value, as the agent's sender and aggregator do.
+`testdata/golden_tags.json` holds the series for the same objects with the
+`labels_as_tags` and `annotations_as_tags` in `testdata/golden_tags_config.json`.
+Regenerate both with `testdata/agentgolden/generate.sh <stackstate-agent
+checkout>`, which runs the harness in a temporary worktree of the checkout's
+`HEAD` with the agent's Go version. `TestSeriesMatchClusterAgent` requires the
+receiver, given the same settings through its configuration, to send the same
 series, compared by name, host, tags and value.
 
 - Both sides run in a `testing/synctest` bubble whose clock does not move, so
@@ -157,3 +160,8 @@ series, compared by name, host, tags and value.
   sees it: v2.13's `kube_cronjob_next_schedule_time` dereferences the field. The
   unset case is covered by the unit tests only.
 - Storage classes and volume attachments produce no gauges on either side.
+- A label or annotation with an empty value produces no tag, so the usual
+  empty `node-role.kubernetes.io/<role>` labels are not tagged.
+- A `*` entry for `namespace` panics in both: the namespace join matches on
+  `namespace` twice, and a namespace without labels gives a negative slice
+  capacity. The tags case uses a `statefulset` wildcard instead.

@@ -40,7 +40,8 @@ const (
 	goldenClusterID   = "11111111-2222-3333-4444-555555555555"
 )
 
-// The chart's kube_state_metrics_core_conf with default values.
+// The chart's kube_state_metrics_core_conf, without labels_as_tags and
+// annotations_as_tags.
 const goldenInstance = `
 collectors:
   - nodes
@@ -65,11 +66,27 @@ collectors:
   - poddisruptionbudgets
   - storageclasses
   - volumeattachments
-labels_as_tags:
-  {}
-annotations_as_tags:
-  {}
 `
+
+// goldenTagsInstance adds the labels_as_tags and annotations_as_tags in
+// GOLDEN_CONFIG, if set, to the instance; JSON is YAML.
+func goldenTagsInstance(t *testing.T) string {
+	t.Helper()
+	tags := struct {
+		LabelsAsTags      json.RawMessage `json:"labels_as_tags"`
+		AnnotationsAsTags json.RawMessage `json:"annotations_as_tags"`
+	}{json.RawMessage("{}"), json.RawMessage("{}")}
+	if path := os.Getenv("GOLDEN_CONFIG"); path != "" {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(raw, &tags); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return goldenInstance + "labels_as_tags: " + string(tags.LabelsAsTags) + "\nannotations_as_tags: " + string(tags.AnnotationsAsTags) + "\n"
+}
 
 type goldenSeries struct {
 	Metric string   `json:"metric"`
@@ -122,7 +139,7 @@ func TestGenerateKSMGolden(t *testing.T) {
 
 	k := newCheck(taggerfxmock.SetupFakeTagger(t), nil).(*KSMCheck)
 	demux := mocksender.CreateDefaultDemultiplexer()
-	if err := k.Configure(demux, nil, 1, integration.Data(goldenInstance), nil, "golden", "golden"); err != nil {
+	if err := k.Configure(demux, nil, 1, integration.Data(goldenTagsInstance(t)), nil, "golden", "golden"); err != nil {
 		t.Fatal(err)
 	}
 	// Run skips leader election only for a cluster check runner.

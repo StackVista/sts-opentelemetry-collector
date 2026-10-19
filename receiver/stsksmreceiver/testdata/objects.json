@@ -77,7 +77,8 @@
       "name": "shop",
       "uid": "uid-ns-shop",
       "creationTimestamp": "1999-12-01T00:00:00Z",
-      "labels": {"team": "shop", "app.kubernetes.io/part-of": "webshop"}
+      "labels": {"team": "shop", "app.kubernetes.io/part-of": "webshop"},
+      "annotations": {"owner.example.com/contact": "shop-oncall"}
     },
     "status": {"phase": "Active"}
   },
@@ -150,6 +151,7 @@
       "labels": {
         "failure-domain.beta.kubernetes.io/zone": "eu-central-1b",
         "failure-domain.beta.kubernetes.io/region": "eu-central-1",
+        "node-role.kubernetes.io/control-plane": "true",
         "kubernetes.io/os": "linux"
       }
     },
@@ -196,6 +198,7 @@
         "app.kubernetes.io/part-of": "webshop",
         "app.kubernetes.io/managed-by": "Helm",
         "helm.sh/chart": "web-1.4.2",
+        "team": "storefront",
         "tags.datadoghq.com/env": "prod",
         "tags.datadoghq.com/service": "web",
         "tags.datadoghq.com/version": "1.4.2"
@@ -300,7 +303,7 @@
       "uid": "uid-sts-db",
       "generation": 3,
       "creationTimestamp": "1999-12-05T00:00:00Z",
-      "labels": {"app.kubernetes.io/name": "db", "app.kubernetes.io/component": "database"}
+      "labels": {"app.kubernetes.io/name": "db", "app.kubernetes.io/component": "database", "tier": "data"}
     },
     "spec": {
       "replicas": 1,
@@ -434,9 +437,10 @@
         "app.kubernetes.io/name": "web",
         "app.kubernetes.io/instance": "web-prod",
         "tags.datadoghq.com/env": "prod",
-        "pod-template-hash": "7c9f8d6b5"
+        "pod-template-hash": "7c9f8d6b5",
+        "app": "web"
       },
-      "annotations": {"kubernetes.io/psp": "restricted"},
+      "annotations": {"kubernetes.io/psp": "restricted", "prometheus.io/scrape": "true"},
       "ownerReferences": [{"apiVersion": "apps/v1", "kind": "ReplicaSet", "name": "web-7c9f8d6b5", "uid": "uid-rs-web", "controller": true}]
     },
     "spec": {
@@ -531,7 +535,7 @@
       "namespace": "shop",
       "uid": "uid-pod-web-2",
       "creationTimestamp": "1999-12-30T00:00:00Z",
-      "labels": {"app.kubernetes.io/name": "web", "pod-template-hash": "7c9f8d6b5"},
+      "labels": {"app.kubernetes.io/name": "web", "app": "web", "pod-template-hash": "7c9f8d6b5"},
       "ownerReferences": [{"apiVersion": "apps/v1", "kind": "ReplicaSet", "name": "web-7c9f8d6b5", "uid": "uid-rs-web", "controller": true}]
     },
     "spec": {
