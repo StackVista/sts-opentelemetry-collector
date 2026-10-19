@@ -1,0 +1,15 @@
+{
+  "labels_as_tags": {
+    "node": {
+      "node-role.kubernetes.io/control-plane": "kube_node_role_control_plane",
+      "node-role.kubernetes.io/worker": "kube_node_role_worker"
+    },
+    "pod": {"app": "pod_app"},
+    "deployment": {"team": "deployment_team"},
+    "statefulset": {"*": "sts_%%label%%"}
+  },
+  "annotations_as_tags": {
+    "pod": {"prometheus.io/scrape": "pod_prometheus_scrape"},
+    "namespace": {"owner.example.com/contact": "namespace_contact"}
+  }
+}
