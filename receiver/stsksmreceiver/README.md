@@ -13,7 +13,7 @@ library and the agent's own mapping code. It is a temporary compatibility path.
 | `collection_interval` | `40s` | Interval between collections, the check interval |
 | `resync_period` | `300s` | Informer resync period, in whole seconds |
 | `collectors` | the cluster agent chart's list | kube-state-metrics resources to collect |
-| `labels_as_tags`, `annotations_as_tags` | | Per resource kind, label or annotation → tag, as in the check's instance config |
+| `labels_as_tags`, `annotations_as_tags` | | Per resource kind, label or annotation → tag, as in the check's instance config. A `*` wildcard for `namespace` is rejected: it panics in the check's label join, in the cluster agent too |
 | `k8s_leader_elector` | | ID of a `k8sleaderelector` extension; only the leader collects |
 
 ## How it works
@@ -162,6 +162,7 @@ series, compared by name, host, tags and value.
 - Storage classes and volume attachments produce no gauges on either side.
 - A label or annotation with an empty value produces no tag, so the usual
   empty `node-role.kubernetes.io/<role>` labels are not tagged.
-- A `*` entry for `namespace` panics in both: the namespace join matches on
-  `namespace` twice, and a namespace without labels gives a negative slice
-  capacity. The tags case uses a `statefulset` wildcard instead.
+- A `*` entry for `namespace` panics in the agent: the namespace join matches
+  on `namespace` twice, and a namespace without labels gives a negative slice
+  capacity. The receiver rejects it in configuration validation instead, so the
+  tags case uses a `statefulset` wildcard.

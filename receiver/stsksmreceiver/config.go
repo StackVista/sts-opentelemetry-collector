@@ -48,6 +48,9 @@ func defaultCollectors() []string {
 	}
 }
 
+// namespaceKind is the labels_as_tags key for namespaces.
+const namespaceKind = "namespace"
+
 func (cfg *Config) Validate() error {
 	switch cfg.AuthType {
 	case authTypeServiceAccount, authTypeKubeConfig:
@@ -68,6 +71,15 @@ func (cfg *Config) Validate() error {
 	}
 	if slices.Contains(cfg.Collectors, "") {
 		return errors.New("collectors must not contain an empty name")
+	}
+	for name, asTags := range map[string]map[string]map[string]string{
+		"labels_as_tags": cfg.LabelsAsTags, "annotations_as_tags": cfg.AnnotationsAsTags,
+	} {
+		if _, ok := asTags[namespaceKind]["*"]; ok {
+			// The KSM label join matches namespace metrics on "namespace" twice, so a wildcard panics on
+			// any namespace without labels; the cluster agent crashes the same way.
+			return fmt.Errorf("%s: a \"*\" wildcard for namespace is not supported, list the namespace labels instead", name)
+		}
 	}
 	return nil
 }
