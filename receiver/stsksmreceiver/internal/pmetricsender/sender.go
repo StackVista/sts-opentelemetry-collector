@@ -3,6 +3,7 @@
 package pmetricsender
 
 import (
+	"maps"
 	"slices"
 	"strings"
 
@@ -42,6 +43,9 @@ var semconv = map[string]string{ //nolint:gochecknoglobals
 	"horizontalpodautoscaler":     "k8s.hpa.name",
 	"kubelet_version":             "k8s.kubelet.version",
 }
+
+// SemconvAttributes returns the Datadog tag key to semantic-convention attribute mapping.
+func SemconvAttributes() map[string]string { return maps.Clone(semconv) }
 
 // Sender accumulates one collection run into a pmetric.Metrics.
 type Sender struct {
@@ -114,11 +118,6 @@ func putAttributes(attrs pcommon.Map, hostname string, sorted []string) {
 			podName = true
 		case "uid":
 			uid = v
-		case "container_id":
-			// KSM reports <runtime>://<id>; container.id is the bare id.
-			if _, id, found := strings.Cut(v, "://"); found {
-				attrs.PutStr("container.id", id)
-			}
 		}
 	}
 	// KSM only sets uid alongside pod on pod and container series.

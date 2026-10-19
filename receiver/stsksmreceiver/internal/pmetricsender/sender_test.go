@@ -1,6 +1,7 @@
 package pmetricsender_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -45,7 +46,6 @@ func TestGauge(t *testing.T) {
 		"kube_container_name": "app",
 		"k8s.container.name":  "app",
 		"container_id":        "containerd://abc123",
-		"container.id":        "abc123",
 		"kube_cluster_name":   "prod",
 		"sts_host":            "node-1-prod",
 		"interval":            "0",
@@ -88,4 +88,28 @@ func TestRepeatedSeriesKeepLastValue(t *testing.T) {
 	require.Equal(t, 2, dps.Len())
 	assert.Equal(t, 2.0, dps.At(0).DoubleValue())
 	assert.Equal(t, 3.0, dps.At(1).DoubleValue())
+}
+
+// Remote write turns attribute names into Prometheus label names, joining the
+// values of names that collide, so an added attribute must not sanitise to a
+// Datadog tag key.
+func TestSemconvAttributesDoNotCollideWithTags(t *testing.T) {
+	sanitise := func(name string) string {
+		return strings.Map(func(r rune) rune {
+			if r == '_' || ('a' <= r && r <= 'z') || ('A' <= r && r <= 'Z') || ('0' <= r && r <= '9') {
+				return r
+			}
+			return '_'
+		}, name)
+	}
+	for tag, attr := range pmetricsender.SemconvAttributes() {
+		assert.NotEqual(t, tag, sanitise(attr), "%s and %s become the same label", tag, attr)
+		for other := range pmetricsender.SemconvAttributes() {
+			assert.NotEqual(t, other, sanitise(attr), "%s and tag %s become the same label", attr, other)
+		}
+	}
+	for _, attr := range []string{"k8s.pod.uid", pmetricsender.HostAttribute, pmetricsender.IntervalAttribute} {
+		_, isTag := pmetricsender.SemconvAttributes()[sanitise(attr)]
+		assert.False(t, isTag, "%s becomes the label of a mapped tag", attr)
+	}
 }

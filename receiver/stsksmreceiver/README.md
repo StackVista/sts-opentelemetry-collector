@@ -44,7 +44,8 @@ interval.
 - `interval` is `"0"`, as the Receiver labels agent check series;
 - the matching `k8sclusterreceiver` attribute (`k8s.namespace.name`,
   `k8s.pod.name`, `k8s.pod.uid`, `k8s.node.name`, `k8s.deployment.name`,
-  `container.id`, …) is added alongside the Datadog tag;
+  …) is added alongside the Datadog tag. `container.id` is not, because remote
+  write would store it under the `container_id` label of the Datadog tag;
 - a series repeated with the same name, host and tags keeps its last value, as
   the agent's aggregator does;
 - service checks are dropped, because the cluster agent's serializer does not
