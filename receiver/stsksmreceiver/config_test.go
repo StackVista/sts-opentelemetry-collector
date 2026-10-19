@@ -37,6 +37,12 @@ func TestConfigValidate(t *testing.T) {
 		"sub-second resync":    func(c *Config) { c.ResyncPeriod = 500 * time.Millisecond },
 		"no collectors":        func(c *Config) { c.Collectors = nil },
 		"empty collector":      func(c *Config) { c.Collectors = []string{defaultCollectors()[0], ""} },
+		"namespace label wildcard": func(c *Config) {
+			c.LabelsAsTags = map[string]map[string]string{namespaceKind: {"*": "ns_%%label%%"}}
+		},
+		"namespace annotation wildcard": func(c *Config) {
+			c.AnnotationsAsTags = map[string]map[string]string{namespaceKind: {"*": "ns_%%annotation%%"}}
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			cfg := validConfig()
@@ -44,6 +50,16 @@ func TestConfigValidate(t *testing.T) {
 			assert.Error(t, cfg.Validate())
 		})
 	}
+}
+
+func TestConfigAcceptsSupportedTagMappings(t *testing.T) {
+	cfg := validConfig()
+	cfg.LabelsAsTags = map[string]map[string]string{
+		namespaceKind: {"tier": "namespace_tier"},
+		"statefulset": {"*": "sts_%%label%%"},
+	}
+	cfg.AnnotationsAsTags = map[string]map[string]string{namespaceKind: {"owner.example.com/contact": "namespace_contact"}}
+	assert.NoError(t, cfg.Validate())
 }
 
 func TestConfigUnmarshal(t *testing.T) {
