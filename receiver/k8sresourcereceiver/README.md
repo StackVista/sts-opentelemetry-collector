@@ -1,5 +1,8 @@
 # Kubernetes resource receiver
 
+> [!NOTE]
+> The Go module of this component is internal to SUSE Observability: its API and configuration can change in any release. Configure the collector as described in the [SUSE Observability documentation](https://documentation.suse.com/cloudnative/suse-observability/latest/en/setup/otel/overview.html).
+
 ## Pod container summary attributes
 
 Core Pod object logs include three integer attributes when

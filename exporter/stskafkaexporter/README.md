@@ -1,5 +1,8 @@
 # STS Kafka Exporter
 
+> [!NOTE]
+> The Go module of this component is internal to SUSE Observability: its API and configuration can change in any release. Configure the collector as described in the [SUSE Observability documentation](https://documentation.suse.com/cloudnative/suse-observability/latest/en/setup/otel/overview.html).
+
 ## What 
 The STS Kafka Exporter allows explicit control over the message key, giving us safety and determinism when exporting OpenTelemetry topology information (components and relations).
 

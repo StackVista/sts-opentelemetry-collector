@@ -1,5 +1,8 @@
 # Logs agent extension
 
+> [!NOTE]
+> The Go module of this component is internal to SUSE Observability: its API and configuration can change in any release. Configure the collector as described in the [SUSE Observability documentation](https://documentation.suse.com/cloudnative/suse-observability/latest/en/setup/otel/overview.html).
+
 `stslogsagent` defaults to fixed Promtail export with health probes and bounded
 shutdown. This mode needs no discovery credentials, state files or native pipeline,
 and makes no feature queries.

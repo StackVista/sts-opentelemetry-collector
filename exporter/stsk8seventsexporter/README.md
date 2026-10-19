@@ -1,5 +1,8 @@
 # Cluster-agent-compatible Kubernetes events exporter
 
+> [!NOTE]
+> The Go module of this component is internal to SUSE Observability: its API and configuration can change in any release. Configure the collector as described in the [SUSE Observability documentation](https://documentation.suse.com/cloudnative/suse-observability/latest/en/setup/otel/overview.html).
+
 `stsk8sevents` sends Kubernetes events to the Receiver intake
 (`/stsAgent/intake`) in the format the cluster-agent's `kubernetes_api_events`
 check produces, so the Kubernetes StackPack receives its existing event

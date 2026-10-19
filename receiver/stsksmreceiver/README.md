@@ -1,5 +1,8 @@
 # Cluster-agent-compatible Kubernetes state metrics receiver
 
+> [!NOTE]
+> The Go module of this component is internal to SUSE Observability: its API and configuration can change in any release. Configure the collector as described in the [SUSE Observability documentation](https://documentation.suse.com/cloudnative/suse-observability/latest/en/setup/otel/overview.html).
+
 `stsksm` produces the `kubernetes_state.*` series that the cluster agent's
 `kubernetes_state_core` check sends, from the same kube-state-metrics (KSM)
 library and the agent's own mapping code. It is a temporary compatibility path.
