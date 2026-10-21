@@ -1,8 +1,8 @@
 # renovate: datasource=docker depName=registry.suse.com/bci/bci-micro
-ARG BASE_IMAGE=registry.suse.com/bci/bci-micro:15.7-61.11
+ARG BASE_IMAGE=registry.suse.com/bci/bci-micro:15.7-61.16
 
 FROM --platform=$BUILDPLATFORM registry.suse.com/bci/golang:1.26 AS builder
-ENV GOTOOLCHAIN=auto
+ENV GOTOOLCHAIN=go1.26.10
 
 ARG TARGETOS=linux
 ARG TARGETARCH

@@ -1,6 +1,6 @@
 module github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8slogsexporter
 
-go 1.26.6
+go 1.26.10
 
 require (
 	github.com/StackVista/stackstate-receiver-go-client v0.0.0-20261001074615-fd72bbd18e84
