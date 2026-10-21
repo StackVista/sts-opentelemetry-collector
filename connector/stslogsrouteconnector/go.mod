@@ -1,6 +1,6 @@
 module github.com/stackvista/sts-opentelemetry-collector/connector/stslogsrouteconnector
 
-go 1.26.6
+go 1.26.10
 
 require (
 	github.com/stackvista/sts-opentelemetry-collector/common v0.0.0

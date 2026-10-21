@@ -1,6 +1,6 @@
 module github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter/integration
 
-go 1.26.6
+go 1.26.10
 
 require (
 	github.com/google/uuid v1.6.0
