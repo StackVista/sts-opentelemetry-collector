@@ -1,5 +1,8 @@
 # Logs route connector
 
+> [!NOTE]
+> The Go module of this component is internal to SUSE Observability: its API and configuration can change in any release. Configure the collector as described in the [SUSE Observability documentation](https://documentation.suse.com/cloudnative/suse-observability/latest/en/setup/otel/overview.html).
+
 `stslogsroute` sends logs to the one pipeline selected by the configured
 `logsagent.Controller` extension at startup. When discovery is enabled, both destination pipelines belong
 to the Collector lifecycle. The connector does not switch destinations or retry
