@@ -102,7 +102,9 @@ sends a snapshot immediately. The
 `internal/dns` and `internal/apiserver` are copied from
 [stackstate-agent](https://github.com/StackVista/stackstate-agent)
 `pkg/collector/corechecks/cluster` at `dd1cba0384` (Apache License 2.0) and are
-excluded from linting. Changes from the original:
+excluded from linting. The per-snapshot identity deduplication in
+`topologycollectors/common.go` and its tests follow the agent at `ca4acc951c`
+(StackVista/stackstate-agent#562). Changes from the original:
 
 - Agent imports point at local packages; `internal/log` and `internal/util`
   replace the agent logging and path helpers.

@@ -74,6 +74,7 @@ type clusterTopologyCommon struct {
 	componentChan      chan<- *topology.Component
 	componentIDCache   sync.Map
 	relationChan       chan<- *topology.Relation
+	relationIDCache    sync.Map
 	possibleRelations  []*topology.Relation
 	k8sVersion         *version.Info
 	useRelationCache   bool
@@ -102,16 +103,21 @@ func NewClusterTopologyCommon(
 	}
 }
 
-// SubmitComponent sends a component to the Component channel and adds its External ID to the cache if the relation cache is being used
+// SubmitComponent sends the first observation of each component identity in this snapshot.
+// Collectors can concurrently discover shared resources, such as host paths and endpoints.
 func (c *clusterTopologyCommon) SubmitComponent(component *topology.Component) {
-	c.componentChan <- component
-	if c.useRelationCache {
-		c.componentIDCache.Store(component.ExternalID, true)
+	if _, exists := c.componentIDCache.LoadOrStore(component.ExternalID, true); exists {
+		return
 	}
+	c.componentChan <- component
 }
 
-// SubmitRelation sends a relation to the Relation channel or adds it to the possibleRelations cache if it's being used
+// SubmitRelation accepts the first observation of each relation identity in this snapshot,
+// sending it immediately or waiting until its endpoints have been collected.
 func (c *clusterTopologyCommon) SubmitRelation(relation *topology.Relation) {
+	if _, exists := c.relationIDCache.LoadOrStore(relation.ExternalID, true); exists {
+		return
+	}
 	if c.useRelationCache {
 		_, sourceExists := c.componentIDCache.Load(relation.SourceID)
 		_, targetExists := c.componentIDCache.Load(relation.TargetID)
@@ -130,6 +136,7 @@ func (c *clusterTopologyCommon) SubmitRelation(relation *topology.Relation) {
 func (c *clusterTopologyCommon) CorrelateRelations() {
 	c.relationCacheMu.Lock()
 	possibleRelations := c.possibleRelations
+	c.possibleRelations = nil
 	c.relationCacheMu.Unlock()
 	for _, relation := range possibleRelations {
 		_, sourceExists := c.componentIDCache.Load(relation.SourceID)
