@@ -40,6 +40,83 @@ receivers:
           static_configs:
             - targets:
                 - ${env:KUBE_NODE_IP}:10250
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              regex: kubelet_container_log_filesystem_used_bytes
+              target_label: __name__
+              replacement: kubernetes.kubelet.container.log_filesystem.used_bytes
+            - source_labels: [__name__]
+              regex: kubelet_cpu_manager_pinning_errors_total
+              target_label: __name__
+              replacement: kubernetes.kubelet.cpu_manager.pinning_errors_total
+            - source_labels: [__name__]
+              regex: kubelet_cpu_manager_pinning_requests_total
+              target_label: __name__
+              replacement: kubernetes.kubelet.cpu_manager.pinning_requests_total
+            - source_labels: [__name__]
+              regex: kubelet_evictions
+              target_label: __name__
+              replacement: kubernetes.kubelet.evictions
+            - source_labels: [__name__]
+              regex: kubelet_network_plugin_operations_duration_seconds_count
+              target_label: __name__
+              replacement: kubernetes.kubelet.network_plugin.latency.count
+            - source_labels: [__name__]
+              regex: kubelet_pleg_discard_events
+              target_label: __name__
+              replacement: kubernetes.kubelet.pleg.discard_events
+            - source_labels: [__name__]
+              regex: kubelet_pleg_last_seen_seconds
+              target_label: __name__
+              replacement: kubernetes.kubelet.pleg.last_seen
+            - source_labels: [__name__]
+              regex: kubelet_pod_start_duration_seconds_count
+              target_label: __name__
+              replacement: kubernetes.kubelet.pod.start.duration.count
+            - source_labels: [__name__]
+              regex: kubelet_pod_worker_duration_seconds_count
+              target_label: __name__
+              replacement: kubernetes.kubelet.pod.worker.duration.count
+            - source_labels: [__name__]
+              regex: kubelet_pod_worker_start_duration_seconds_count
+              target_label: __name__
+              replacement: kubernetes.kubelet.pod.worker.start.duration.count
+            - source_labels: [__name__]
+              regex: kubelet_runtime_operations_total
+              target_label: __name__
+              replacement: kubernetes.kubelet.runtime.operations
+            - source_labels: [__name__]
+              regex: kubelet_runtime_operations_errors_total
+              target_label: __name__
+              replacement: kubernetes.kubelet.runtime.errors
+            - source_labels: [__name__]
+              regex: kubelet_runtime_operations_duration_seconds_count
+              target_label: __name__
+              replacement: kubernetes.kubelet.runtime.operations.duration.count
+            - source_labels: [__name__]
+              regex: kubelet_volume_stats_available_bytes
+              target_label: __name__
+              replacement: kubernetes.kubelet.volume.stats.available_bytes
+            - source_labels: [__name__]
+              regex: kubelet_volume_stats_capacity_bytes
+              target_label: __name__
+              replacement: kubernetes.kubelet.volume.stats.capacity_bytes
+            - source_labels: [__name__]
+              regex: kubelet_volume_stats_inodes
+              target_label: __name__
+              replacement: kubernetes.kubelet.volume.stats.inodes
+            - source_labels: [__name__]
+              regex: kubelet_volume_stats_inodes_free
+              target_label: __name__
+              replacement: kubernetes.kubelet.volume.stats.inodes_free
+            - source_labels: [__name__]
+              regex: kubelet_volume_stats_inodes_used
+              target_label: __name__
+              replacement: kubernetes.kubelet.volume.stats.inodes_used
+            - source_labels: [__name__]
+              regex: kubelet_volume_stats_used_bytes
+              target_label: __name__
+              replacement: kubernetes.kubelet.volume.stats.used_bytes
 
   prometheus/probes:
     config:
@@ -55,6 +132,51 @@ receivers:
           static_configs:
             - targets:
                 - ${env:KUBE_NODE_IP}:10250
+          metric_relabel_configs:
+            - source_labels: [__name__, probe_type, result]
+              regex: prober_probe_total;Liveness;successful
+              target_label: __name__
+              replacement: kubernetes.liveness_probe.success.total
+            - source_labels: [__name__, probe_type, result]
+              regex: prober_probe_total;Liveness;failed
+              target_label: __name__
+              replacement: kubernetes.liveness_probe.failure.total
+            - source_labels: [__name__, probe_type, result]
+              regex: prober_probe_total;Liveness;unknown
+              target_label: __name__
+              replacement: kubernetes.liveness_probe.unknown.total
+            - source_labels: [__name__, probe_type, result]
+              regex: prober_probe_total;Readiness;successful
+              target_label: __name__
+              replacement: kubernetes.readiness_probe.success.total
+            - source_labels: [__name__, probe_type, result]
+              regex: prober_probe_total;Readiness;failed
+              target_label: __name__
+              replacement: kubernetes.readiness_probe.failure.total
+            - source_labels: [__name__, probe_type, result]
+              regex: prober_probe_total;Readiness;unknown
+              target_label: __name__
+              replacement: kubernetes.readiness_probe.unknown.total
+            - source_labels: [__name__, probe_type, result]
+              regex: prober_probe_total;Startup;successful
+              target_label: __name__
+              replacement: kubernetes.startup_probe.success.total
+            - source_labels: [__name__, probe_type, result]
+              regex: prober_probe_total;Startup;failed
+              target_label: __name__
+              replacement: kubernetes.startup_probe.failure.total
+            - source_labels: [__name__, probe_type, result]
+              regex: prober_probe_total;Startup;unknown
+              target_label: __name__
+              replacement: kubernetes.startup_probe.unknown.total
+            - source_labels: [__name__]
+              regex: kubernetes\.(liveness|readiness|startup)_probe\..+
+              target_label: probe_type
+              replacement: ""
+            - source_labels: [__name__]
+              regex: kubernetes\.(liveness|readiness|startup)_probe\..+
+              target_label: result
+              replacement: ""
 
   prometheus/slis:
     config:
@@ -70,6 +192,15 @@ receivers:
           static_configs:
             - targets:
                 - ${env:KUBE_NODE_IP}:10250
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              regex: kubernetes_healthcheck
+              target_label: __name__
+              replacement: kubernetes.slis.kubernetes_healthcheck
+            - source_labels: [__name__]
+              regex: kubernetes_healthchecks_total
+              target_label: __name__
+              replacement: kubernetes.slis.kubernetes_healthchecks_total
 
   prometheus/self:
     config:

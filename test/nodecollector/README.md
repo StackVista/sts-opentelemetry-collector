@@ -85,15 +85,46 @@ docker run --rm --security-opt label=disable \
 
 ## Acceptance
 
-Apply the manifests, then confirm native series are visible in the metric explorer:
+Apply the manifests, then confirm the series are visible in the metric explorer:
 
 - `k8s.node.*`, `k8s.pod.*` and `container.*` (dotted) from `kubeletstats`, bound to the existing
   node, pod and container components.
 - `container_*` from the cAdvisor scrape.
-- `kubernetes_healthcheck*` from `/metrics/slis` and `prober_probe_*` from `/metrics/probes`.
-- `kubelet_*` from `/metrics`.
+- The relabeled `kubernetes.kubelet.*` family, the nine
+  `kubernetes.{liveness,readiness,startup}_probe.{success,failure,unknown}.total` series, and the
+  `kubernetes.slis.*` series.
+- `prober_probe_*` and `kubelet_*` for the families not yet relabeled.
 - `system.cpu.*`, `system.memory.*`, `system.disk.*`, `system.filesystem.*`, `system.network.*`,
   `system.paging.*` and `system.processes.*` from `hostmetrics`.
+
+## Kubelet compatibility (#681)
+
+`#681` is relabel-only. The `prometheus/kubelet`, `prometheus/probes` and `prometheus/slis` jobs
+rename the contract rows a relabel rule can express:
+
+- `kubernetes.kubelet.*`: container log filesystem, cpu manager pinning, evictions, pleg discard
+  events and last seen, the pod start/worker/worker-start `.count` rows, runtime operations and
+  runtime operations duration `.count`, and the volume stats rows.
+- The nine probe totals, split by `probe_type` and `result`. Those two labels are removed only from
+  the nine split series; the probe duration histograms keep them.
+- `kubernetes.slis.kubernetes_healthcheck` and `kubernetes.slis.kubernetes_healthchecks_total`.
+
+Deferred, because relabel cannot express them or the source is unproven:
+
+- The five duration `.sum` rows need a seconds-to-microseconds value transform. They are not
+  renamed here, so they stay under their raw `kubelet_*` names.
+- `kubernetes.kubelet.pleg.relist_duration` and `.relist_interval`: the contract only has the
+  `kubelet_pleg_*` wildcard, and the `_sum`/`_count`/`_bucket` choice is not established. The raw
+  pleg series remain until Agent V2 evidence settles it.
+- The bare histogram rows (`network_plugin.latency`, `pod.start.duration`, `pod.worker.duration`,
+  `pod.worker.start.duration`, `runtime.operations.duration`): the contract lists them separately
+  from the `.sum`/`.count` rows, but a Prometheus histogram has no bare sample.
+- The `kubeletstats` system-container rows, the dockershim-only docker rows, and the
+  apiserver/rest-client rows, which are outside the three kubelet endpoints or need a transform.
+- `kubernetes.slis.kubernetes_healthchecks_total` keeps the source counter's cumulative kind; the
+  contract's `count` kind needs resolving in the harness.
+- Renaming in relabel can drop the Prometheus type and unit on the renamed series. That is a known
+  prototype limitation until the renames move to a processor that preserves them.
 
 ## hostmetrics and the non-root question
 
@@ -123,7 +154,7 @@ kubectl -n default delete secret sts-node-collector-prototype
 
 ## Not in scope
 
-Agent V2 naming and labels (`#679`, `#680`, `#681`), pod-spec and pod-state metrics (`#682`), the
-kubelet health service check (`#683`), chart integration (`#686`), the validate fixture and CI gate
-(`#687`), documentation (`#688`) and the remaining `system.*` families (`#693`, `#695`, `#696`).
-This prototype emits raw native names only.
+Agent V2 label mapping and the metric shape layer (`#679`, `#680`), pod-spec and pod-state metrics
+(`#682`), the kubelet health service check (`#683`), chart integration (`#686`), the validate
+fixture and CI gate (`#687`), documentation (`#688`) and the remaining `system.*` families (`#693`,
+`#695`, `#696`). The raw names remain for the families `#681` defers.
