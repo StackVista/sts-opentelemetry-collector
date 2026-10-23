@@ -3587,25 +3587,7 @@
    "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde",
    "targetId": "urn:kubernetes:/golden-cluster:shop:configmap/app-config",
    "type": {
-    "name": "claims"
-   },
-   "data": {}
-  },
-  {
-   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde-\u003eurn:kubernetes:/golden-cluster:shop:configmap/app-config",
-   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde",
-   "targetId": "urn:kubernetes:/golden-cluster:shop:configmap/app-config",
-   "type": {
     "name": "uses"
-   },
-   "data": {}
-  },
-  {
-   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde-\u003eurn:kubernetes:/golden-cluster:shop:configmap/app-config",
-   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-abcde",
-   "targetId": "urn:kubernetes:/golden-cluster:shop:configmap/app-config",
-   "type": {
-    "name": "uses_value"
    },
    "data": {}
   },
@@ -3752,25 +3734,7 @@
    "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij",
    "targetId": "urn:kubernetes:/golden-cluster:shop:configmap/app-config",
    "type": {
-    "name": "claims"
-   },
-   "data": {}
-  },
-  {
-   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij-\u003eurn:kubernetes:/golden-cluster:shop:configmap/app-config",
-   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij",
-   "targetId": "urn:kubernetes:/golden-cluster:shop:configmap/app-config",
-   "type": {
     "name": "uses"
-   },
-   "data": {}
-  },
-  {
-   "externalId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij-\u003eurn:kubernetes:/golden-cluster:shop:configmap/app-config",
-   "sourceId": "urn:kubernetes:/golden-cluster:shop:pod/web-5d8f-fghij",
-   "targetId": "urn:kubernetes:/golden-cluster:shop:configmap/app-config",
-   "type": {
-    "name": "uses_value"
    },
    "data": {}
   },
