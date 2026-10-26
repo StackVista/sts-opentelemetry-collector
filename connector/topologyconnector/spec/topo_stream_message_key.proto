@@ -1,3 +1,4 @@
+// Internal protocol: not a supported API and may change without notice. See the repository README.
 syntax = "proto3";
 
 package topo_stream.v1;
