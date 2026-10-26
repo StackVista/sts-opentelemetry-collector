@@ -86,6 +86,7 @@ jobs:
 
       - name: Install protoc # TODO create a docker image with protoc installed
         run: |
+          sudo apt-get update
           sudo apt-get install -y protobuf-compiler
           go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.8
 
@@ -199,7 +200,7 @@ jobs:
           done
 
       - name: CVE report and secret scan (amd64)
-        uses: StackVista/image-pipeline/.github/actions/scan-image@b6440004f2ed34dfc602d4cfb4c2ba5e353aeea3 # main
+        uses: StackVista/image-pipeline/.github/actions/scan-image@508730536961e38718dbc2403448e2d418b1136f # main
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cve-gate-${{ matrix.image }}-amd64
           mode: inform
@@ -207,7 +208,7 @@ jobs:
           upload-sarif: 'false'
 
       - name: CVE report and secret scan (arm64)
-        uses: StackVista/image-pipeline/.github/actions/scan-image@b6440004f2ed34dfc602d4cfb4c2ba5e353aeea3 # main
+        uses: StackVista/image-pipeline/.github/actions/scan-image@508730536961e38718dbc2403448e2d418b1136f # main
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cve-gate-${{ matrix.image }}-arm64
           mode: inform
@@ -228,7 +229,7 @@ jobs:
           fi
 
       - name: Scan (and, on tags, sign and push)
-        uses: StackVista/image-pipeline/.github/actions/scan-sign-push@ec325c73909d0d00420121bbde6754b964e80ac3 # main
+        uses: StackVista/image-pipeline/.github/actions/scan-sign-push@508730536961e38718dbc2403448e2d418b1136f # main
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: ${{ steps.meta.outputs.tags }}
