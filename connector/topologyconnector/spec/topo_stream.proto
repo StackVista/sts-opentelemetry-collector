@@ -1,3 +1,4 @@
+// Internal protocol: not a supported API and may change without notice. See the repository README.
 syntax = "proto3";
 import "google/protobuf/struct.proto";
 
@@ -19,10 +20,9 @@ message TopologyStreamComponent {
 
   // Component type. Is what help us match it with config and come with the rendering for overview, highlight pages
   string  type_name = 4;
-  optional string type_identifier = 5;
 
-  reserved 6, 7, 8, 9;
-  reserved "layer_name", "layer_identifier", "domain_name", "domain_identifier";
+  reserved 5, 6, 7, 8, 9;
+  reserved "type_identifier", "layer_name", "layer_identifier", "domain_name", "domain_identifier";
 
   // currently the properties on the component dto. Helpful to access data when we are building overview, highlight pages
   // We agree to start without displayProperties.
@@ -73,6 +73,7 @@ message TopologyStreamRelation {
 
   // Relation type identifier is no longer in use, instead we allow dependencyType.
   reserved 6;
+  reserved "type_identifier";
 
   repeated string tags = 7;
 
