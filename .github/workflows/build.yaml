@@ -63,6 +63,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           flavor: |
+            latest=${{ startsWith(github.ref, 'refs/tags/v') && 'auto' || 'false' }}
             suffix=${{ matrix.image == 'agent' && '-agent' || '' }},onlatest=true
           labels: |
             org.opencontainers.image.source=https://github.com/${{github.repository_owner}}/${{ github.repository }}
@@ -165,6 +166,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           flavor: |
+            latest=${{ startsWith(github.ref, 'refs/tags/v') && 'auto' || 'false' }}
             suffix=${{ matrix.image == 'agent' && '-agent' || '' }},onlatest=true
 
       - name: Download image artifacts
