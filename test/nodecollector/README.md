@@ -126,6 +126,41 @@ Deferred, because relabel cannot express them or the source is unproven:
 - Renaming in relabel can drop the Prometheus type and unit on the renamed series. That is a known
   prototype limitation until the renames move to a processor that preserves them.
 
+## Container and pod resource compatibility (#680)
+
+The cAdvisor counters are rated before they are renamed. Renaming them in the prometheus receiver
+first makes the receiver treat the dotted names as unknown gauges, so `cumulativetodelta` and
+`deltatorate` no longer recognise them. The rate processors therefore run on the original
+`container_*` names, and `transform/resource-compat` renames the results.
+
+Mapped:
+
+- cAdvisor: `kubernetes.cpu.system.total`, `kubernetes.cpu.user.total`, `kubernetes.cpu.cfs.*`,
+  `kubernetes.memory.cache`, `kubernetes.memory.swap`, `kubernetes.memory.limits`,
+  `kubernetes.memory.sw_limit`, `kubernetes.io.read_bytes`, `kubernetes.io.write_bytes`,
+  `kubernetes.network.rx_dropped`, `kubernetes.network.tx_dropped`, `container.io.read`,
+  `container.io.write`, `container.io.read.operations`, `container.io.write.operations` and
+  `container.memory.oom_events`.
+- kubeletstats: `container.cpu.usage` and `kubernetes.cpu.usage.total` are scaled from cores to
+  nanocores; `kubernetes.memory.usage`, `kubernetes.memory.working_set`, `kubernetes.memory.rss`
+  and `kubernetes.filesystem.usage` are copied from their `container.*` sources;
+  `kubernetes.memory.usage_pct` and `kubernetes.ephemeral_storage.usage` are renames.
+- Container duplicates: `container.memory.cache`, `container.memory.swap`, `container.memory.limit`,
+  `container.io.read` and `container.io.write`.
+
+Deferred:
+
+- `kubernetes.network.rx_bytes`, `tx_bytes`, `rx_errors` and `tx_errors` need the `direction`
+  attribute split across two pipelines, with the rate conversion after the split.
+- `kubernetes.filesystem.usage_pct` and `kubernetes.memory.sw_in_use` need cross-metric joins that
+  the transform processor cannot express.
+- `kubernetes.cpu.capacity`, `memory.capacity`, `cpu.requests`, `memory.requests`, `cpu.limits` and
+  `memory.limits` have no source in the three receivers; they need the pod-spec reader.
+- The `container.*` rows marked `undecided` or `no-source` (active/file memory, PSI, refault, pid,
+  restarts, `container.net.*`) stay raw or absent; most have no OTel source.
+- `kubernetes.cpu.load.10s.avg` is mapped, but cAdvisor does not expose
+  `container_cpu_load_average_10s` on every runtime.
+
 ## hostmetrics and the non-root question
 
 The prototype ships as `runAsUser: 0` so the per-process scraper works. The chart decision in
@@ -154,7 +189,7 @@ kubectl -n default delete secret sts-node-collector-prototype
 
 ## Not in scope
 
-Agent V2 label mapping and the metric shape layer (`#679`, `#680`), pod-spec and pod-state metrics
-(`#682`), the kubelet health service check (`#683`), chart integration (`#686`), the validate
-fixture and CI gate (`#687`), documentation (`#688`) and the remaining `system.*` families (`#693`,
-`#695`, `#696`). The raw names remain for the families `#681` defers.
+Agent V2 label mapping and the metric shape layer (`#679`), pod-spec and pod-state metrics (`#682`),
+the kubelet health service check (`#683`), chart integration (`#686`), the validate fixture and CI
+gate (`#687`), documentation (`#688`) and the remaining `system.*` families (`#693`, `#695`,
+`#696`). The raw names remain for the families `#680` and `#681` defer.

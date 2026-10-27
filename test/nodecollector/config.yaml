@@ -299,6 +299,72 @@ processors:
           - delete_key(attributes, "k8s.cluster.name")
           - set(attributes["k8s.cluster.name"], "${env:K8S_CLUSTER_NAME}")
           - set(attributes["k8s.node.name"], "${env:KUBE_NODE_NAME}") where attributes["k8s.node.name"] == nil
+  transform/resource-compat:
+    error_mode: ignore
+    metric_statements:
+      - context: metric
+        statements:
+          - set(metric.name, "kubernetes.cpu.load.10s.avg") where metric.name == "container_cpu_load_average_10s"
+          - set(metric.name, "kubernetes.cpu.system.total") where metric.name == "container_cpu_system_seconds_total"
+          - set(metric.name, "kubernetes.cpu.user.total") where metric.name == "container_cpu_user_seconds_total"
+          - set(metric.name, "kubernetes.cpu.cfs.periods") where metric.name == "container_cpu_cfs_periods_total"
+          - set(metric.name, "kubernetes.cpu.cfs.throttled.periods") where metric.name == "container_cpu_cfs_throttled_periods_total"
+          - set(metric.name, "kubernetes.cpu.cfs.throttled.seconds") where metric.name == "container_cpu_cfs_throttled_seconds_total"
+          - set(metric.name, "kubernetes.memory.cache") where metric.name == "container_memory_cache"
+          - set(metric.name, "kubernetes.memory.swap") where metric.name == "container_memory_swap"
+          - set(metric.name, "kubernetes.memory.limits") where metric.name == "container_spec_memory_limit_bytes"
+          - set(metric.name, "kubernetes.memory.sw_limit") where metric.name == "container_spec_memory_swap_limit_bytes"
+          - set(metric.name, "kubernetes.io.read_bytes") where metric.name == "container_fs_reads_bytes_total"
+          - set(metric.name, "kubernetes.io.write_bytes") where metric.name == "container_fs_writes_bytes_total"
+          - set(metric.name, "container.io.read.operations") where metric.name == "container_fs_reads_total"
+          - set(metric.name, "container.io.write.operations") where metric.name == "container_fs_writes_total"
+          - set(metric.name, "kubernetes.network.rx_dropped") where metric.name == "container_network_receive_packets_dropped_total"
+          - set(metric.name, "kubernetes.network.tx_dropped") where metric.name == "container_network_transmit_packets_dropped_total"
+          - set(metric.name, "container.memory.oom_events") where metric.name == "container_oom_events_total"
+          - scale_metric(1000000000.0) where metric.name == "container.cpu.usage"
+          - copy_metric(name="kubernetes.cpu.usage.total") where metric.name == "container.cpu.usage"
+          - copy_metric(name="kubernetes.memory.usage") where metric.name == "container.memory.usage"
+          - copy_metric(name="kubernetes.memory.working_set") where metric.name == "container.memory.working_set"
+          - copy_metric(name="kubernetes.memory.rss") where metric.name == "container.memory.rss"
+          - copy_metric(name="kubernetes.filesystem.usage") where metric.name == "container.filesystem.usage"
+          - set(metric.name, "kubernetes.memory.usage_pct") where metric.name == "k8s.container.memory_limit_utilization"
+          - set(metric.name, "kubernetes.ephemeral_storage.usage") where metric.name == "k8s.container.ephemeral_storage.usage"
+          - copy_metric(name="container.memory.cache") where metric.name == "kubernetes.memory.cache"
+          - copy_metric(name="container.memory.swap") where metric.name == "kubernetes.memory.swap"
+          - copy_metric(name="container.memory.limit") where metric.name == "kubernetes.memory.limits"
+          - copy_metric(name="container.io.read") where metric.name == "kubernetes.io.read_bytes"
+          - copy_metric(name="container.io.write") where metric.name == "kubernetes.io.write_bytes"
+  cumulativetodelta:
+    include:
+      metrics:
+        - container_cpu_cfs_periods_total
+        - container_cpu_cfs_throttled_periods_total
+        - container_cpu_cfs_throttled_seconds_total
+        - container_cpu_system_seconds_total
+        - container_cpu_user_seconds_total
+        - container_fs_reads_bytes_total
+        - container_fs_writes_bytes_total
+        - container_fs_reads_total
+        - container_fs_writes_total
+        - container_network_receive_packets_dropped_total
+        - container_network_transmit_packets_dropped_total
+        - container_oom_events_total
+      match_type: strict
+    initial_value: auto
+  deltatorate:
+    metrics:
+      - container_cpu_cfs_periods_total
+      - container_cpu_cfs_throttled_periods_total
+      - container_cpu_cfs_throttled_seconds_total
+      - container_cpu_system_seconds_total
+      - container_cpu_user_seconds_total
+      - container_fs_reads_bytes_total
+      - container_fs_writes_bytes_total
+      - container_fs_reads_total
+      - container_fs_writes_total
+      - container_network_receive_packets_dropped_total
+      - container_network_transmit_packets_dropped_total
+      - container_oom_events_total
   transform/self-metrics:
     error_mode: ignore
     metric_statements:
@@ -348,7 +414,7 @@ service:
   pipelines:
     metrics/native:
       receivers: [kubeletstats, prometheus/cadvisor, prometheus/kubelet, prometheus/probes, prometheus/slis, hostmetrics]
-      processors: [memory_limiter, k8sattributes, transform/node-identity, batch]
+      processors: [memory_limiter, k8sattributes, transform/node-identity, cumulativetodelta, deltatorate, transform/resource-compat, batch]
       exporters: [otlphttp/suse-observability]
     metrics/self:
       receivers: [prometheus/self]
