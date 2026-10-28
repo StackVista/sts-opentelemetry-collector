@@ -1,0 +1,515 @@
+receivers:
+  kubeletstats:
+    collection_interval: 20s
+    initial_delay: 5s
+    auth_type: serviceAccount
+    endpoint: https://${env:KUBE_NODE_IP}:10250
+    insecure_skip_verify: true
+    metric_groups:
+      - container
+      - pod
+      - node
+      - volume
+    extra_metadata_labels:
+      - container.id
+
+  prometheus/cadvisor:
+    config:
+      scrape_configs:
+        - job_name: kubelet-cadvisor
+          scrape_interval: 30s
+          scheme: https
+          metrics_path: /metrics/cadvisor
+          authorization:
+            credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+          tls_config:
+            insecure_skip_verify: true
+          static_configs:
+            - targets:
+                - ${env:KUBE_NODE_IP}:10250
+
+  prometheus/kubelet:
+    config:
+      scrape_configs:
+        - job_name: kubelet
+          scrape_interval: 30s
+          scheme: https
+          metrics_path: /metrics
+          authorization:
+            credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+          tls_config:
+            insecure_skip_verify: true
+          static_configs:
+            - targets:
+                - ${env:KUBE_NODE_IP}:10250
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              regex: kubelet_container_log_filesystem_used_bytes
+              target_label: __name__
+              replacement: kubernetes.kubelet.container.log_filesystem.used_bytes
+            - source_labels: [__name__]
+              regex: kubelet_cpu_manager_pinning_errors_total
+              target_label: __name__
+              replacement: kubernetes.kubelet.cpu_manager.pinning_errors_total
+            - source_labels: [__name__]
+              regex: kubelet_cpu_manager_pinning_requests_total
+              target_label: __name__
+              replacement: kubernetes.kubelet.cpu_manager.pinning_requests_total
+            - source_labels: [__name__]
+              regex: kubelet_evictions
+              target_label: __name__
+              replacement: kubernetes.kubelet.evictions
+            - source_labels: [__name__]
+              regex: kubelet_network_plugin_operations_duration_seconds_count
+              target_label: __name__
+              replacement: kubernetes.kubelet.network_plugin.latency.count
+            - source_labels: [__name__]
+              regex: kubelet_pleg_discard_events
+              target_label: __name__
+              replacement: kubernetes.kubelet.pleg.discard_events
+            - source_labels: [__name__]
+              regex: kubelet_pleg_last_seen_seconds
+              target_label: __name__
+              replacement: kubernetes.kubelet.pleg.last_seen
+            - source_labels: [__name__]
+              regex: kubelet_pod_start_duration_seconds_count
+              target_label: __name__
+              replacement: kubernetes.kubelet.pod.start.duration.count
+            - source_labels: [__name__]
+              regex: kubelet_pod_worker_duration_seconds_count
+              target_label: __name__
+              replacement: kubernetes.kubelet.pod.worker.duration.count
+            - source_labels: [__name__]
+              regex: kubelet_pod_worker_start_duration_seconds_count
+              target_label: __name__
+              replacement: kubernetes.kubelet.pod.worker.start.duration.count
+            - source_labels: [__name__]
+              regex: kubelet_runtime_operations_total
+              target_label: __name__
+              replacement: kubernetes.kubelet.runtime.operations
+            - source_labels: [__name__]
+              regex: kubelet_runtime_operations_errors_total
+              target_label: __name__
+              replacement: kubernetes.kubelet.runtime.errors
+            - source_labels: [__name__]
+              regex: kubelet_runtime_operations_duration_seconds_count
+              target_label: __name__
+              replacement: kubernetes.kubelet.runtime.operations.duration.count
+            - source_labels: [__name__]
+              regex: kubelet_volume_stats_available_bytes
+              target_label: __name__
+              replacement: kubernetes.kubelet.volume.stats.available_bytes
+            - source_labels: [__name__]
+              regex: kubelet_volume_stats_capacity_bytes
+              target_label: __name__
+              replacement: kubernetes.kubelet.volume.stats.capacity_bytes
+            - source_labels: [__name__]
+              regex: kubelet_volume_stats_inodes
+              target_label: __name__
+              replacement: kubernetes.kubelet.volume.stats.inodes
+            - source_labels: [__name__]
+              regex: kubelet_volume_stats_inodes_free
+              target_label: __name__
+              replacement: kubernetes.kubelet.volume.stats.inodes_free
+            - source_labels: [__name__]
+              regex: kubelet_volume_stats_inodes_used
+              target_label: __name__
+              replacement: kubernetes.kubelet.volume.stats.inodes_used
+            - source_labels: [__name__]
+              regex: kubelet_volume_stats_used_bytes
+              target_label: __name__
+              replacement: kubernetes.kubelet.volume.stats.used_bytes
+
+  prometheus/probes:
+    config:
+      scrape_configs:
+        - job_name: kubelet-probes
+          scrape_interval: 30s
+          scheme: https
+          metrics_path: /metrics/probes
+          authorization:
+            credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+          tls_config:
+            insecure_skip_verify: true
+          static_configs:
+            - targets:
+                - ${env:KUBE_NODE_IP}:10250
+          metric_relabel_configs:
+            - source_labels: [__name__, probe_type, result]
+              regex: prober_probe_total;Liveness;successful
+              target_label: __name__
+              replacement: kubernetes.liveness_probe.success.total
+            - source_labels: [__name__, probe_type, result]
+              regex: prober_probe_total;Liveness;failed
+              target_label: __name__
+              replacement: kubernetes.liveness_probe.failure.total
+            - source_labels: [__name__, probe_type, result]
+              regex: prober_probe_total;Liveness;unknown
+              target_label: __name__
+              replacement: kubernetes.liveness_probe.unknown.total
+            - source_labels: [__name__, probe_type, result]
+              regex: prober_probe_total;Readiness;successful
+              target_label: __name__
+              replacement: kubernetes.readiness_probe.success.total
+            - source_labels: [__name__, probe_type, result]
+              regex: prober_probe_total;Readiness;failed
+              target_label: __name__
+              replacement: kubernetes.readiness_probe.failure.total
+            - source_labels: [__name__, probe_type, result]
+              regex: prober_probe_total;Readiness;unknown
+              target_label: __name__
+              replacement: kubernetes.readiness_probe.unknown.total
+            - source_labels: [__name__, probe_type, result]
+              regex: prober_probe_total;Startup;successful
+              target_label: __name__
+              replacement: kubernetes.startup_probe.success.total
+            - source_labels: [__name__, probe_type, result]
+              regex: prober_probe_total;Startup;failed
+              target_label: __name__
+              replacement: kubernetes.startup_probe.failure.total
+            - source_labels: [__name__, probe_type, result]
+              regex: prober_probe_total;Startup;unknown
+              target_label: __name__
+              replacement: kubernetes.startup_probe.unknown.total
+            - source_labels: [__name__]
+              regex: kubernetes\.(liveness|readiness|startup)_probe\..+
+              target_label: probe_type
+              replacement: ""
+            - source_labels: [__name__]
+              regex: kubernetes\.(liveness|readiness|startup)_probe\..+
+              target_label: result
+              replacement: ""
+
+  prometheus/slis:
+    config:
+      scrape_configs:
+        - job_name: kubelet-slis
+          scrape_interval: 30s
+          scheme: https
+          metrics_path: /metrics/slis
+          authorization:
+            credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+          tls_config:
+            insecure_skip_verify: true
+          static_configs:
+            - targets:
+                - ${env:KUBE_NODE_IP}:10250
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              regex: kubernetes_healthcheck
+              target_label: __name__
+              replacement: kubernetes.slis.kubernetes_healthcheck
+            - source_labels: [__name__]
+              regex: kubernetes_healthchecks_total
+              target_label: __name__
+              replacement: kubernetes.slis.kubernetes_healthchecks_total
+
+  prometheus/self:
+    config:
+      scrape_configs:
+        - job_name: node-collector-self
+          scrape_interval: 30s
+          static_configs:
+            - targets:
+                - 127.0.0.1:8888
+              labels:
+                k8s.pod.uid: ${env:POD_UID}
+
+  hostmetrics:
+    root_path: /hostfs
+    collection_interval: 30s
+    scrapers:
+      cpu:
+      disk:
+      filesystem:
+        exclude_mount_points:
+          mount_points:
+            - /dev/*
+            - /proc/*
+            - /sys/*
+            - /run/k3s/containerd/*
+            - /var/lib/docker/*
+            - /var/lib/kubelet/*
+            - /snap/*
+          match_type: regexp
+        exclude_fs_types:
+          fs_types:
+            - autofs
+            - binfmt_misc
+            - bpf
+            - cgroup2
+            - configfs
+            - debugfs
+            - devpts
+            - devtmpfs
+            - fusectl
+            - hugetlbfs
+            - iso9660
+            - mqueue
+            - nsfs
+            - overlay
+            - proc
+            - procfs
+            - pstore
+            - rpc_pipefs
+            - securityfs
+            - selinuxfs
+            - squashfs
+            - sysfs
+            - tracefs
+          match_type: strict
+      load:
+      memory:
+      network:
+      paging:
+      processes:
+      system:
+
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+  k8sattributes:
+    auth_type: serviceAccount
+    passthrough: false
+    filter:
+      node_from_env_var: KUBE_NODE_NAME
+    extract:
+      metadata:
+        - k8s.namespace.name
+        - k8s.deployment.name
+        - k8s.statefulset.name
+        - k8s.daemonset.name
+        - k8s.job.name
+        - k8s.cronjob.name
+        - k8s.node.name
+        - k8s.pod.name
+        - k8s.pod.uid
+        - k8s.pod.start_time
+        - k8s.replicaset.name
+        - k8s.replicaset.uid
+        - container.id
+        - container.image.name
+        - container.image.tag
+        - container.image.repo_digests
+        - k8s.container.name
+      labels:
+        - tag_name: kube_app_name
+          key: app.kubernetes.io/name
+          from: pod
+        - tag_name: kube_app_instance
+          key: app.kubernetes.io/instance
+          from: pod
+        - tag_name: kube_app_component
+          key: app.kubernetes.io/component
+          from: pod
+    pod_association:
+      - sources:
+          - from: resource_attribute
+            name: k8s.pod.uid
+      - sources:
+          - from: connection
+  transform/node-identity:
+    error_mode: ignore
+    metric_statements:
+      - context: resource
+        statements:
+          - delete_key(attributes, "k8s.cluster.name")
+          - set(attributes["k8s.cluster.name"], "${env:K8S_CLUSTER_NAME}")
+          - set(attributes["k8s.node.name"], "${env:KUBE_NODE_NAME}") where attributes["k8s.node.name"] == nil
+  transform/resource-compat:
+    error_mode: ignore
+    metric_statements:
+      - context: metric
+        statements:
+          - set(metric.name, "kubernetes.cpu.load.10s.avg") where metric.name == "container_cpu_load_average_10s"
+          - set(metric.name, "kubernetes.cpu.system.total") where metric.name == "container_cpu_system_seconds_total"
+          - set(metric.name, "kubernetes.cpu.user.total") where metric.name == "container_cpu_user_seconds_total"
+          - set(metric.name, "kubernetes.cpu.cfs.periods") where metric.name == "container_cpu_cfs_periods_total"
+          - set(metric.name, "kubernetes.cpu.cfs.throttled.periods") where metric.name == "container_cpu_cfs_throttled_periods_total"
+          - set(metric.name, "kubernetes.cpu.cfs.throttled.seconds") where metric.name == "container_cpu_cfs_throttled_seconds_total"
+          - set(metric.name, "kubernetes.memory.cache") where metric.name == "container_memory_cache"
+          - set(metric.name, "kubernetes.memory.swap") where metric.name == "container_memory_swap"
+          - set(metric.name, "kubernetes.memory.limits") where metric.name == "container_spec_memory_limit_bytes"
+          - set(metric.name, "kubernetes.memory.sw_limit") where metric.name == "container_spec_memory_swap_limit_bytes"
+          - set(metric.name, "kubernetes.io.read_bytes") where metric.name == "container_fs_reads_bytes_total"
+          - set(metric.name, "kubernetes.io.write_bytes") where metric.name == "container_fs_writes_bytes_total"
+          - set(metric.name, "container.io.read.operations") where metric.name == "container_fs_reads_total"
+          - set(metric.name, "container.io.write.operations") where metric.name == "container_fs_writes_total"
+          - set(metric.name, "kubernetes.network.rx_dropped") where metric.name == "container_network_receive_packets_dropped_total"
+          - set(metric.name, "kubernetes.network.tx_dropped") where metric.name == "container_network_transmit_packets_dropped_total"
+          - set(metric.name, "container.memory.oom_events") where metric.name == "container_oom_events_total"
+          - scale_metric(1000000000.0) where metric.name == "container.cpu.usage"
+          - copy_metric(name="kubernetes.cpu.usage.total") where metric.name == "container.cpu.usage"
+          - copy_metric(name="kubernetes.memory.usage") where metric.name == "container.memory.usage"
+          - copy_metric(name="kubernetes.memory.working_set") where metric.name == "container.memory.working_set"
+          - copy_metric(name="kubernetes.memory.rss") where metric.name == "container.memory.rss"
+          - copy_metric(name="kubernetes.filesystem.usage") where metric.name == "container.filesystem.usage"
+          - set(metric.name, "kubernetes.memory.usage_pct") where metric.name == "k8s.container.memory_limit_utilization"
+          - set(metric.name, "kubernetes.ephemeral_storage.usage") where metric.name == "k8s.container.ephemeral_storage.usage"
+          - copy_metric(name="container.memory.cache") where metric.name == "kubernetes.memory.cache"
+          - copy_metric(name="container.memory.swap") where metric.name == "kubernetes.memory.swap"
+          - copy_metric(name="container.memory.limit") where metric.name == "kubernetes.memory.limits"
+          - copy_metric(name="container.io.read") where metric.name == "kubernetes.io.read_bytes"
+          - copy_metric(name="container.io.write") where metric.name == "kubernetes.io.write_bytes"
+  cumulativetodelta:
+    include:
+      metrics:
+        - container_cpu_cfs_periods_total
+        - container_cpu_cfs_throttled_periods_total
+        - container_cpu_cfs_throttled_seconds_total
+        - container_cpu_system_seconds_total
+        - container_cpu_user_seconds_total
+        - container_fs_reads_bytes_total
+        - container_fs_writes_bytes_total
+        - container_fs_reads_total
+        - container_fs_writes_total
+        - container_network_receive_packets_dropped_total
+        - container_network_transmit_packets_dropped_total
+        - container_oom_events_total
+      match_type: strict
+    initial_value: auto
+  deltatorate:
+    metrics:
+      - container_cpu_cfs_periods_total
+      - container_cpu_cfs_throttled_periods_total
+      - container_cpu_cfs_throttled_seconds_total
+      - container_cpu_system_seconds_total
+      - container_cpu_user_seconds_total
+      - container_fs_reads_bytes_total
+      - container_fs_writes_bytes_total
+      - container_fs_reads_total
+      - container_fs_writes_total
+      - container_network_receive_packets_dropped_total
+      - container_network_transmit_packets_dropped_total
+      - container_oom_events_total
+  transform/agent-v2-labels:
+    error_mode: ignore
+    metric_statements:
+      - context: resource
+        statements:
+          - set(attributes["cluster_name"], attributes["k8s.cluster.name"]) where attributes["k8s.cluster.name"] != nil
+          - set(attributes["namespace"], attributes["k8s.namespace.name"]) where attributes["k8s.namespace.name"] != nil
+          - set(attributes["pod_name"], attributes["k8s.pod.name"]) where attributes["k8s.pod.name"] != nil
+          - set(attributes["container"], attributes["k8s.container.name"]) where attributes["k8s.container.name"] != nil
+          - set(attributes["deployment"], attributes["k8s.deployment.name"]) where attributes["k8s.deployment.name"] != nil
+          - set(attributes["daemonset"], attributes["k8s.daemonset.name"]) where attributes["k8s.daemonset.name"] != nil
+          - set(attributes["statefulset"], attributes["k8s.statefulset.name"]) where attributes["k8s.statefulset.name"] != nil
+          - set(attributes["container_id"], attributes["container.id"]) where attributes["container.id"] != nil
+          - set(attributes["image_name"], attributes["container.image.name"]) where attributes["container.image.name"] != nil
+          - set(attributes["image_tag"], attributes["container.image.tag"]) where attributes["container.image.tag"] != nil
+          - set(attributes["image_id"], ExtractPatterns(attributes["container.image.repo_digests"], "(?P<digest>sha256:[a-f0-9]+)")["digest"]) where attributes["container.image.repo_digests"] != nil
+          - set(attributes["short_image"], ExtractPatterns(attributes["container.image.name"], ".*/(?P<short>[^/]+)$")["short"]) where attributes["container.image.name"] != nil
+          - set(attributes["display_container_name"], Concat([attributes["container"], "_", attributes["pod_name"]], "")) where attributes["container"] != nil and attributes["pod_name"] != nil
+          - set(attributes["interval"], "0")
+          - set(attributes["replicaset"], attributes["k8s.replicaset.name"]) where attributes["k8s.replicaset.name"] != nil
+          - set(attributes["kube_ownerref_kind"], "replicaset") where attributes["k8s.replicaset.name"] != nil
+          - set(attributes["kube_ownerref_name"], attributes["k8s.replicaset.name"]) where attributes["k8s.replicaset.name"] != nil
+          - set(attributes["kube_ownerref_kind"], "statefulset") where attributes["k8s.replicaset.name"] == nil and attributes["k8s.statefulset.name"] != nil
+          - set(attributes["kube_ownerref_name"], attributes["k8s.statefulset.name"]) where attributes["k8s.replicaset.name"] == nil and attributes["k8s.statefulset.name"] != nil
+          - set(attributes["kube_ownerref_kind"], "daemonset") where attributes["k8s.replicaset.name"] == nil and attributes["k8s.statefulset.name"] == nil and attributes["k8s.daemonset.name"] != nil
+          - set(attributes["kube_ownerref_name"], attributes["k8s.daemonset.name"]) where attributes["k8s.replicaset.name"] == nil and attributes["k8s.statefulset.name"] == nil and attributes["k8s.daemonset.name"] != nil
+          - set(attributes["kube_ownerref_kind"], "job") where attributes["k8s.replicaset.name"] == nil and attributes["k8s.statefulset.name"] == nil and attributes["k8s.daemonset.name"] == nil and attributes["k8s.job.name"] != nil
+          - set(attributes["kube_ownerref_name"], attributes["k8s.job.name"]) where attributes["k8s.replicaset.name"] == nil and attributes["k8s.statefulset.name"] == nil and attributes["k8s.daemonset.name"] == nil and attributes["k8s.job.name"] != nil
+          - set(attributes["sts_host"], Concat([attributes["k8s.node.name"], "-", attributes["cluster_name"]], "")) where attributes["k8s.node.name"] != nil and attributes["cluster_name"] != nil
+          - delete_key(attributes, "k8s.cluster.name")
+          - delete_key(attributes, "k8s.cluster.uid")
+          - delete_key(attributes, "k8s.namespace.name")
+          - delete_key(attributes, "k8s.pod.name")
+          - delete_key(attributes, "k8s.pod.uid")
+          - delete_key(attributes, "k8s.pod.start_time")
+          - delete_key(attributes, "k8s.pod.ip")
+          - delete_key(attributes, "k8s.pod.hostname")
+          - delete_key(attributes, "k8s.node.name")
+          - delete_key(attributes, "k8s.node.uid")
+          - delete_key(attributes, "k8s.container.name")
+          - delete_key(attributes, "k8s.container.restart_count")
+          - delete_key(attributes, "k8s.deployment.name")
+          - delete_key(attributes, "k8s.deployment.uid")
+          - delete_key(attributes, "k8s.daemonset.name")
+          - delete_key(attributes, "k8s.daemonset.uid")
+          - delete_key(attributes, "k8s.statefulset.name")
+          - delete_key(attributes, "k8s.statefulset.uid")
+          - delete_key(attributes, "k8s.job.name")
+          - delete_key(attributes, "k8s.job.uid")
+          - delete_key(attributes, "k8s.cronjob.name")
+          - delete_key(attributes, "k8s.cronjob.uid")
+          - delete_key(attributes, "k8s.replicaset.name")
+          - delete_key(attributes, "k8s.replicaset.uid")
+          - delete_key(attributes, "container.id")
+          - delete_key(attributes, "container.image.name")
+          - delete_key(attributes, "container.image.tag")
+          - delete_key(attributes, "container.image.repo_digests")
+          - set(attributes["service.namespace"], "")
+          - delete_key(attributes, "service.name")
+          - delete_key(attributes, "service.instance.id")
+          - delete_key(attributes, "otel.scope.name")
+          - delete_key(attributes, "otel.scope.version")
+      - context: scope
+        statements:
+          - set(name, "")
+      - context: metric
+        statements:
+          - convert_sum_to_gauge() where metric.type == "Sum"
+          - set(metric.unit, "")
+  filter/drop-native:
+    error_mode: ignore
+    metrics:
+      metric:
+        - 'IsMatch(metric.name, "^(container_|kubelet_|prober_|kubernetes_|k8s[.])")'
+  transform/self-metrics:
+    error_mode: ignore
+    metric_statements:
+      - context: resource
+        statements:
+          - set(attributes["k8s.cluster.name"], "${env:K8S_CLUSTER_NAME}")
+          - set(attributes["service.name"], "suse-observability-agent-node-collector")
+          - set(attributes["service.instance.id"], attributes["k8s.pod.uid"]) where attributes["service.instance.id"] == nil and attributes["k8s.pod.uid"] != nil
+  batch: {}
+
+exporters:
+  otlphttp/suse-observability:
+    auth:
+      authenticator: bearertokenauth
+    endpoint: ${env:PLATFORM_OTLP_ENDPOINT}
+    tls:
+      insecure_skip_verify: true
+    compression: gzip
+    timeout: 30s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  pprof:
+    endpoint: 0.0.0.0:1777
+  bearertokenauth:
+    scheme: SUSEObservability
+    token: ${env:STS_API_KEY}
+
+service:
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888
+  extensions: [health_check, pprof, bearertokenauth]
+  pipelines:
+    metrics/native:
+      receivers: [kubeletstats, prometheus/cadvisor, prometheus/kubelet, prometheus/probes, prometheus/slis, hostmetrics]
+      processors: [memory_limiter, k8sattributes, transform/node-identity, cumulativetodelta, deltatorate, transform/resource-compat, transform/agent-v2-labels, filter/drop-native, batch]
+      exporters: [otlphttp/suse-observability]
+    metrics/self:
+      receivers: [prometheus/self]
+      processors: [memory_limiter, k8sattributes, transform/self-metrics, batch]
+      exporters: [otlphttp/suse-observability]
