@@ -161,6 +161,30 @@ Deferred:
 - `kubernetes.cpu.load.10s.avg` is mapped, but cAdvisor does not expose
   `container_cpu_load_average_10s` on every runtime.
 
+## Agent V2 label and shape layer (#679)
+
+The native resource attributes are mapped to the Agent V2 label names and the rest are deleted:
+`cluster_name`, `namespace`, `pod_name`, `container`, `deployment`, `daemonset`, `statefulset`,
+`sts_host`, `container_id`, `image_name`, `image_tag`, `image_id`, `short_image`,
+`display_container_name`, `interval`, `replicaset`, `kube_ownerref_*` and `kube_app_*`. Every metric
+is forced to a gauge with an empty unit, and `filter/drop-native` removes the raw `container_*`,
+`kubelet_*`, `prober_*`, `kubernetes_*` and `k8s.*` series.
+
+`kubeletstats` adds `container.id`; `k8sattributes` adds the container image metadata, replicaset
+and the `app.kubernetes.io/*` pod labels. The `nodes/pods` RBAC permission is required for the
+kubeletstats metadata.
+
+On the nightly-champagne comparison the stored names are suffix-free and the new side is down to the
+contract names. Still missing from the Agent V2 label sets:
+
+- `kube_qos`, `pod_phase`, `priority_class` and `service`, which need the pod spec/status/service
+  work in #682/#690.
+- `image_id`/`image_tag` where the container runtime does not populate the image metadata.
+- `kube_app_*` where the pod does not carry the `app.kubernetes.io/*` labels.
+
+The platform still adds `otel_scope_name` and `service_namespace`; those need a platform-side strip
+or an accepted changed-label decision.
+
 ## hostmetrics and the non-root question
 
 The prototype ships as `runAsUser: 0` so the per-process scraper works. The chart decision in
