@@ -1,0 +1,93 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "github>StackVista/renovate-config#v1.1.0",
+    "github>StackVista/renovate-config:go#v1.1.0",
+    "github>StackVista/renovate-config:docker#v1.1.0",
+    "github>StackVista/renovate-config:automerge#v1.1.0"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update OpenTelemetry components in the OCB builder manifests",
+      "managerFilePatterns": ["/(^|/)[^/]+-otel-builder\\.yaml$/"],
+      "matchStrings": [
+        "- gomod: (?<depName>(?:go\\.opentelemetry\\.io/collector|github\\.com/open-telemetry/opentelemetry-collector-contrib)/\\S+) (?<currentValue>v\\S+)"
+      ],
+      "datasourceTemplate": "go"
+    },
+    {
+      "customType": "regex",
+      "description": "Update the OCB builder installed by the image builds",
+      "managerFilePatterns": ["/(^|/)Dockerfile[^/]*$/"],
+      "matchStrings": [
+        "go install (?<depName>go\\.opentelemetry\\.io/collector/cmd/builder)@(?<currentValue>v\\S+)"
+      ],
+      "datasourceTemplate": "go"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Leave developer examples, which CI does not build, out of automated updates",
+      "matchFileNames": ["**/example/**"],
+      "enabled": false
+    },
+    {
+      "description": "Update the compiler with scripts/upgrade_go_version.sh, which keeps go.work and every module on one version",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["golang", "toolchain"],
+      "enabled": false
+    },
+    {
+      "description": "Update the compiler with scripts/upgrade_go_version.sh, which keeps go.work and every module on one version",
+      "matchManagers": ["mise"],
+      "matchDepNames": ["go"],
+      "enabled": false
+    },
+    {
+      "description": "Look up Go libraries compatible with the approved compiler release line",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["require", "indirect", "replace"],
+      "constraints": {
+        "%goMod": "<1.27.0"
+      }
+    },
+    {
+      "description": "Keep the BCI Go builder on the approved compiler release line",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["registry.suse.com/bci/golang"],
+      "allowedVersions": "/^1\\.26(?:[.-]|$)/"
+    },
+    {
+      "description": "Review OpenTelemetry releases in one PR with the builder manifests that pin them",
+      "matchPackageNames": [
+        "go.opentelemetry.io/collector",
+        "go.opentelemetry.io/collector/**",
+        "github.com/open-telemetry/opentelemetry-collector-contrib/**",
+        "go.opentelemetry.io/otel",
+        "go.opentelemetry.io/otel/**",
+        "go.opentelemetry.io/contrib/**"
+      ],
+      "matchUpdateTypes": ["patch", "minor"],
+      "groupName": "OpenTelemetry Collector",
+      "groupSlug": "opentelemetry-collector",
+      "separateMinorPatch": false,
+      "automerge": false,
+      "rebaseWhen": "conflicted"
+    },
+    {
+      "matchManagers": [
+        "renovate-config",
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "StackVista/renovate-config"
+      ],
+      "groupName": "Renovate configuration",
+      "groupSlug": "renovate-config",
+      "separateMajorMinor": false,
+      "separateMinorPatch": false,
+      "automerge": false
+    }
+  ]
+}
