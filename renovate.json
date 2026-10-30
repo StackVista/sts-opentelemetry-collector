@@ -75,28 +75,13 @@
       "enabled": false
     },
     {
-      "description": "Look up Go libraries compatible with the approved compiler release line",
-      "matchManagers": [
-        "gomod"
-      ],
-      "matchDepTypes": [
-        "require",
-        "indirect",
-        "replace"
-      ],
-      "constraints": {
-        "%goMod": "<1.27.0"
-      }
-    },
-    {
-      "description": "Keep the BCI Go builder on the approved compiler release line",
       "matchDatasources": [
         "docker"
       ],
       "matchPackageNames": [
         "registry.suse.com/bci/golang"
       ],
-      "allowedVersions": "/^1\\.26(\\.\\d+)*$/"
+      "allowedVersions": "/^\\d+\\.\\d+(\\.\\d+)*$/"
     },
     {
       "description": "Keep the runtime image on the approved BCI release",
