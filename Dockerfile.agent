@@ -2,7 +2,8 @@
 ARG BASE_IMAGE=registry.suse.com/bci/bci-micro:15.7-61.21
 
 FROM --platform=$BUILDPLATFORM registry.suse.com/bci/golang:1.26 AS builder
-ENV GOTOOLCHAIN=go1.26.10
+# Build only with this image's compiler; a go.work bump waits for a matching builder.
+ENV GOTOOLCHAIN=local
 
 ARG TARGETOS=linux
 ARG TARGETARCH
@@ -16,7 +17,10 @@ WORKDIR /go/src/github.com/stackvista/sts-opentelemetry-collector
 COPY . .
 
 RUN go install go.opentelemetry.io/collector/cmd/builder@v0.161.0
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH:-$(go env GOARCH)} builder --config ./agent-otel-builder.yaml
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH:-$(go env GOARCH)} builder --config ./agent-otel-builder.yaml && \
+    compiler="$(go env GOVERSION)" && \
+    case "${compiler}" in go1.26.*) ;; *) echo "Unapproved Go compiler: ${compiler}" >&2; exit 1 ;; esac && \
+    go version bin/sts-opentelemetry-agent-collector | grep -Fx "bin/sts-opentelemetry-agent-collector: ${compiler}"
 
 FROM ${BASE_IMAGE}
 USER 10001
