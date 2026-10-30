@@ -43,6 +43,10 @@
   ],
   "packageRules": [
     {
+      "matchDatasources": ["golang-version"],
+      "separateMinorPatch": true
+    },
+    {
       "matchPackageNames": ["StackVista/image-pipeline"],
       "enabled": false
     },
@@ -81,7 +85,8 @@
       "matchPackageNames": [
         "registry.suse.com/bci/golang"
       ],
-      "allowedVersions": "/^\\d+\\.\\d+(\\.\\d+)*$/"
+      "allowedVersions": "/^\\d+\\.\\d+(\\.\\d+)*$/",
+      "separateMinorPatch": true
     },
     {
       "description": "Keep the runtime image on the approved BCI release",
@@ -176,6 +181,27 @@
       "groupSlug": "renovate-config",
       "separateMajorMinor": false,
       "separateMinorPatch": false,
+      "automerge": false
+    },
+    {
+      "matchDatasources": ["golang-version", "docker"],
+      "matchPackageNames": ["go", "golang/go", "registry.suse.com/bci/golang"],
+      "matchUpdateTypes": ["patch", "digest", "pinDigest"],
+      "group": {"branchTopic": "go-build-environment"}
+    },
+    {
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "registry.suse.com/bci/golang"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "major"
+      ],
+      "groupName": "Go toolchain",
+      "groupSlug": "go-toolchain",
       "automerge": false
     }
   ]

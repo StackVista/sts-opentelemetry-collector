@@ -19,7 +19,8 @@ COPY . .
 RUN go install go.opentelemetry.io/collector/cmd/builder@v0.161.0
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH:-$(go env GOARCH)} builder --config ./sts-otel-builder.yaml && \
     compiler="$(go env GOVERSION)" && \
-    case "${compiler}" in go1.26.*) ;; *) echo "Unapproved Go compiler: ${compiler}" >&2; exit 1 ;; esac && \
+    release_line="go$(awk '/^go / {print $2; exit}' go.work | cut -d. -f1,2)." && \
+    case "${compiler}" in "${release_line}"*) ;; *) echo "${compiler} does not match ${release_line}x" >&2; exit 1 ;; esac && \
     go version bin/sts-opentelemetry-collector | grep -Fx "bin/sts-opentelemetry-collector: ${compiler}"
 
 FROM ${BASE_IMAGE}
