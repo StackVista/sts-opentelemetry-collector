@@ -1,10 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "github>StackVista/renovate-config#v1.1.0",
-    "github>StackVista/renovate-config:go#v1.1.0",
-    "github>StackVista/renovate-config:docker#v1.1.0",
-    "github>StackVista/renovate-config:automerge#v1.1.0"
+    "github>StackVista/renovate-config#9e21a606e5995439dc37b1da98754da9983989a0",
+    "github>StackVista/renovate-config:go#9e21a606e5995439dc37b1da98754da9983989a0",
+    "github>StackVista/renovate-config:docker#9e21a606e5995439dc37b1da98754da9983989a0",
+    "github>StackVista/renovate-config:automerge#9e21a606e5995439dc37b1da98754da9983989a0"
   ],
   "customManagers": [
     {
@@ -57,6 +57,21 @@
       "matchDatasources": ["docker"],
       "matchPackageNames": ["registry.suse.com/bci/golang"],
       "allowedVersions": "/^1\\.26(?:[.-]|$)/"
+    },
+    {
+      "description": "Keep the runtime image on the approved BCI release",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["registry.suse.com/bci/bci-micro"],
+      "allowedVersions": "/^15\\.7(?:[.-]|$)/"
+    },
+    {
+      "description": "Review ClickHouse test server refreshes separately because the digest tracks latest",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["clickhouse/clickhouse-server"],
+      "groupName": null,
+      "groupSlug": null,
+      "automerge": false,
+      "rebaseWhen": "conflicted"
     },
     {
       "description": "Review OpenTelemetry releases in one PR with the builder manifests that pin them",
