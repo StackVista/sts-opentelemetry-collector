@@ -1,10 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "github>StackVista/renovate-config#9e21a606e5995439dc37b1da98754da9983989a0",
-    "github>StackVista/renovate-config:go#9e21a606e5995439dc37b1da98754da9983989a0",
-    "github>StackVista/renovate-config:docker#9e21a606e5995439dc37b1da98754da9983989a0",
-    "github>StackVista/renovate-config:automerge#9e21a606e5995439dc37b1da98754da9983989a0"
+    "github>StackVista/renovate-config#v1.1.0",
+    "github>StackVista/renovate-config:go#v1.1.0",
+    "github>StackVista/renovate-config:docker#v1.1.0",
+    "github>StackVista/renovate-config:automerge#v1.1.0"
   ],
   "customManagers": [
     {
@@ -42,6 +42,10 @@
     }
   ],
   "packageRules": [
+    {
+      "matchPackageNames": ["StackVista/image-pipeline"],
+      "enabled": false
+    },
     {
       "description": "Leave developer examples, which CI does not build, out of automated updates",
       "matchFileNames": [
