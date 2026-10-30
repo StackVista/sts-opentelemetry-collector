@@ -96,7 +96,7 @@
       "matchPackageNames": [
         "registry.suse.com/bci/golang"
       ],
-      "allowedVersions": "/^1\\.26(?:[.-]|$)/"
+      "allowedVersions": "/^1\\.26(\\.\\d+)*$/"
     },
     {
       "description": "Keep the runtime image on the approved BCI release",
