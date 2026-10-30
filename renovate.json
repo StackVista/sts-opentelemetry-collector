@@ -10,7 +10,9 @@
     {
       "customType": "regex",
       "description": "Update OpenTelemetry components in the OCB builder manifests",
-      "managerFilePatterns": ["/(^|/)[^/]+-otel-builder\\.yaml$/"],
+      "managerFilePatterns": [
+        "/(^|/)[^/]+-otel-builder\\.yaml$/"
+      ],
       "matchStrings": [
         "- gomod: (?<depName>(?:go\\.opentelemetry\\.io/collector|github\\.com/open-telemetry/opentelemetry-collector-contrib)/\\S+) (?<currentValue>v\\S+)"
       ],
@@ -18,8 +20,21 @@
     },
     {
       "customType": "regex",
+      "description": "Update module replacements pinned by the OCB builder manifests, which override go.mod versions in the built distributions",
+      "managerFilePatterns": [
+        "/(^|/)[^/]+-otel-builder\\.yaml$/"
+      ],
+      "matchStrings": [
+        "- (?<depName>[^\\s=]+) => (?<packageName>[^\\s=]+) (?<currentValue>v\\S+)"
+      ],
+      "datasourceTemplate": "go"
+    },
+    {
+      "customType": "regex",
       "description": "Update the OCB builder installed by the image builds",
-      "managerFilePatterns": ["/(^|/)Dockerfile[^/]*$/"],
+      "managerFilePatterns": [
+        "/(^|/)Dockerfile[^/]*$/"
+      ],
       "matchStrings": [
         "go install (?<depName>go\\.opentelemetry\\.io/collector/cmd/builder)@(?<currentValue>v\\S+)"
       ],
@@ -29,49 +44,90 @@
   "packageRules": [
     {
       "description": "Leave developer examples, which CI does not build, out of automated updates",
-      "matchFileNames": ["**/example/**"],
+      "matchFileNames": [
+        "**/example/**"
+      ],
       "enabled": false
     },
     {
       "description": "Update the compiler with scripts/upgrade_go_version.sh, which keeps go.work and every module on one version",
-      "matchManagers": ["gomod"],
-      "matchDepTypes": ["golang", "toolchain"],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchDepTypes": [
+        "golang",
+        "toolchain"
+      ],
       "enabled": false
     },
     {
       "description": "Update the compiler with scripts/upgrade_go_version.sh, which keeps go.work and every module on one version",
-      "matchManagers": ["mise"],
-      "matchDepNames": ["go"],
+      "matchManagers": [
+        "mise"
+      ],
+      "matchDepNames": [
+        "go"
+      ],
       "enabled": false
     },
     {
       "description": "Look up Go libraries compatible with the approved compiler release line",
-      "matchManagers": ["gomod"],
-      "matchDepTypes": ["require", "indirect", "replace"],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchDepTypes": [
+        "require",
+        "indirect",
+        "replace"
+      ],
       "constraints": {
         "%goMod": "<1.27.0"
       }
     },
     {
       "description": "Keep the BCI Go builder on the approved compiler release line",
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["registry.suse.com/bci/golang"],
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "registry.suse.com/bci/golang"
+      ],
       "allowedVersions": "/^1\\.26(?:[.-]|$)/"
     },
     {
       "description": "Keep the runtime image on the approved BCI release",
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["registry.suse.com/bci/bci-micro"],
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "registry.suse.com/bci/bci-micro"
+      ],
       "allowedVersions": "/^15\\.7(?:[.-]|$)/"
     },
     {
       "description": "Review ClickHouse test server refreshes separately because the digest tracks latest",
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["clickhouse/clickhouse-server"],
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "clickhouse/clickhouse-server"
+      ],
       "groupName": null,
       "groupSlug": null,
       "automerge": false,
       "rebaseWhen": "conflicted"
+    },
+    {
+      "description": "Keep OpenTelemetry patch and minor releases in one branch with their manifest pins",
+      "matchPackageNames": [
+        "go.opentelemetry.io/collector",
+        "go.opentelemetry.io/collector/**",
+        "github.com/open-telemetry/opentelemetry-collector-contrib/**",
+        "go.opentelemetry.io/otel",
+        "go.opentelemetry.io/otel/**",
+        "go.opentelemetry.io/contrib/**"
+      ],
+      "separateMinorPatch": false
     },
     {
       "description": "Review OpenTelemetry releases in one PR with the builder manifests that pin them",
@@ -83,10 +139,39 @@
         "go.opentelemetry.io/otel/**",
         "go.opentelemetry.io/contrib/**"
       ],
-      "matchUpdateTypes": ["patch", "minor"],
+      "matchUpdateTypes": [
+        "patch",
+        "minor"
+      ],
       "groupName": "OpenTelemetry Collector",
       "groupSlug": "opentelemetry-collector",
-      "separateMinorPatch": false,
+      "automerge": false,
+      "rebaseWhen": "conflicted"
+    },
+    {
+      "description": "Keep modules pinned by builder manifest replacements in one branch with those pins",
+      "matchPackageNames": [
+        "github.com/goccy/go-json",
+        "github.com/klauspost/compress",
+        "golang.org/x/crypto",
+        "google.golang.org/grpc"
+      ],
+      "separateMinorPatch": false
+    },
+    {
+      "description": "Review modules pinned by builder manifest replacements together with the replacement pins that ship",
+      "matchPackageNames": [
+        "github.com/goccy/go-json",
+        "github.com/klauspost/compress",
+        "golang.org/x/crypto",
+        "google.golang.org/grpc"
+      ],
+      "matchUpdateTypes": [
+        "patch",
+        "minor"
+      ],
+      "groupName": "Builder-pinned Go modules",
+      "groupSlug": "builder-pinned-go-modules",
       "automerge": false,
       "rebaseWhen": "conflicted"
     },
