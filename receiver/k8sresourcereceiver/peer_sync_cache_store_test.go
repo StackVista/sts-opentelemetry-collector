@@ -29,6 +29,11 @@ import (
 
 func testCacheWithData(t *testing.T) *resourceCache {
 	t.Helper()
+	return testCacheWithDataAs(t, false)
+}
+
+func testCacheWithDataAs(t *testing.T, compact bool) *resourceCache {
+	t.Helper()
 	cache := newResourceCache()
 
 	crd := makeTestCRDUnstructured("widgets.example.com", testExampleGroup, "Widget", testWidgetsResource)
@@ -39,7 +44,7 @@ func testCacheWithData(t *testing.T) *resourceCache {
 	cr := makeTestCR("my-widget", "default", testExampleGroup, "v1", "Widget")
 	cr.SetResourceVersion("7")
 	key := objectResourceKey(gvr, "default", "my-widget")
-	cache.Objects[key] = &cachedObject{Obj: cr, GVR: gvr, Source: ObjectSourceCR}
+	cache.Objects[key] = &cachedObject{Obj: cachedAs(t, compact, cr), GVR: gvr, Source: ObjectSourceCR}
 
 	return cache
 }
@@ -88,13 +93,17 @@ func peerPort(t *testing.T, addr string) (string, int) {
 
 func TestPeerSyncCacheStore_ApplyDelta_PopulatesCache(t *testing.T) {
 	t.Parallel()
+	forEachCacheMode(t, testPeerSyncCacheStoreApplyDeltaPopulatesCache)
+}
+
+func testPeerSyncCacheStoreApplyDeltaPopulatesCache(t *testing.T, compact bool) {
 	store := newPeerSyncCacheStore(zaptest.NewLogger(t), 0, "", nil)
 
 	delta := &PeerSyncDelta{AppliedAt: time.Now()}
-	for _, crd := range testCacheWithData(t).CRDs {
+	for _, crd := range testCacheWithDataAs(t, compact).CRDs {
 		delta.Changes = append(delta.Changes, ResourceChange{Obj: crd, EventType: watch.Added, IsCRD: true})
 	}
-	for _, obj := range testCacheWithData(t).Objects {
+	for _, obj := range testCacheWithDataAs(t, compact).Objects {
 		delta.Changes = append(delta.Changes, ResourceChange{Obj: obj.Obj, EventType: watch.Added, GVR: obj.GVR, Source: obj.Source})
 	}
 
@@ -214,14 +223,17 @@ func TestPeerSyncCacheStore_HandleIncrement_RejectsMalformedStream(t *testing.T)
 
 func TestEncodeDecodeDeltaStream_RoundTrip(t *testing.T) {
 	t.Parallel()
+	forEachPeerCacheMode(t, testEncodeDecodeDeltaStreamRoundTrip)
+}
 
-	original := testDeltaFromCache(t, testCacheWithData(t))
+func testEncodeDecodeDeltaStreamRoundTrip(t *testing.T, senderCompact, receiverCompact bool) {
+	original := testDeltaFromCache(t, testCacheWithDataAs(t, senderCompact))
 	original.LastSnapshotTime = time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
 
 	var buf bytes.Buffer
 	require.NoError(t, encodeDeltaStream(&buf, original))
 
-	got, err := decodeDeltaStream(&buf)
+	got, err := decodeDeltaStream(&buf, receiverCompact)
 	require.NoError(t, err)
 
 	assert.Equal(t, original.AppliedAt.UTC(), got.AppliedAt.UTC())
@@ -241,6 +253,8 @@ func TestEncodeDecodeDeltaStream_RoundTrip(t *testing.T) {
 		assert.Equal(t, want.IsCRD, got.IsCRD)
 		assert.Equal(t, want.GVR, got.GVR)
 		assert.Equal(t, want.Source, got.Source)
+		assertRepresentation(t, receiverCompact && !got.IsCRD, got.Obj)
+		assert.Equal(t, mustDecode(t, want.Obj).Object, mustDecode(t, got.Obj).Object)
 	}
 }
 
@@ -252,7 +266,9 @@ func TestPeerSyncCacheStore_HandleIncrement_RejectsMissingMetaFrame(t *testing.T
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
 	enc := json.NewEncoder(gz)
-	require.NoError(t, enc.Encode(peerSyncStreamFrame{Type: streamFrameCRD, Obj: makeTestCRDUnstructured("x.example.com", "example.com", "X", "xs")}))
+	crd, err := makeTestCRDUnstructured("x.example.com", "example.com", "X", "xs").MarshalJSON()
+	require.NoError(t, err)
+	require.NoError(t, enc.Encode(peerSyncStreamFrame{Type: streamFrameCRD, Obj: crd}))
 	require.NoError(t, gz.Close())
 
 	req := httptest.NewRequest(http.MethodPost, syncIncrementsPath, bytes.NewReader(buf.Bytes()))
@@ -656,17 +672,22 @@ func TestPeerSyncCacheStore_PushConcurrently_TimeoutWhenNoAck(t *testing.T) {
 
 func TestPeerSyncCacheStore_PushToPeer_DataIntegrity(t *testing.T) {
 	t.Parallel()
+	forEachPeerCacheMode(t, testPeerSyncCacheStorePushToPeerDataIntegrity)
+}
+
+func testPeerSyncCacheStorePushToPeerDataIntegrity(t *testing.T, senderCompact, receiverCompact bool) {
 	logger := zaptest.NewLogger(t)
 
 	// Use a real peer store as the receiver to verify end-to-end data flow.
 	receiver := newPeerSyncCacheStore(logger, 0, "", nil)
+	receiver.compactObjects = receiverCompact
 	peerServer := httptest.NewServer(http.HandlerFunc(receiver.handleIncrement))
 	defer peerServer.Close()
 
 	peerHost, peerPortInt := peerPort(t, peerServer.Listener.Addr().String())
 	sender := newPeerSyncCacheStore(logger, peerPortInt, "", nil)
 
-	payload := encodedDelta(t, testDeltaFromCache(t, testCacheWithData(t)))
+	payload := encodedDelta(t, testDeltaFromCache(t, testCacheWithDataAs(t, senderCompact)))
 
 	client := &http.Client{Timeout: pushPeerTimeout}
 	sender.pushToPeer(context.Background(), client, peerHost, payload)
@@ -681,6 +702,7 @@ func TestPeerSyncCacheStore_PushToPeer_DataIntegrity(t *testing.T) {
 	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"}
 	key := objectResourceKey(gvr, "default", "my-widget")
 	assert.Equal(t, "my-widget", receiver.cache.Objects[key].Obj.GetName())
+	assertRepresentation(t, receiverCompact, receiver.cache.Objects[key].Obj)
 }
 
 // --- Context cancellation ---

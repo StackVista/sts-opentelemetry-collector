@@ -674,9 +674,9 @@ func (ri *ResourceInformers) StaticWatchesSynced() bool {
 }
 
 // appendStoreObjects copies entry.informer.GetStore() into result under
-// entry.gvr, tagged with source, skipping any item that isn't
-// *unstructured.Unstructured. CR/static overlap is rejected at startup, so
-// each GVR is owned by exactly one informer here.
+// entry.gvr, tagged with source, skipping any item that isn't a
+// resourceObject. CR/static overlap is rejected at startup, so each GVR is
+// owned by exactly one informer here.
 func appendStoreObjects(
 	result map[schema.GroupVersionResource]ObjectGroup,
 	entry *resourceInformerEntry,
@@ -685,11 +685,11 @@ func appendStoreObjects(
 	group := result[entry.gvr]
 	group.Source = source
 	for _, obj := range entry.informer.GetStore().List() {
-		u, ok := toUnstructured(obj)
+		o, ok := toResourceObject(obj)
 		if !ok {
 			continue
 		}
-		group.Objects = append(group.Objects, u)
+		group.Objects = append(group.Objects, o)
 	}
 	result[entry.gvr] = group
 }
@@ -894,7 +894,8 @@ func (ri *ResourceInformers) staticMarkForbidden(key string) {
 
 // buildInformer constructs a SharedIndexInformer for unstructured objects with
 // no resync (the collector reads the cache directly on its own cadence) and no
-// indexers (lookups are full-store scans, not indexed queries).
+// indexers (lookups are full-store scans, not indexed queries). With
+// CompactCache the store holds *compactObject entries instead.
 func (ri *ResourceInformers) buildInformer(lw *cache.ListWatch) cache.SharedIndexInformer {
 	informer := cache.NewSharedIndexInformer(
 		cache.ToListWatcherWithWatchListSemantics(lw, ri.dynamicClient),
@@ -902,8 +903,12 @@ func (ri *ResourceInformers) buildInformer(lw *cache.ListWatch) cache.SharedInde
 		0,
 		cache.Indexers{},
 	)
+	transform := sanitizeObject(ri.config.ConfigMapMaxDataSize)
+	if ri.config.CompactCache {
+		transform = compactTransform(transform)
+	}
 	// Only fails once the informer has started, which it has not.
-	_ = informer.SetTransform(sanitizeObject(ri.config.ConfigMapMaxDataSize))
+	_ = informer.SetTransform(transform)
 	return informer
 }
 

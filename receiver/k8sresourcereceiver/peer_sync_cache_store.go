@@ -74,6 +74,9 @@ type peerSyncCacheStore struct {
 	peerDNS  string
 	metrics  metrics.Recorder
 
+	// compactObjects stores objects received from peers as *compactObject.
+	compactObjects bool
+
 	// cacheMu guards cache, lastSnapshotTime, and lastAppliedAt.
 	cacheMu          sync.RWMutex
 	cache            *resourceCache
@@ -389,7 +392,7 @@ func (p *peerSyncCacheStore) handleIncrement(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	delta, err := decodeDeltaStream(r.Body)
+	delta, err := decodeDeltaStream(r.Body, p.compactObjects)
 	if err != nil {
 		p.logger.Debug("Failed to decode delta stream", zap.Error(err))
 		http.Error(w, "invalid peer sync delta", http.StatusBadRequest)
@@ -487,11 +490,15 @@ func (p *peerSyncCacheStore) handleSnapshot(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	for name, crd := range crdsCopy {
-		if err := enc.Encode(peerSyncStreamFrame{
-			Type: streamFrameCRD,
-			Key:  name,
-			Obj:  crd,
-		}); err != nil {
+		raw, err := marshalWireObject(crd)
+		if err == nil {
+			err = enc.Encode(peerSyncStreamFrame{
+				Type: streamFrameCRD,
+				Key:  name,
+				Obj:  raw,
+			})
+		}
+		if err != nil {
 			p.metrics.RecordSnapshotStreamFailure(r.Context())
 			p.logger.Error("Failed to encode snapshot CRD frame; partial stream",
 				zap.String("name", name), zap.Error(err))
@@ -500,13 +507,17 @@ func (p *peerSyncCacheStore) handleSnapshot(w http.ResponseWriter, r *http.Reque
 	}
 	for key, obj := range objsCopy {
 		gvr := obj.GVR
-		if err := enc.Encode(peerSyncStreamFrame{
-			Type:         streamFrameObject,
-			Key:          key,
-			Obj:          obj.Obj,
-			GVR:          &gvr,
-			ObjectSource: obj.Source,
-		}); err != nil {
+		raw, err := marshalWireObject(obj.Obj)
+		if err == nil {
+			err = enc.Encode(peerSyncStreamFrame{
+				Type:         streamFrameObject,
+				Key:          key,
+				Obj:          raw,
+				GVR:          &gvr,
+				ObjectSource: obj.Source,
+			})
+		}
+		if err != nil {
 			p.metrics.RecordSnapshotStreamFailure(r.Context())
 			p.logger.Error("Failed to encode snapshot object frame; partial stream",
 				zap.String("key", key), zap.Error(err))
@@ -520,7 +531,7 @@ func (p *peerSyncCacheStore) handleSnapshot(w http.ResponseWriter, r *http.Reque
 // cache; safe because all readers treat them as read-only (informer convention).
 // Also returns lastSnapshotTime and lastAppliedAt for the meta frame.
 func (p *peerSyncCacheStore) snapshotCopyForServe() (
-	map[string]*unstructured.Unstructured,
+	map[string]resourceObject,
 	map[string]*cachedObject,
 	time.Time, // lastSnapshotTime
 	time.Time, // lastAppliedAt
@@ -531,7 +542,7 @@ func (p *peerSyncCacheStore) snapshotCopyForServe() (
 	if p.cache.isEmpty() {
 		return nil, nil, time.Time{}, time.Time{}, true
 	}
-	crds := make(map[string]*unstructured.Unstructured, len(p.cache.CRDs))
+	crds := make(map[string]resourceObject, len(p.cache.CRDs))
 	for k, v := range p.cache.CRDs {
 		crds[k] = v
 	}
@@ -925,13 +936,21 @@ func (p *peerSyncCacheStore) fetchPeerSnapshot(
 			snap.LastAppliedAt = frame.LastAppliedAt
 			snap.Source = frame.Source
 		case streamFrameCRD:
-			snap.Cache.CRDs[frame.Key] = frame.Obj
+			obj, err := unmarshalWireObject(frame.Obj, false)
+			if err != nil {
+				return nil, resp.StatusCode, fmt.Errorf("CRD frame for %q from %s: %w", frame.Key, url, err)
+			}
+			snap.Cache.CRDs[frame.Key] = obj
 		case streamFrameObject:
 			if frame.GVR == nil {
 				return nil, resp.StatusCode, fmt.Errorf("object frame for %q missing gvr", frame.Key)
 			}
+			obj, err := unmarshalWireObject(frame.Obj, p.compactObjects)
+			if err != nil {
+				return nil, resp.StatusCode, fmt.Errorf("object frame for %q from %s: %w", frame.Key, url, err)
+			}
 			snap.Cache.Objects[frame.Key] = &cachedObject{
-				Obj:    frame.Obj,
+				Obj:    obj,
 				GVR:    *frame.GVR,
 				Source: frame.ObjectSource,
 			}

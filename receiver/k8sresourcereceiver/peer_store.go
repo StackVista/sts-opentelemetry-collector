@@ -77,7 +77,7 @@ type peerSyncStreamFrame struct {
 	// every entry is implicitly Added. ObjectSource is set on object frames so peers
 	// preserve CR-vs-static origin across bootstrap and delta application.
 	Key          string                       `json:"key,omitempty"`
-	Obj          *unstructured.Unstructured   `json:"obj,omitempty"`
+	Obj          json.RawMessage              `json:"obj,omitempty"`
 	GVR          *schema.GroupVersionResource `json:"gvr,omitempty"`
 	EventType    watch.EventType              `json:"event_type,omitempty"`
 	ObjectSource ObjectSource                 `json:"object_source,omitempty"`
@@ -113,8 +113,13 @@ func encodeDeltaStream(w io.Writer, delta *PeerSyncDelta) error {
 	}
 
 	for _, ch := range delta.Changes {
+		obj, err := marshalWireObject(ch.Obj)
+		if err != nil {
+			_ = gz.Close()
+			return fmt.Errorf("encode change object: %w", err)
+		}
 		frame := peerSyncStreamFrame{
-			Obj:       ch.Obj,
+			Obj:       obj,
 			EventType: ch.EventType,
 		}
 		if ch.IsCRD {
@@ -135,7 +140,8 @@ func encodeDeltaStream(w io.Writer, delta *PeerSyncDelta) error {
 
 // decodeDeltaStream reads gzipped NDJSON frames from r and assembles a PeerSyncDelta.
 // Returns an error if the meta frame is missing or any frame is malformed.
-func decodeDeltaStream(r io.Reader) (*PeerSyncDelta, error) {
+// compact selects the representation of decoded objects; CRDs are always live.
+func decodeDeltaStream(r io.Reader, compact bool) (*PeerSyncDelta, error) {
 	gr, err := gzip.NewReader(r)
 	if err != nil {
 		return nil, fmt.Errorf("gzip reader: %w", err)
@@ -160,23 +166,25 @@ func decodeDeltaStream(r io.Reader) (*PeerSyncDelta, error) {
 			delta.LastSnapshotTime = frame.LastSnapshotTime
 			metaSeen = true
 		case streamFrameCRD:
-			if frame.Obj == nil {
-				return nil, fmt.Errorf("CRD frame missing obj")
+			obj, err := unmarshalWireObject(frame.Obj, false)
+			if err != nil {
+				return nil, fmt.Errorf("CRD frame: %w", err)
 			}
 			delta.Changes = append(delta.Changes, ResourceChange{
-				Obj:       frame.Obj,
+				Obj:       obj,
 				EventType: frame.EventType,
 				IsCRD:     true,
 			})
 		case streamFrameObject:
-			if frame.Obj == nil {
-				return nil, fmt.Errorf("object frame missing obj")
+			obj, err := unmarshalWireObject(frame.Obj, compact)
+			if err != nil {
+				return nil, fmt.Errorf("object frame: %w", err)
 			}
 			if frame.GVR == nil {
 				return nil, fmt.Errorf("object frame missing gvr")
 			}
 			delta.Changes = append(delta.Changes, ResourceChange{
-				Obj:       frame.Obj,
+				Obj:       obj,
 				EventType: frame.EventType,
 				GVR:       *frame.GVR,
 				Source:    frame.ObjectSource,

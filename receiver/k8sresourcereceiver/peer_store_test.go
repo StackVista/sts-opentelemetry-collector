@@ -18,7 +18,7 @@ import (
 // roundtripCache pushes c through a real handleSnapshot → fetchPeerSnapshot HTTP
 // transfer (NDJSON streamed, gzipped) and returns the assembled cache. Exercises
 // the same code paths used in production.
-func roundtripCache(t *testing.T, c *resourceCache) *resourceCache {
+func roundtripCache(t *testing.T, c *resourceCache, receiverCompact bool) *resourceCache {
 	t.Helper()
 	server := newPeerSyncCacheStore(zaptest.NewLogger(t), 0, "", nil)
 	server.SetLeader(true)
@@ -29,6 +29,7 @@ func roundtripCache(t *testing.T, c *resourceCache) *resourceCache {
 
 	host, port := peerPort(t, ts.Listener.Addr().String())
 	client := newPeerSyncCacheStore(zaptest.NewLogger(t), port, "", nil)
+	client.compactObjects = receiverCompact
 
 	httpClient := &http.Client{Timeout: 5 * time.Second}
 	snap, status, err := client.fetchPeerSnapshot(context.Background(), httpClient, host)
@@ -38,6 +39,10 @@ func roundtripCache(t *testing.T, c *resourceCache) *resourceCache {
 }
 
 func TestSnapshotRoundtrip_PreservesCRWithGVR(t *testing.T) {
+	forEachPeerCacheMode(t, testSnapshotRoundtripPreservesCRWithGVR)
+}
+
+func testSnapshotRoundtripPreservesCRWithGVR(t *testing.T, senderCompact, receiverCompact bool) {
 	original := newResourceCache()
 
 	gvr := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: testWidgetsResource}
@@ -45,13 +50,14 @@ func TestSnapshotRoundtrip_PreservesCRWithGVR(t *testing.T) {
 	cr.SetResourceVersion("7")
 
 	key := objectResourceKey(gvr, "default", "my-widget")
-	original.Objects[key] = &cachedObject{Obj: cr, GVR: gvr, Source: ObjectSourceStatic}
+	original.Objects[key] = &cachedObject{Obj: cachedAs(t, senderCompact, cr), GVR: gvr, Source: ObjectSourceStatic}
 
-	restored := roundtripCache(t, original)
+	restored := roundtripCache(t, original, receiverCompact)
 
 	require.Len(t, restored.Objects, 1)
 	restoredObj := restored.Objects[key]
 	require.NotNil(t, restoredObj)
+	assertRepresentation(t, receiverCompact, restoredObj.Obj)
 	assert.Equal(t, "my-widget", restoredObj.Obj.GetName())
 	assert.Equal(t, "default", restoredObj.Obj.GetNamespace())
 	assert.Equal(t, "7", restoredObj.Obj.GetResourceVersion())
@@ -60,6 +66,10 @@ func TestSnapshotRoundtrip_PreservesCRWithGVR(t *testing.T) {
 }
 
 func TestSnapshotRoundtrip_PreservesNestedSpecAndStatus(t *testing.T) {
+	forEachPeerCacheMode(t, testSnapshotRoundtripPreservesNestedSpecAndStatus)
+}
+
+func testSnapshotRoundtripPreservesNestedSpecAndStatus(t *testing.T, senderCompact, receiverCompact bool) {
 	original := newResourceCache()
 
 	cr := &unstructured.Unstructured{
@@ -90,15 +100,17 @@ func TestSnapshotRoundtrip_PreservesNestedSpecAndStatus(t *testing.T) {
 
 	gvr := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: testWidgetsResource}
 	key := objectResourceKey(gvr, "prod", "complex-widget")
-	original.Objects[key] = &cachedObject{Obj: cr, GVR: gvr, Source: ObjectSourceCR}
+	original.Objects[key] = &cachedObject{Obj: cachedAs(t, senderCompact, cr), GVR: gvr, Source: ObjectSourceCR}
 
-	restored := roundtripCache(t, original)
+	restored := roundtripCache(t, original, receiverCompact)
 
 	restoredObj := restored.Objects[key]
 	require.NotNil(t, restoredObj)
+	assertRepresentation(t, receiverCompact, restoredObj.Obj)
+	restoredLive := mustDecode(t, restoredObj.Obj)
 
 	// Verify nested spec fields are preserved (important for CEL topology mappings).
-	spec, found, err := unstructured.NestedMap(restoredObj.Obj.Object, "spec")
+	spec, found, err := unstructured.NestedMap(restoredLive.Object, "spec")
 	require.NoError(t, err)
 	require.True(t, found)
 
@@ -108,7 +120,7 @@ func TestSnapshotRoundtrip_PreservesNestedSpecAndStatus(t *testing.T) {
 	assert.Equal(t, int64(3), replicas)
 
 	// Verify status fields are preserved.
-	ready, found, err := unstructured.NestedBool(restoredObj.Obj.Object, "status", "ready")
+	ready, found, err := unstructured.NestedBool(restoredLive.Object, "status", "ready")
 	require.NoError(t, err)
 	require.True(t, found)
 	assert.True(t, ready)

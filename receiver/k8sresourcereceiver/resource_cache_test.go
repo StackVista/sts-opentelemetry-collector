@@ -47,6 +47,14 @@ func makeCachedCR(name, namespace, group, version, kind, resourceVersion string)
 	return obj
 }
 
+//nolint:unparam
+func makeCachedCREntry(
+	t *testing.T, compact bool, name, namespace, group, version, kind, resourceVersion string,
+) resourceObject {
+	t.Helper()
+	return cachedAs(t, compact, makeCachedCR(name, namespace, group, version, kind, resourceVersion))
+}
+
 func TestResourceCache_IsEmpty(t *testing.T) {
 	rc := newResourceCache()
 	assert.True(t, rc.isEmpty())
@@ -111,14 +119,18 @@ func TestResourceCache_ComputeChanges_CRDUnchanged(t *testing.T) {
 }
 
 func TestResourceCache_ComputeChanges_CRAdded(t *testing.T) {
+	forEachCacheMode(t, testResourceCacheComputeChangesCRAdded)
+}
+
+func testResourceCacheComputeChangesCRAdded(t *testing.T, compact bool) {
 	rc := newResourceCache()
 
 	gvr := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: testFoosResource}
 	currentObjects := map[schema.GroupVersionResource]ObjectGroup{
 		gvr: {
 			Source: ObjectSourceCR,
-			Objects: []*unstructured.Unstructured{
-				makeCachedCR("my-foo", "default", testExampleGroup, "v1", "Foo", "1"),
+			Objects: []resourceObject{
+				makeCachedCREntry(t, compact, "my-foo", "default", testExampleGroup, "v1", "Foo", "1"),
 			},
 		},
 	}
@@ -134,12 +146,16 @@ func TestResourceCache_ComputeChanges_CRAdded(t *testing.T) {
 }
 
 func TestResourceCache_ComputeChanges_CRModified(t *testing.T) {
+	forEachCacheMode(t, testResourceCacheComputeChangesCRModified)
+}
+
+func testResourceCacheComputeChangesCRModified(t *testing.T, compact bool) {
 	gvr := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: testFoosResource}
 	key := objectResourceKey(gvr, "default", "my-foo")
 
 	rc := newResourceCache()
 	rc.Objects[key] = &cachedObject{
-		Obj:    makeCachedCR("my-foo", "default", testExampleGroup, "v1", "Foo", "1"),
+		Obj:    makeCachedCREntry(t, compact, "my-foo", "default", testExampleGroup, "v1", "Foo", "1"),
 		GVR:    gvr,
 		Source: ObjectSourceCR,
 	}
@@ -147,8 +163,8 @@ func TestResourceCache_ComputeChanges_CRModified(t *testing.T) {
 	currentObjects := map[schema.GroupVersionResource]ObjectGroup{
 		gvr: {
 			Source: ObjectSourceCR,
-			Objects: []*unstructured.Unstructured{
-				makeCachedCR("my-foo", "default", testExampleGroup, "v1", "Foo", "2"),
+			Objects: []resourceObject{
+				makeCachedCREntry(t, compact, "my-foo", "default", testExampleGroup, "v1", "Foo", "2"),
 			},
 		},
 	}
@@ -162,12 +178,16 @@ func TestResourceCache_ComputeChanges_CRModified(t *testing.T) {
 }
 
 func TestResourceCache_ComputeChanges_CRDeleted(t *testing.T) {
+	forEachCacheMode(t, testResourceCacheComputeChangesCRDeleted)
+}
+
+func testResourceCacheComputeChangesCRDeleted(t *testing.T, compact bool) {
 	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "foos"}
 	key := objectResourceKey(gvr, "default", "my-foo")
 
 	rc := newResourceCache()
 	rc.Objects[key] = &cachedObject{
-		Obj:    makeCachedCR("my-foo", "default", "example.com", "v1", "Foo", "1"),
+		Obj:    makeCachedCREntry(t, compact, "my-foo", "default", "example.com", "v1", "Foo", "1"),
 		GVR:    gvr,
 		Source: ObjectSourceStatic,
 	}
@@ -180,19 +200,24 @@ func TestResourceCache_ComputeChanges_CRDeleted(t *testing.T) {
 	assert.Equal(t, gvr, changes[0].GVR)
 	assert.Equal(t, ObjectSourceStatic, changes[0].Source)
 	assert.Equal(t, "my-foo", changes[0].Obj.GetName())
+	assertRepresentation(t, compact, changes[0].Obj)
 }
 
 func TestResourceCache_ComputeChanges_MixedChanges(t *testing.T) {
+	forEachCacheMode(t, testResourceCacheComputeChangesMixedChanges)
+}
+
+func testResourceCacheComputeChangesMixedChanges(t *testing.T, compact bool) {
 	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "foos"}
 
 	rc := newResourceCache()
 	rc.CRDs["foos.example.com"] = makeCachedCRD("foos.example.com", "1")
 	rc.Objects[objectResourceKey(gvr, "default", "existing-foo")] = &cachedObject{
-		Obj: makeCachedCR("existing-foo", "default", "example.com", "v1", "Foo", "1"),
+		Obj: makeCachedCREntry(t, compact, "existing-foo", "default", "example.com", "v1", "Foo", "1"),
 		GVR: gvr,
 	}
 	rc.Objects[objectResourceKey(gvr, "default", "deleted-foo")] = &cachedObject{
-		Obj: makeCachedCR("deleted-foo", "default", "example.com", "v1", "Foo", "1"),
+		Obj: makeCachedCREntry(t, compact, "deleted-foo", "default", "example.com", "v1", "Foo", "1"),
 		GVR: gvr,
 	}
 
@@ -202,9 +227,9 @@ func TestResourceCache_ComputeChanges_MixedChanges(t *testing.T) {
 	currentObjects := map[schema.GroupVersionResource]ObjectGroup{
 		gvr: {
 			Source: ObjectSourceCR,
-			Objects: []*unstructured.Unstructured{
-				makeCachedCR("existing-foo", "default", "example.com", "v1", "Foo", "1"), // unchanged
-				makeCachedCR("new-foo", "default", "example.com", "v1", "Foo", "1"),      // added
+			Objects: []resourceObject{
+				makeCachedCREntry(t, compact, "existing-foo", "default", "example.com", "v1", "Foo", "1"), // unchanged
+				makeCachedCREntry(t, compact, "new-foo", "default", "example.com", "v1", "Foo", "1"),      // added
 				// deleted-foo is absent → deleted
 			},
 		},
@@ -225,18 +250,22 @@ func TestResourceCache_ComputeChanges_MixedChanges(t *testing.T) {
 }
 
 func TestResourceCache_ApplyAdditions(t *testing.T) {
+	forEachCacheMode(t, testResourceCacheApplyAdditions)
+}
+
+func testResourceCacheApplyAdditions(t *testing.T, compact bool) {
 	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "foos"}
 	key := objectResourceKey(gvr, "default", "my-foo")
 
 	rc := newResourceCache()
 	// Pre-existing entries that ApplyAdditions should update or leave alone.
 	rc.CRDs["foos.example.com"] = makeCachedCRD("foos.example.com", "1")
-	rc.Objects[key] = &cachedObject{Obj: makeCachedCR("my-foo", "default", "example.com", "v1", "Foo", "1"), GVR: gvr}
+	rc.Objects[key] = &cachedObject{Obj: makeCachedCREntry(t, compact, "my-foo", "default", "example.com", "v1", "Foo", "1"), GVR: gvr}
 
 	newCRD := makeCachedCRD("foos.example.com", "2") // modify
-	newCR := makeCachedCR("my-foo", "default", "example.com", "v1", "Foo", "2")
-	addedCR := makeCachedCR("other-foo", "default", "example.com", "v1", "Foo", "1") // add
-	deletedCRD := makeCachedCRD("ignored.example.com", "1")                          // should be skipped
+	newCR := makeCachedCREntry(t, compact, "my-foo", "default", "example.com", "v1", "Foo", "2")
+	addedCR := makeCachedCREntry(t, compact, "other-foo", "default", "example.com", "v1", "Foo", "1") // add
+	deletedCRD := makeCachedCRD("ignored.example.com", "1")                                           // should be skipped
 
 	rc.applyAdditions([]ResourceChange{
 		{Obj: newCRD, EventType: watch.Modified, IsCRD: true},
@@ -248,11 +277,16 @@ func TestResourceCache_ApplyAdditions(t *testing.T) {
 	assert.Equal(t, "2", rc.CRDs["foos.example.com"].GetResourceVersion(), "CRD should be modified")
 	assert.NotContains(t, rc.CRDs, "ignored.example.com", "deleted change must not be applied")
 	assert.Equal(t, "2", rc.Objects[key].Obj.GetResourceVersion(), "CR should be modified")
+	assertRepresentation(t, compact, rc.Objects[key].Obj)
 	assert.Contains(t, rc.Objects, objectResourceKey(gvr, "default", "other-foo"), "added CR should be present")
 
 }
 
 func TestResourceCache_ApplyDeletions(t *testing.T) {
+	forEachCacheMode(t, testResourceCacheApplyDeletions)
+}
+
+func testResourceCacheApplyDeletions(t *testing.T, compact bool) {
 	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "foos"}
 	keepKey := objectResourceKey(gvr, "default", "keep-foo")
 	dropKey := objectResourceKey(gvr, "default", "drop-foo")
@@ -260,12 +294,12 @@ func TestResourceCache_ApplyDeletions(t *testing.T) {
 	rc := newResourceCache()
 	rc.CRDs["keep.example.com"] = makeCachedCRD("keep.example.com", "1")
 	rc.CRDs["drop.example.com"] = makeCachedCRD("drop.example.com", "1")
-	rc.Objects[keepKey] = &cachedObject{Obj: makeCachedCR("keep-foo", "default", "example.com", "v1", "Foo", "1"), GVR: gvr}
-	rc.Objects[dropKey] = &cachedObject{Obj: makeCachedCR("drop-foo", "default", "example.com", "v1", "Foo", "1"), GVR: gvr}
+	rc.Objects[keepKey] = &cachedObject{Obj: makeCachedCREntry(t, compact, "keep-foo", "default", "example.com", "v1", "Foo", "1"), GVR: gvr}
+	rc.Objects[dropKey] = &cachedObject{Obj: makeCachedCREntry(t, compact, "drop-foo", "default", "example.com", "v1", "Foo", "1"), GVR: gvr}
 
 	rc.applyDeletions([]ResourceChange{
 		{Obj: makeCachedCRD("drop.example.com", "1"), EventType: watch.Deleted, IsCRD: true},
-		{Obj: makeCachedCR("drop-foo", "default", "example.com", "v1", "Foo", "1"), EventType: watch.Deleted, GVR: gvr},
+		{Obj: makeCachedCREntry(t, compact, "drop-foo", "default", "example.com", "v1", "Foo", "1"), EventType: watch.Deleted, GVR: gvr},
 		// Non-delete changes must be ignored — they don't affect the cache here.
 		{Obj: makeCachedCRD("keep.example.com", "2"), EventType: watch.Modified, IsCRD: true},
 	})
@@ -278,13 +312,17 @@ func TestResourceCache_ApplyDeletions(t *testing.T) {
 }
 
 func TestResourceCache_ComputeChanges_SourceOnlyChangeIsNotModified(t *testing.T) {
+	forEachCacheMode(t, testResourceCacheComputeChangesSourceOnlyChangeIsNotModified)
+}
+
+func testResourceCacheComputeChangesSourceOnlyChangeIsNotModified(t *testing.T, compact bool) {
 	// Source flipping CR→static (or vice versa) without an RV change must not emit a Modified event.
 	gvr := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: testFoosResource}
 	key := objectResourceKey(gvr, "default", "my-foo")
 
 	rc := newResourceCache()
 	rc.Objects[key] = &cachedObject{
-		Obj:    makeCachedCR("my-foo", "default", testExampleGroup, "v1", "Foo", "1"),
+		Obj:    makeCachedCREntry(t, compact, "my-foo", "default", testExampleGroup, "v1", "Foo", "1"),
 		GVR:    gvr,
 		Source: ObjectSourceCR,
 	}
@@ -292,8 +330,8 @@ func TestResourceCache_ComputeChanges_SourceOnlyChangeIsNotModified(t *testing.T
 	currentObjects := map[schema.GroupVersionResource]ObjectGroup{
 		gvr: {
 			Source: ObjectSourceStatic, // source flipped
-			Objects: []*unstructured.Unstructured{
-				makeCachedCR("my-foo", "default", testExampleGroup, "v1", "Foo", "1"), // same RV
+			Objects: []resourceObject{
+				makeCachedCREntry(t, compact, "my-foo", "default", testExampleGroup, "v1", "Foo", "1"), // same RV
 			},
 		},
 	}
@@ -303,12 +341,16 @@ func TestResourceCache_ComputeChanges_SourceOnlyChangeIsNotModified(t *testing.T
 }
 
 func TestResourceCache_ApplyAdditions_PersistsSource(t *testing.T) {
+	forEachCacheMode(t, testResourceCacheApplyAdditionsPersistsSource)
+}
+
+func testResourceCacheApplyAdditionsPersistsSource(t *testing.T, compact bool) {
 	gvr := schema.GroupVersionResource{Group: testExampleGroup, Version: "v1", Resource: testFoosResource}
 	rc := newResourceCache()
 
 	rc.applyAdditions([]ResourceChange{
 		{
-			Obj:       makeCachedCR("my-foo", "default", testExampleGroup, "v1", "Foo", "1"),
+			Obj:       makeCachedCREntry(t, compact, "my-foo", "default", testExampleGroup, "v1", "Foo", "1"),
 			EventType: watch.Added,
 			GVR:       gvr,
 			Source:    ObjectSourceStatic,
