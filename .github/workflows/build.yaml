@@ -228,7 +228,7 @@ jobs:
           done
 
       - name: CVE report and secret scan (amd64)
-        uses: StackVista/image-pipeline/.github/actions/scan-image@508730536961e38718dbc2403448e2d418b1136f
+        uses: StackVista/image-pipeline/.github/actions/scan-image@d847894223a794b4f4834654af20a04278b16b4f # main
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cve-gate-${{ matrix.image }}-amd64
           mode: inform
@@ -236,7 +236,7 @@ jobs:
           upload-sarif: 'false'
 
       - name: CVE report and secret scan (arm64)
-        uses: StackVista/image-pipeline/.github/actions/scan-image@508730536961e38718dbc2403448e2d418b1136f
+        uses: StackVista/image-pipeline/.github/actions/scan-image@d847894223a794b4f4834654af20a04278b16b4f # main
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cve-gate-${{ matrix.image }}-arm64
           mode: inform
@@ -257,7 +257,7 @@ jobs:
           fi
 
       - name: Scan (and, on tags, sign and push)
-        uses: StackVista/image-pipeline/.github/actions/scan-sign-push@508730536961e38718dbc2403448e2d418b1136f
+        uses: StackVista/image-pipeline/.github/actions/scan-sign-push@d847894223a794b4f4834654af20a04278b16b4f # main
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: ${{ steps.meta.outputs.tags }}
