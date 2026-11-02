@@ -9,33 +9,14 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Update OpenTelemetry components in the OCB builder manifests",
+      "description": "Update OCB components, replacement pins and the builder installed by image builds",
       "managerFilePatterns": [
-        "/(^|/)[^/]+-otel-builder\\.yaml$/"
-      ],
-      "matchStrings": [
-        "- gomod: (?<depName>(?:go\\.opentelemetry\\.io/collector|github\\.com/open-telemetry/opentelemetry-collector-contrib)/\\S+) (?<currentValue>v\\S+)"
-      ],
-      "datasourceTemplate": "go"
-    },
-    {
-      "customType": "regex",
-      "description": "Update module replacements pinned by the OCB builder manifests, which override go.mod versions in the built distributions",
-      "managerFilePatterns": [
-        "/(^|/)[^/]+-otel-builder\\.yaml$/"
-      ],
-      "matchStrings": [
-        "- (?<depName>[^\\s=]+) => (?<packageName>[^\\s=]+) (?<currentValue>v\\S+)"
-      ],
-      "datasourceTemplate": "go"
-    },
-    {
-      "customType": "regex",
-      "description": "Update the OCB builder installed by the image builds",
-      "managerFilePatterns": [
+        "/(^|/)[^/]+-otel-builder\\.yaml$/",
         "/(^|/)Dockerfile[^/]*$/"
       ],
       "matchStrings": [
+        "- gomod: (?<depName>(?:go\\.opentelemetry\\.io/collector|github\\.com/open-telemetry/opentelemetry-collector-contrib)/\\S+) (?<currentValue>v\\S+)",
+        "- (?<depName>[^\\s=]+) => (?<packageName>[^\\s=]+) (?<currentValue>v\\S+)",
         "go install (?<depName>go\\.opentelemetry\\.io/collector/cmd/builder)@(?<currentValue>v\\S+)"
       ],
       "datasourceTemplate": "go"
@@ -52,21 +33,12 @@
     {
       "description": "Update the compiler with scripts/upgrade_go_version.sh, which keeps go.work and every module on one version",
       "matchManagers": [
-        "gomod"
-      ],
-      "matchDepTypes": [
-        "golang",
-        "toolchain"
-      ],
-      "enabled": false
-    },
-    {
-      "description": "Update the compiler with scripts/upgrade_go_version.sh, which keeps go.work and every module on one version",
-      "matchManagers": [
+        "gomod",
         "mise"
       ],
-      "matchDepNames": [
-        "go"
+      "matchPackageNames": [
+        "go",
+        "golang/go"
       ],
       "enabled": false
     },
@@ -94,18 +66,6 @@
       "rebaseWhen": "conflicted"
     },
     {
-      "description": "Keep OpenTelemetry patch and minor releases in one branch with their manifest pins",
-      "matchPackageNames": [
-        "go.opentelemetry.io/collector",
-        "go.opentelemetry.io/collector/**",
-        "github.com/open-telemetry/opentelemetry-collector-contrib/**",
-        "go.opentelemetry.io/otel",
-        "go.opentelemetry.io/otel/**",
-        "go.opentelemetry.io/contrib/**"
-      ],
-      "separateMinorPatch": false
-    },
-    {
       "description": "Review OpenTelemetry releases in one PR with the builder manifests that pin them",
       "matchPackageNames": [
         "go.opentelemetry.io/collector",
@@ -115,23 +75,10 @@
         "go.opentelemetry.io/otel/**",
         "go.opentelemetry.io/contrib/**"
       ],
-      "matchUpdateTypes": [
-        "patch",
-        "minor"
-      ],
       "groupName": "OpenTelemetry Collector",
       "groupSlug": "opentelemetry-collector",
       "automerge": false,
-      "rebaseWhen": "conflicted"
-    },
-    {
-      "description": "Keep modules pinned by builder manifest replacements in one branch with those pins",
-      "matchPackageNames": [
-        "github.com/goccy/go-json",
-        "github.com/klauspost/compress",
-        "golang.org/x/crypto",
-        "google.golang.org/grpc"
-      ],
+      "rebaseWhen": "conflicted",
       "separateMinorPatch": false
     },
     {
@@ -142,14 +89,11 @@
         "golang.org/x/crypto",
         "google.golang.org/grpc"
       ],
-      "matchUpdateTypes": [
-        "patch",
-        "minor"
-      ],
       "groupName": "Builder-pinned Go modules",
       "groupSlug": "builder-pinned-go-modules",
       "automerge": false,
-      "rebaseWhen": "conflicted"
+      "rebaseWhen": "conflicted",
+      "separateMinorPatch": false
     }
   ]
 }
