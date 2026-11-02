@@ -47,10 +47,6 @@
       "separateMinorPatch": true
     },
     {
-      "matchPackageNames": ["StackVista/image-pipeline"],
-      "enabled": false
-    },
-    {
       "description": "Leave developer examples, which CI does not build, out of automated updates",
       "matchFileNames": [
         "**/example/**"
