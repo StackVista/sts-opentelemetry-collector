@@ -1,10 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "github>StackVista/renovate-config#v1.1.0",
-    "github>StackVista/renovate-config:go#v1.1.0",
-    "github>StackVista/renovate-config:docker#v1.1.0",
-    "github>StackVista/renovate-config:automerge#v1.1.0"
+    "github>StackVista/renovate-config#v1.2.0",
+    "github>StackVista/renovate-config:go#v1.2.0",
+    "github>StackVista/renovate-config:docker#v1.2.0",
+    "github>StackVista/renovate-config:automerge#v1.2.0"
   ],
   "customManagers": [
     {
@@ -43,10 +43,6 @@
   ],
   "packageRules": [
     {
-      "matchDatasources": ["golang-version"],
-      "separateMinorPatch": true
-    },
-    {
       "description": "Leave developer examples, which CI does not build, out of automated updates",
       "matchFileNames": [
         "**/example/**"
@@ -73,16 +69,6 @@
         "go"
       ],
       "enabled": false
-    },
-    {
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchPackageNames": [
-        "registry.suse.com/bci/golang"
-      ],
-      "allowedVersions": "/^\\d+\\.\\d+(\\.\\d+)*$/",
-      "separateMinorPatch": true
     },
     {
       "description": "Keep the runtime image on the approved BCI release",
@@ -164,41 +150,6 @@
       "groupSlug": "builder-pinned-go-modules",
       "automerge": false,
       "rebaseWhen": "conflicted"
-    },
-    {
-      "matchManagers": [
-        "renovate-config",
-        "github-actions"
-      ],
-      "matchPackageNames": [
-        "StackVista/renovate-config"
-      ],
-      "groupName": "Renovate configuration",
-      "groupSlug": "renovate-config",
-      "separateMajorMinor": false,
-      "separateMinorPatch": false,
-      "automerge": false
-    },
-    {
-      "matchDatasources": ["golang-version", "docker"],
-      "matchPackageNames": ["go", "golang/go", "registry.suse.com/bci/golang"],
-      "matchUpdateTypes": ["patch", "digest", "pinDigest"],
-      "group": {"branchTopic": "go-build-environment"}
-    },
-    {
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchPackageNames": [
-        "registry.suse.com/bci/golang"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "major"
-      ],
-      "groupName": "Go toolchain",
-      "groupSlug": "go-toolchain",
-      "automerge": false
     }
   ]
 }
