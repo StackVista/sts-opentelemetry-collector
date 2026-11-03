@@ -35,6 +35,18 @@ Consumers that treat absence as deletion, such as the `stsk8stopology`
 exporter, use these records to act only on complete snapshots. Existing
 mappings select other event names and ignore them.
 
+## Compact object cache
+
+With `compact_cache: true`, CR and static objects are held in the informer and
+peer caches as their sanitized JSON plus the metadata used for keys and change
+detection, which retains far less memory than decoded objects. Objects are
+decoded only to emit: changed objects in increments, every object in a
+snapshot one at a time, and the cached object on deletion. Emitted records are
+the same as with the option off, at the cost of decoding CPU on each snapshot.
+An object that fails to decode is logged and skipped for that emission. CRDs
+are not compacted. Peer sync uses the same wire format in both modes, so
+replicas with different settings interoperate.
+
 ## Peer-sync protocol
 
 A short reference for the in-process peer sync that keeps `k8sresourcereceiver`
@@ -211,6 +223,7 @@ out entirely.
 | `MaxCRTotalDataSizeBytes` | 10MiB   | Total CR payload budget per collection cycle.      |
 | `MaxObjectTotalDataSizeBytes` | 10MiB | Total static object payload budget per collection cycle. Zero disables it. |
 | `ConfigMapMaxDataSize` | 100KiB | ConfigMap data kept per object. Zero keeps all. |
+| `CompactCache` | false | Cache objects as compact JSON. See [Compact object cache](#compact-object-cache). |
 
 Payload budgets are applied after reading informer caches and before diffing
 against the peer cache. CRDs do not count against the budget. CRs and static

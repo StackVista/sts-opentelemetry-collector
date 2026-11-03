@@ -202,7 +202,11 @@ func (c *resourceCollector) emitSnapshot(
 	for gvr, group := range currentObjects {
 		eventName := eventNameForSource(group.Source)
 		resourceAttributes := c.resourceAttributesFor(gvr)
-		for _, obj := range group.Objects {
+		for _, entry := range group.Objects {
+			obj, ok := c.decodeForEmit(entry, gvr)
+			if !ok {
+				continue
+			}
 			if err := emit.LogObject(
 				ctx, c.consumer, obj, watch.Added, c.config.ClusterName, eventName, resourceAttributes,
 			); err != nil {
@@ -221,12 +225,16 @@ func (c *resourceCollector) emitSnapshot(
 		if ch.EventType != watch.Deleted {
 			continue
 		}
+		obj, ok := c.decodeForEmit(ch.Obj, changeGVR(ch))
+		if !ok {
+			continue
+		}
 		var err error
 		if ch.IsCRD {
-			err = emit.LogCRD(ctx, c.consumer, ch.Obj, watch.Deleted, c.config.ClusterName, c.crdCustomResourcesWatched(ch.Obj))
+			err = emit.LogCRD(ctx, c.consumer, obj, watch.Deleted, c.config.ClusterName, c.crdCustomResourcesWatched(obj))
 		} else {
 			err = emit.LogObject(
-				ctx, c.consumer, ch.Obj, watch.Deleted, c.config.ClusterName,
+				ctx, c.consumer, obj, watch.Deleted, c.config.ClusterName,
 				eventNameForSource(ch.Source), c.resourceAttributesFor(ch.GVR),
 			)
 		}
@@ -316,15 +324,19 @@ func (c *resourceCollector) emitIncrement(ctx context.Context, changes []Resourc
 func (c *resourceCollector) emitChanges(ctx context.Context, changes []ResourceChange) {
 	counts := map[metrics.ChangeType]int64{}
 	for _, change := range changes {
+		obj, ok := c.decodeForEmit(change.Obj, changeGVR(change))
+		if !ok {
+			continue
+		}
 		var err error
 		if change.IsCRD {
 			err = emit.LogCRD(
-				ctx, c.consumer, change.Obj, change.EventType,
-				c.config.ClusterName, c.crdCustomResourcesWatched(change.Obj),
+				ctx, c.consumer, obj, change.EventType,
+				c.config.ClusterName, c.crdCustomResourcesWatched(obj),
 			)
 		} else {
 			err = emit.LogObject(
-				ctx, c.consumer, change.Obj, change.EventType, c.config.ClusterName,
+				ctx, c.consumer, obj, change.EventType, c.config.ClusterName,
 				eventNameForSource(change.Source), c.resourceAttributesFor(change.GVR),
 			)
 		}
@@ -341,6 +353,31 @@ func (c *resourceCollector) emitChanges(ctx context.Context, changes []ResourceC
 	for changeType, count := range counts {
 		c.metrics.RecordEmitted(ctx, changeType, count)
 	}
+}
+
+// decodeForEmit returns obj as the Unstructured to emit. A compact entry that
+// fails to decode is logged and skipped for this emission only.
+func (c *resourceCollector) decodeForEmit(
+	obj resourceObject, gvr schema.GroupVersionResource,
+) (*unstructured.Unstructured, bool) {
+	u, err := decodeObject(obj)
+	if err != nil {
+		c.logger.Warn("Skipping Kubernetes object that could not be decoded from the compact cache",
+			zap.String("gvr", emit.FormatGVRKey(gvr)),
+			zap.String("namespace", obj.GetNamespace()),
+			zap.String("name", obj.GetName()),
+			zap.Error(err),
+		)
+		return nil, false
+	}
+	return u, true
+}
+
+func changeGVR(ch ResourceChange) schema.GroupVersionResource {
+	if ch.IsCRD {
+		return crdGVR
+	}
+	return ch.GVR
 }
 
 func (c *resourceCollector) watchEventToChangeType(e watch.EventType) metrics.ChangeType {
@@ -369,7 +406,7 @@ func (c *resourceCollector) crdCustomResourcesWatched(crd *unstructured.Unstruct
 type budgetCandidate struct {
 	gvr    schema.GroupVersionResource
 	group  ObjectGroup
-	obj    *unstructured.Unstructured
+	obj    resourceObject
 	size   int
 	source metrics.PayloadSource
 }
@@ -389,7 +426,7 @@ func (c *resourceCollector) applyPayloadBudgets(
 			continue
 		}
 		for _, obj := range group.Objects {
-			size, ok := serializedObjectSize(obj.Object)
+			size, ok := objectPayloadSize(obj)
 			if !ok {
 				c.addObjectToBudgetResult(result, gvr, group, obj)
 				continue
@@ -464,7 +501,7 @@ func (c *resourceCollector) addObjectToBudgetResult(
 	result map[schema.GroupVersionResource]ObjectGroup,
 	gvr schema.GroupVersionResource,
 	group ObjectGroup,
-	obj *unstructured.Unstructured,
+	obj resourceObject,
 ) {
 	current := result[gvr]
 	if current.Source == "" {

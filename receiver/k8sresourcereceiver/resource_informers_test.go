@@ -483,6 +483,10 @@ func staticPodClient(pods ...*unstructured.Unstructured) *dynamicfake.FakeDynami
 }
 
 func TestResourceInformers_StaticInformer_StartsAndReads(t *testing.T) {
+	forEachCacheMode(t, testResourceInformersStaticInformerStartsAndReads)
+}
+
+func testResourceInformersStaticInformerStartsAndReads(t *testing.T, compact bool) {
 	pod := makeTestPod("nginx", "default", nil)
 	client := staticPodClient(pod)
 
@@ -493,6 +497,7 @@ func TestResourceInformers_StaticInformer_StartsAndReads(t *testing.T) {
 	}}
 
 	config := testConfig([]string{testExampleGroup}, nil)
+	config.CompactCache = compact
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 	ri := newResourceInformers(testSettings(t), config, client, resolved, ft, nil)
 
@@ -510,6 +515,7 @@ func TestResourceInformers_StaticInformer_StartsAndReads(t *testing.T) {
 	require.Contains(t, objs, podsGVR)
 	require.Len(t, objs[podsGVR].Objects, 1)
 	assert.Equal(t, "nginx", objs[podsGVR].Objects[0].GetName())
+	assertRepresentation(t, compact, objs[podsGVR].Objects[0])
 	assert.Equal(t, ObjectSourceStatic, objs[podsGVR].Source)
 	assert.True(t, ri.StaticWatchesSynced())
 }
@@ -830,6 +836,10 @@ func TestResourceInformers_ReconcileSkipsForbidden(t *testing.T) {
 }
 
 func TestResourceInformers_StaticInformer_SanitizesSecrets(t *testing.T) {
+	forEachCacheMode(t, testResourceInformersStaticInformerSanitizesSecrets)
+}
+
+func testResourceInformersStaticInformerSanitizesSecrets(t *testing.T, compact bool) {
 	secretsGVR := schema.GroupVersionResource{Version: "v1", Resource: "secrets"}
 	s := testScheme()
 	s.AddKnownTypeWithName(schema.GroupVersionKind{Version: "v1", Kind: "SecretList"}, &unstructured.UnstructuredList{})
@@ -846,7 +856,9 @@ func TestResourceInformers_StaticInformer_SanitizesSecrets(t *testing.T) {
 		secret,
 	)
 	resolved := []resolvedObjectWatch{{ObjectWatch: ObjectWatch{Name: "secrets"}, GVR: secretsGVR, Namespaced: true}}
-	ri := newResourceInformers(testSettings(t), testConfig([]string{testExampleGroup}, nil), client, resolved,
+	config := testConfig([]string{testExampleGroup}, nil)
+	config.CompactCache = compact
+	ri := newResourceInformers(testSettings(t), config, client, resolved,
 		tracker.NewForbiddenTracker(time.Hour), nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -856,11 +868,13 @@ func TestResourceInformers_StaticInformer_SanitizesSecrets(t *testing.T) {
 
 	objs := ri.ReadObjects()[secretsGVR].Objects
 	require.Len(t, objs, 1)
-	data, _, err := unstructured.NestedStringMap(objs[0].Object, "data")
+	assertRepresentation(t, compact, objs[0])
+	stored := mustDecode(t, objs[0])
+	data, _, err := unstructured.NestedStringMap(stored.Object, "data")
 	require.NoError(t, err)
 	assert.Len(t, data, 1)
 	assert.Contains(t, data, k8ssanitize.SecretDataHashKey)
-	_, found, _ := unstructured.NestedFieldNoCopy(objs[0].Object, "metadata", "managedFields")
+	_, found, _ := unstructured.NestedFieldNoCopy(stored.Object, "metadata", "managedFields")
 	assert.False(t, found, "managedFields are dropped on ingestion")
 }
 
@@ -869,6 +883,10 @@ func TestResourceInformers_StaticInformer_SanitizesSecrets(t *testing.T) {
 type watchListClient struct{ dynamic.Interface }
 
 func TestResourceInformers_BuildInformer_SanitizesStreamingListOnce(t *testing.T) {
+	forEachCacheMode(t, testResourceInformersBuildInformerSanitizesStreamingListOnce)
+}
+
+func testResourceInformersBuildInformerSanitizesStreamingListOnce(t *testing.T, compact bool) {
 	secret := func() *unstructured.Unstructured {
 		return &unstructured.Unstructured{Object: map[string]interface{}{
 			testAPIVersionKey: "v1",
@@ -892,6 +910,7 @@ func TestResourceInformers_BuildInformer_SanitizesStreamingListOnce(t *testing.T
 	ri := newResourceInformers(testSettings(t), testConfig([]string{testExampleGroup}, nil),
 		watchListClient{staticPodClient()}, nil, tracker.NewForbiddenTracker(time.Hour), nil)
 	ri.config.ConfigMapMaxDataSize = defaultConfigMapMaxDataSize
+	ri.config.CompactCache = compact
 	listed := false
 	informer := ri.buildInformer(&cache.ListWatch{
 		ListWithContextFunc: func(context.Context, metav1.ListOptions) (runtime.Object, error) {
@@ -913,7 +932,9 @@ func TestResourceInformers_BuildInformer_SanitizesStreamingListOnce(t *testing.T
 
 	objs := informer.GetStore().List()
 	require.Len(t, objs, 1)
-	got, ok := objs[0].(*unstructured.Unstructured)
+	obj, ok := toResourceObject(objs[0])
 	require.True(t, ok)
+	assertRepresentation(t, compact, obj)
+	got := mustDecode(t, obj)
 	assert.Equal(t, want.Object["data"], got.Object["data"])
 }

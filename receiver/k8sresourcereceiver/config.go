@@ -101,6 +101,11 @@ type Config struct {
 	// EmitSnapshotBoundaries emits KubernetesSnapshotBoundary records around each
 	// snapshot and on collection stop. Default: false.
 	EmitSnapshotBoundaries bool `mapstructure:"emit_snapshot_boundaries"`
+
+	// CompactCache keeps CR and static objects in the informer and peer caches
+	// as compact JSON, decoding them only to emit. This trades CPU for memory.
+	// CRDs are not compacted. Default: false.
+	CompactCache bool `mapstructure:"compact_cache"`
 }
 
 // ObjectMatcher identifies a Kubernetes resource by plural name and API group.

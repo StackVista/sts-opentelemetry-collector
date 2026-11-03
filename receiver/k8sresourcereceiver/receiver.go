@@ -131,6 +131,7 @@ func (r *k8sresourceReceiver) Start(ctx context.Context, host component.Host) er
 		r.config.PeerSyncDNS,
 		r.metrics,
 	)
+	r.peerStore.compactObjects = r.config.CompactCache
 	if err := r.peerStore.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start peer sync cache store: %w", err)
 	}

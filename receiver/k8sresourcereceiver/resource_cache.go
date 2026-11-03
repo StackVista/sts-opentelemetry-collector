@@ -31,13 +31,13 @@ func eventNameForSource(s ObjectSource) string {
 // per-GVR by Informers.ReadObjects.
 type ObjectGroup struct {
 	Source  ObjectSource
-	Objects []*unstructured.Unstructured
+	Objects []resourceObject
 }
 
 // ResourceChange represents a detected change between the resource cache and
 // current informer state. Source is empty for CRD changes (IsCRD=true).
 type ResourceChange struct {
-	Obj       *unstructured.Unstructured
+	Obj       resourceObject
 	EventType watch.EventType
 	IsCRD     bool
 	GVR       schema.GroupVersionResource // set for object changes
@@ -45,20 +45,20 @@ type ResourceChange struct {
 }
 
 type cachedObject struct {
-	Obj    *unstructured.Unstructured
+	Obj    resourceObject
 	GVR    schema.GroupVersionResource
 	Source ObjectSource
 }
 
 // resourceCache tracks the last state emitted downstream.
 type resourceCache struct {
-	CRDs    map[string]*unstructured.Unstructured // key: CRD name
-	Objects map[string]*cachedObject              // key: objectResourceKey(gvr, namespace, name)
+	CRDs    map[string]resourceObject // key: CRD name
+	Objects map[string]*cachedObject  // key: objectResourceKey(gvr, namespace, name)
 }
 
 func newResourceCache() *resourceCache {
 	return &resourceCache{
-		CRDs:    make(map[string]*unstructured.Unstructured),
+		CRDs:    make(map[string]resourceObject),
 		Objects: make(map[string]*cachedObject),
 	}
 }
@@ -108,7 +108,7 @@ func (rc *resourceCache) computeChanges(
 	}
 
 	// --- Object changes ---
-	currentObjectMap := make(map[string]*unstructured.Unstructured)
+	currentObjectMap := make(map[string]resourceObject)
 	for gvr, group := range currentObjects {
 		for _, obj := range group.Objects {
 			key := objectResourceKey(gvr, obj.GetNamespace(), obj.GetName())

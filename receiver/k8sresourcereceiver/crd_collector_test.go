@@ -355,6 +355,10 @@ func TestResourceCollector_EmitsInitialCRDAndCR(t *testing.T) {
 }
 
 func TestResourceCollector_CRLifecycleEvents(t *testing.T) {
+	forEachCacheMode(t, testResourceCollectorCRLifecycleEvents)
+}
+
+func testResourceCollectorCRLifecycleEvents(t *testing.T, compact bool) {
 	scheme := testScheme()
 	registerCRGVR(scheme, testExampleGroup, "v1", "TestResource")
 
@@ -371,6 +375,7 @@ func TestResourceCollector_CRLifecycleEvents(t *testing.T) {
 
 	sink := &consumertest.LogsSink{}
 	config := testConfig([]string{testExampleGroup}, nil)
+	config.CompactCache = compact
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 	collector := newTestCollector(t, config, sink, client, ft)
 
@@ -423,6 +428,10 @@ func TestResourceCollector_CRLifecycleEvents(t *testing.T) {
 }
 
 func TestResourceCollector_SnapshotEmitsAllResources(t *testing.T) {
+	forEachCacheMode(t, testResourceCollectorSnapshotEmitsAllResources)
+}
+
+func testResourceCollectorSnapshotEmitsAllResources(t *testing.T, compact bool) {
 	scheme := testScheme()
 	registerCRGVR(scheme, testExampleGroup, "v1", "TestResource")
 
@@ -442,6 +451,7 @@ func TestResourceCollector_SnapshotEmitsAllResources(t *testing.T) {
 
 	sink := &consumertest.LogsSink{}
 	config := testConfig([]string{testExampleGroup}, nil)
+	config.CompactCache = compact
 	ft := tracker.NewForbiddenTracker(1 * time.Hour)
 	collector := newTestCollector(t, config, sink, client, ft)
 
@@ -468,6 +478,10 @@ func TestResourceCollector_SnapshotEmitsAllResources(t *testing.T) {
 // We assert this by recording each ApplyDelta invocation along with the cache contents at
 // that moment, then checking the number of applies and what each apply contained per cycle.
 func TestResourceCollector_TwoPhaseSaveOrdering(t *testing.T) {
+	forEachCacheMode(t, testResourceCollectorTwoPhaseSaveOrdering)
+}
+
+func testResourceCollectorTwoPhaseSaveOrdering(t *testing.T, compact bool) {
 	scheme := testScheme()
 	registerCRGVR(scheme, testExampleGroup, "v1", "TestResource")
 
@@ -561,6 +575,7 @@ func TestResourceCollector_TwoPhaseSaveOrdering(t *testing.T) {
 
 			sink := &consumertest.LogsSink{}
 			config := testConfig([]string{testExampleGroup}, nil)
+			config.CompactCache = compact
 			ft := tracker.NewForbiddenTracker(1 * time.Hour)
 			peerStore := newRecordingPeerStore()
 			collector := newTestCollectorWithPeerStore(t, config, sink, client, ft, peerStore)
@@ -630,8 +645,8 @@ func TestResourceCollector_EmitObject_SourceDrivesEventName(t *testing.T) {
 			context.Background(),
 			nil, // no CRDs
 			map[schema.GroupVersionResource]ObjectGroup{
-				crGVR:     {Source: ObjectSourceCR, Objects: []*unstructured.Unstructured{crObj}},
-				staticGVR: {Source: ObjectSourceStatic, Objects: []*unstructured.Unstructured{staticObj}},
+				crGVR:     {Source: ObjectSourceCR, Objects: []resourceObject{crObj}},
+				staticGVR: {Source: ObjectSourceStatic, Objects: []resourceObject{staticObj}},
 			},
 			nil, // no deletes
 		)
@@ -728,6 +743,10 @@ func TestResourceCollector_EmitsAllCRDsButOnlyFilteredCRs(t *testing.T) {
 }
 
 func TestResourceCollector_AppliesPayloadBudgets(t *testing.T) {
+	forEachCacheMode(t, testResourceCollectorAppliesPayloadBudgets)
+}
+
+func testResourceCollectorAppliesPayloadBudgets(t *testing.T, compact bool) {
 	crGVR := schema.GroupVersionResource{Group: "kubevirt.io", Version: "v1", Resource: "virtualmachines"}
 	staticGVR := schema.GroupVersionResource{Group: "storage.sbomscanner.kubewarden.io", Version: "v1alpha1", Resource: "sboms"}
 	crSmall := makeTestCR("a-small", "default", "kubevirt.io", "v1", "VirtualMachine")
@@ -746,13 +765,14 @@ func TestResourceCollector_AppliesPayloadBudgets(t *testing.T) {
 	}
 
 	filtered := c.applyPayloadBudgets(context.Background(), map[schema.GroupVersionResource]ObjectGroup{
-		crGVR:     {Source: ObjectSourceCR, Objects: []*unstructured.Unstructured{crLarge, crSmall}},
-		staticGVR: {Source: ObjectSourceStatic, Objects: []*unstructured.Unstructured{staticLarge}},
+		crGVR:     {Source: ObjectSourceCR, Objects: cachedAll(t, compact, crLarge, crSmall)},
+		staticGVR: {Source: ObjectSourceStatic, Objects: cachedAll(t, compact, staticLarge)},
 	})
 
 	require.Contains(t, filtered, crGVR)
 	require.Len(t, filtered[crGVR].Objects, 1)
 	assert.Equal(t, "a-small", filtered[crGVR].Objects[0].GetName())
+	assertRepresentation(t, compact, filtered[crGVR].Objects[0])
 	assert.NotContains(t, filtered, staticGVR)
 	assert.ElementsMatch(t, []payloadDropRecord{
 		{source: metrics.PayloadSourceCR, apiGroup: "kubevirt.io", kind: "VirtualMachine"},
@@ -767,6 +787,10 @@ func TestResourceCollector_AppliesPayloadBudgets(t *testing.T) {
 }
 
 func TestResourceCollector_ZeroObjectBudgetKeepsEveryObject(t *testing.T) {
+	forEachCacheMode(t, testResourceCollectorZeroObjectBudgetKeepsEveryObject)
+}
+
+func testResourceCollectorZeroObjectBudgetKeepsEveryObject(t *testing.T, compact bool) {
 	cfg, ok := createDefaultConfig().(*Config)
 	require.True(t, ok)
 	cfg.ClusterName = "test-cluster"
@@ -774,11 +798,11 @@ func TestResourceCollector_ZeroObjectBudgetKeepsEveryObject(t *testing.T) {
 	require.NoError(t, cfg.Validate())
 
 	staticGVR := schema.GroupVersionResource{Version: "v1", Resource: "configmaps"}
-	objects := make([]*unstructured.Unstructured, 0, 3)
+	objects := make([]resourceObject, 0, 3)
 	for _, name := range []string{"a", "b", "c"} {
 		obj := makeTestCR(name, "default", "", "v1", "ConfigMap")
 		obj.Object["data"] = map[string]interface{}{"payload": strings.Repeat("x", defaultMaxObjectTotalDataSizeBytes/2)}
-		objects = append(objects, obj)
+		objects = append(objects, cachedAs(t, compact, obj))
 	}
 	c := &resourceCollector{
 		logger:   zaptest.NewLogger(t),
