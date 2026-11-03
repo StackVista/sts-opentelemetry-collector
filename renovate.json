@@ -22,7 +22,21 @@
       "datasourceTemplate": "go"
     }
   ],
+  "vulnerabilityAlerts": {
+    "branchTopic": "{{#if (or (equals depName \"github.com/oapi-codegen/oapi-codegen/v2\") (equals depName \"github.com/getkin/kin-openapi\"))}}openapi-generator{{else}}{{{datasource}}}-{{{depNameSanitized}}}-vulnerability{{/if}}"
+  },
   "packageRules": [
+    {
+      "description": "Keep the OpenAPI generator and parser compatible",
+      "matchPackageNames": [
+        "github.com/oapi-codegen/oapi-codegen/v2",
+        "github.com/getkin/kin-openapi"
+      ],
+      "groupName": "OpenAPI generator",
+      "groupSlug": "openapi-generator",
+      "separateMajorMinor": false,
+      "separateMinorPatch": false
+    },
     {
       "description": "Leave developer examples, which CI does not build, out of automated updates",
       "matchFileNames": [
