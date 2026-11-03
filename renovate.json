@@ -22,7 +22,23 @@
       "datasourceTemplate": "go"
     }
   ],
+  "vulnerabilityAlerts": {
+    "branchTopic": "{{#if (or (equals depName \"github.com/oapi-codegen/oapi-codegen/v2\") (equals depName \"github.com/getkin/kin-openapi\"))}}openapi-generator{{else}}{{{datasource}}}-{{{depNameSanitized}}}-vulnerability{{/if}}"
+  },
   "packageRules": [
+    {
+      "description": "Keep the OpenAPI generator and parser compatible",
+      "matchPackageNames": [
+        "github.com/oapi-codegen/oapi-codegen/v2",
+        "github.com/getkin/kin-openapi"
+      ],
+      "groupName": "OpenAPI generator",
+      "groupSlug": "openapi-generator",
+      "separateMajorMinor": false,
+      "separateMinorPatch": false,
+      "commitMessageTopic": "OpenAPI generator",
+      "commitMessageExtra": ""
+    },
     {
       "description": "Leave developer examples, which CI does not build, out of automated updates",
       "matchFileNames": [
@@ -95,5 +111,16 @@
       "rebaseWhen": "conflicted",
       "separateMinorPatch": false
     }
-  ]
+  ],
+  "postUpgradeTasks": {
+    "commands": [
+      "python3 scripts/renovate_codegen.py"
+    ],
+    "executionMode": "branch",
+    "fileFilters": [
+      "extension/settingsproviderextension/generated/settingsproto/model.gen.go",
+      "extension/settingsproviderextension/generated/settingsschema/model.gen.go",
+      "go.work.sum"
+    ]
+  }
 }
