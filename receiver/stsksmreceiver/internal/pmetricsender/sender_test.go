@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ddcompat/servicecheck"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/pmetricsender"
@@ -15,7 +16,7 @@ import (
 const shopNamespace = "kube_namespace:shop"
 
 func TestGauge(t *testing.T) {
-	s := pmetricsender.New(pcommon.Timestamp(42))
+	s := pmetricsender.New(pcommon.Timestamp(42), 0, discard)
 	s.Gauge("kubernetes_state.container.restarts", 3, "node-1-prod", []string{
 		shopNamespace, "pod_name:web-0", "uid:pod-uid", "kube_container_name:app",
 		"container_id:containerd://abc123", "kube_cluster_name:prod", "kube_namespace:other",
@@ -60,13 +61,13 @@ func TestGauge(t *testing.T) {
 }
 
 func TestServiceCheckIsDropped(t *testing.T) {
-	s := pmetricsender.New(pcommon.Timestamp(0))
+	s := pmetricsender.New(pcommon.Timestamp(0), 0, discard)
 	s.ServiceCheck("kubernetes_state.node.ready", servicecheck.ServiceCheckOK, "node-1", []string{"node:node-1"}, "")
 	assert.Equal(t, 0, s.Metrics().MetricCount())
 }
 
 func TestTagWithoutValue(t *testing.T) {
-	s := pmetricsender.New(pcommon.Timestamp(1))
+	s := pmetricsender.New(pcommon.Timestamp(1), 0, discard)
 	s.Gauge("kubernetes_state.pod.count", 1, "", []string{"orphaned", shopNamespace})
 
 	attrs := s.Metrics().ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0).Gauge().DataPoints().At(0).Attributes()
@@ -79,7 +80,7 @@ func TestTagWithoutValue(t *testing.T) {
 
 func TestRepeatedSeriesKeepLastValue(t *testing.T) {
 	const name, op, pod = "kubernetes_state.pod.tolerations", "operator:Exists", "pod_name:a"
-	s := pmetricsender.New(pcommon.Timestamp(0))
+	s := pmetricsender.New(pcommon.Timestamp(0), 0, discard)
 	s.Gauge(name, 1, "", []string{op, pod})
 	s.Gauge(name, 2, "", []string{pod, op, pod})
 	s.Gauge(name, 3, "node-1", []string{pod, op})
@@ -112,4 +113,69 @@ func TestSemconvAttributesDoNotCollideWithTags(t *testing.T) {
 		_, isTag := pmetricsender.SemconvAttributes()[sanitise(attr)]
 		assert.False(t, isTag, "%s becomes the label of a mapped tag", attr)
 	}
+}
+
+func discard(pmetric.Metrics) {}
+
+const podOne, podTwo = "pod_name:p1", "pod_name:p2"
+
+// submitFamilies submits three groups between boundaries; the first emits two
+// metric names, as one object's resource limits do.
+func submitFamilies(s *pmetricsender.Sender) {
+	s.FamilyDone()
+	s.Gauge("a", 1, "", []string{podOne})
+	s.Gauge("x", 1, "", []string{podOne})
+	s.Gauge("a", 2, "", []string{podOne})
+	s.Gauge("a", 3, "", []string{podTwo})
+	s.Gauge("x", 3, "", []string{podTwo})
+	s.FamilyDone()
+	s.Gauge("b", 4, "", []string{podOne})
+	s.Gauge("b", 5, "", []string{podTwo})
+	s.FamilyDone()
+	s.Gauge("c", 6, "", []string{podOne})
+}
+
+func values(parts []pmetric.Metrics) map[string][]float64 {
+	out := map[string][]float64{}
+	for _, md := range parts {
+		ms := md.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics()
+		for i := 0; i < ms.Len(); i++ {
+			dps := ms.At(i).Gauge().DataPoints()
+			for j := 0; j < dps.Len(); j++ {
+				out[ms.At(i).Name()] = append(out[ms.At(i).Name()], dps.At(j).DoubleValue())
+			}
+		}
+	}
+	return out
+}
+
+func TestChunkedSenderSplitsOnlyAtBoundaries(t *testing.T) {
+	whole := pmetricsender.New(pcommon.Timestamp(0), 0, discard)
+	submitFamilies(whole)
+
+	var parts []pmetric.Metrics
+	s := pmetricsender.New(pcommon.Timestamp(0), 2, func(md pmetric.Metrics) { parts = append(parts, md) })
+	submitFamilies(s)
+	s.Flush()
+
+	require.Len(t, parts, 3, "a part is handed on at a boundary once it holds 2 points")
+	assert.Equal(t, []string{"a", "x"}, metricNames(parts[0]), "names and repeated series between two boundaries stay in one part")
+	assert.Equal(t, values([]pmetric.Metrics{whole.Metrics()}), values(parts))
+}
+
+func metricNames(md pmetric.Metrics) []string {
+	ms := md.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics()
+	names := make([]string, ms.Len())
+	for i := range names {
+		names[i] = ms.At(i).Name()
+	}
+	return names
+}
+
+func TestSenderWithoutMinimumSendsWhole(t *testing.T) {
+	var parts []pmetric.Metrics
+	s := pmetricsender.New(pcommon.Timestamp(0), 0, func(md pmetric.Metrics) { parts = append(parts, md) })
+	submitFamilies(s)
+	s.Flush()
+	require.Len(t, parts, 1)
 }

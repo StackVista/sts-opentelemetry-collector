@@ -47,28 +47,57 @@ var semconv = map[string]string{ //nolint:gochecknoglobals
 // SemconvAttributes returns the Datadog tag key to semantic-convention attribute mapping.
 func SemconvAttributes() map[string]string { return maps.Clone(semconv) }
 
-// Sender accumulates one collection run into a pmetric.Metrics.
+// Sender accumulates a collection run and passes it to send in parts of at
+// least minPoints data points, split only where FamilyDone marks a boundary.
+// The KSM check marks one between objects, so a repeated series, which comes
+// from one object, stays in one part and still keeps its last value. With
+// minPoints 0 the run is sent whole when it is flushed.
 type Sender struct {
 	metrics  pmetric.Metrics
 	scope    pmetric.MetricSlice
 	byName   map[string]pmetric.NumberDataPointSlice
 	contexts map[string]int
 	ts       pcommon.Timestamp
+
+	send      func(pmetric.Metrics)
+	minPoints int
+	points    int
 }
 
-func New(ts pcommon.Timestamp) *Sender {
-	md := pmetric.NewMetrics()
-	scope := md.ResourceMetrics().AppendEmpty().ScopeMetrics().AppendEmpty().Metrics()
-	return &Sender{
-		metrics:  md,
-		scope:    scope,
-		byName:   map[string]pmetric.NumberDataPointSlice{},
-		contexts: map[string]int{},
-		ts:       ts,
+// New returns a Sender for one collection run. Call Flush after the run to send
+// the remainder.
+func New(ts pcommon.Timestamp, minPoints int, send func(pmetric.Metrics)) *Sender {
+	s := &Sender{ts: ts, minPoints: minPoints, send: send}
+	s.reset()
+	return s
+}
+
+func (s *Sender) reset() {
+	s.metrics = pmetric.NewMetrics()
+	s.scope = s.metrics.ResourceMetrics().AppendEmpty().ScopeMetrics().AppendEmpty().Metrics()
+	s.byName = map[string]pmetric.NumberDataPointSlice{}
+	s.contexts = map[string]int{}
+	s.points = 0
+}
+
+// Metrics returns the data points accumulated since the last part.
+func (s *Sender) Metrics() pmetric.Metrics { return s.metrics }
+
+// FamilyDone marks a boundary where a part may be sent.
+func (s *Sender) FamilyDone() {
+	if s.minPoints > 0 && s.points >= s.minPoints {
+		s.Flush()
 	}
 }
 
-func (s *Sender) Metrics() pmetric.Metrics { return s.metrics }
+// Flush hands on the data points accumulated since the last part.
+func (s *Sender) Flush() {
+	if s.points == 0 {
+		return
+	}
+	s.send(s.metrics)
+	s.reset()
+}
 
 func (s *Sender) Gauge(metric string, value float64, hostname string, tags []string) {
 	// The agent's aggregator sorts and deduplicates tags, and keeps the last
@@ -88,6 +117,7 @@ func (s *Sender) Gauge(metric string, value float64, hostname string, tags []str
 		return
 	}
 	s.contexts[key] = dps.Len()
+	s.points++
 	dp := dps.AppendEmpty()
 	dp.SetTimestamp(s.ts)
 	dp.SetDoubleValue(value)

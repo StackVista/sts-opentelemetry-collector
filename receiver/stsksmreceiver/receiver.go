@@ -169,21 +169,36 @@ func (r *ksmReceiver) run(ctx context.Context, done chan struct{}) {
 
 func (r *ksmReceiver) collect(ctx context.Context, check *ksm.KSMCheck, stores [][]cache.Store) {
 	now := time.Now()
-	s := pmetricsender.New(pcommon.NewTimestampFromTime(now))
+	ts := pcommon.NewTimestampFromTime(now)
+	var failed int
+	var firstErr error
+	send := func(md pmetric.Metrics) {
+		if err := r.send(ctx, md); err != nil {
+			failed++
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	// Sending in parts bounds the memory a collection holds in flight.
+	s := pmetricsender.New(ts, r.cfg.MinPointsPerSend, send)
 	check.Collect(s, stores, now)
-	md := s.Metrics()
+	s.Flush()
+	if failed > 0 {
+		r.set.Logger.Error("Failed to send Kubernetes state metrics", zap.Int("failed_sends", failed), zap.Error(firstErr))
+	}
+}
+
+func (r *ksmReceiver) send(ctx context.Context, md pmetric.Metrics) error {
 	points := md.DataPointCount()
 	if points == 0 {
-		return
+		return nil
 	}
 	r.setResource(md)
-
 	ctx = r.obsrecv.StartMetricsOp(ctx)
 	err := r.next.ConsumeMetrics(ctx, md)
 	r.obsrecv.EndMetricsOp(ctx, typeStr, points, err)
-	if err != nil {
-		r.set.Logger.Error("Failed to send Kubernetes state metrics", zap.Error(err))
-	}
+	return err
 }
 
 func (r *ksmReceiver) setResource(md pmetric.Metrics) {

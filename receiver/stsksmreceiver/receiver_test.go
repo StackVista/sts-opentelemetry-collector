@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/consumer/consumertest"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/receiver/receivertest"
 	"go.uber.org/zap"
@@ -120,6 +121,32 @@ func TestCollectionPayloadShape(t *testing.T) {
 	assert.Equal(t, "prod-eu", attrs["kube_cluster_name"])
 	assert.Equal(t, "cluster-uid", attrs["orch_cluster_id"])
 	assert.Equal(t, "0", attrs["interval"])
+}
+
+func TestCollectionIsSentInParts(t *testing.T) {
+	sink := new(consumertest.MetricsSink)
+	rcv, _ := newTestReceiver(t, fakeClient(clusterObjects()...), sink, func(c *Config) { c.MinPointsPerSend = 1 })
+	require.NoError(t, rcv.Start(context.Background(), componenttest.NewNopHost()))
+	t.Cleanup(func() { require.NoError(t, rcv.Shutdown(context.Background())) })
+
+	// Parts of one collection share its timestamp; the receiver collects every 20 ms.
+	var parts []pmetric.Metrics
+	require.Eventually(t, func() bool {
+		byCollection := map[pcommon.Timestamp][]pmetric.Metrics{}
+		for _, md := range sink.AllMetrics() {
+			ts := md.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0).Gauge().DataPoints().At(0).Timestamp()
+			byCollection[ts] = append(byCollection[ts], md)
+			if len(byCollection[ts]) > 1 {
+				parts = byCollection[ts]
+				return true
+			}
+		}
+		return false
+	}, eventually, 10*time.Millisecond)
+	for _, md := range parts {
+		assert.Equal(t, map[string]any{"service.namespace": "", "k8s.cluster.name": "prod-eu"},
+			md.ResourceMetrics().At(0).Resource().Attributes().AsRaw())
+	}
 }
 
 func TestClusterIDFallback(t *testing.T) {

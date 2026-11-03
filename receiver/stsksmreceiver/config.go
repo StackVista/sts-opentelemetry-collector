@@ -36,6 +36,9 @@ type Config struct {
 	// K8sLeaderElector is the ID of a k8sleaderelector extension. When set, only
 	// the leader collects.
 	K8sLeaderElector *component.ID `mapstructure:"k8s_leader_elector"`
+	// MinPointsPerSend splits a collection into sends of at least this many data
+	// points, at metric family boundaries. Zero sends each collection whole.
+	MinPointsPerSend int `mapstructure:"min_points_per_send"`
 }
 
 // defaultCollectors is the cluster agent chart's collector list.
@@ -65,6 +68,9 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.ResyncPeriod < time.Second {
 		return errors.New("resync_period must be at least 1s")
+	}
+	if cfg.MinPointsPerSend < 0 {
+		return errors.New("min_points_per_send must not be negative")
 	}
 	if len(cfg.Collectors) == 0 {
 		return errors.New("collectors must not be empty")
