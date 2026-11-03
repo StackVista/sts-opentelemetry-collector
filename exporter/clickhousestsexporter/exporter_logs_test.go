@@ -10,7 +10,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter"
 	"github.com/stretchr/testify/require"
@@ -90,8 +89,8 @@ func TestLogsExporter_New(t *testing.T) {
 }
 
 const (
-	logsTable          = "otel_logs"
-	logsResourcesTable = "otel_logs_resources"
+	logsTable          = "otel_logs_v1"
+	logsResourcesTable = "otel_logs_resources_v1"
 )
 
 type logsInserts struct {
@@ -116,30 +115,17 @@ func recordLogsInserts(t *testing.T) *logsInserts {
 	return inserts
 }
 
-// Inserts use the native batch API, which the fake database/sql driver cannot observe; the
-// row mapping is covered by internal tests and the inserts by the integration tests.
 func TestLogsExporter_TableCreation(t *testing.T) {
-	t.Run("tables are created by default", func(t *testing.T) {
+	t.Run("StackState owns table creation", func(t *testing.T) {
 		inserts := recordLogsInserts(t)
 		newTestLogsExporter(t)
-
-		require.Len(t, inserts.creates, 2)
-		require.Contains(t, inserts.creates[0], logsResourcesTable)
-		require.Contains(t, inserts.creates[1], logsTable)
-	})
-	t.Run("tables are not created when disabled", func(t *testing.T) {
-		inserts := recordLogsInserts(t)
-		newTestLogsExporter(t, func(cfg *clickhousestsexporter.Config) { cfg.CreateLogsTable = false })
-
 		require.Empty(t, inserts.creates)
 	})
-	t.Run("resources table TTL has slack beyond the logs TTL", func(t *testing.T) {
-		inserts := recordLogsInserts(t)
-		newTestLogsExporter(t, func(cfg *clickhousestsexporter.Config) { cfg.TTL = 72 * time.Hour })
-
-		require.Len(t, inserts.creates, 2)
-		require.Contains(t, inserts.creates[0], "toIntervalDay(5)")
-		require.Contains(t, inserts.creates[1], "toIntervalDay(3)")
+	t.Run("collector table creation is rejected", func(t *testing.T) {
+		cfg := withDefaultConfig(func(cfg *clickhousestsexporter.Config) { cfg.CreateLogsTable = true })
+		exporter, err := clickhousestsexporter.NewLogsExporter(testTelemetrySettings(t), cfg)
+		require.Nil(t, exporter)
+		require.ErrorContains(t, err, "managed by StackState")
 	})
 }
 

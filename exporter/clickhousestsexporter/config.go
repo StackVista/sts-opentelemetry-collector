@@ -33,7 +33,7 @@ type Config struct {
 	Database string `mapstructure:"database"`
 	// ConnectionParams is the extra connection parameters with map format. for example compression/dial_timeout
 	ConnectionParams map[string]string `mapstructure:"connection_params"`
-	// LogsTableName is the table name for logs. default is `otel_logs`.
+	// LogsTableName is the table name for logs. default is `otel_logs_v1`.
 	LogsTableName string `mapstructure:"logs_table_name"`
 	// TracesTableName is the table name for logs. default is `otel_traces`.
 	TracesTableName string `mapstructure:"traces_table_name"`
@@ -41,7 +41,7 @@ type Config struct {
 	MetricsTableName string `mapstructure:"metrics_table_name"`
 	// ResourcesTableName is the table name for resources. default is `otel_resources`.
 	ResourcesTableName string `mapstructure:"resources_table_name"`
-	// LogsResourcesTableName is the table name for resources of logs. default is `otel_logs_resources`.
+	// LogsResourcesTableName is the table name for resources of logs. default is `otel_logs_resources_v1`.
 	LogsResourcesTableName string `mapstructure:"logs_resources_table_name"`
 
 	// Deprecated: Use 'ttl' instead
@@ -52,7 +52,7 @@ type Config struct {
 	CreateTracesTable bool `mapstructure:"create_traces_table"`
 	// Create the resources table on startup
 	CreateResourcesTable bool `mapstructure:"create_resources_table"`
-	// Create the logs and logs resources tables on startup
+	// Deprecated: log tables are managed by StackState; this must remain false.
 	CreateLogsTable bool `mapstructure:"create_logs_table"`
 
 	driverName string
