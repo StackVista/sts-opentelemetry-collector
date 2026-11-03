@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"strconv"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -39,6 +41,8 @@ type compactObject struct {
 	metav1.ObjectMeta
 
 	raw []byte
+	// size is the object's json.Marshal length, which payload budgets use.
+	size int
 }
 
 func newCompactObject(u *unstructured.Unstructured) (*compactObject, error) {
@@ -46,6 +50,13 @@ func newCompactObject(u *unstructured.Unstructured) (*compactObject, error) {
 	raw, err := json.Marshal(u.Object)
 	if err != nil {
 		return nil, err
+	}
+	size := len(raw)
+	if hasIntegralFloat(u.Object) {
+		// json.Marshal writes 1.0 as 1, which decodes as an integer.
+		if raw, err = json.Marshal(keepFloats(u.Object)); err != nil {
+			return nil, err
+		}
 	}
 	return &compactObject{
 		TypeMeta: metav1.TypeMeta{APIVersion: u.GetAPIVersion(), Kind: u.GetKind()},
@@ -55,7 +66,8 @@ func newCompactObject(u *unstructured.Unstructured) (*compactObject, error) {
 			UID:             u.GetUID(),
 			ResourceVersion: u.GetResourceVersion(),
 		},
-		raw: raw,
+		raw:  raw,
+		size: size,
 	}, nil
 }
 
@@ -82,7 +94,8 @@ func compactObjectFromJSON(raw []byte) (*compactObject, error) {
 			UID:             header.Metadata.UID,
 			ResourceVersion: header.Metadata.ResourceVersion,
 		},
-		raw: raw,
+		raw:  raw,
+		size: len(raw),
 	}, nil
 }
 
@@ -90,7 +103,7 @@ func (c *compactObject) GetKind() string { return c.Kind }
 
 func (c *compactObject) DeepCopyObject() runtime.Object {
 	meta := c.ObjectMeta
-	return &compactObject{TypeMeta: c.TypeMeta, ObjectMeta: *meta.DeepCopy(), raw: bytes.Clone(c.raw)}
+	return &compactObject{TypeMeta: c.TypeMeta, ObjectMeta: *meta.DeepCopy(), raw: bytes.Clone(c.raw), size: c.size}
 }
 
 // decode uses the dynamic client's JSON number handling, so the result equals
@@ -131,7 +144,7 @@ func objectPayloadSize(obj resourceObject) (int, bool) {
 	case *unstructured.Unstructured:
 		return serializedObjectSize(o.Object)
 	case *compactObject:
-		return len(o.raw), true
+		return o.size, true
 	default:
 		return 0, false
 	}
@@ -183,4 +196,55 @@ func compactTransform(sanitize cache.TransformFunc) cache.TransformFunc {
 		}
 		return u, nil
 	}
+}
+
+// integralFloat reports whether json.Marshal writes f without a fraction or
+// exponent, as it does for 1.0 below 1e21.
+func integralFloat(f float64) bool {
+	return f == math.Trunc(f) && math.Abs(f) < 1e21
+}
+
+func hasIntegralFloat(v interface{}) bool {
+	switch t := v.(type) {
+	case float64:
+		return integralFloat(t)
+	case map[string]interface{}:
+		for _, e := range t {
+			if hasIntegralFloat(e) {
+				return true
+			}
+		}
+	case []interface{}:
+		for _, e := range t {
+			if hasIntegralFloat(e) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// keepFloats copies v with integral floats as json.Number "1.0", which decodes
+// back to a float.
+func keepFloats(v interface{}) interface{} {
+	switch t := v.(type) {
+	case float64:
+		if integralFloat(t) {
+			return json.Number(strconv.FormatFloat(t, 'f', -1, 64) + ".0")
+		}
+		return t
+	case map[string]interface{}:
+		out := make(map[string]interface{}, len(t))
+		for k, e := range t {
+			out[k] = keepFloats(e)
+		}
+		return out
+	case []interface{}:
+		out := make([]interface{}, len(t))
+		for i, e := range t {
+			out[i] = keepFloats(e)
+		}
+		return out
+	}
+	return v
 }

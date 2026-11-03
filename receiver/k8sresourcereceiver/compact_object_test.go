@@ -89,7 +89,7 @@ const compactFixtureWidget = `{
 	"metadata": {"name": "w", "namespace": "prod", "uid": "u-1", "resourceVersion": "7",
 		"labels": {"app": "<a&b>"},
 		"managedFields": [{"manager": "kubectl"}]},
-	"spec": {"replicas": 3, "ratio": 0.25, "big": 9007199254740993, "huge": 1e300,
+	"spec": {"replicas": 3, "ratio": 0.25, "whole": 1.0, "negative": -2.0, "big": 9007199254740993, "huge": 1e300,
 		"items": [1, "two", {"three": null}, [true, false]], "empty": {}, "none": [], "text": "héllo"}
 }`
 
