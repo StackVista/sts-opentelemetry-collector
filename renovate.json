@@ -111,19 +111,5 @@
       "rebaseWhen": "conflicted",
       "separateMinorPatch": false
     }
-  ],
-  "postUpgradeTasks": {
-    "commands": [
-      "go -C extension/settingsproviderextension generate ./generated/settingsproto/... ./generated/settingsschema/..."
-    ],
-    "installTools": {
-      "golang": true
-    },
-    "executionMode": "branch",
-    "fileFilters": [
-      "extension/settingsproviderextension/generated/settingsproto/model.gen.go",
-      "extension/settingsproviderextension/generated/settingsschema/model.gen.go",
-      "go.work.sum"
-    ]
-  }
+  ]
 }
