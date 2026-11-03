@@ -124,7 +124,7 @@ func TestCollectionPayloadShape(t *testing.T) {
 
 func TestCollectionIsSentInParts(t *testing.T) {
 	sink := new(consumertest.MetricsSink)
-	rcv, _ := newTestReceiver(t, fakeClient(clusterObjects()...), sink, func(c *Config) { c.MaxPointsPerSend = 1 })
+	rcv, _ := newTestReceiver(t, fakeClient(clusterObjects()...), sink, func(c *Config) { c.MinPointsPerSend = 1 })
 	require.NoError(t, rcv.Start(context.Background(), componenttest.NewNopHost()))
 	t.Cleanup(func() { require.NoError(t, rcv.Shutdown(context.Background())) })
 

@@ -25,7 +25,7 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, defaultCollectors(), cfg.Collectors)
 	assert.Contains(t, cfg.Collectors, "endpoints")
 	assert.Nil(t, cfg.K8sLeaderElector)
-	assert.Equal(t, 8192, cfg.MaxPointsPerSend)
+	assert.Equal(t, 8192, cfg.MinPointsPerSend)
 	assert.Error(t, cfg.Validate(), "cluster_name has no default")
 }
 
@@ -38,7 +38,7 @@ func TestConfigValidate(t *testing.T) {
 		"sub-second resync":    func(c *Config) { c.ResyncPeriod = 500 * time.Millisecond },
 		"no collectors":        func(c *Config) { c.Collectors = nil },
 		"empty collector":      func(c *Config) { c.Collectors = []string{defaultCollectors()[0], ""} },
-		"negative send size":   func(c *Config) { c.MaxPointsPerSend = -1 },
+		"negative send size":   func(c *Config) { c.MinPointsPerSend = -1 },
 		"namespace label wildcard": func(c *Config) {
 			c.LabelsAsTags = map[string]map[string]string{namespaceKind: {"*": "ns_%%label%%"}}
 		},

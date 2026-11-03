@@ -60,7 +60,7 @@ func TestPipelineToPmetric(t *testing.T) {
 
 	var s *pmetricsender.Sender
 	newSender := func() sender.Sender {
-		s = pmetricsender.New(pcommon.NewTimestampFromTime(time.Now()))
+		s = pmetricsender.New(pcommon.NewTimestampFromTime(time.Now()), 0, func(pmetric.Metrics) {})
 		return s
 	}
 	collectWhen(t, check, stores, newSender, func() bool {

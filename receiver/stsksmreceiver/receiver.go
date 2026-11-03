@@ -180,16 +180,10 @@ func (r *ksmReceiver) collect(ctx context.Context, check *ksm.KSMCheck, stores [
 			}
 		}
 	}
-	if r.cfg.MaxPointsPerSend == 0 {
-		s := pmetricsender.New(ts)
-		check.Collect(s, stores, now)
-		send(s.Metrics())
-	} else {
-		// Sending in parts bounds the memory a collection holds in flight.
-		s := pmetricsender.NewChunked(ts, r.cfg.MaxPointsPerSend, send)
-		check.Collect(s, stores, now)
-		s.Flush()
-	}
+	// Sending in parts bounds the memory a collection holds in flight.
+	s := pmetricsender.New(ts, r.cfg.MinPointsPerSend, send)
+	check.Collect(s, stores, now)
+	s.Flush()
 	if failed > 0 {
 		r.set.Logger.Error("Failed to send Kubernetes state metrics", zap.Int("failed_sends", failed), zap.Error(firstErr))
 	}

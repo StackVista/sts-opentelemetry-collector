@@ -27,7 +27,7 @@ func createDefaultConfig() component.Config {
 		CollectionInterval: 40 * time.Second,
 		ResyncPeriod:       300 * time.Second,
 		Collectors:         defaultCollectors(),
-		MaxPointsPerSend:   8192,
+		MinPointsPerSend:   8192,
 	}
 }
 

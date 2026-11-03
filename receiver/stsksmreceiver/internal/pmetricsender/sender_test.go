@@ -16,7 +16,7 @@ import (
 const shopNamespace = "kube_namespace:shop"
 
 func TestGauge(t *testing.T) {
-	s := pmetricsender.New(pcommon.Timestamp(42))
+	s := pmetricsender.New(pcommon.Timestamp(42), 0, discard)
 	s.Gauge("kubernetes_state.container.restarts", 3, "node-1-prod", []string{
 		shopNamespace, "pod_name:web-0", "uid:pod-uid", "kube_container_name:app",
 		"container_id:containerd://abc123", "kube_cluster_name:prod", "kube_namespace:other",
@@ -61,13 +61,13 @@ func TestGauge(t *testing.T) {
 }
 
 func TestServiceCheckIsDropped(t *testing.T) {
-	s := pmetricsender.New(pcommon.Timestamp(0))
+	s := pmetricsender.New(pcommon.Timestamp(0), 0, discard)
 	s.ServiceCheck("kubernetes_state.node.ready", servicecheck.ServiceCheckOK, "node-1", []string{"node:node-1"}, "")
 	assert.Equal(t, 0, s.Metrics().MetricCount())
 }
 
 func TestTagWithoutValue(t *testing.T) {
-	s := pmetricsender.New(pcommon.Timestamp(1))
+	s := pmetricsender.New(pcommon.Timestamp(1), 0, discard)
 	s.Gauge("kubernetes_state.pod.count", 1, "", []string{"orphaned", shopNamespace})
 
 	attrs := s.Metrics().ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0).Gauge().DataPoints().At(0).Attributes()
@@ -80,7 +80,7 @@ func TestTagWithoutValue(t *testing.T) {
 
 func TestRepeatedSeriesKeepLastValue(t *testing.T) {
 	const name, op, pod = "kubernetes_state.pod.tolerations", "operator:Exists", "pod_name:a"
-	s := pmetricsender.New(pcommon.Timestamp(0))
+	s := pmetricsender.New(pcommon.Timestamp(0), 0, discard)
 	s.Gauge(name, 1, "", []string{op, pod})
 	s.Gauge(name, 2, "", []string{pod, op, pod})
 	s.Gauge(name, 3, "node-1", []string{pod, op})
@@ -115,6 +115,8 @@ func TestSemconvAttributesDoNotCollideWithTags(t *testing.T) {
 	}
 }
 
+func discard(pmetric.Metrics) {}
+
 const podOne, podTwo = "pod_name:p1", "pod_name:p2"
 
 // submitFamilies submits three families; the first emits two metric names per
@@ -148,11 +150,11 @@ func values(parts []pmetric.Metrics) map[string][]float64 {
 }
 
 func TestChunkedSenderSplitsBetweenFamilies(t *testing.T) {
-	whole := pmetricsender.New(pcommon.Timestamp(0))
+	whole := pmetricsender.New(pcommon.Timestamp(0), 0, discard)
 	submitFamilies(whole)
 
 	var parts []pmetric.Metrics
-	s := pmetricsender.NewChunked(pcommon.Timestamp(0), 2, func(md pmetric.Metrics) { parts = append(parts, md) })
+	s := pmetricsender.New(pcommon.Timestamp(0), 2, func(md pmetric.Metrics) { parts = append(parts, md) })
 	submitFamilies(s)
 	s.Flush()
 
@@ -168,4 +170,12 @@ func metricNames(md pmetric.Metrics) []string {
 		names[i] = ms.At(i).Name()
 	}
 	return names
+}
+
+func TestSenderWithoutMinimumSendsWhole(t *testing.T) {
+	var parts []pmetric.Metrics
+	s := pmetricsender.New(pcommon.Timestamp(0), 0, func(md pmetric.Metrics) { parts = append(parts, md) })
+	submitFamilies(s)
+	s.Flush()
+	require.Len(t, parts, 1)
 }

@@ -47,10 +47,10 @@ var semconv = map[string]string{ //nolint:gochecknoglobals
 // SemconvAttributes returns the Datadog tag key to semantic-convention attribute mapping.
 func SemconvAttributes() map[string]string { return maps.Clone(semconv) }
 
-// Sender accumulates one collection run into a pmetric.Metrics. A chunked
-// Sender hands the run on in parts of at least maxPoints data points, split only
-// between metric families: repeated series come from one family, so they stay
-// in one part and still keep their last value.
+// Sender accumulates a collection run and passes it to send in parts of at
+// least minPoints data points, split only between metric families: repeated
+// series come from one family, so they stay in one part and still keep their
+// last value. With minPoints 0 the run is sent whole when it is flushed.
 type Sender struct {
 	metrics  pmetric.Metrics
 	scope    pmetric.MetricSlice
@@ -58,23 +58,16 @@ type Sender struct {
 	contexts map[string]int
 	ts       pcommon.Timestamp
 
-	flush     func(pmetric.Metrics)
-	maxPoints int
+	send      func(pmetric.Metrics)
+	minPoints int
 	points    int
 }
 
-func New(ts pcommon.Timestamp) *Sender {
-	s := &Sender{ts: ts}
+// New returns a Sender for one collection run. Call Flush after the run to send
+// the remainder.
+func New(ts pcommon.Timestamp, minPoints int, send func(pmetric.Metrics)) *Sender {
+	s := &Sender{ts: ts, minPoints: minPoints, send: send}
 	s.reset()
-	return s
-}
-
-// NewChunked returns a Sender that passes each part to flush. Call Flush after
-// the run to hand on the remainder.
-func NewChunked(ts pcommon.Timestamp, maxPoints int, flush func(pmetric.Metrics)) *Sender {
-	s := New(ts)
-	s.maxPoints = maxPoints
-	s.flush = flush
 	return s
 }
 
@@ -86,23 +79,24 @@ func (s *Sender) reset() {
 	s.points = 0
 }
 
-// FamilyDone marks a metric family boundary, where a part may be handed on.
+// Metrics returns the data points accumulated since the last part.
+func (s *Sender) Metrics() pmetric.Metrics { return s.metrics }
+
+// FamilyDone marks a metric family boundary, where a part may be sent.
 func (s *Sender) FamilyDone() {
-	if s.flush != nil && s.points >= s.maxPoints {
+	if s.minPoints > 0 && s.points >= s.minPoints {
 		s.Flush()
 	}
 }
 
 // Flush hands on the data points accumulated since the last part.
 func (s *Sender) Flush() {
-	if s.flush == nil || s.points == 0 {
+	if s.points == 0 {
 		return
 	}
-	s.flush(s.metrics)
+	s.send(s.metrics)
 	s.reset()
 }
-
-func (s *Sender) Metrics() pmetric.Metrics { return s.metrics }
 
 func (s *Sender) Gauge(metric string, value float64, hostname string, tags []string) {
 	// The agent's aggregator sorts and deduplicates tags, and keeps the last
