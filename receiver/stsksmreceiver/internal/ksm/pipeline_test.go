@@ -2,6 +2,8 @@ package ksm
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +15,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ddcompat/sender"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/pmetricsender"
@@ -128,4 +132,82 @@ func find(md pmetric.Metrics, name string) *pmetric.NumberDataPoint {
 		}
 	}
 	return nil
+}
+
+func seriesKey(name string, dp pmetric.NumberDataPoint) string {
+	attrs := dp.Attributes().AsRaw()
+	keys := make([]string, 0, len(attrs))
+	for k, v := range attrs {
+		keys = append(keys, fmt.Sprintf("%s=%v", k, v))
+	}
+	slices.Sort(keys)
+	return name + "\x00" + strings.Join(keys, "\x00")
+}
+
+func seriesValues(md pmetric.Metrics) map[string]float64 {
+	out := map[string]float64{}
+	ms := md.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics()
+	for i := 0; i < ms.Len(); i++ {
+		dps := ms.At(i).Gauge().DataPoints()
+		for j := 0; j < dps.Len(); j++ {
+			out[seriesKey(ms.At(i).Name(), dps.At(j))] = dps.At(j).DoubleValue()
+		}
+	}
+	return out
+}
+
+func TestChunkedCollectionMatchesWholeSend(t *testing.T) {
+	ctrl := true
+	objects := []runtime.Object{
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "shop", UID: "ns-uid"}},
+		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-1", UID: "node-uid"}},
+	}
+	for i := range 6 {
+		objects = append(objects, &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf("web-%d", i), Namespace: "shop", UID: types.UID(fmt.Sprintf("pod-%d", i)),
+				OwnerReferences: []metav1.OwnerReference{{Kind: "ReplicaSet", Name: "web-rs", Controller: &ctrl}},
+			},
+			Spec: corev1.PodSpec{
+				NodeName: "node-1",
+				// A toleration listed twice gives a series repeated within the object, as DaemonSet Pods often have.
+				Tolerations: []corev1.Toleration{{Operator: corev1.TolerationOpExists}, {Operator: corev1.TolerationOpExists}},
+				Containers:  []corev1.Container{{Name: "app", Image: "web:1"}, {Name: "sidecar", Image: "proxy:1"}},
+			},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodRunning,
+				ContainerStatuses: []corev1.ContainerStatus{
+					{Name: "app", Ready: true, RestartCount: int32(i)},
+					{Name: "sidecar", Ready: true},
+				},
+			},
+		})
+	}
+	check := New(&KSMConfig{Collectors: chartCollectors}, Options{ClusterName: "prod"})
+	stores := startFakeKSM(t, check, objects...)
+
+	var whole *pmetricsender.Sender
+	collectWhen(t, check, stores, func() sender.Sender {
+		whole = pmetricsender.New(pcommon.NewTimestampFromTime(time.Now()), 0, func(pmetric.Metrics) {})
+		return whole
+	}, func() bool {
+		return len(seriesValues(whole.Metrics())) > 0 && find(whole.Metrics(), "kubernetes_state.pod.tolerations") != nil
+	})
+	want := seriesValues(whole.Metrics())
+
+	var parts []pmetric.Metrics
+	chunked := pmetricsender.New(pcommon.NewTimestampFromTime(time.Now()), 1, func(md pmetric.Metrics) { parts = append(parts, md) })
+	check.Collect(chunked, stores, time.Now())
+	chunked.Flush()
+
+	require.Greater(t, len(parts), 1)
+	got := map[string]float64{}
+	for _, md := range parts {
+		for key, value := range seriesValues(md) {
+			_, dup := got[key]
+			require.False(t, dup, "series in two parts: %q", key)
+			got[key] = value
+		}
+	}
+	assert.Equal(t, want, got)
 }

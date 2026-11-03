@@ -489,9 +489,11 @@ func (k *KSMCheck) processMetrics(sender sender.Sender, metrics map[string][]ksm
 	}
 }
 
-// familyDone lets a chunking sender split a collection between metric families.
-// Repeated series come from one family, and aggregators reset after each flush,
-// so with one store per collector no series is split across sends.
+// familyDone marks where a chunking sender may split a collection: between the
+// per-object groups of a metric family that MetricsStore.Push returns, and
+// before aggregator flushes. Repeated series come from one object, and
+// aggregators reset after each flush, so with one store per collector no
+// series is split across sends.
 func familyDone(s sender.Sender) {
 	if f, ok := s.(interface{ FamilyDone() }); ok {
 		f.FamilyDone()

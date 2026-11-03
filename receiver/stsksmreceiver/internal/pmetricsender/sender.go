@@ -48,9 +48,10 @@ var semconv = map[string]string{ //nolint:gochecknoglobals
 func SemconvAttributes() map[string]string { return maps.Clone(semconv) }
 
 // Sender accumulates a collection run and passes it to send in parts of at
-// least minPoints data points, split only between metric families: repeated
-// series come from one family, so they stay in one part and still keep their
-// last value. With minPoints 0 the run is sent whole when it is flushed.
+// least minPoints data points, split only where FamilyDone marks a boundary.
+// The KSM check marks one between objects, so a repeated series, which comes
+// from one object, stays in one part and still keeps its last value. With
+// minPoints 0 the run is sent whole when it is flushed.
 type Sender struct {
 	metrics  pmetric.Metrics
 	scope    pmetric.MetricSlice
@@ -82,7 +83,7 @@ func (s *Sender) reset() {
 // Metrics returns the data points accumulated since the last part.
 func (s *Sender) Metrics() pmetric.Metrics { return s.metrics }
 
-// FamilyDone marks a metric family boundary, where a part may be sent.
+// FamilyDone marks a boundary where a part may be sent.
 func (s *Sender) FamilyDone() {
 	if s.minPoints > 0 && s.points >= s.minPoints {
 		s.Flush()

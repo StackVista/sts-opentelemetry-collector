@@ -119,8 +119,8 @@ func discard(pmetric.Metrics) {}
 
 const podOne, podTwo = "pod_name:p1", "pod_name:p2"
 
-// submitFamilies submits three families; the first emits two metric names per
-// object, as KSM resource families do.
+// submitFamilies submits three groups between boundaries; the first emits two
+// metric names, as one object's resource limits do.
 func submitFamilies(s *pmetricsender.Sender) {
 	s.FamilyDone()
 	s.Gauge("a", 1, "", []string{podOne})
@@ -149,7 +149,7 @@ func values(parts []pmetric.Metrics) map[string][]float64 {
 	return out
 }
 
-func TestChunkedSenderSplitsBetweenFamilies(t *testing.T) {
+func TestChunkedSenderSplitsOnlyAtBoundaries(t *testing.T) {
 	whole := pmetricsender.New(pcommon.Timestamp(0), 0, discard)
 	submitFamilies(whole)
 
@@ -158,8 +158,8 @@ func TestChunkedSenderSplitsBetweenFamilies(t *testing.T) {
 	submitFamilies(s)
 	s.Flush()
 
-	require.Len(t, parts, 3, "a part is handed on at a family boundary once it holds 2 points")
-	assert.Equal(t, []string{"a", "x"}, metricNames(parts[0]), "a family's names and repeated series stay in one part")
+	require.Len(t, parts, 3, "a part is handed on at a boundary once it holds 2 points")
+	assert.Equal(t, []string{"a", "x"}, metricNames(parts[0]), "names and repeated series between two boundaries stay in one part")
 	assert.Equal(t, values([]pmetric.Metrics{whole.Metrics()}), values(parts))
 }
 
