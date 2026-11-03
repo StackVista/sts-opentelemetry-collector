@@ -64,8 +64,8 @@ processors:
 
 replaces:
   - github.com/stackvista/sts-opentelemetry-collector/common => ../common
-  - google.golang.org/grpc => google.golang.org/grpc v1.83.2
-  - github.com/klauspost/compress => github.com/klauspost/compress v1.20.0
+  - google.golang.org/grpc => google.golang.org/grpc v1.85.0
+  - github.com/klauspost/compress => github.com/klauspost/compress v1.20.3
   - golang.org/x/crypto => golang.org/x/crypto v0.57.0
   - github.com/goccy/go-json => github.com/goccy/go-json v0.11.2
   # The agent does not include the server modules that select these fixed exporters.
