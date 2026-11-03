@@ -22,6 +22,7 @@ jobs:
 
   branches:
     needs: renovate
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: read
@@ -86,7 +87,7 @@ jobs:
   commit:
     name: Commit models for PR ${{ matrix.pr.number }}
     needs: [branches, generate]
-    if: ${{ !cancelled() && needs.branches.result == 'success' && needs.branches.outputs.branches != '[]' }}
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.branches.result == 'success' && needs.branches.outputs.branches != '[]' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
