@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/ddcompat/servicecheck"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/stsksmreceiver/internal/pmetricsender"
@@ -112,4 +113,59 @@ func TestSemconvAttributesDoNotCollideWithTags(t *testing.T) {
 		_, isTag := pmetricsender.SemconvAttributes()[sanitise(attr)]
 		assert.False(t, isTag, "%s becomes the label of a mapped tag", attr)
 	}
+}
+
+const podOne, podTwo = "pod_name:p1", "pod_name:p2"
+
+// submitFamilies submits three families; the first emits two metric names per
+// object, as KSM resource families do.
+func submitFamilies(s *pmetricsender.Sender) {
+	s.FamilyDone()
+	s.Gauge("a", 1, "", []string{podOne})
+	s.Gauge("x", 1, "", []string{podOne})
+	s.Gauge("a", 2, "", []string{podOne})
+	s.Gauge("a", 3, "", []string{podTwo})
+	s.Gauge("x", 3, "", []string{podTwo})
+	s.FamilyDone()
+	s.Gauge("b", 4, "", []string{podOne})
+	s.Gauge("b", 5, "", []string{podTwo})
+	s.FamilyDone()
+	s.Gauge("c", 6, "", []string{podOne})
+}
+
+func values(parts []pmetric.Metrics) map[string][]float64 {
+	out := map[string][]float64{}
+	for _, md := range parts {
+		ms := md.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics()
+		for i := 0; i < ms.Len(); i++ {
+			dps := ms.At(i).Gauge().DataPoints()
+			for j := 0; j < dps.Len(); j++ {
+				out[ms.At(i).Name()] = append(out[ms.At(i).Name()], dps.At(j).DoubleValue())
+			}
+		}
+	}
+	return out
+}
+
+func TestChunkedSenderSplitsBetweenFamilies(t *testing.T) {
+	whole := pmetricsender.New(pcommon.Timestamp(0))
+	submitFamilies(whole)
+
+	var parts []pmetric.Metrics
+	s := pmetricsender.NewChunked(pcommon.Timestamp(0), 2, func(md pmetric.Metrics) { parts = append(parts, md) })
+	submitFamilies(s)
+	s.Flush()
+
+	require.Len(t, parts, 3, "a part is handed on at a family boundary once it holds 2 points")
+	assert.Equal(t, []string{"a", "x"}, metricNames(parts[0]), "a family's names and repeated series stay in one part")
+	assert.Equal(t, values([]pmetric.Metrics{whole.Metrics()}), values(parts))
+}
+
+func metricNames(md pmetric.Metrics) []string {
+	ms := md.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics()
+	names := make([]string, ms.Len())
+	for i := range names {
+		names[i] = ms.At(i).Name()
+	}
+	return names
 }

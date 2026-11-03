@@ -47,25 +47,59 @@ var semconv = map[string]string{ //nolint:gochecknoglobals
 // SemconvAttributes returns the Datadog tag key to semantic-convention attribute mapping.
 func SemconvAttributes() map[string]string { return maps.Clone(semconv) }
 
-// Sender accumulates one collection run into a pmetric.Metrics.
+// Sender accumulates one collection run into a pmetric.Metrics. A chunked
+// Sender hands the run on in parts of at least maxPoints data points, split only
+// between metric families: repeated series come from one family, so they stay
+// in one part and still keep their last value.
 type Sender struct {
 	metrics  pmetric.Metrics
 	scope    pmetric.MetricSlice
 	byName   map[string]pmetric.NumberDataPointSlice
 	contexts map[string]int
 	ts       pcommon.Timestamp
+
+	flush     func(pmetric.Metrics)
+	maxPoints int
+	points    int
 }
 
 func New(ts pcommon.Timestamp) *Sender {
-	md := pmetric.NewMetrics()
-	scope := md.ResourceMetrics().AppendEmpty().ScopeMetrics().AppendEmpty().Metrics()
-	return &Sender{
-		metrics:  md,
-		scope:    scope,
-		byName:   map[string]pmetric.NumberDataPointSlice{},
-		contexts: map[string]int{},
-		ts:       ts,
+	s := &Sender{ts: ts}
+	s.reset()
+	return s
+}
+
+// NewChunked returns a Sender that passes each part to flush. Call Flush after
+// the run to hand on the remainder.
+func NewChunked(ts pcommon.Timestamp, maxPoints int, flush func(pmetric.Metrics)) *Sender {
+	s := New(ts)
+	s.maxPoints = maxPoints
+	s.flush = flush
+	return s
+}
+
+func (s *Sender) reset() {
+	s.metrics = pmetric.NewMetrics()
+	s.scope = s.metrics.ResourceMetrics().AppendEmpty().ScopeMetrics().AppendEmpty().Metrics()
+	s.byName = map[string]pmetric.NumberDataPointSlice{}
+	s.contexts = map[string]int{}
+	s.points = 0
+}
+
+// FamilyDone marks a metric family boundary, where a part may be handed on.
+func (s *Sender) FamilyDone() {
+	if s.flush != nil && s.points >= s.maxPoints {
+		s.Flush()
 	}
+}
+
+// Flush hands on the data points accumulated since the last part.
+func (s *Sender) Flush() {
+	if s.flush == nil || s.points == 0 {
+		return
+	}
+	s.flush(s.metrics)
+	s.reset()
 }
 
 func (s *Sender) Metrics() pmetric.Metrics { return s.metrics }
@@ -88,6 +122,7 @@ func (s *Sender) Gauge(metric string, value float64, hostname string, tags []str
 		return
 	}
 	s.contexts[key] = dps.Len()
+	s.points++
 	dp := dps.AppendEmpty()
 	dp.SetTimestamp(s.ts)
 	dp.SetDoubleValue(value)

@@ -122,6 +122,21 @@ func TestCollectionPayloadShape(t *testing.T) {
 	assert.Equal(t, "0", attrs["interval"])
 }
 
+func TestCollectionIsSentInParts(t *testing.T) {
+	sink := new(consumertest.MetricsSink)
+	rcv, _ := newTestReceiver(t, fakeClient(clusterObjects()...), sink, func(c *Config) { c.MaxPointsPerSend = 1 })
+	require.NoError(t, rcv.Start(context.Background(), componenttest.NewNopHost()))
+	t.Cleanup(func() { require.NoError(t, rcv.Shutdown(context.Background())) })
+
+	waitForMetric(t, sink, "kubernetes_state.node.cpu_allocatable")
+	parts := sink.AllMetrics()
+	require.Greater(t, len(parts), 1)
+	for _, md := range parts {
+		assert.Equal(t, map[string]any{"service.namespace": "", "k8s.cluster.name": "prod-eu"},
+			md.ResourceMetrics().At(0).Resource().Attributes().AsRaw())
+	}
+}
+
 func TestClusterIDFallback(t *testing.T) {
 	sink := new(consumertest.MetricsSink)
 	rcv, logs := newTestReceiver(t, fakeClient(clusterObjects()[1:]...), sink, nil)

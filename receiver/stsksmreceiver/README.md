@@ -15,6 +15,7 @@ library and the agent's own mapping code. It is a temporary compatibility path.
 | `auth_type` | `serviceAccount` | `serviceAccount` or `kubeConfig` |
 | `collection_interval` | `40s` | Interval between collections, the check interval |
 | `resync_period` | `300s` | Informer resync period, in whole seconds |
+| `max_points_per_send` | `8192` | Sends each collection in parts of at least this many data points, split between metric families, so memory in flight does not grow with the collection; `0` sends it whole |
 | `collectors` | the cluster agent chart's list | kube-state-metrics resources to collect |
 | `labels_as_tags`, `annotations_as_tags` | | Per resource kind, label or annotation → tag, as in the check's instance config. A `*` wildcard for `namespace` is rejected: it panics in the check's label join, in the cluster agent too |
 | `k8s_leader_elector` | | ID of a `k8sleaderelector` extension; only the leader collects |

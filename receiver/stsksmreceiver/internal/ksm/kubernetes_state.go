@@ -441,6 +441,7 @@ func (k *KSMCheck) processMetrics(sender sender.Sender, metrics map[string][]ksm
 		aggregatedMetricList := aggregateStatusReasonMetrics(metricsList)
 
 		for _, metricFamily := range aggregatedMetricList {
+			familyDone(sender)
 			// First check for aggregator, because the check use _labels metrics to aggregate values.
 			if aggregator, found := k.metricAggregators[metricFamily.Name]; found {
 				for _, m := range metricFamily.ListMetrics {
@@ -483,7 +484,17 @@ func (k *KSMCheck) processMetrics(sender sender.Sender, metrics map[string][]ksm
 		}
 	}
 	for _, aggregator := range k.metricAggregators {
+		familyDone(sender)
 		aggregator.flush(sender, k, labelJoiner)
+	}
+}
+
+// familyDone lets a chunking sender split a collection between metric families.
+// Repeated series come from one family, and aggregators reset after each flush,
+// so with one store per collector no series is split across sends.
+func familyDone(s sender.Sender) {
+	if f, ok := s.(interface{ FamilyDone() }); ok {
+		f.FamilyDone()
 	}
 }
 

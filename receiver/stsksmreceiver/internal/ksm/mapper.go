@@ -101,6 +101,8 @@ func (s *checkTagsSender) Gauge(metric string, value float64, hostname string, t
 	s.Sender.Gauge(metric, value, hostname, append(slices.Clip(tags), s.tags...))
 }
 
+func (s *checkTagsSender) FamilyDone() { familyDone(s.Sender) }
+
 func (s *checkTagsSender) ServiceCheck(
 	checkName string, status servicecheck.ServiceCheckStatus, hostname string, tags []string, message string,
 ) {
