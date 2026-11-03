@@ -192,7 +192,7 @@ func TestLogsToClickHouse_PlatformPipeline(t *testing.T) {
 	assert.EqualValues(t, 1, plain["TraceFlags"])
 	assert.Equal(t, "WARN", plain["SeverityText"])
 	assert.EqualValues(t, otellog.SeverityWarn, plain["SeverityNumber"])
-	assert.Equal(t, map[string]any{"retry": "2"}, plain["Ints"])
+	assert.Equal(t, map[string]any{"retry": float64(2)}, plain["Ints"])
 	assert.Equal(t, []any{"k8s.cluster.name:prod", "k8s.scope:prod/shop"}, plain["AuthScope"])
 	assert.EqualValues(t, now.UnixMicro(), plain["TsMicros"])
 	assert.JSONEq(t, `{"kvlistValue":{"values":[{"key":"msg","value":{"stringValue":"structured"}}]}}`,
