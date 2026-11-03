@@ -1,10 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "github>StackVista/renovate-config#v1.2.0",
-    "github>StackVista/renovate-config:go#v1.2.0",
-    "github>StackVista/renovate-config:docker#v1.2.0",
-    "github>StackVista/renovate-config:automerge#v1.2.0"
+    "github>StackVista/renovate-config#10734b53596c7bf4649ece6cbb2284a9899aaea1",
+    "github>StackVista/renovate-config:go#10734b53596c7bf4649ece6cbb2284a9899aaea1",
+    "github>StackVista/renovate-config:docker#10734b53596c7bf4649ece6cbb2284a9899aaea1",
+    "github>StackVista/renovate-config:automerge#10734b53596c7bf4649ece6cbb2284a9899aaea1"
   ],
   "customManagers": [
     {
@@ -114,8 +114,11 @@
   ],
   "postUpgradeTasks": {
     "commands": [
-      "python3 scripts/renovate_codegen.py"
+      "go -C extension/settingsproviderextension generate ./generated/settingsproto/... ./generated/settingsschema/..."
     ],
+    "installTools": {
+      "golang": true
+    },
     "executionMode": "branch",
     "fileFilters": [
       "extension/settingsproviderextension/generated/settingsproto/model.gen.go",

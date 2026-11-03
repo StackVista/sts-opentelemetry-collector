@@ -10,9 +10,9 @@ permissions:
 
 jobs:
   renovate:
-    uses: StackVista/renovate-config/.github/workflows/renovate.yml@8f2cca0d58dd1173affe6deb6a09debe4305a7cf # renovate-docker-tasks
+    uses: StackVista/renovate-config/.github/workflows/renovate.yml@10734b53596c7bf4649ece6cbb2284a9899aaea1 # renovate-repository-scope
     with:
-      mount_docker_socket: true
-      allowed_commands: '["^python3 scripts/renovate_codegen\\.py$"]'
+      dependency_read_repositories: stackstate
+      allowed_commands: '["^go -C extension/settingsproviderextension generate \\./generated/settingsproto/\\.\\.\\. \\./generated/settingsschema/\\.\\.\\.$"]'
     secrets:
       RENOVATE_GH_APP_PRIVATE_KEY: ${{ secrets.RENOVATE_GH_APP_PRIVATE_KEY }}
