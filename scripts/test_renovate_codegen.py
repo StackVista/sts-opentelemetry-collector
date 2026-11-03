@@ -49,6 +49,14 @@ class GeneratedFilesTests(unittest.TestCase):
                 save_outputs(archive(OUTPUTS, data=b"x" * (8 * 1024 * 1024 + 1)))
             target.assert_not_called()
 
+    def test_rejects_compressed_archives_before_writing(self):
+        import gzip
+
+        with patch("renovate_codegen.Path") as target:
+            with self.assertRaises(tarfile.ReadError):
+                save_outputs(io.BytesIO(gzip.compress(archive(OUTPUTS).getvalue())))
+            target.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,7 +15,7 @@ OUTPUTS = (
 
 
 def save_outputs(archive):
-    with tarfile.open(fileobj=archive) as result:
+    with tarfile.open(fileobj=archive, mode="r:") as result:
         members = result.getmembers()
         if sorted(member.name for member in members) != sorted(OUTPUTS):
             raise ValueError("Unexpected generated files")
