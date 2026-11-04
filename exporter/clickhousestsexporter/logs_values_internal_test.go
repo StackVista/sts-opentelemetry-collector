@@ -1,14 +1,145 @@
 package clickhousestsexporter
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 )
+
+func TestLogAnyValueJSONEscaping(t *testing.T) {
+	for _, text := range []string{
+		"", "plain ASCII / text", `"quotes" and \backslashes`,
+		"\x00\x01\b\f\n\r\t\x1f\x7f", "<script>&</script>",
+		"café 日本語 🙂", "\u2028\u2029", string([]byte{0xff, 0xc0, 0x80}),
+	} {
+		t.Run(fmt.Sprintf("%q", text), func(t *testing.T) {
+			expected, err := json.Marshal(text)
+			require.NoError(t, err)
+			encoded, err := encodeLogAnyValue(pcommon.NewValueStr(text))
+			require.NoError(t, err)
+			require.Equal(t, `{"stringValue":`+string(expected)+`}`, encoded)
+
+			value := pcommon.NewValueMap()
+			value.Map().PutStr(text, text)
+			encoded, err = encodeLogAnyValue(value)
+			require.NoError(t, err)
+			require.Equal(t, `{"kvlistValue":{"values":[{"key":`+string(expected)+
+				`,"value":{"stringValue":`+string(expected)+`}}]}}`, encoded)
+		})
+	}
+}
+
+func TestLogAnyValueFiniteDoubleJSON(t *testing.T) {
+	for _, number := range []float64{
+		0, math.Copysign(0, -1), 0.25, 1e-7, 1e-6, 1e20, 1e21,
+		math.SmallestNonzeroFloat64, math.MaxFloat64,
+	} {
+		t.Run(fmt.Sprint(number), func(t *testing.T) {
+			expected, err := json.Marshal(number)
+			require.NoError(t, err)
+			encoded, err := encodeLogAnyValue(pcommon.NewValueDouble(number))
+			require.NoError(t, err)
+			require.Equal(t, `{"doubleValue":`+string(expected)+`}`, encoded)
+		})
+	}
+}
+
+func TestLogAnyValueEmptyCollectionsAndBytes(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		value pcommon.Value
+		json  string
+	}{
+		{"unset", pcommon.NewValueEmpty(), `{}`},
+		{"array", pcommon.NewValueSlice(), `{"arrayValue":{"values":[]}}`},
+		{"map", pcommon.NewValueMap(), `{"kvlistValue":{"values":[]}}`},
+		{"bytes", pcommon.NewValueBytes(), `{"bytesValue":""}`},
+		{"false", pcommon.NewValueBool(false), `{"boolValue":false}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			encoded, err := encodeLogAnyValue(test.value)
+			require.NoError(t, err)
+			require.Equal(t, test.json, encoded)
+		})
+	}
+}
+
+func TestLogAnyValueNestedCollections(t *testing.T) {
+	value := pcommon.NewValueMap()
+	values := value.Map().PutEmptySlice("items")
+	values.AppendEmpty().SetInt(math.MinInt64)
+	values.AppendEmpty().SetInt(math.MaxInt64)
+	values.AppendEmpty().SetDouble(math.Inf(-1))
+	values.AppendEmpty().SetEmptyBytes().FromRaw([]byte{0, 255, 128})
+	values.AppendEmpty().SetEmptyMap().PutStr("quote\"", "line\n")
+	values.AppendEmpty()
+	encoded, err := encodeLogAnyValue(value)
+	require.NoError(t, err)
+	require.Equal(t, `{"kvlistValue":{"values":[{"key":"items","value":{"arrayValue":{"values":[`+
+		`{"intValue":"-9223372036854775808"},{"intValue":"9223372036854775807"},`+
+		`{"doubleValue":"-Infinity"},{"bytesValue":"AP+A"},`+
+		`{"kvlistValue":{"values":[{"key":"quote\"","value":{"stringValue":"line\n"}}]}},`+
+		`{}]}}}]}}`, encoded)
+}
+
+func FuzzLogAnyValueString(f *testing.F) {
+	for _, text := range []string{"", "ASCII", "\"\\\n", "<>&", "日本語", "\u2028", "\xff"} {
+		f.Add(text)
+	}
+	f.Fuzz(func(t *testing.T, text string) {
+		expected, err := json.Marshal(text)
+		require.NoError(t, err)
+		encoded, err := encodeLogAnyValue(pcommon.NewValueStr(text))
+		require.NoError(t, err)
+		require.Equal(t, `{"stringValue":`+string(expected)+`}`, encoded)
+	})
+}
+
+func BenchmarkEncodeLogAnyValue(b *testing.B) {
+	for _, escaped := range []bool{false, true} {
+		b.Run(fmt.Sprintf("escaped=%t", escaped), func(b *testing.B) {
+			body := pcommon.NewValueMap()
+			body.Map().PutStr("kind", "SyntheticResource")
+			items := body.Map().PutEmptySlice("items")
+			text := strings.Repeat("x", 300)
+			if escaped {
+				text = strings.Repeat("日本語 <>&\n", 30)
+			}
+			for i := 0; i < 64; i++ {
+				item := items.AppendEmpty().SetEmptyMap()
+				item.PutStr("name", fmt.Sprintf("entry-%d", i))
+				item.PutStr("data", text)
+				labels := item.PutEmptyMap("labels")
+				for label := 0; label < 4; label++ {
+					labels.PutStr(fmt.Sprintf("key-%d", label), "synthetic-value")
+				}
+			}
+			encoded, err := encodeLogAnyValue(body)
+			if err != nil {
+				b.Fatal(err)
+			}
+			b.ReportAllocs()
+			b.SetBytes(int64(len(encoded)))
+			b.ResetTimer()
+			for b.Loop() {
+				encoded, err = encodeLogAnyValue(body)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+			b.StopTimer()
+			if len(encoded) == 0 {
+				b.Fatal("empty encoded body")
+			}
+		})
+	}
+}
 
 func TestLogAttributesPreserveTypesAndInt64Bounds(t *testing.T) {
 	attrs := pcommon.NewMap()

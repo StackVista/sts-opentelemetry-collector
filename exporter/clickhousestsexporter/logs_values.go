@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil"
@@ -54,65 +55,141 @@ func encodeLogAttributes(attrs pcommon.Map) (typedAttributes, error) {
 }
 
 func encodeLogAnyValue(value pcommon.Value) (string, error) {
-	encoded, err := logAnyValue(value)
-	if err != nil {
+	var encoded strings.Builder
+	encoded.Grow(logAnyValueSize(value))
+	if err := writeLogAnyValue(&encoded, value); err != nil {
 		return "", err
 	}
-	data, err := json.Marshal(encoded)
-	if err != nil {
-		return "", fmt.Errorf("encode OTLP AnyValue: %w", err)
-	}
-	return string(data), nil
+	return encoded.String(), nil
 }
 
-func logAnyValue(value pcommon.Value) (map[string]any, error) {
+// Escaping can grow strings beyond this capacity hint.
+func logAnyValueSize(value pcommon.Value) int {
 	switch value.Type() {
 	case pcommon.ValueTypeEmpty:
-		return map[string]any{}, nil
+		return 2
 	case pcommon.ValueTypeStr:
-		return map[string]any{"stringValue": value.Str()}, nil
+		return len(`{"stringValue":""}`) + len(value.Str())
 	case pcommon.ValueTypeInt:
-		return map[string]any{"intValue": strconv.FormatInt(value.Int(), 10)}, nil
+		return len(`{"intValue":""}`) + 20
 	case pcommon.ValueTypeDouble:
-		var number any = value.Double()
+		return len(`{"doubleValue":}`) + 24
+	case pcommon.ValueTypeBool:
+		return len(`{"boolValue":false}`)
+	case pcommon.ValueTypeBytes:
+		return len(`{"bytesValue":""}`) + base64.StdEncoding.EncodedLen(value.Bytes().Len())
+	case pcommon.ValueTypeSlice:
+		size := len(`{"arrayValue":{"values":[]}}`)
+		values := value.Slice()
+		for i := 0; i < values.Len(); i++ {
+			size += logAnyValueSize(values.At(i)) + 1
+		}
+		return size
+	case pcommon.ValueTypeMap:
+		size := len(`{"kvlistValue":{"values":[]}}`)
+		value.Map().Range(func(key string, nested pcommon.Value) bool {
+			size += len(`{"key":"","value":},`) + len(key) + logAnyValueSize(nested)
+			return true
+		})
+		return size
+	default:
+		return 2
+	}
+}
+
+func writeLogAnyValue(encoded *strings.Builder, value pcommon.Value) error {
+	switch value.Type() {
+	case pcommon.ValueTypeEmpty:
+		encoded.WriteString("{}")
+	case pcommon.ValueTypeStr:
+		encoded.WriteString(`{"stringValue":`)
+		writeLogJSONString(encoded, value.Str())
+		encoded.WriteByte('}')
+	case pcommon.ValueTypeInt:
+		encoded.WriteString(`{"intValue":"`)
+		var number [20]byte
+		encoded.Write(strconv.AppendInt(number[:0], value.Int(), 10))
+		encoded.WriteString(`"}`)
+	case pcommon.ValueTypeDouble:
+		encoded.WriteString(`{"doubleValue":`)
 		switch {
 		case math.IsNaN(value.Double()):
-			number = "NaN"
+			encoded.WriteString(`"NaN"`)
 		case math.IsInf(value.Double(), 1):
-			number = "Infinity"
+			encoded.WriteString(`"Infinity"`)
 		case math.IsInf(value.Double(), -1):
-			number = "-Infinity"
-		}
-		return map[string]any{"doubleValue": number}, nil
-	case pcommon.ValueTypeBool:
-		return map[string]any{"boolValue": value.Bool()}, nil
-	case pcommon.ValueTypeBytes:
-		return map[string]any{"bytesValue": base64.StdEncoding.EncodeToString(value.Bytes().AsRaw())}, nil
-	case pcommon.ValueTypeSlice:
-		values := make([]any, 0, value.Slice().Len())
-		for i := 0; i < value.Slice().Len(); i++ {
-			nested, err := logAnyValue(value.Slice().At(i))
+			encoded.WriteString(`"-Infinity"`)
+		default:
+			number, err := json.Marshal(value.Double())
 			if err != nil {
-				return nil, err
+				return fmt.Errorf("encode OTLP double: %w", err)
 			}
-			values = append(values, nested)
+			encoded.Write(number)
 		}
-		return map[string]any{"arrayValue": map[string]any{"values": values}}, nil
+		encoded.WriteByte('}')
+	case pcommon.ValueTypeBool:
+		encoded.WriteString(`{"boolValue":`)
+		if value.Bool() {
+			encoded.WriteString("true")
+		} else {
+			encoded.WriteString("false")
+		}
+		encoded.WriteByte('}')
+	case pcommon.ValueTypeBytes:
+		encoded.WriteString(`{"bytesValue":"`)
+		encoded.WriteString(base64.StdEncoding.EncodeToString(value.Bytes().AsRaw()))
+		encoded.WriteString(`"}`)
+	case pcommon.ValueTypeSlice:
+		encoded.WriteString(`{"arrayValue":{"values":[`)
+		values := value.Slice()
+		for i := 0; i < values.Len(); i++ {
+			if i > 0 {
+				encoded.WriteByte(',')
+			}
+			if err := writeLogAnyValue(encoded, values.At(i)); err != nil {
+				return err
+			}
+		}
+		encoded.WriteString("]}}")
 	case pcommon.ValueTypeMap:
-		values := make([]any, 0, value.Map().Len())
+		encoded.WriteString(`{"kvlistValue":{"values":[`)
+		first := true
 		var err error
 		value.Map().Range(func(key string, nested pcommon.Value) bool {
-			var encoded map[string]any
-			encoded, err = logAnyValue(nested)
-			if err == nil {
-				values = append(values, map[string]any{"key": key, "value": encoded})
+			if !first {
+				encoded.WriteByte(',')
 			}
+			first = false
+			encoded.WriteString(`{"key":`)
+			writeLogJSONString(encoded, key)
+			encoded.WriteString(`,"value":`)
+			err = writeLogAnyValue(encoded, nested)
+			encoded.WriteByte('}')
 			return err == nil
 		})
-		return map[string]any{"kvlistValue": map[string]any{"values": values}}, err
+		if err != nil {
+			return err
+		}
+		encoded.WriteString("]}}")
 	default:
-		return nil, fmt.Errorf("unsupported OTLP value type %v", value.Type())
+		return fmt.Errorf("unsupported OTLP value type %v", value.Type())
 	}
+	return nil
+}
+
+func writeLogJSONString(encoded *strings.Builder, value string) {
+	for i := 0; i < len(value); i++ {
+		c := value[i]
+		if c < 0x20 || c >= 0x80 || c == '"' || c == '\\' || c == '<' || c == '>' || c == '&' {
+			//nolint:errchkjson // Marshaling a string cannot fail.
+			escaped, _ := json.Marshal(value)
+			encoded.Write(escaped)
+			return
+		}
+	}
+	encoded.WriteByte('"')
+	encoded.WriteString(value)
+	encoded.WriteByte('"')
 }
 
 type logResourceModel struct {
