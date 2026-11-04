@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"hash/maphash"
 	"math"
 	"strconv"
 	"strings"
@@ -199,22 +200,131 @@ type logResourceModel struct {
 	serviceName string
 }
 
+type cachedLogResource struct {
+	attributes pcommon.Map
+	model      *logResourceModel
+}
+
+type logResourceModels struct {
+	seed    maphash.Seed
+	entries map[uint64]cachedLogResource
+	lookups int
+	hits    int
+}
+
+const logResourceCacheSampleSize = 128
+
+func newLogResourceModels() *logResourceModels {
+	return &logResourceModels{seed: maphash.MakeSeed(), entries: make(map[uint64]cachedLogResource)}
+}
+
+func (models *logResourceModels) get(resource pcommon.Resource) (*logResourceModel, error) {
+	if models == nil || models.entries == nil {
+		return newLogResourceModel(resource)
+	}
+	attrs := resource.Attributes()
+	hash := models.fingerprint(attrs)
+	// Compare from the validated map so duplicate incoming keys cannot hit the cache.
+	if cached, found := models.entries[hash]; found && equalLogResourceAttributes(cached, attrs) {
+		models.sample(true)
+		return cached.model, nil
+	}
+	model, err := newLogResourceModel(resource)
+	if err != nil {
+		return nil, err
+	}
+	models.entries[hash] = cachedLogResource{attributes: attrs, model: model}
+	models.sample(false)
+	return model, nil
+}
+
+func (models *logResourceModels) sample(hit bool) {
+	if models.lookups >= logResourceCacheSampleSize {
+		return
+	}
+	models.lookups++
+	if hit {
+		models.hits++
+	}
+	// Stop paying lookup costs when the first groups show little resource reuse.
+	if models.lookups == logResourceCacheSampleSize && models.hits < logResourceCacheSampleSize/4 {
+		models.entries = nil
+	}
+}
+
+// This lookup key does not change the canonical ResourceRef hash.
+func (models *logResourceModels) fingerprint(attrs pcommon.Map) uint64 {
+	var hash uint64
+	attrs.Range(func(key string, value pcommon.Value) bool {
+		entry := struct {
+			key, text string
+			number    uint64
+			kind      pcommon.ValueType
+		}{key: key, kind: value.Type()}
+		switch value.Type() {
+		case pcommon.ValueTypeStr:
+			entry.text = value.Str()
+		case pcommon.ValueTypeInt:
+			entry.number = maphash.Comparable(models.seed, value.Int())
+		case pcommon.ValueTypeDouble:
+			entry.number = math.Float64bits(value.Double())
+		case pcommon.ValueTypeBool:
+			if value.Bool() {
+				entry.number = 1
+			}
+		case pcommon.ValueTypeBytes:
+			entry.number = maphash.Bytes(models.seed, value.Bytes().AsRaw())
+		case pcommon.ValueTypeMap, pcommon.ValueTypeSlice:
+			entry.number = maphash.Comparable(models.seed, pdatautil.ValueHash(value))
+		case pcommon.ValueTypeEmpty:
+		}
+		hash += maphash.Comparable(models.seed, entry)
+		return true
+	})
+	return hash
+}
+
+func equalLogResourceAttributes(cached cachedLogResource, attrs pcommon.Map) bool {
+	if !cached.attributes.Equal(attrs) {
+		return false
+	}
+	equal := true
+	attrs.Range(func(key string, value pcommon.Value) bool {
+		if value.Type() == pcommon.ValueTypeMap || value.Type() == pcommon.ValueTypeSlice {
+			// Map.Equal ignores duplicate nested keys; preserve their encoded values.
+			encoded, err := encodeLogAnyValue(value)
+			equal = err == nil && encoded == cached.model.attributes.other[key]
+		}
+		return equal
+	})
+	return equal
+}
+
+func normalizedLogResourceAttributes(attrs pcommon.Map) (pcommon.Map, string, error) {
+	service, exists := attrs.Get("service.name")
+	if !exists || (service.Type() == pcommon.ValueTypeStr && service.Str() == "") {
+		normalized := pcommon.NewMap()
+		attrs.CopyTo(normalized)
+		attrs = normalized
+		attrs.PutStr("service.name", "unknown_service")
+		service, _ = attrs.Get("service.name")
+	}
+	if service.Type() != pcommon.ValueTypeStr {
+		return pcommon.Map{}, "", fmt.Errorf("service.name must be a string")
+	}
+	return attrs, service.Str(), nil
+}
+
 func newLogResourceModel(resource pcommon.Resource) (*logResourceModel, error) {
 	attributes, err := encodeLogAttributes(resource.Attributes())
 	if err != nil {
 		return nil, err
 	}
-	attrs := pcommon.NewMap()
-	resource.Attributes().CopyTo(attrs)
-	service, exists := attrs.Get("service.name")
-	if !exists || (service.Type() == pcommon.ValueTypeStr && service.Str() == "") {
-		attrs.PutStr("service.name", "unknown_service")
-		service, _ = attrs.Get("service.name")
+	attrs, serviceName, err := normalizedLogResourceAttributes(resource.Attributes())
+	if err != nil {
+		return nil, err
 	}
-	if service.Type() != pcommon.ValueTypeStr {
-		return nil, fmt.Errorf("service.name must be a string")
-	}
-	attributes.strings["service.name"] = service.Str()
+	attributes.strings["service.name"] = serviceName
 	hash := pdatautil.MapHash(attrs)
 	ref, err := uuid.FromBytes(hash[:])
 	if err != nil {
@@ -224,6 +334,6 @@ func newLogResourceModel(resource pcommon.Resource) (*logResourceModel, error) {
 		resourceRef: ref,
 		attributes:  attributes,
 		authScope:   attributesToAuthScope(attrs),
-		serviceName: service.Str(),
+		serviceName: serviceName,
 	}, nil
 }

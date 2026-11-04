@@ -228,6 +228,10 @@ func logRowsFromPData(ld plog.Logs) ([]logRow, []*logResourceModel, logRowsStats
 	rows := make([]logRow, 0, ld.LogRecordCount())
 	resources := make([]*logResourceModel, 0, ld.ResourceLogs().Len())
 	seenResources := make(map[uuid.UUID]struct{}, ld.ResourceLogs().Len())
+	var resourceModels *logResourceModels
+	if ld.ResourceLogs().Len() > 1 {
+		resourceModels = newLogResourceModels()
+	}
 	stats := logRowsStats{rejected: plog.NewLogs()}
 resourceLoop:
 	for i := 0; i < ld.ResourceLogs().Len(); i++ {
@@ -246,7 +250,7 @@ resourceLoop:
 				}
 				var err error
 				if resource == nil {
-					resource, err = newLogResourceModel(resourceLogs.Resource())
+					resource, err = resourceModels.get(resourceLogs.Resource())
 					if err != nil {
 						stats.reject(ld, i, -1, -1, fmt.Errorf("resource group %d: %w", i, err))
 						continue resourceLoop
