@@ -23,13 +23,14 @@
     }
   ],
   "vulnerabilityAlerts": {
-    "branchTopic": "{{#if (or (equals depName \"github.com/oapi-codegen/oapi-codegen/v2\") (equals depName \"github.com/getkin/kin-openapi\"))}}openapi-generator{{else}}{{{datasource}}}-{{{depNameSanitized}}}-vulnerability{{/if}}"
+    "branchTopic": "{{#if (or (equals depName \"github.com/oapi-codegen/oapi-codegen/v2\") (or (equals depName \"github.com/oapi-codegen/runtime\") (equals depName \"github.com/getkin/kin-openapi\")))}}openapi-generator{{else}}{{{datasource}}}-{{{depNameSanitized}}}-vulnerability{{/if}}"
   },
   "packageRules": [
     {
-      "description": "Keep the OpenAPI generator and parser compatible",
+      "description": "Keep the OpenAPI generator, runtime and parser compatible",
       "matchPackageNames": [
         "github.com/oapi-codegen/oapi-codegen/v2",
+        "github.com/oapi-codegen/runtime",
         "github.com/getkin/kin-openapi"
       ],
       "groupName": "OpenAPI generator",
