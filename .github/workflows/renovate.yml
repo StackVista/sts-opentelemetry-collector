@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   renovate:
-    uses: StackVista/renovate-config/.github/workflows/renovate.yml@8f2cca0d58dd1173affe6deb6a09debe4305a7cf # renovate-docker-tasks
+    uses: StackVista/renovate-config/.github/workflows/renovate.yml@d0c369893bc063c4f07752c785954cbc374771c8 # v1.3.0
     with:
       mount_docker_socket: true
       allowed_commands: '["^bash scripts/renovate-codegen\\.sh$"]'
