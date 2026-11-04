@@ -106,5 +106,16 @@
       "rebaseWhen": "conflicted",
       "separateMinorPatch": false
     }
-  ]
+  ],
+  "postUpgradeTasks": {
+    "commands": [
+      "python3 scripts/renovate_codegen.py"
+    ],
+    "executionMode": "branch",
+    "fileFilters": [
+      "extension/settingsproviderextension/generated/settingsproto/model.gen.go",
+      "extension/settingsproviderextension/generated/settingsschema/model.gen.go",
+      "go.work.sum"
+    ]
+  }
 }
