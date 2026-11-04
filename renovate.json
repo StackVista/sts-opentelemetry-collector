@@ -67,17 +67,14 @@
       "allowedVersions": "/^15\\.7(?:[.-]|$)/"
     },
     {
-      "description": "Review ClickHouse test server refreshes separately because the digest tracks latest",
+      "description": "Track ClickHouse releases and SUSE Observability rebuilds",
       "matchDatasources": [
         "docker"
       ],
       "matchPackageNames": [
-        "clickhouse/clickhouse-server"
+        "quay.io/stackstate/clickhouse"
       ],
-      "groupName": null,
-      "groupSlug": null,
-      "automerge": false,
-      "rebaseWhen": "conflicted"
+      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\.(?<build>\\d+)-so(?<revision>\\d+)$"
     },
     {
       "description": "Review OpenTelemetry releases in one PR with the builder manifests that pin them",
