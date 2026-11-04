@@ -315,7 +315,12 @@ jobs:
       contents: read
     services:
       clickhouse:
-        image: clickhouse/clickhouse-server@sha256:6d8f358747b59f7db044749eaf951e828e75cc16f9c487f855b114272c44b82c # latest as of 2026-05-15
+        image: registry.tooling.stackstate.io/quay/stackstate/clickhouse:26.8.34.13-so2
+        credentials:
+          username: ${{ vars.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+        env:
+          CLICKHOUSE_SKIP_USER_SETUP: "yes"
         ports:
           - "9000:9000"
           - "8123:8123"

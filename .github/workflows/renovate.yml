@@ -11,5 +11,9 @@ permissions:
 jobs:
   renovate:
     uses: StackVista/renovate-config/.github/workflows/renovate.yml@aded68c2327b12da3c88b34addf37cbdf2a29fde # v1.2.0
+    with:
+      docker_registry_2: registry.tooling.stackstate.io
+      docker_registry_2_username: ${{ vars.REGISTRY_USER }}
     secrets:
       RENOVATE_GH_APP_PRIVATE_KEY: ${{ secrets.RENOVATE_GH_APP_PRIVATE_KEY }}
+      DOCKER_REGISTRY_2_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
