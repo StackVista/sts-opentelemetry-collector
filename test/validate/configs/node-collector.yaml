@@ -407,7 +407,7 @@ processors:
           - set(attributes["container_id"], attributes["container.id"]) where attributes["container.id"] != nil
           - set(attributes["image_name"], attributes["container.image.name"]) where attributes["container.image.name"] != nil
           - set(attributes["image_tag"], attributes["container.image.tag"]) where attributes["container.image.tag"] != nil
-          - set(attributes["image_id"], ExtractPatterns(attributes["container.image.repo_digests"], "(?P<digest>sha256:[a-f0-9]+)")["digest"]) where attributes["container.image.repo_digests"] != nil
+          - set(attributes["image_id"], ExtractPatterns(attributes["container.image.repo_digests"][0], "(?P<digest>sha256:[a-f0-9]+)")["digest"]) where attributes["container.image.repo_digests"] != nil and Len(attributes["container.image.repo_digests"]) > 0
           - set(attributes["short_image"], ExtractPatterns(attributes["container.image.name"], ".*/(?P<short>[^/]+)$")["short"]) where attributes["container.image.name"] != nil
           - set(attributes["display_container_name"], Concat([attributes["container"], "_", attributes["pod_name"]], "")) where attributes["container"] != nil and attributes["pod_name"] != nil
           - set(attributes["interval"], "0")
