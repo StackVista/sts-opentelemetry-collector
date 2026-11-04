@@ -416,3 +416,82 @@ func TestLogsExporter_RejectsInvalidRecordWithoutLosingValidBatch(t *testing.T) 
 	require.NotContains(t, rows, "invalid")
 	require.Len(t, ch.resources(t), 1)
 }
+
+func TestLogsExporter_ResourceIdentityPreservesValues(t *testing.T) {
+	for _, separate := range []bool{false, true} {
+		t.Run(fmt.Sprintf("separate_batches=%t", separate), func(t *testing.T) {
+			ch := startLogStorage(t)
+			exporter := startLogsExporter(t, ch.exporterConfig())
+			logs, err := (&plog.JSONUnmarshaler{}).UnmarshalLogs([]byte(`{
+				"resourceLogs":[
+					{"resource":{"attributes":[{"key":"metadata","value":{"kvlistValue":{"values":[
+						{"key":"x","value":{"stringValue":"first"}},{"key":"x","value":{"stringValue":"first"}}
+					]}}}]},"scopeLogs":[{"logRecords":[{"body":{"stringValue":"nested-first"}}]}]},
+					{"resource":{"attributes":[{"key":"metadata","value":{"kvlistValue":{"values":[
+						{"key":"x","value":{"stringValue":"first"}},{"key":"x","value":{"stringValue":"changed"}}
+					]}}}]},"scopeLogs":[{"logRecords":[{"body":{"stringValue":"nested-changed"}}]}]}
+				]
+			}`))
+			require.NoError(t, err)
+			for _, test := range []struct {
+				body  string
+				data  []byte
+				extra bool
+			}{
+				{"bytes-delimiter", []byte{1, 0xf4, 'q', 0xf7, 'v'}, false},
+				{"bytes-separate", []byte{1}, true},
+			} {
+				resource := logs.ResourceLogs().AppendEmpty()
+				resource.Resource().Attributes().PutEmptyBytes("metadata").FromRaw(test.data)
+				if test.extra {
+					resource.Resource().Attributes().PutStr("q", "v")
+				}
+				resource.ScopeLogs().AppendEmpty().LogRecords().AppendEmpty().Body().SetStr(test.body)
+			}
+			for i := 0; i < logs.ResourceLogs().Len(); i++ {
+				logs.ResourceLogs().At(i).Resource().Attributes().PutStr("k8s.cluster.name", "cluster")
+				logs.ResourceLogs().At(i).ScopeLogs().At(0).LogRecords().At(0).
+					SetTimestamp(pcommon.NewTimestampFromTime(testTime))
+			}
+			for i := 0; i < 2; i++ {
+				if separate {
+					for j := 0; j < logs.ResourceLogs().Len(); j++ {
+						batch := plog.NewLogs()
+						logs.ResourceLogs().At(j).CopyTo(batch.ResourceLogs().AppendEmpty())
+						require.NoError(t, exporter.PushLogsData(context.Background(), batch))
+					}
+				} else {
+					require.NoError(t, exporter.PushLogsData(context.Background(), logs))
+				}
+			}
+			rows := ch.logs(t)
+			require.Len(t, rows, 4)
+			require.Equal(t, uint64(8), ch.count(t, "SELECT count() FROM %s.otel_logs_v1"))
+			require.Equal(t, uint64(4), ch.count(t, "SELECT count() FROM %s.otel_logs_resources_v1"))
+			resources := ch.resources(t)
+			require.Len(t, resources, 4)
+			byRef := make(map[uuid.UUID]resourceRow, len(resources))
+			for _, resource := range resources {
+				byRef[resource.ResourceRef] = resource
+			}
+			expected := map[string]string{
+				"nested-first":    `{"kvlistValue":{"values":[{"key":"x","value":{"stringValue":"first"}},{"key":"x","value":{"stringValue":"first"}}]}}`,
+				"nested-changed":  `{"kvlistValue":{"values":[{"key":"x","value":{"stringValue":"first"}},{"key":"x","value":{"stringValue":"changed"}}]}}`,
+				"bytes-delimiter": `{"bytesValue":"AfRx93Y="}`,
+				"bytes-separate":  `{"bytesValue":"AQ=="}`,
+			}
+			for body, value := range expected {
+				row := rows[body]
+				resource, found := byRef[row.ResourceRef]
+				require.True(t, found, body)
+				require.JSONEq(t, value, resource.Other["metadata"], body)
+				require.Equal(t, []string{"k8s.cluster.name:cluster"}, row.AuthScope, body)
+				require.Equal(t, row.AuthScope, resource.AuthScope, body)
+				require.Equal(t, row.ServiceName, resource.Strings["service.name"], body)
+			}
+			require.Equal(t, "v", byRef[rows["bytes-separate"].ResourceRef].Strings["q"])
+			require.NotEqual(t, rows["nested-first"].ResourceRef, rows["nested-changed"].ResourceRef)
+			require.NotEqual(t, rows["bytes-delimiter"].ResourceRef, rows["bytes-separate"].ResourceRef)
+		})
+	}
+}

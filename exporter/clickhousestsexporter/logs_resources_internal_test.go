@@ -165,7 +165,7 @@ func TestLogResourceModelsPreserveNestedValues(t *testing.T) {
 			second, err := models.get(logs.ResourceLogs().At(1).Resource())
 			require.NoError(t, err)
 			require.NotSame(t, first, second)
-			require.Equal(t, first.resourceRef, second.resourceRef)
+			require.NotEqual(t, first.resourceRef, second.resourceRef)
 			require.NotEqual(t, first.attributes.other[key], second.attributes.other[key])
 			if key == "k8s.cluster.name" {
 				require.NotEqual(t, first.authScope, second.authScope)

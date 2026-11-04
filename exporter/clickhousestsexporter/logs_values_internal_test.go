@@ -263,14 +263,25 @@ func TestLogRowsRejectOnlyAffectedAttributeGroups(t *testing.T) {
 	}
 }
 
-func TestLogResourcePreservesExistingTypedHash(t *testing.T) {
+func TestLogResourceIdentityIgnoresAttributeOrder(t *testing.T) {
 	resource := pcommon.NewResource()
 	resource.Attributes().PutStr("service.name", "checkout")
 	resource.Attributes().PutInt("worker.count", math.MaxInt64)
 	resource.Attributes().PutEmptyBytes("identity").FromRaw([]byte{1, 0, 0})
-	legacy, err := NewResourceModel(resource)
+	resource.Attributes().PutStr("large", strings.Repeat("value", 400))
+	for i := 0; i < 40; i++ {
+		resource.Attributes().PutInt(fmt.Sprintf("key-%d", i), int64(i))
+	}
+	first, err := newLogResourceModel(resource)
 	require.NoError(t, err)
-	current, err := newLogResourceModel(resource)
+	reordered := pcommon.NewResource()
+	resource.Attributes().Range(func(key string, value pcommon.Value) bool {
+		value.CopyTo(reordered.Attributes().PutEmpty(key))
+		return true
+	})
+	reordered.Attributes().Remove("service.name")
+	reordered.Attributes().PutStr("service.name", "checkout")
+	second, err := newLogResourceModel(reordered)
 	require.NoError(t, err)
-	require.Equal(t, legacy.resourceRef, current.resourceRef)
+	require.Equal(t, first.resourceRef, second.resourceRef)
 }

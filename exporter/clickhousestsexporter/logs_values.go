@@ -1,11 +1,14 @@
 package clickhousestsexporter
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"hash/maphash"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -325,15 +328,54 @@ func newLogResourceModel(resource pcommon.Resource) (*logResourceModel, error) {
 		return nil, err
 	}
 	attributes.strings["service.name"] = serviceName
-	hash := pdatautil.MapHash(attrs)
-	ref, err := uuid.FromBytes(hash[:])
-	if err != nil {
-		return nil, err
-	}
+	ref := logResourceRef(attrs, attributes)
 	return &logResourceModel{
 		resourceRef: ref,
 		attributes:  attributes,
 		authScope:   attributesToAuthScope(attrs),
 		serviceName: serviceName,
 	}, nil
+}
+
+func logResourceRef(attrs pcommon.Map, encoded typedAttributes) uuid.UUID {
+	var keyBuffer [16]string
+	keys := keyBuffer[:0]
+	attrs.Range(func(key string, _ pcommon.Value) bool {
+		keys = append(keys, key)
+		return true
+	})
+	slices.Sort(keys)
+	data := make([]byte, 0, 1024)
+	data = append(data, "otel.logs.resource.v1"...)
+	for _, key := range keys {
+		value, _ := attrs.Get(key)
+		data = binary.LittleEndian.AppendUint64(data, uint64(len(key)))
+		data = append(data, key...)
+		data = appendLogResourceField(data, value.Type().String())
+		switch value.Type() {
+		case pcommon.ValueTypeStr:
+			data = appendLogResourceField(data, value.Str())
+		case pcommon.ValueTypeInt:
+			data = strconv.AppendInt(data, value.Int(), 10)
+			data = append(data, 0)
+		case pcommon.ValueTypeDouble:
+			data = binary.LittleEndian.AppendUint64(data, math.Float64bits(value.Double()))
+		case pcommon.ValueTypeBool:
+			if value.Bool() {
+				data = append(data, 1)
+			} else {
+				data = append(data, 0)
+			}
+		default:
+			// Hash the stored JSON so nested duplicate keys and bytes retain their full identity.
+			data = appendLogResourceField(data, encoded.other[key])
+		}
+	}
+	hash := sha256.Sum256(data)
+	return uuid.UUID(hash[:16])
+}
+
+func appendLogResourceField(data []byte, value string) []byte {
+	data = binary.LittleEndian.AppendUint64(data, uint64(len(value)))
+	return append(data, value...)
 }
