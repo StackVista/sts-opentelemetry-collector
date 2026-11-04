@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: sts-node-collector-prototype
+  labels:
+    app.kubernetes.io/name: sts-node-collector-prototype
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sts-node-collector-prototype
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sts-node-collector-prototype
+    spec:
+      serviceAccountName: sts-node-collector-prototype
+      hostNetwork: true
+      hostPID: true
+      dnsPolicy: ClusterFirstWithHostNet
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: collector
+          image: quay.io/stackstate/sts-opentelemetry-collector-agent:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config=/etc/otel/config.yaml
+          env:
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: KUBE_NODE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: K8S_CLUSTER_NAME
+              value: test-cluster
+            - name: POD_UID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
+            - name: PLATFORM_OTLP_ENDPOINT
+              value: https://suse-observability:443
+            - name: STS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sts-node-collector-prototype
+                  key: api-key
+          ports:
+            - name: self-metrics
+              containerPort: 8888
+            - name: health
+              containerPort: 13133
+            - name: pprof
+              containerPort: 1777
+          livenessProbe:
+            httpGet:
+              path: /
+              port: health
+          readinessProbe:
+            httpGet:
+              path: /
+              port: health
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otel
+              readOnly: true
+            - name: hostfs
+              mountPath: /hostfs
+              readOnly: true
+              mountPropagation: HostToContainer
+            - name: kubelet
+              mountPath: /var/lib/kubelet
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: sts-node-collector-prototype
+        - name: hostfs
+          hostPath:
+            path: /
+        - name: kubelet
+          hostPath:
+            path: /var/lib/kubelet
