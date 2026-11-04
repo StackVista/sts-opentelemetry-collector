@@ -1,5 +1,5 @@
 # renovate: datasource=docker depName=registry.suse.com/bci/bci-micro
-ARG BASE_IMAGE=registry.suse.com/bci/bci-micro:15.7-61.21
+ARG BASE_IMAGE=registry.suse.com/bci/bci-micro:15.7@sha256:f1427da6f40791aa5a9f73bb339674970ea93a2b158adc81bc99bcd1b7899a74
 
 FROM --platform=$BUILDPLATFORM registry.suse.com/bci/golang:1.26.10@sha256:cac8f486aa94ad879513585c7b36060425713af13be618dc22f60fd4341e6ed4 AS builder
 # Build only with this image's compiler; a go.work bump waits for a matching builder.
