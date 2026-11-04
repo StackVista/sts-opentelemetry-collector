@@ -72,7 +72,7 @@
         "docker"
       ],
       "matchPackageNames": [
-        "quay.io/stackstate/clickhouse"
+        "registry.tooling.stackstate.io/quay/stackstate/clickhouse"
       ],
       "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\.(?<build>\\d+)-so(?<revision>\\d+)$"
     },
