@@ -110,7 +110,7 @@
   ],
   "postUpgradeTasks": {
     "commands": [
-      "python3 scripts/renovate_codegen.py"
+      "bash scripts/renovate-codegen.sh"
     ],
     "executionMode": "branch",
     "fileFilters": [

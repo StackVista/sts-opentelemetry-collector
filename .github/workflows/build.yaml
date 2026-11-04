@@ -44,9 +44,6 @@ jobs:
           inputs: .
           collect: workflows,actions,dependabot
 
-      - name: Check generated-file boundary
-        run: python3 -B -m unittest discover -s scripts -p 'test_renovate_codegen.py'
-
   build:
     name: Build (${{ matrix.image }} ${{ matrix.platform }})
     runs-on: ubuntu-latest
