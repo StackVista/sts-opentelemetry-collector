@@ -10,8 +10,10 @@ permissions:
 
 jobs:
   renovate:
-    uses: StackVista/renovate-config/.github/workflows/renovate.yml@aded68c2327b12da3c88b34addf37cbdf2a29fde # v1.2.0
+    uses: StackVista/renovate-config/.github/workflows/renovate.yml@d0c369893bc063c4f07752c785954cbc374771c8 # v1.3.0
     with:
+      mount_docker_socket: true
+      allowed_commands: '["^bash scripts/renovate-codegen\\.sh$"]'
       docker_registry_2: registry.tooling.stackstate.io
       docker_registry_2_username: ${{ vars.REGISTRY_USER }}
     secrets:
