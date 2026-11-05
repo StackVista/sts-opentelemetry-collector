@@ -95,7 +95,7 @@ jobs:
 
       - name: Apply OCI labels
         id: oci-labels
-        uses: StackVista/image-pipeline/.github/actions/apply-oci-labels@6284a6fc006a7cc46a7f00d02c50d5f21b117b63
+        uses: StackVista/image-pipeline/.github/actions/apply-oci-labels@79dd6718168651ffc846eed98c3c0cb646eb15a0 # v1.0.1
         with:
           image-name: ${{ steps.image-name.outputs.value }}
           tag: ${{ steps.meta.outputs.version }}
@@ -227,7 +227,7 @@ jobs:
           done
 
       - name: CVE report and secret scan (amd64)
-        uses: StackVista/image-pipeline/.github/actions/scan-image@d847894223a794b4f4834654af20a04278b16b4f # main
+        uses: StackVista/image-pipeline/.github/actions/scan-image@79dd6718168651ffc846eed98c3c0cb646eb15a0 # v1.0.1
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cve-gate-${{ matrix.image }}-amd64
           mode: inform
@@ -235,7 +235,7 @@ jobs:
           upload-sarif: 'false'
 
       - name: CVE report and secret scan (arm64)
-        uses: StackVista/image-pipeline/.github/actions/scan-image@d847894223a794b4f4834654af20a04278b16b4f # main
+        uses: StackVista/image-pipeline/.github/actions/scan-image@79dd6718168651ffc846eed98c3c0cb646eb15a0 # v1.0.1
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cve-gate-${{ matrix.image }}-arm64
           mode: inform
@@ -256,7 +256,7 @@ jobs:
           fi
 
       - name: Scan (and, on tags, sign and push)
-        uses: StackVista/image-pipeline/.github/actions/scan-sign-push@d847894223a794b4f4834654af20a04278b16b4f # main
+        uses: StackVista/image-pipeline/.github/actions/scan-sign-push@79dd6718168651ffc846eed98c3c0cb646eb15a0 # v1.0.1
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: ${{ steps.meta.outputs.tags }}
