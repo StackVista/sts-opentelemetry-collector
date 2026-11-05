@@ -27,6 +27,16 @@
   },
   "packageRules": [
     {
+      "description": "Use checked-out source for internal Go modules",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "github.com/stackvista/sts-opentelemetry-collector/**"
+      ],
+      "enabled": false
+    },
+    {
       "description": "Keep the OpenAPI generator, runtime and parser compatible",
       "matchPackageNames": [
         "github.com/oapi-codegen/oapi-codegen/v2",
