@@ -15,7 +15,7 @@ exporters:
   clickhousests:
     endpoint: tcp://clickhouse:9000
     database: otel
-    logs_table_name: otel_logs
+    logs_table_name: otel_logs_v1
     traces_table_name: otel_traces
     resources_table_name: otel_resources
     create_traces_table: true

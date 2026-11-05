@@ -413,7 +413,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.stackstate-schema-token.outputs.token }}
           # renovate: datasource=git-refs depName=https://github.com/StackVista/stackstate
-          STACKSTATE_SCHEMA_REF_VERSION: be45a6d9767c276200cf6f27e41a737366a0ab7c
+          STACKSTATE_SCHEMA_REF_VERSION: ad611298332192416c99ad3ebb33cb9d2145e3da
         run: |
           cd exporter/clickhousestsexporter/integration
           GOWORK=off go test -tags "integration schema_contract" -run TestLogsExporter_MatchesStackStateSchema -v ./...

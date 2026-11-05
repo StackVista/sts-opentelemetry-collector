@@ -41,14 +41,14 @@ func CreateDefaultConfig() component.Config {
 		BackOffConfig:          configretry.NewDefaultBackOffConfig(),
 		ConnectionParams:       map[string]string{},
 		Database:               defaultDatabase,
-		LogsTableName:          "otel_logs",
+		LogsTableName:          "otel_logs_v1",
 		TracesTableName:        "otel_traces",
 		MetricsTableName:       "otel_metrics",
 		ResourcesTableName:     "otel_resources",
-		LogsResourcesTableName: "otel_logs_resources",
+		LogsResourcesTableName: "otel_logs_resources_v1",
 		CreateTracesTable:      true,
 		CreateResourcesTable:   true,
-		CreateLogsTable:        true,
+		CreateLogsTable:        false,
 		TTL:                    0,
 	}
 }

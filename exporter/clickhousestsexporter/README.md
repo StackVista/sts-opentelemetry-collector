@@ -47,7 +47,7 @@ as [ClickHouse document says:](https://clickhouse.com/docs/en/introduction/perfo
 
 ```clickhouse
 SELECT toDateTime(toStartOfInterval(Timestamp, INTERVAL 60 second)) as time, SeverityText, count() as count
-FROM otel_logs
+FROM otel_logs_v1
 WHERE time >= NOW() - INTERVAL 1 HOUR
 GROUP BY SeverityText, time
 ORDER BY time;
@@ -57,7 +57,7 @@ ORDER BY time;
 
 ```clickhouse
 SELECT Timestamp as log_time, Body
-FROM otel_logs
+FROM otel_logs_v1
 WHERE Timestamp >= NOW() - INTERVAL 1 HOUR
 Limit 100;
 ```
@@ -66,7 +66,7 @@ Limit 100;
 
 ```clickhouse
 SELECT Timestamp as log_time, Body
-FROM otel_logs
+FROM otel_logs_v1
 WHERE ServiceName = 'clickhouse-exporter'
   AND Timestamp >= NOW() - INTERVAL 1 HOUR
 Limit 100;
@@ -76,8 +76,8 @@ Limit 100;
 
 ```clickhouse
 SELECT Timestamp as log_time, Body
-FROM otel_logs
-WHERE LogAttributes['container_name'] = '/example_flog_1'
+FROM otel_logs_v1
+WHERE Strings['container_name'] = '/example_flog_1'
   AND Timestamp >= NOW() - INTERVAL 1 HOUR
 Limit 100;
 ```
@@ -86,7 +86,7 @@ Limit 100;
 
 ```clickhouse
 SELECT Timestamp as log_time, Body
-FROM otel_logs
+FROM otel_logs_v1
 WHERE hasToken(Body, 'http')
   AND Timestamp >= NOW() - INTERVAL 1 HOUR
 Limit 100;
@@ -96,7 +96,7 @@ Limit 100;
 
 ```clickhouse
 SELECT Timestamp as log_time, Body
-FROM otel_logs
+FROM otel_logs_v1
 WHERE Body like '%http%'
   AND Timestamp >= NOW() - INTERVAL 1 HOUR
 Limit 100;
@@ -106,7 +106,7 @@ Limit 100;
 
 ```clickhouse
 SELECT Timestamp as log_time, Body
-FROM otel_logs
+FROM otel_logs_v1
 WHERE match(Body, 'http')
   AND Timestamp >= NOW() - INTERVAL 1 HOUR
 Limit 100;
@@ -116,7 +116,7 @@ Limit 100;
 
 ```clickhouse
 SELECT Timestamp as log_time, Body
-FROM otel_logs
+FROM otel_logs_v1
 WHERE JSONExtractFloat(Body, 'bytes') > 1000
   AND Timestamp >= NOW() - INTERVAL 1 HOUR
 Limit 100;
@@ -289,14 +289,19 @@ Connection options:
 
 ClickHouse tables:
 
-- `logs_table_name` (default = otel_logs): The table name for logs.
+- `logs_table_name` (default = otel_logs_v1): The table name for logs.
 - `traces_table_name` (default = otel_traces): The table name for traces.
 - `metrics_table_name` (default = otel_metrics): The table name for metrics.
-- `logs_resources_table_name` (default = otel_logs_resources): The table name for the resources referenced by logs.
+- `logs_resources_table_name` (default = otel_logs_resources_v1): The table name for the resources referenced by logs.
 - `create_traces_table` (default = true): Create the traces table on startup
-- `create_logs_table` (default = true): Create the logs and logs resources tables on startup. Disable when StackState manages the schema.
+- `create_logs_table` (default = false): Deprecated. This value must stay false because StackState manages the log tables and retention.
 
-Log records with an `EventName` are OTel events and are not written to the logs table.
+The exporter preserves source time and observed time. Query time uses source time first, then observed time.
+If both clocks are absent, the exporter drops the record and increments `otelcol_clickhousests_missing_timestamp_records`.
+The exporter preserves `EventName` on application logs. Event routing belongs to the pipeline before this exporter.
+
+Scalar attributes use `Strings`, `Ints`, `Doubles` and `Bools` maps. `Other` preserves structured, byte and empty values as OTLP JSON AnyValue.
+String bodies use `Body`. Other bodies, including empty strings, use `BodyOther` as OTLP JSON AnyValue.
 
 Processing:
 
@@ -319,8 +324,8 @@ use the `https` scheme.
 ## Example
 
 This example shows how to configure the exporter to send data to a ClickHouse server.
-It uses the native protocol without TLS. The exporter will create the database and tables if they don't exist.
-The data is stored for 72 hours (3 days).
+It uses the native protocol without TLS. StackState must create the log tables before the exporter sends logs.
+The `ttl` value controls trace retention. StackState controls log retention.
 
 ```yaml
 receivers:
@@ -334,7 +339,7 @@ exporters:
     endpoint: tcp://127.0.0.1:9000?dial_timeout=10s&compress=lz4
     database: otel
     ttl: 72h
-    logs_table_name: otel_logs
+    logs_table_name: otel_logs_v1
     traces_table_name: otel_traces
     metrics_table_name: otel_metrics
     create_traces_table: true

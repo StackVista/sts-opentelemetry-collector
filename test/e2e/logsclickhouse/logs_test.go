@@ -53,6 +53,19 @@ func setup(t *testing.T, numCollectors int) *testEnv {
 	database := "e2e_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 
 	env := &testEnv{ctx: ctx, clickHouse: clickHouse, database: database}
+	_, err := clickHouse.Query(ctx, "CREATE DATABASE "+database)
+	require.NoError(t, err)
+	//nolint:dogsled
+	_, filename, _, _ := runtime.Caller(0)
+	schema, err := os.ReadFile(filepath.Join(filepath.Dir(filename),
+		"../../../exporter/clickhousestsexporter/integration/testdata/otel_logs_schema.sql"))
+	require.NoError(t, err)
+	for _, statement := range strings.Split(strings.ReplaceAll(string(schema), "`otel`.", "`"+database+"`."), ";") {
+		if trimmed := strings.TrimSpace(statement); trimmed != "" {
+			_, err = clickHouse.Query(ctx, trimmed)
+			require.NoError(t, err)
+		}
+	}
 	for i := 0; i < numCollectors; i++ {
 		configFile := writeCollectorConfig(t, i, collectorConfig{
 			OtlpGRPCEndpoint:   "0.0.0.0:4317",
@@ -125,12 +138,12 @@ func testResource(extra ...attribute.KeyValue) *resource.Resource {
 }
 
 func (env *testEnv) logsQuery(columns string) string {
-	return fmt.Sprintf("SELECT %s FROM %s.otel_logs ORDER BY Timestamp", columns, env.database)
+	return fmt.Sprintf("SELECT %s FROM %s.otel_logs_v1 ORDER BY Timestamp", columns, env.database)
 }
 
 func (env *testEnv) resourcesQuery() string {
 	return fmt.Sprintf(
-		"SELECT ResourceRef, ResourceAttributes, AuthScope FROM %s.otel_logs_resources FINAL", env.database)
+		"SELECT ResourceRef, Strings, AuthScope FROM %s.otel_logs_resources_v1 FINAL", env.database)
 }
 
 func hasRows(n int) func([]map[string]any) bool {
@@ -160,11 +173,16 @@ func TestLogsToClickHouse_PlatformPipeline(t *testing.T) {
 	)
 
 	rows := env.clickHouse.QueryUntil(env.ctx, t, env.logsQuery(
-		"Body, ServiceName, ScopeName, ScopeVersion, TraceId, SpanId, TraceFlags, SeverityText, SeverityNumber, "+
-			"LogAttributes, AuthScope, ResourceRef, toUnixTimestamp64Micro(Timestamp) AS TsMicros",
-	), time.Minute, hasRows(2))
+		"Body, BodyOther, EventName, ServiceName, ScopeName, ScopeVersion, lower(hex(TraceId)) AS TraceId, "+
+			"lower(hex(SpanId)) AS SpanId, TraceFlags, SeverityText, SeverityNumber, "+
+			"Ints, AuthScope, ResourceRef, toUnixTimestamp64Micro(Timestamp) AS TsMicros",
+	), time.Minute, hasRows(3))
 
-	plain, structured := rows[0], rows[1]
+	byBody := make(map[string]map[string]any, len(rows))
+	for _, row := range rows {
+		byBody[fmt.Sprint(row["Body"])] = row
+	}
+	plain, structured := byBody["payment retried"], byBody[""]
 	assert.Equal(t, "payment retried", plain["Body"])
 	assert.Equal(t, "checkout", plain["ServiceName"])
 	assert.Equal(t, "e2e.logsclickhouse", plain["ScopeName"])
@@ -174,16 +192,18 @@ func TestLogsToClickHouse_PlatformPipeline(t *testing.T) {
 	assert.EqualValues(t, 1, plain["TraceFlags"])
 	assert.Equal(t, "WARN", plain["SeverityText"])
 	assert.EqualValues(t, otellog.SeverityWarn, plain["SeverityNumber"])
-	assert.Equal(t, map[string]any{"retry": "2"}, plain["LogAttributes"])
+	assert.Equal(t, map[string]any{"retry": float64(2)}, plain["Ints"])
 	assert.Equal(t, []any{"k8s.cluster.name:prod", "k8s.scope:prod/shop"}, plain["AuthScope"])
 	assert.EqualValues(t, now.UnixMicro(), plain["TsMicros"])
-	assert.JSONEq(t, `{"msg":"structured"}`, fmt.Sprint(structured["Body"]))
+	assert.JSONEq(t, `{"kvlistValue":{"values":[{"key":"msg","value":{"stringValue":"structured"}}]}}`,
+		fmt.Sprint(structured["BodyOther"]))
+	assert.Equal(t, "checkout.completed", byBody["an event"]["EventName"])
 
 	resources := env.clickHouse.QueryUntil(env.ctx, t, env.resourcesQuery(), time.Minute, hasRows(1))
 	assert.Equal(t, plain["ResourceRef"], resources[0]["ResourceRef"])
 	assert.Equal(t, map[string]any{
 		"service.name": "checkout", "k8s.cluster.name": "prod", "k8s.namespace.name": "shop",
-	}, resources[0]["ResourceAttributes"], "sts_api_key is stripped before export")
+	}, resources[0]["Strings"], "sts_api_key is stripped before export")
 }
 
 func TestLogsToClickHouse_MultipleCollectorsShareResourceRef(t *testing.T) {
@@ -215,7 +235,7 @@ func TestLogsToClickHouse_BatchesInserts(t *testing.T) {
 		sendLogs(t, env, env.collectors[0], testResource(), records...)
 	}
 
-	env.clickHouse.QueryUntil(env.ctx, t, fmt.Sprintf("SELECT count() AS n FROM %s.otel_logs", env.database),
+	env.clickHouse.QueryUntil(env.ctx, t, fmt.Sprintf("SELECT count() AS n FROM %s.otel_logs_v1", env.database),
 		time.Minute, func(rows []map[string]any) bool {
 			return len(rows) == 1 && fmt.Sprint(rows[0]["n"]) == fmt.Sprint(requests*perRequest)
 		})
@@ -223,7 +243,7 @@ func TestLogsToClickHouse_BatchesInserts(t *testing.T) {
 	_, err := env.clickHouse.Query(env.ctx, "SYSTEM FLUSH LOGS")
 	require.NoError(t, err)
 	inserts, err := env.clickHouse.Query(env.ctx, fmt.Sprintf(`SELECT count() AS n FROM system.query_log
-		WHERE type = 'QueryFinish' AND query_kind = 'Insert' AND has(tables, '%s.otel_logs')`, env.database))
+		WHERE type = 'QueryFinish' AND query_kind = 'Insert' AND has(tables, '%s.otel_logs_v1')`, env.database))
 	require.NoError(t, err)
 	require.Len(t, inserts, 1)
 	var n int
