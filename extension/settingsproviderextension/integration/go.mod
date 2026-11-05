@@ -7,7 +7,7 @@ require (
 	github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension v0.0.0
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go/modules/kafka v0.39.0
-	github.com/twmb/franz-go v1.21.1
+	github.com/twmb/franz-go v1.21.7
 	github.com/twmb/franz-go/pkg/kadm v1.18.0
 	go.opentelemetry.io/collector/component/componenttest v0.161.0
 	go.uber.org/zap v1.28.0
