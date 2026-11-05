@@ -13,6 +13,7 @@ env:
   IMAGE_NAME: stackstate/sts-opentelemetry-collector
   GO_VERSION: 1.26.10
   GOTOOLCHAIN: local
+  # renovate: datasource=github-releases depName=golangci/golangci-lint
   GOLANGCI_LINT_VERSION: v2.12.2
 
 # Default to read-only at the workflow level. Jobs that need more
