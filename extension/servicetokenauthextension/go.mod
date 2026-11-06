@@ -4,7 +4,7 @@ go 1.26.10
 
 require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
-	github.com/stackvista/sts-opentelemetry-collector/common v0.0.0-20260506113943-458aac03785b
+	github.com/stackvista/sts-opentelemetry-collector/common v0.0.0
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/collector/client v1.67.0
 	go.opentelemetry.io/collector/component v1.67.0
@@ -43,7 +43,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.28.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
 	google.golang.org/grpc v1.83.2 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 )
