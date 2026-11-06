@@ -3,7 +3,7 @@ module github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8slogsexpo
 go 1.26.10
 
 require (
-	github.com/StackVista/stackstate-receiver-go-client v0.0.0-20261001074615-fd72bbd18e84
+	github.com/StackVista/stackstate-receiver-go-client v0.0.0-20261021065957-0eec368dd97e
 	github.com/golang/snappy v1.0.0
 	github.com/google/uuid v1.6.0
 	github.com/stackvista/sts-opentelemetry-collector/common v0.0.0
@@ -66,7 +66,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d // indirect
 	google.golang.org/grpc v1.83.2 // indirect
 )
