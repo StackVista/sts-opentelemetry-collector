@@ -17,10 +17,10 @@ require (
 	go.opentelemetry.io/collector/receiver/receivertest v0.161.0
 	go.uber.org/zap v1.28.0
 	gotest.tools v2.2.0+incompatible
-	k8s.io/api v0.37.0
-	k8s.io/apimachinery v0.37.0
-	k8s.io/client-go v0.37.0
-	k8s.io/component-base v0.37.0
+	k8s.io/api v0.37.2
+	k8s.io/apimachinery v0.37.2
+	k8s.io/client-go v0.37.2
+	k8s.io/component-base v0.37.2
 	k8s.io/kube-state-metrics/v2 v2.20.0
 )
 
