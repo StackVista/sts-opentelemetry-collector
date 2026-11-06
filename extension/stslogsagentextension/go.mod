@@ -3,11 +3,12 @@ module github.com/stackvista/sts-opentelemetry-collector/extension/stslogsagente
 go 1.26.10
 
 require (
-	github.com/StackVista/stackstate-receiver-go-client v0.0.0-20261001074615-fd72bbd18e84
+	github.com/StackVista/stackstate-receiver-go-client v0.0.0-20261021065957-0eec368dd97e
 	github.com/stackvista/sts-opentelemetry-collector/common v0.0.0
 	go.opentelemetry.io/collector/component v1.67.0
 	go.opentelemetry.io/collector/component/componentstatus v0.161.0
 	go.opentelemetry.io/collector/config/configopaque v1.67.0
+	go.opentelemetry.io/collector/confmap v1.67.0
 	go.opentelemetry.io/collector/extension v1.67.0
 	go.opentelemetry.io/collector/extension/extensioncapabilities v0.161.0
 	go.opentelemetry.io/collector/featuregate v1.67.0
@@ -22,13 +23,12 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/collector/component/componenttest v0.161.0 // indirect
-	go.opentelemetry.io/collector/confmap v1.67.0 // indirect
 	go.opentelemetry.io/collector/consumer v1.67.0 // indirect
 	go.opentelemetry.io/collector/consumer/consumererror v0.161.0 // indirect
 	go.opentelemetry.io/collector/pdata/pprofile v0.161.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.46.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.46.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d // indirect
 	google.golang.org/grpc v1.83.2 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
