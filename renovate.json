@@ -152,7 +152,7 @@
       "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\.(?<build>\\d+)-so(?<revision>\\d+)$"
     },
     {
-      "description": "Keep OpenTelemetry releases together with their builder manifest pins",
+      "description": "Review OpenTelemetry releases in one PR with the builder manifests that pin them",
       "matchPackageNames": [
         "go.opentelemetry.io/collector",
         "go.opentelemetry.io/collector/**",
@@ -163,6 +163,8 @@
       ],
       "groupName": "OpenTelemetry Collector",
       "groupSlug": "opentelemetry-collector",
+      "automerge": false,
+      "rebaseWhen": "conflicted",
       "separateMinorPatch": false
     }
   ],
