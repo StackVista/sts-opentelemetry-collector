@@ -37,7 +37,41 @@
   "vulnerabilityAlerts": {
     "branchTopic": "{{#if (or (equals depName \"github.com/oapi-codegen/oapi-codegen/v2\") (or (equals depName \"github.com/oapi-codegen/runtime\") (equals depName \"github.com/getkin/kin-openapi\")))}}openapi-generator{{else}}{{{datasource}}}-{{{depNameSanitized}}}-vulnerability{{/if}}"
   },
+  "postUpdateOptions": [
+    "gomodTidyAll"
+  ],
   "packageRules": [
+    {
+      "description": "Update each external Go module across its module and builder references",
+      "matchManagers": [
+        "gomod",
+        "custom.regex"
+      ],
+      "matchDatasources": [
+        "go"
+      ],
+      "matchPackageNames": [
+        "!github.com/stackvista/sts-opentelemetry-collector/**"
+      ],
+      "enabled": true,
+      "groupName": "{{depName}}",
+      "groupSlug": "{{depNameSanitized}}",
+      "separateMinorPatch": false
+    },
+    {
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchDatasources": [
+        "go"
+      ],
+      "matchUpdateTypes": [
+        "patch",
+        "minor"
+      ],
+      "automerge": true,
+      "rebaseWhen": "behind-base-branch"
+    },
     {
       "description": "Use checked-out source for internal Go modules",
       "matchManagers": [
@@ -118,7 +152,7 @@
       "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\.(?<build>\\d+)-so(?<revision>\\d+)$"
     },
     {
-      "description": "Review OpenTelemetry releases in one PR with the builder manifests that pin them",
+      "description": "Keep OpenTelemetry releases together with their builder manifest pins",
       "matchPackageNames": [
         "go.opentelemetry.io/collector",
         "go.opentelemetry.io/collector/**",
@@ -129,22 +163,6 @@
       ],
       "groupName": "OpenTelemetry Collector",
       "groupSlug": "opentelemetry-collector",
-      "automerge": false,
-      "rebaseWhen": "conflicted",
-      "separateMinorPatch": false
-    },
-    {
-      "description": "Review modules pinned by builder manifest replacements together with the replacement pins that ship",
-      "matchPackageNames": [
-        "github.com/goccy/go-json",
-        "github.com/klauspost/compress",
-        "golang.org/x/crypto",
-        "google.golang.org/grpc"
-      ],
-      "groupName": "Builder-pinned Go modules",
-      "groupSlug": "builder-pinned-go-modules",
-      "automerge": false,
-      "rebaseWhen": "conflicted",
       "separateMinorPatch": false
     }
   ],
