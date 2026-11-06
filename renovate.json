@@ -20,6 +20,18 @@
         "go install (?<depName>go\\.opentelemetry\\.io/collector/cmd/builder)@(?<currentValue>v\\S+)"
       ],
       "datasourceTemplate": "go"
+    },
+    {
+      "customType": "regex",
+      "description": "Update the Go workspace compiler with the module and build versions",
+      "managerFilePatterns": [
+        "/(^|/)go\\.work$/"
+      ],
+      "matchStrings": [
+        "(?:^|\\n)go (?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "datasourceTemplate": "golang-version",
+      "depNameTemplate": "go"
     }
   ],
   "vulnerabilityAlerts": {
@@ -56,16 +68,34 @@
       "enabled": false
     },
     {
-      "description": "Update the compiler with scripts/upgrade_go_version.sh, which keeps go.work and every module on one version",
-      "matchManagers": [
-        "gomod",
-        "mise"
-      ],
+      "description": "Update Go across the workspace, modules, CI, Mise and builder images together",
       "matchPackageNames": [
         "go",
-        "golang/go"
+        "golang/go",
+        "registry.suse.com/bci/golang"
       ],
-      "enabled": false
+      "enabled": true,
+      "rangeStrategy": "bump",
+      "minimumReleaseAge": null,
+      "groupName": "Go toolchain",
+      "groupSlug": "go-toolchain",
+      "separateMinorPatch": true
+    },
+    {
+      "matchPackageNames": [
+        "go",
+        "golang/go",
+        "registry.suse.com/bci/golang"
+      ],
+      "matchUpdateTypes": [
+        "patch",
+        "digest",
+        "pinDigest"
+      ],
+      "groupName": "Go build environment",
+      "groupSlug": "go-build-environment",
+      "automerge": true,
+      "rebaseWhen": "behind-base-branch"
     },
     {
       "description": "Keep the runtime image on the approved BCI release",
