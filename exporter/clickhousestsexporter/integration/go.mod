@@ -1,6 +1,6 @@
 module github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter/integration
 
-go 1.26.10
+go 1.27.3
 
 replace github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter => ..
 
