@@ -3,7 +3,7 @@ module github.com/stackvista/sts-opentelemetry-collector/exporter/stsk8stopology
 go 1.26.10
 
 require (
-	github.com/StackVista/stackstate-receiver-go-client v0.0.0-20261001074615-fd72bbd18e84
+	github.com/StackVista/stackstate-receiver-go-client v0.0.0-20261021065957-0eec368dd97e
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/collector/component v1.67.0
 	go.opentelemetry.io/collector/component/componentstatus v0.161.0
