@@ -171,7 +171,7 @@ func drain(
 		select {
 		case <-components:
 		case <-relations:
-		case <-errs:
+		case <-errs: //nolint:errcheck // Drain abandoned collectors without reporting their errors again.
 		case <-done:
 			return
 		}

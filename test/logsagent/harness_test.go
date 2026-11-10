@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"text/template"
@@ -23,6 +24,9 @@ import (
 )
 
 const syntheticKey = "synthetic-logsagent-fixture"
+
+//nolint:gochecknoglobals // Each child needs a distinct loopback host, including during restarts.
+var nextHealthHost atomic.Uint32
 
 //go:embed testdata/agent.yaml.tmpl
 var configTemplate string
@@ -85,7 +89,7 @@ func newBinaryFixture(t *testing.T, mode, variable string) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	info, err := os.Stat(absolute)
+	info, err := os.Stat(absolute) //nolint:gosec // Explicit test-binary input, not a path beneath a restricted directory.
 	if err != nil || info.IsDir() || info.Mode()&0111 == 0 {
 		t.Fatalf("%s must name an executable file: %s", variable, absolute)
 	}
@@ -131,7 +135,11 @@ func childEnvironment(root string) []string {
 
 func (f *fixture) start(mutate func(map[string]any), synchronous bool) *process {
 	f.t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	host := nextHealthHost.Add(1)
+	if host > 65535 {
+		f.t.Fatal("exhausted fixture loopback hosts")
+	}
+	listener, err := net.Listen("tcp", fmt.Sprintf("127.1.%d.%d:0", host>>8, host&255))
 	if err != nil {
 		f.t.Fatal(err)
 	}
