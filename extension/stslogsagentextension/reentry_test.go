@@ -191,8 +191,8 @@ func TestPollingShutdownJoinsIntentWrite(t *testing.T) {
 			done := make(chan error, 1)
 			go func() { done <- c.Shutdown(context.Background()) }()
 			select {
-			case <-done:
-				t.Error("shutdown returned before intent write finished")
+			case err := <-done:
+				t.Errorf("shutdown returned before intent write finished: %v", err)
 			case <-time.After(20 * time.Millisecond):
 			}
 			close(release)
