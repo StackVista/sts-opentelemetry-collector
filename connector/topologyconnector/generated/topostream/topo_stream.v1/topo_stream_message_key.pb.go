@@ -80,8 +80,8 @@ func (TopologyStreamOwner) EnumDescriptor() ([]byte, []int) {
 
 type TopologyStreamMessageKey struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// *
-	// Datasource could be the Component/Relation mapping identifier probably
+	//*
+	//Datasource could be the Component/Relation mapping identifier probably
 	Owner         TopologyStreamOwner `protobuf:"varint,1,opt,name=owner,proto3,enum=topo_stream.v1.TopologyStreamOwner" json:"owner,omitempty"`
 	DataSource    string              `protobuf:"bytes,2,opt,name=data_source,json=dataSource,proto3" json:"data_source,omitempty"`
 	ShardId       string              `protobuf:"bytes,3,opt,name=shard_id,json=shardId,proto3" json:"shard_id,omitempty"`
