@@ -26,7 +26,7 @@ require (
 require go.opentelemetry.io/otel/log v1.47.0 // indirect
 
 require (
-	github.com/cenkalti/backoff/v7 v7.0.1 // indirect
+	github.com/cenkalti/backoff/v7 v7.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cihub/seelog v0.0.0-20170130134532-f561c5e57575 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.2 // indirect
