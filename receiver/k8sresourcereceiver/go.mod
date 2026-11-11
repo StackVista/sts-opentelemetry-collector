@@ -4,6 +4,7 @@ go 1.27.3
 
 require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector v0.164.1
+	github.com/stackvista/sts-opentelemetry-collector/common v0.0.0
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/collector/component v1.70.0
 	go.opentelemetry.io/collector/component/componentstatus v0.164.0
@@ -55,7 +56,6 @@ require (
 	github.com/openshift/client-go v0.0.0-20260507170119-509fb07b72e4 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
-	github.com/stackvista/sts-opentelemetry-collector/common v0.0.0
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/collector/consumer/xconsumer v0.164.0 // indirect
 	go.opentelemetry.io/collector/extension v1.70.0 // indirect
@@ -65,7 +65,7 @@ require (
 	go.opentelemetry.io/collector/pipeline v1.70.0 // indirect
 	go.opentelemetry.io/otel/trace v1.47.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.yaml.in/yaml/v2 v2.4.4 // indirect
+	go.yaml.in/yaml/v2 v2.4.5 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
