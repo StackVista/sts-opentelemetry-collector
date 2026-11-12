@@ -37,6 +37,15 @@ A missing or misnamed component in the BOM makes `validate` fail, breaking the b
   `HOSTNAME` for the node filter and `auth_type: none` for kubeletstats replace the runtime
   environment.
 
+## Node collector pod-spec/state spike (#682)
+
+The pod-spec/state spike chose the existing `stsksm` receiver, exposed through the chart's
+`global.features.experimentalOtelKubernetesClusterAgent` path, instead of adding a kubelet
+`/pods` receiver or a server-side recording rule. The receiver already provides the
+kube-state-metrics data (requests, limits, restarts, waiting/terminated reasons, phase/ready/
+scheduled); the chart test in `helm-charts-internal` exercises the rendered `stsksm` config and
+its `metrics/kubernetes-state` pipeline.
+
 ## Keeping these in sync
 
 These fixtures are copies of the Helm-rendered agent collector configs with templating,
