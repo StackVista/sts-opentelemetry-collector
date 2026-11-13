@@ -18,7 +18,7 @@ require (
 require (
 	dario.cat/mergo v1.0.2 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20261006220739-8c912ac31dd4 // indirect
-	github.com/ClickHouse/ch-go v0.74.0 // indirect
+	github.com/ClickHouse/ch-go v0.75.0 // indirect
 	github.com/Microsoft/go-winio v0.6.4 // indirect
 	github.com/andybalholm/brotli v1.2.8 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
@@ -32,10 +32,10 @@ require (
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/go-connections v0.8.2 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
-	github.com/ebitengine/purego v0.10.1 // indirect
+	github.com/ebitengine/purego v0.11.2 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/go-faster/city v1.0.1 // indirect
-	github.com/go-faster/errors v0.7.1 // indirect
+	github.com/go-faster/errors v0.8.0 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
@@ -68,9 +68,9 @@ require (
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/paulmach/orb v0.13.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.33 // indirect
-	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
+	github.com/power-devops/perfstat v0.0.0-20260805114148-88456608a4f6 // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
-	github.com/shirou/gopsutil/v4 v4.26.6 // indirect
+	github.com/shirou/gopsutil/v4 v4.26.10 // indirect
 	github.com/shopspring/decimal v1.5.0 // indirect
 	github.com/sirupsen/logrus v1.10.2 // indirect
 	github.com/tklauser/go-sysconf v0.4.0 // indirect
@@ -103,7 +103,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.47.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.28.0 // indirect
-	go.yaml.in/yaml/v3 v3.0.5 // indirect
+	go.yaml.in/yaml/v3 v3.0.6 // indirect
 	golang.org/x/crypto v0.59.0 // indirect
 	golang.org/x/sys v0.50.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d // indirect
