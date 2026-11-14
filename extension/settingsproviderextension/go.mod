@@ -9,9 +9,9 @@ require (
 	github.com/stretchr/testify v1.12.1
 	github.com/twmb/franz-go v1.22.2
 	github.com/twmb/franz-go/pkg/kadm v1.19.0
-	go.opentelemetry.io/collector/component v1.70.0
-	go.opentelemetry.io/collector/component/componenttest v0.164.0
-	go.opentelemetry.io/collector/extension v1.70.0
+	go.opentelemetry.io/collector/component v1.71.0
+	go.opentelemetry.io/collector/component/componenttest v0.165.0
+	go.opentelemetry.io/collector/extension v1.71.0
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/metric v1.47.0
 	go.opentelemetry.io/otel/trace v1.47.0
@@ -34,9 +34,9 @@ require (
 	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/twmb/franz-go/pkg/kmsg v1.15.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
-	go.opentelemetry.io/collector/featuregate v1.70.0 // indirect
-	go.opentelemetry.io/collector/internal/componentalias v0.164.0 // indirect
-	go.opentelemetry.io/collector/pdata v1.70.0 // indirect
+	go.opentelemetry.io/collector/featuregate v1.71.0 // indirect
+	go.opentelemetry.io/collector/internal/componentalias v0.165.0 // indirect
+	go.opentelemetry.io/collector/pdata v1.71.0 // indirect
 	go.opentelemetry.io/otel/log v1.47.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.47.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.47.0 // indirect
