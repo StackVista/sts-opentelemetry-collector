@@ -313,7 +313,7 @@ jobs:
       contents: read
     services:
       clickhouse:
-        image: registry.tooling.stackstate.io/quay/stackstate/clickhouse:26.8.34.13-so2
+        image: registry.tooling.stackstate.io/quay/stackstate/clickhouse:26.8.34.13-so3
         credentials:
           username: ${{ vars.REGISTRY_USER }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
