@@ -23,6 +23,7 @@ type resourceObject interface {
 	GetName() string
 	GetNamespace() string
 	GetResourceVersion() string
+	GetUID() types.UID
 	GetKind() string
 }
 

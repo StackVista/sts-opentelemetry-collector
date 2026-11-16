@@ -33,6 +33,7 @@ type resourceCollector struct {
 	// Used instead of peerStore.IsEmpty() to guard the snapshot cadence so that
 	// a repeated ApplyDelta failure does not cause a continuous snapshot storm.
 	lastSnapshotTime time.Time
+	watchedResources map[schema.GroupResource]bool
 
 	// Lifecycle
 	wg     sync.WaitGroup
@@ -135,6 +136,27 @@ func (c *resourceCollector) runIncrement(ctx context.Context) {
 	staticSynced := c.informers.StaticWatchesSynced()
 	currentCRDs := c.informers.ReadCRDs()
 	currentObjects := c.informers.ReadObjects()
+	var allowDelete func(ResourceChange) bool
+	if source, ok := c.informers.(collectionReportingSource); ok {
+		snapshot := source.collectionSnapshot()
+		currentCRDs, currentObjects, staticSynced = snapshot.CRDs, snapshot.Objects, snapshot.Complete
+		c.watchedResources = make(map[schema.GroupResource]bool, len(snapshot.Watched))
+		for key, watched := range snapshot.Watched {
+			c.watchedResources[key] = watched
+		}
+		allowDelete = snapshot.AllowDelete
+	}
+	if allowDelete != nil {
+		var retained bool
+		currentCRDs, currentObjects, retained = preserveCollectionPeerView(
+			currentCRDs, currentObjects, c.peerStore.ComputeChanges(currentCRDs, currentObjects), allowDelete)
+		staticSynced = staticSynced && retained
+		for gvr, group := range currentObjects {
+			if group.Source == ObjectSourceCR && !c.config.isDeniedResource(gvr.Group, gvr.Resource) {
+				c.watchedResources[gvr.GroupResource()] = true
+			}
+		}
+	}
 	currentObjects = c.applyPayloadBudgets(ctx, currentObjects)
 	changes := c.peerStore.ComputeChanges(currentCRDs, currentObjects)
 
@@ -154,6 +176,41 @@ func (c *resourceCollector) runIncrement(ctx context.Context) {
 		c.emitIncrement(ctx, changes)
 		c.metrics.RecordCycle(ctx, metrics.ModeIncrement, time.Since(start))
 	}
+}
+
+// Retain uncertain peer observations before budgeting; intentional withdrawals still delete.
+func preserveCollectionPeerView(
+	crds []*unstructured.Unstructured, objects map[schema.GroupVersionResource]ObjectGroup,
+	changes []ResourceChange, allowDelete func(ResourceChange) bool,
+) ([]*unstructured.Unstructured, map[schema.GroupVersionResource]ObjectGroup, bool) {
+	copyCRDs := append([]*unstructured.Unstructured(nil), crds...)
+	copyObjects := make(map[schema.GroupVersionResource]ObjectGroup, len(objects))
+	for gvr, group := range objects {
+		group.Objects = append([]resourceObject(nil), group.Objects...)
+		copyObjects[gvr] = group
+	}
+	complete := true
+	for _, change := range changes {
+		if change.EventType != watch.Deleted || allowDelete(change) {
+			continue
+		}
+		if change.IsCRD {
+			object, err := decodeObject(change.Obj)
+			if err != nil {
+				complete = false
+				continue
+			}
+			copyCRDs = append(copyCRDs, object)
+		} else {
+			group := copyObjects[change.GVR]
+			if group.Source == "" {
+				group.Source = change.Source
+			}
+			group.Objects = append(group.Objects, change.Obj)
+			copyObjects[change.GVR] = group
+		}
+	}
+	return copyCRDs, copyObjects, complete
 }
 
 // recordSnapshotApplied syncs the peer cache with the given changes, broadcasts
@@ -360,6 +417,10 @@ func (c *resourceCollector) emitChanges(ctx context.Context, changes []ResourceC
 func (c *resourceCollector) decodeForEmit(
 	obj resourceObject, gvr schema.GroupVersionResource,
 ) (*unstructured.Unstructured, bool) {
+	// A peer cache may still hold objects denied by this replica.
+	if gvr != crdGVR && c.config.isDeniedResource(gvr.Group, gvr.Resource) {
+		return nil, false
+	}
 	u, err := decodeObject(obj)
 	if err != nil {
 		c.logger.Warn("Skipping Kubernetes object that could not be decoded from the compact cache",
@@ -400,7 +461,12 @@ func (c *resourceCollector) resourceAttributesFor(gvr schema.GroupVersionResourc
 
 func (c *resourceCollector) crdCustomResourcesWatched(crd *unstructured.Unstructured) bool {
 	apiGroup, _, _ := unstructured.NestedString(crd.Object, "spec", "group")
-	return c.config.shouldWatchAPIGroup(apiGroup)
+	resource, _, _ := unstructured.NestedString(crd.Object, "spec", "names", "plural")
+	if c.watchedResources != nil {
+		return c.watchedResources[schema.GroupResource{Group: apiGroup, Resource: resource}] &&
+			!c.config.isDeniedResource(apiGroup, resource)
+	}
+	return c.config.shouldWatchAPIGroup(apiGroup) && !c.config.isDeniedResource(apiGroup, resource)
 }
 
 type budgetCandidate struct {

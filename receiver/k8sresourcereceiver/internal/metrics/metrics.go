@@ -152,7 +152,7 @@ func NewMetrics(typeName, clusterName string, settings component.TelemetrySettin
 	)
 	informerReconciles, _ := meter.Int64Counter(
 		name("informer_reconciles_total"),
-		metric.WithDescription("Reconciler attempts to start informers, labelled by kind (cr|static) and outcome."),
+		metric.WithDescription("Informer reconciliation outcomes, labelled by kind (cr|static|control) and outcome."),
 	)
 	enrichmentSyncs, _ := meter.Int64Counter(
 		name("enrichment_syncs_total"),

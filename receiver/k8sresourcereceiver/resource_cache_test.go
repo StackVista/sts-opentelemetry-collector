@@ -203,6 +203,27 @@ func testResourceCacheComputeChangesCRDeleted(t *testing.T, compact bool) {
 	assertRepresentation(t, compact, changes[0].Obj)
 }
 
+func TestResourceCacheRecreatedObjectWithReusedVersion(t *testing.T) {
+	forEachCacheMode(t, func(t *testing.T, compact bool) {
+		gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"}
+		old := makeTestCR("widget", "payments", "example.com", "v1", "Widget")
+		old.SetUID("old-incarnation")
+		old.SetResourceVersion("opaque")
+		next := old.DeepCopy()
+		next.SetUID("new-incarnation")
+		rc := newResourceCache()
+		rc.applyAdditions([]ResourceChange{{
+			Obj: cachedAs(t, compact, old), GVR: gvr, Source: ObjectSourceCR, EventType: watch.Added,
+		}})
+		changes := rc.computeChanges(nil, map[schema.GroupVersionResource]ObjectGroup{
+			gvr: {Source: ObjectSourceCR, Objects: cachedAll(t, compact, next)},
+		})
+		require.Len(t, changes, 1)
+		assert.Equal(t, watch.Modified, changes[0].EventType)
+		assert.Equal(t, next.GetUID(), changes[0].Obj.GetUID())
+	})
+}
+
 func TestResourceCache_ComputeChanges_MixedChanges(t *testing.T) {
 	forEachCacheMode(t, testResourceCacheComputeChangesMixedChanges)
 }

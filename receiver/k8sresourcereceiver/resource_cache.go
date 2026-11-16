@@ -87,7 +87,7 @@ func (rc *resourceCache) computeChanges(
 				EventType: watch.Added,
 				IsCRD:     true,
 			})
-		} else if prev.GetResourceVersion() != crd.GetResourceVersion() {
+		} else if prev.GetResourceVersion() != crd.GetResourceVersion() || prev.GetUID() != crd.GetUID() {
 			changes = append(changes, ResourceChange{
 				Obj:       crd,
 				EventType: watch.Modified,
@@ -122,7 +122,7 @@ func (rc *resourceCache) computeChanges(
 					GVR:       gvr,
 					Source:    group.Source,
 				})
-			} else if prev.Obj.GetResourceVersion() != obj.GetResourceVersion() {
+			} else if prev.Obj.GetResourceVersion() != obj.GetResourceVersion() || prev.Obj.GetUID() != obj.GetUID() {
 				changes = append(changes, ResourceChange{
 					Obj:       obj,
 					EventType: watch.Modified,

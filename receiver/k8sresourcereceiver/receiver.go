@@ -24,7 +24,7 @@ type k8sresourceReceiver struct {
 	consumer        consumer.Logs
 	metrics         metrics.Recorder
 	dynamicClient   dynamic.Interface            // injectable for testing
-	discoveryClient discovery.DiscoveryInterface // injectable for testing; only used when Config.Objects is non-empty
+	discoveryClient discovery.DiscoveryInterface // injectable for testing
 
 	// resolvedObjects is populated in Start() from Config.Objects via
 	// discovery. Consumed by the informer layer to build dynamic informers.
@@ -38,15 +38,18 @@ type k8sresourceReceiver struct {
 	resolvedResourceAttributes []resolvedResourceAttributeEnrichment
 
 	// Collector lifecycle — guarded by leader election when enabled.
-	mu              sync.Mutex
-	collector       *resourceCollector
-	shuttingDown    bool
-	lifecycleCancel context.CancelFunc
-	collectorCancel context.CancelFunc
-	shutdownOnce    sync.Once
-	shutdownDone    chan struct{}
-	shutdownErr     error
-	bootstrapDone   chan struct{}
+	mu                sync.Mutex
+	collector         *resourceCollector
+	shuttingDown      bool
+	lifecycleCancel   context.CancelFunc
+	collectorCancel   context.CancelFunc
+	collectorStarting bool
+	startingCancel    context.CancelFunc
+	startingDone      chan struct{}
+	shutdownOnce      sync.Once
+	shutdownDone      chan struct{}
+	shutdownErr       error
+	bootstrapDone     chan struct{}
 }
 
 func newReceiver(
@@ -94,13 +97,13 @@ func (r *k8sresourceReceiver) Start(ctx context.Context, host component.Host) er
 		r.dynamicClient = client
 	}
 
-	if len(r.config.Objects) > 0 || len(r.config.ResourceAttributes) > 0 {
+	if len(r.config.Objects) > 0 || len(r.config.ResourceAttributes) > 0 || r.config.ResourceCollections.Enabled {
 		if err := r.ensureDiscoveryClient(); err != nil {
 			return err
 		}
 	}
 
-	if len(r.config.Objects) > 0 {
+	if len(r.config.Objects) > 0 && !r.config.ResourceCollections.Enabled {
 		resolved, err := resolveObjectGVRs(r.discoveryClient, r.config.Objects, r.settings.Logger)
 		if err != nil {
 			return fmt.Errorf("failed to resolve object GVRs: %w", err)
@@ -186,26 +189,49 @@ func (r *k8sresourceReceiver) ensureDiscoveryClient() error {
 // Idempotent: a duplicate onStartLeading callback (e.g., k8s lease re-acquisition firing twice)
 // is a no-op rather than spawning a second collector that would leak goroutines and informers.
 func (r *k8sresourceReceiver) startCollector(ctx, lifetimeCtx context.Context) error {
-	r.mu.Lock()
-	if r.shuttingDown || r.collector != nil {
-		r.mu.Unlock()
-		r.settings.Logger.Warn("Resource collection is already running or shutting down; ignoring start")
-		return nil
-	}
-	r.mu.Unlock()
-
 	ctx, cancel := context.WithCancel(ctx)
 	stopLifetime := context.AfterFunc(lifetimeCtx, cancel)
 	cleanup := func() { stopLifetime(); cancel() }
+	for {
+		r.mu.Lock()
+		if r.shuttingDown || r.collector != nil || ctx.Err() != nil {
+			r.mu.Unlock()
+			cleanup()
+			return nil
+		}
+		if r.collectorStarting {
+			done := r.startingDone
+			r.mu.Unlock()
+			select {
+			case <-done:
+				continue
+			case <-ctx.Done():
+				cleanup()
+				return nil
+			}
+		}
+		r.collectorStarting, r.startingCancel = true, cleanup
+		r.startingDone = make(chan struct{})
+		r.mu.Unlock()
+		break
+	}
 	adopted := false
 	defer func() {
 		if !adopted {
 			cleanup()
 		}
+		r.mu.Lock()
+		r.collectorStarting, r.startingCancel = false, nil
+		close(r.startingDone)
+		r.mu.Unlock()
 	}()
 
-	ft := tracker.NewDefault()
-	informers := newResourceInformers(r.settings, r.config, r.dynamicClient, r.resolvedObjects, ft, r.metrics)
+	var informers Informers
+	if r.config.ResourceCollections.Enabled {
+		informers = newCollectionRuntime(r.settings, r.config, r.dynamicClient, r.discoveryClient, r.metrics)
+	} else {
+		informers = newResourceInformers(r.settings, r.config, r.dynamicClient, r.resolvedObjects, tracker.NewDefault(), r.metrics)
+	}
 	var enricher resourceAttributeEnricher
 	if r.resourceAttributeManager != nil {
 		enricher = r.resourceAttributeManager
@@ -223,7 +249,7 @@ func (r *k8sresourceReceiver) startCollector(ctx, lifetimeCtx context.Context) e
 	}
 
 	r.mu.Lock()
-	if r.shuttingDown || r.collector != nil {
+	if r.shuttingDown || r.collector != nil || ctx.Err() != nil {
 		// Shutdown or another start won the race while informers were starting.
 		r.mu.Unlock()
 		r.settings.Logger.Warn("Discarding resource collector after concurrent start or shutdown")
@@ -253,16 +279,29 @@ func (r *k8sresourceReceiver) stopCollector(ctx context.Context) {
 	r.mu.Lock()
 	collector := r.collector
 	cancel := r.collectorCancel
+	startingCancel := r.startingCancel
+	startingDone := r.startingDone
+	starting := r.collectorStarting
 	r.collectorCancel = nil
 	r.collector = nil
 	r.mu.Unlock()
 
+	if startingCancel != nil {
+		startingCancel()
+	}
 	if cancel != nil {
 		cancel()
 	}
 	if collector != nil {
 		if err := collector.Shutdown(ctx); err != nil {
 			r.settings.Logger.Debug("Error shutting down collector", zap.Error(err))
+		}
+	}
+	if starting {
+		select {
+		case <-startingDone:
+		case <-ctx.Done():
+			r.settings.Logger.Debug("Collector startup cancellation did not finish", zap.Error(ctx.Err()))
 		}
 	}
 }

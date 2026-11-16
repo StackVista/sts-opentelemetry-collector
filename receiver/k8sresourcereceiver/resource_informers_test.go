@@ -236,6 +236,105 @@ func TestResourceInformers_FiltersAPIGroups(t *testing.T) {
 	assert.ElementsMatch(t, []string{"alloweds.allowed.com", "blockeds.blocked.com"}, []string{crds[0].GetName(), crds[1].GetName()})
 }
 
+func TestResourceInformers_DeniedObjectsAcrossDiscoveryLifecycle(t *testing.T) {
+	forEachCacheMode(t, func(t *testing.T, compact bool) {
+		const group = "collection-test.example.com"
+		const otherGroup = "other.example.com"
+		deniedGVR := schema.GroupVersionResource{Group: group, Version: "v1", Resource: "widgets"}
+		allowedGVR := schema.GroupVersionResource{Group: group, Version: "v1", Resource: "gadgets"}
+		otherGVR := schema.GroupVersionResource{Group: otherGroup, Version: "v1", Resource: "widgets"}
+		scheme := testScheme()
+		registerCRGVR(scheme, group, "v1", "Widget")
+		registerCRGVR(scheme, group, "v2", "Widget")
+		registerCRGVR(scheme, group, "v1", "Gadget")
+		registerCRGVR(scheme, otherGroup, "v1", "Widget")
+		deniedCRD := makeTestCRDUnstructured("widgets."+group, group, "Widget", "widgets")
+		client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme,
+			map[schema.GroupVersionResource]string{
+				crdGVR:     "CustomResourceDefinitionList",
+				deniedGVR:  "WidgetList",
+				allowedGVR: "GadgetList",
+				otherGVR:   "WidgetList",
+				{Group: group, Version: "v2", Resource: "widgets"}: "WidgetList",
+			},
+			deniedCRD,
+			makeTestCRDUnstructured("gadgets."+group, group, "Gadget", "gadgets"),
+			makeTestCRDUnstructured("widgets."+otherGroup, otherGroup, "Widget", "widgets"),
+			makeTestCR("sensitive", "payments", group, "v1", "Widget"),
+			makeTestCR("allowed", "payments", group, "v1", "Gadget"),
+			makeTestCR("other-group", "payments", otherGroup, "v1", "Widget"),
+		)
+		config := testConfig([]string{"*"}, nil)
+		config.CompactCache = compact
+		config.DeniedObjects = []ObjectMatcher{{Name: "widgets", Group: group}}
+		ft := tracker.NewForbiddenTracker(time.Hour)
+		ri := newResourceInformers(testSettings(t), config, client, nil, ft, nil)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		require.NoError(t, ri.Start(ctx))
+		defer func() { require.NoError(t, ri.Shutdown(ctx)) }()
+
+		require.Eventually(t, func() bool {
+			objects := ri.ReadObjects()
+			return len(objects[allowedGVR].Objects) == 1 && len(objects[otherGVR].Objects) == 1
+		}, 10*time.Second, 10*time.Millisecond)
+		require.Len(t, ri.ReadCRDs(), 3, "denying instances keeps their CRD definition visible")
+
+		ri.onCRDAdd(deniedCRD)
+		updated := makeTestCRDWithVersions("widgets."+group, group, "Widget", "widgets",
+			[]map[string]interface{}{
+				{"name": "v1", "served": true, "storage": false},
+				{"name": "v2", "served": true, "storage": true},
+			})
+		ri.onCRDUpdate(deniedCRD, updated)
+		require.NoError(t, ri.crdInformer.GetStore().Update(updated))
+		ri.reconcileCRInformers(ctx)
+		for _, version := range []string{"v1", "v2"} {
+			gvr := schema.GroupVersionResource{Group: group, Version: version, Resource: "widgets"}
+			outcome, err := ri.startCRInformer(gvr)
+			require.NoError(t, err)
+			assert.Equal(t, metrics.InformerPolicyDenied, outcome)
+			retry, _ := ft.ShouldRetry(gvr)
+			assert.True(t, retry, "a policy deny must not be reported as missing RBAC")
+		}
+
+		for gvr := range ri.ReadObjects() {
+			assert.NotEqual(t, deniedGVR.GroupResource(), gvr.GroupResource())
+		}
+		for _, action := range client.Actions() {
+			assert.NotEqual(t, deniedGVR.GroupResource(), action.GetResource().GroupResource(),
+				"denied resources must not receive permission probes, lists, or watches")
+		}
+	})
+}
+
+func TestResourceInformers_DeniedObjectsAfterStaticResolution(t *testing.T) {
+	config := testConfig([]string{"*"}, nil)
+	config.Objects = []ObjectWatch{{Name: "widgets"}}
+	config.DeniedObjects = []ObjectMatcher{{Name: "widgets", Group: "example.com"}}
+	require.NoError(t, config.Validate(), "an omitted group is resolved by discovery")
+	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"}
+	resolved := []resolvedObjectWatch{{
+		ObjectWatch: config.Objects[0],
+		GVR:         gvr,
+		Namespaced:  true,
+	}}
+	client := dynamicfake.NewSimpleDynamicClient(testScheme())
+	ri := newResourceInformers(testSettings(t), config, client, resolved,
+		tracker.NewForbiddenTracker(time.Hour), nil)
+	ri.ctx = context.Background()
+
+	outcome, err := ri.startStaticInformer(&resolved[0], "payments")
+	require.NoError(t, err)
+	assert.Equal(t, metrics.InformerPolicyDenied, outcome)
+	ri.startStaticInformers()
+	ri.reconcileStaticInformers(ri.ctx)
+	assert.Empty(t, ri.staticInformers)
+	assert.Empty(t, ri.ReadObjects())
+	assert.True(t, ri.StaticWatchesSynced(), "deliberately denied watches must not stall snapshots")
+	assert.Empty(t, client.Actions())
+}
+
 func TestResourceInformers_ExcludeFilter(t *testing.T) {
 	scheme := testScheme()
 	registerCRGVR(scheme, "included.com", "v1", "IncludedResource")

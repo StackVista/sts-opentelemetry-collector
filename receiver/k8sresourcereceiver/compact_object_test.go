@@ -249,11 +249,12 @@ func emittedRecords(sink *consumertest.LogsSink, from int) []emittedRecord {
 				records := rl.ScopeLogs().At(j).LogRecords()
 				for k := 0; k < records.Len(); k++ {
 					r := records.At(k)
+					body, _ := r.Body().AsRaw().(map[string]any)
 					out = append(out, emittedRecord{
 						Resource: rl.Resource().Attributes().AsRaw(),
 						Event:    r.EventName(),
 						Attrs:    r.Attributes().AsRaw(),
-						Body:     r.Body().Map().AsRaw(),
+						Body:     body,
 					})
 				}
 			}

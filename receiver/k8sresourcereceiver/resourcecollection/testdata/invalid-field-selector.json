@@ -1,0 +1,10 @@
+{
+  "apiVersion": "observability.suse.com/v1alpha1",
+  "kind": "ResourceCollection",
+  "metadata": {"name": "malformed-fields"},
+  "spec": {
+    "resources": [
+      {"group": "collection-test.example.com", "resource": "widgets", "fieldSelector": "status.phase in (Running)"}
+    ]
+  }
+}

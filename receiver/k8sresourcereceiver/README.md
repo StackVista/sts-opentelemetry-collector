@@ -3,6 +3,61 @@
 > [!NOTE]
 > The Go module of this component is internal to SUSE Observability: its API and configuration can change in any release. Configure the collector as described in the [SUSE Observability documentation](https://documentation.suse.com/cloudnative/suse-observability/latest/en/setup/otel/overview.html).
 
+## Administrator collection denies
+
+`denied_objects` blocks an exact plural resource name and API group:
+
+```yaml
+denied_objects:
+  - name: certificates
+    group: cert-manager.io
+  - name: virtualmachines
+    group: kubevirt.io
+```
+
+The deny covers every namespace and API version of that type. It is checked
+before automatic CR discovery or resolved static watches make API requests.
+An explicit `objects` entry with the same name and group fails configuration
+validation. CRD definitions remain visible; their denied instances are not
+collected. This does not change Kubernetes read permissions.
+Cached denied objects are removed without exporting their bodies, including in
+deletion events. Previously exported data follows downstream retention.
+
+## ResourceCollection declarations
+
+With `resource_collections.enabled: true`, the active leader reads cluster-scoped
+`observability.suse.com/v1alpha1` ResourceCollections directly. Their spec selects
+CRD-backed custom resources through each type's served storage version, using
+namespace names and Kubernetes label selectors. Declaration version pinning is
+not supported; existing YAML version selections remain.
+
+Baseline selections and declarations contribute a union. Identical watches are
+shared, objects are deduplicated per API representation before payload budgets,
+and replacement watches synchronize before withdrawing previous contributions.
+Unavailable APIs and missing resource-read permissions are retried. Declarations
+do not change RBAC or render ConfigMaps or collector rollouts.
+
+The leader publishes generation-bound feedback through the status subresource
+using UID, generation and resourceVersion preconditions. Status-only updates do
+not trigger discovery. The current per-selection summary is provisional; wildcard
+children are tracked internally even when their details are not on the wire.
+
+Declaration objects and their status are also reported as custom resources,
+subject to the same administrator denies and CR payload budget. Disabling their
+export does not disable the control reads needed to process selections.
+
+Discovery failures retain known APIs and contributions; an authoritative CRD
+deletion withdraws its resources. On takeover, uncertain objects from the peer
+cache remain in the reporting view until their watches synchronize. Retention
+is applied before payload budgets. A pending custom declaration does not stop
+the healthy standard Kubernetes baseline from being reported.
+
+Informer recovery remains visible in `informer_reconciles_total`. The declaration
+path records watch transitions and periodic reconciliation, with bounded
+`kind` (`cr`, `static`, `control`) and `outcome` labels. Shared watches are counted
+once. Unresolved APIs and administrator denies also appear in the counter.
+Watch failures and recovery log once per health transition.
+
 ## Pod container summary attributes
 
 Core Pod object logs include three integer attributes when

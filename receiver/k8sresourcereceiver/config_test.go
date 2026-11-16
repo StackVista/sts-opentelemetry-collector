@@ -10,6 +10,43 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
+func TestResourceCollectionsConfigDefaults(t *testing.T) {
+	cfg := &Config{}
+	require.NoError(t, cfg.Validate())
+	assert.False(t, cfg.ResourceCollections.Enabled)
+	assert.Equal(t, []string{"*"}, cfg.CustomResourceAPIGroups.Include)
+}
+
+func TestResourceCollectionsEmptyBaseline(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		name := "disabled"
+		if enabled {
+			name = "enabled"
+		}
+		t.Run(name, func(t *testing.T) {
+			cfg := &Config{
+				ResourceCollections:     ResourceCollectionsConfig{Enabled: enabled},
+				CustomResourceAPIGroups: &APIGroups{Include: []string{}},
+			}
+			err := cfg.Validate()
+			if !enabled {
+				require.ErrorContains(t, err, "cr_api_groups.include cannot be empty")
+				return
+			}
+			require.NoError(t, err)
+			assert.False(t, cfg.shouldWatchAPIGroup("collection-test.example.com"))
+			assert.Empty(t, cfg.CustomResourceAPIGroups.Include)
+		})
+	}
+}
+
+func TestResourceCollectionsPreservesOmittedBaseline(t *testing.T) {
+	cfg := &Config{ResourceCollections: ResourceCollectionsConfig{Enabled: true}}
+	require.NoError(t, cfg.Validate())
+	assert.Equal(t, []string{"*"}, cfg.CustomResourceAPIGroups.Include)
+	assert.True(t, cfg.shouldWatchAPIGroup("collection-test.example.com"))
+}
+
 func TestConfigValidate(t *testing.T) {
 	tests := []struct {
 		name    string

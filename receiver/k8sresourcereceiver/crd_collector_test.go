@@ -676,6 +676,51 @@ func TestResourceCollector_EmitObject_SourceDrivesEventName(t *testing.T) {
 	})
 }
 
+func TestResourceCollector_DeniedObjectsNeverEmitCachedBodies(t *testing.T) {
+	forEachCacheMode(t, func(t *testing.T, compact bool) {
+		for _, mode := range []string{"snapshot", "increment"} {
+			t.Run(mode, func(t *testing.T) {
+				ctx := context.Background()
+				deniedGVR := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"}
+				allowedGVR := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "gadgets"}
+				denied := makeTestCR("sensitive", "payments", "example.com", "v1", "Widget")
+				denied.Object["spec"] = map[string]interface{}{"secret": "must-not-be-exported"}
+				allowed := makeTestCR("allowed", "payments", "example.com", "v1", "Gadget")
+				cfg := testConfig([]string{"*"}, nil)
+				cfg.CompactCache = compact
+				cfg.DeniedObjects = []ObjectMatcher{{Name: "widgets", Group: "example.com"}}
+				sink := &consumertest.LogsSink{}
+				peer := newRecordingPeerStore()
+				informers := newResourceInformers(testSettings(t), cfg, nil, nil,
+					tracker.NewForbiddenTracker(time.Hour), nil)
+				c := newResourceCollector(zaptest.NewLogger(t), cfg, sink, informers, peer, nil, nil)
+				require.NoError(t, peer.ApplyDelta(ctx, &PeerSyncDelta{Changes: []ResourceChange{
+					{Obj: cachedAs(t, compact, denied), EventType: watch.Added, GVR: deniedGVR, Source: ObjectSourceCR},
+					{Obj: cachedAs(t, compact, allowed), EventType: watch.Added, GVR: allowedGVR, Source: ObjectSourceCR},
+				}}))
+				if mode == "increment" {
+					c.lastSnapshotTime = time.Now()
+				}
+				c.runIncrement(ctx)
+
+				require.Equal(t, 1, sink.LogRecordCount(), "only the allowed resource's deletion may be exported")
+				assertEventNamesByObjectName(t, sink, map[string]string{"allowed": emit.EventNameCR})
+				assert.True(t, peer.IsEmpty(), "denied objects must still be removed from the peer cache")
+
+				sink.Reset()
+				c.emitChanges(ctx, []ResourceChange{
+					{Obj: cachedAs(t, compact, denied), EventType: watch.Added, GVR: deniedGVR, Source: ObjectSourceCR},
+					{Obj: cachedAs(t, compact, denied), EventType: watch.Modified, GVR: deniedGVR, Source: ObjectSourceCR},
+				})
+				c.emitSnapshot(ctx, nil, map[schema.GroupVersionResource]ObjectGroup{
+					deniedGVR: {Source: ObjectSourceCR, Objects: cachedAll(t, compact, denied)},
+				}, nil)
+				assert.Zero(t, sink.LogRecordCount())
+			})
+		}
+	})
+}
+
 func TestResourceCollector_EmitObject_AddsEnrichedResourceAttributes(t *testing.T) {
 	crGVR := schema.GroupVersionResource{Group: "kubevirt.io", Version: "v1", Resource: "virtualmachines"}
 	crObj := makeTestCR("vm-1", "default", "kubevirt.io", "v1", "VirtualMachine")
@@ -836,6 +881,19 @@ func TestResourceCollector_CRDWatchedMarkerHonorsWildcard(t *testing.T) {
 	crd := makeTestCRDUnstructured("widgets.example.com", "example.com", "Widget", "widgets")
 
 	assert.True(t, collector.crdCustomResourcesWatched(crd))
+}
+
+func TestResourceCollector_CRDWatchedMarkerHonorsDeniedObjects(t *testing.T) {
+	config := testConfig([]string{"*"}, nil)
+	config.DeniedObjects = []ObjectMatcher{{Name: "widgets", Group: "example.com"}}
+	collector := &resourceCollector{config: config}
+
+	assert.False(t, collector.crdCustomResourcesWatched(
+		makeTestCRDUnstructured("widgets.example.com", "example.com", "Widget", "widgets")))
+	assert.True(t, collector.crdCustomResourcesWatched(
+		makeTestCRDUnstructured("gadgets.example.com", "example.com", "Gadget", "gadgets")))
+	assert.True(t, collector.crdCustomResourcesWatched(
+		makeTestCRDUnstructured("widgets.other.com", "other.com", "Widget", "widgets")))
 }
 
 // assertEventNamesByObjectName walks every emitted log record and matches

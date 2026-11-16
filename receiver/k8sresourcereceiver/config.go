@@ -84,12 +84,11 @@ type Config struct {
 	// These attributes are added to emitted logs for matching Kubernetes resources.
 	ResourceAttributes []ResourceAttributeEnrichment `mapstructure:"resource_attributes"`
 
-	// DeniedObjects lists resources that must not appear under Objects. Use this
-	// to block third-party resources with sensitive contents (e.g. cert-manager
-	// Certificates). Core Secrets and ConfigMaps are allowed because they are
-	// sanitized on ingestion: Secret data is replaced by its hash and ConfigMap
-	// data is truncated.
+	// DeniedObjects vetoes exact resource types across discovery and declarations.
+	// Conflicting explicit Objects entries are rejected by validation.
 	DeniedObjects []ObjectMatcher `mapstructure:"denied_objects"`
+
+	ResourceCollections ResourceCollectionsConfig `mapstructure:"resource_collections"`
 
 	// ConfigMapMaxDataSize caps the ConfigMap data kept per object, shared
 	// evenly between its keys. Zero keeps all data. Binary data is never kept.
@@ -114,6 +113,19 @@ type ObjectMatcher struct {
 
 	// Group is the API group. Empty matches the core API group.
 	Group string `mapstructure:"group"`
+}
+
+func (c *Config) isDeniedResource(group, name string) bool {
+	for _, matcher := range c.DeniedObjects {
+		if matcher.Group == group && matcher.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+type ResourceCollectionsConfig struct {
+	Enabled bool `mapstructure:"enabled"`
 }
 
 // ObjectWatch declares a Kubernetes resource to watch.
@@ -243,7 +255,7 @@ func (c *Config) Validate() error {
 			}
 		}
 
-		if len(c.CustomResourceAPIGroups.Include) == 0 {
+		if len(c.CustomResourceAPIGroups.Include) == 0 && !c.ResourceCollections.Enabled {
 			return errors.New("cr_api_groups.include cannot be empty when discovery_mode is 'api_groups'")
 		}
 
