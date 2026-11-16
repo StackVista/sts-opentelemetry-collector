@@ -166,6 +166,22 @@
       "automerge": false,
       "rebaseWhen": "conflicted",
       "separateMinorPatch": false
+    },
+    {
+      "description": "Skip routine indirect commit updates; retain security fixes",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchDepTypes": [
+        "indirect"
+      ],
+      "matchUpdateTypes": [
+        "digest"
+      ],
+      "matchJsonata": [
+        "$not(isVulnerabilityAlert = true or $exists(vulnerabilityFixVersion))"
+      ],
+      "enabled": false
     }
   ],
   "postUpgradeTasks": {
