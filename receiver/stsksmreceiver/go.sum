@@ -13,8 +13,8 @@ github.com/dgryski/go-jump v0.0.0-20211018200510-ba001c3ffce0 h1:0wH6nO9QEa02Qx8
 github.com/dgryski/go-jump v0.0.0-20211018200510-ba001c3ffce0/go.mod h1:4hKCXuwrJoYvHZxJ86+bRVTOMyJ0Ej+RqfSm8mHi6KA=
 github.com/dlclark/regexp2/v2 v2.13.0 h1:sGPfGE1Bx7H3F9vcCdLrKUFvnau7DGiQZxHPQ6rMMs4=
 github.com/dlclark/regexp2/v2 v2.13.0/go.mod h1:avUrQvPaLz2DrFNHJF0taWAFFX2C1GMSSoeiqFjcBmU=
-github.com/emicklei/go-restful/v3 v3.13.0 h1:C4Bl2xDndpU6nJ4bc1jXd+uTmYPVUwkD6bFY/oTyCes=
-github.com/emicklei/go-restful/v3 v3.13.0/go.mod h1:6n3XBCmQQb25CM2LCACGz8ukIrRry+4bhvbpWn3mrbc=
+github.com/emicklei/go-restful/v3 v3.14.0 h1:6V6Ba8/5W1Z7amPinklZeCMlHBMwj53thpfxazCLMX4=
+github.com/emicklei/go-restful/v3 v3.14.0/go.mod h1:6n3XBCmQQb25CM2LCACGz8ukIrRry+4bhvbpWn3mrbc=
 github.com/fxamacker/cbor/v2 v2.9.1 h1:2rWm8B193Ll4VdjsJY28jxs70IdDsHRWgQYAI80+rMQ=
 github.com/fxamacker/cbor/v2 v2.9.1/go.mod h1:vM4b+DJCtHn+zz7h3FFp/hDAI9WNWCsZj23V5ytsSxQ=
 github.com/go-logr/logr v1.2.2/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbVz/1A=
