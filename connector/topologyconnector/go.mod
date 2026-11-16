@@ -57,7 +57,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
 	github.com/speakeasy-api/jsonpath v0.6.3 // indirect
 	github.com/speakeasy-api/openapi v1.24.0 // indirect
-	github.com/twmb/franz-go v1.22.2 // indirect
+	github.com/twmb/franz-go v1.22.3 // indirect
 	github.com/twmb/franz-go/pkg/kadm v1.19.0 // indirect
 	github.com/twmb/franz-go/pkg/kmsg v1.15.1 // indirect
 	github.com/vmware-labs/yaml-jsonpath v0.3.2 // indirect
