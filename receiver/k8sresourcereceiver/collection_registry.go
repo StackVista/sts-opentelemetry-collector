@@ -198,6 +198,14 @@ func (r *collectionWatchRegistry) observeWatch(
 }
 
 func (r *collectionWatchRegistry) snapshot() []collectionWatchSnapshot {
+	return r.readSnapshot(true)
+}
+
+func (r *collectionWatchRegistry) healthSnapshot() []collectionWatchSnapshot {
+	return r.readSnapshot(false)
+}
+
+func (r *collectionWatchRegistry) readSnapshot(objects bool) []collectionWatchSnapshot {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	if r.ctx.Err() != nil {
@@ -217,7 +225,7 @@ func (r *collectionWatchRegistry) snapshot() []collectionWatchSnapshot {
 			observation.State, observation.Reason = resourcecollection.Active, collectionWatching
 		}
 		// Keep known objects beside failure state; consumers must not infer an empty observation.
-		if observation.Synced {
+		if objects && observation.Synced {
 			for _, item := range entry.informer.GetStore().List() {
 				if object, ok := toResourceObject(item); ok {
 					observation.Objects = append(observation.Objects, object)

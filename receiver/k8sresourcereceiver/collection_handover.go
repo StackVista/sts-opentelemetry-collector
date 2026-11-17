@@ -102,10 +102,16 @@ func collectionContributionRemoved(request collectionDesiredContribution, remove
 }
 
 func (h *collectionHandover) read() (collectionEffectiveView, error) {
+	view, _, err := h.readSnapshot()
+	return view, err
+}
+
+func (h *collectionHandover) readSnapshot() (collectionEffectiveView, []collectionWatchSnapshot, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	snapshot := h.registry.snapshot()
 	observations := map[collectionWatchKey]collectionWatchSnapshot{}
-	for _, observation := range h.registry.snapshot() {
+	for _, observation := range snapshot {
 		observations[observation.Spec.Key] = observation
 	}
 	active := make(map[collectionContributionKey]collectionActiveContribution, len(h.active))
@@ -148,10 +154,10 @@ func (h *collectionHandover) read() (collectionEffectiveView, error) {
 	}
 	// Retire old watches only after the replacement's effective view is available.
 	if err := h.registry.reconcile(collectionTransitionWatches(h.desired, active)); err != nil {
-		return collectionEffectiveView{}, err
+		return collectionEffectiveView{}, nil, err
 	}
 	h.active = active
-	return collectionView(active, observations, complete), nil
+	return collectionView(active, observations, complete), snapshot, nil
 }
 
 func collectionWatchObserved(observation collectionWatchSnapshot) bool {

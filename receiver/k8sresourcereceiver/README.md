@@ -46,6 +46,8 @@ Declaration objects and their status are also reported as custom resources,
 subject to the same administrator denies and CR payload budget. Disabling their
 export does not disable the control reads needed to process selections.
 
+Blocked watches retain their last successful objects until observation recovers.
+There is no retention timeout because an unavailable API cannot prove deletion.
 Discovery failures retain known APIs and contributions; an authoritative CRD
 deletion withdraws its resources. On takeover, uncertain objects from the peer
 cache remain in the reporting view until their watches synchronize. Retention
@@ -57,6 +59,10 @@ path records watch transitions and periodic reconciliation, with bounded
 `kind` (`cr`, `static`, `control`) and `outcome` labels. Shared watches are counted
 once. Unresolved APIs and administrator denies also appear in the counter.
 Watch failures and recovery log once per health transition.
+Unresolved YAML object selections also log once per resolution transition.
+Required YAML watches must synchronize before a snapshot can be complete.
+Health and status checks run independently of object snapshot assembly, which
+reads informer stores at the reporting interval.
 
 ## Pod container summary attributes
 

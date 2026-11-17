@@ -36,32 +36,40 @@ func (r *collectionControlRegistry) reconcile(specs []collectionWatchSpec) error
 }
 
 func (r *collectionControlRegistry) snapshot() []collectionWatchSnapshot {
+	return r.readSnapshot(true)
+}
+
+func (r *collectionControlRegistry) healthSnapshot() []collectionWatchSnapshot {
+	return r.readSnapshot(false)
+}
+
+func (r *collectionControlRegistry) readSnapshot(objects bool) []collectionWatchSnapshot {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	result := r.target.snapshot()
+	result := r.target.readSnapshot(objects)
 	if r.declaration == nil {
 		return result
 	}
-	for _, observation := range r.controls.snapshot() {
+	for _, observation := range r.controls.readSnapshot(objects) {
 		if observation.Spec.Key != r.declaration.Key {
 			continue
 		}
 		observation.Spec = copyCollectionWatchSpec(*r.declaration)
-		objects := make([]resourceObject, 0, len(observation.Objects))
+		transformedObjects := make([]resourceObject, 0, len(observation.Objects))
 		for _, object := range observation.Objects {
 			decoded, err := decodeObject(object)
 			if err == nil {
 				var transformed interface{}
 				transformed, err = r.transform(decoded.DeepCopy())
 				if cached, ok := toResourceObject(transformed); err == nil && ok {
-					objects = append(objects, cached)
+					transformedObjects = append(transformedObjects, cached)
 					continue
 				}
 			}
 			observation.State, observation.Reason = resourcecollection.Pending, "ObservationFailed"
 			observation.Message = "A declaration object could not be read from the cache."
 		}
-		observation.Objects = objects
+		observation.Objects = transformedObjects
 		result = append(result, observation)
 	}
 	return result

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -37,9 +38,11 @@ type collectionRuntimeDiscovery struct {
 	mu        sync.Mutex
 	resources []*metav1.APIResourceList
 	err       error
+	calls     atomic.Int64
 }
 
 func (d *collectionRuntimeDiscovery) ServerPreferredResources() ([]*metav1.APIResourceList, error) {
+	d.calls.Add(1)
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	result := make([]*metav1.APIResourceList, 0, len(d.resources))
@@ -306,6 +309,15 @@ func TestCollectionRuntimeWildcardDeniedAndForbiddenChildrenKeepHealthyTypes(t *
 			}}
 			r, _ := startCollectionTestRuntime(t, cfg, client, disc)
 			feedback := collectionRuntimeStatus(t, client, declaration.Name, resourcecollection.Blocked)
+			require.Eventually(t, func() bool {
+				object, err := client.Resource(resourcecollection.GVR()).Get(context.Background(), declaration.Name, metav1.GetOptions{})
+				if err != nil {
+					return false
+				}
+				feedback, err = resourcecollection.Decode(object)
+				return err == nil && len(feedback.Status.Resources) == 1 &&
+					strings.Contains(feedback.Status.Resources[0].Message, "1 types active, 1 blocked, 0 pending.")
+			}, 5*time.Second, 20*time.Millisecond, "Blocked can precede the healthy wildcard child's synchronization")
 			assert.Contains(t, feedback.Status.Resources[0].Message, "1 types active, 1 blocked, 0 pending.")
 			require.Eventually(t, func() bool {
 				return r.StaticWatchesSynced() && len(r.ReadObjects()[gadgetsGVR].Objects) == 1 &&
@@ -399,11 +411,61 @@ func TestCollectionRuntimeIgnoresStatusOnlyControlEvents(t *testing.T) {
 	after.SetResourceVersion("11")
 	r.controlChanged(before, after)
 	assert.False(t, r.dirty.Load())
-	assert.Empty(t, r.trigger)
+	assert.True(t, r.controlDirty.Load(), "reported declarations must refresh their cached status")
+	assert.Len(t, r.trigger, 1)
 	after.SetGeneration(2)
 	r.controlChanged(before, after)
-	assert.True(t, r.dirty.Load())
+	assert.False(t, r.dirty.Load(), "declaration changes resolve against the cached API catalog")
+	assert.True(t, r.controlDirty.Load())
 	assert.Len(t, r.trigger, 1)
+
+	crd := collectionRuntimeCRD()
+	crd.SetGeneration(1)
+	for _, change := range []struct {
+		name      string
+		update    func(*unstructured.Unstructured)
+		discovery bool
+	}{
+		{"stored versions", func(object *unstructured.Unstructured) {
+			require.NoError(t, unstructured.SetNestedSlice(object.Object, []interface{}{"v1"}, "status", "storedVersions"))
+		}, false},
+		{"condition message", func(object *unstructured.Unstructured) {
+			object.Object["status"] = map[string]interface{}{"conditions": []interface{}{
+				map[string]interface{}{"type": "Established", "status": "True", "message": "updated"},
+			}}
+		}, false},
+		{"established", func(object *unstructured.Unstructured) {
+			object.Object["status"] = map[string]interface{}{"conditions": []interface{}{
+				map[string]interface{}{"type": "Established", "status": "False"},
+			}}
+		}, true},
+		{"names accepted", func(object *unstructured.Unstructured) {
+			object.Object["status"] = map[string]interface{}{"conditions": []interface{}{
+				map[string]interface{}{"type": "Established", "status": "True"},
+				map[string]interface{}{"type": "NamesAccepted", "status": "True"},
+			}}
+		}, true},
+		{"generation", func(object *unstructured.Unstructured) { object.SetGeneration(2) }, true},
+		{"replacement", func(object *unstructured.Unstructured) { object.SetUID("replacement") }, true},
+		{"deletion", func(object *unstructured.Unstructured) {
+			now := metav1.Now()
+			object.SetDeletionTimestamp(&now)
+		}, true},
+	} {
+		t.Run(change.name, func(t *testing.T) {
+			before := crd.DeepCopy()
+			before.Object["status"] = map[string]interface{}{"conditions": []interface{}{
+				map[string]interface{}{"type": "Established", "status": "True"},
+			}}
+			after := before.DeepCopy()
+			change.update(after)
+			r := &collectionRuntime{trigger: make(chan struct{}, 1)}
+			r.controlChanged(before, after)
+			assert.Equal(t, change.discovery, r.dirty.Load())
+			assert.True(t, r.controlDirty.Load())
+			assert.Len(t, r.trigger, 1)
+		})
+	}
 }
 
 type collectionReportingFixture struct {
@@ -412,6 +474,41 @@ type collectionReportingFixture struct {
 }
 
 func (f *collectionReportingFixture) collectionSnapshot() collectionReportingSnapshot { return f.view }
+func (*collectionReportingFixture) StaticWatchesSynced() bool {
+	panic("combined reporting must not call legacy accessors")
+}
+func (*collectionReportingFixture) ReadCRDs() []*unstructured.Unstructured {
+	panic("combined reporting must not call legacy accessors")
+}
+func (*collectionReportingFixture) ReadObjects() map[schema.GroupVersionResource]ObjectGroup {
+	panic("combined reporting must not call legacy accessors")
+}
+
+func TestCollectionRuntimeInvalidSpecPreservesCachedStatus(t *testing.T) {
+	cfg := collectionTestConfig(t, nil, nil, nil, nil)
+	declaration := collectionTestDeclaration("invalid", collectionTestSelection("widgets", nil, nil))
+	result := collectionDeclarationResult{
+		Name: declaration.Name, UID: declaration.UID, Generation: declaration.Generation, Reason: "InvalidDeclaration",
+	}
+	declaration.Status = collectionDeclarationStatus(result, nil)
+	preserveCollectionTransition(&declaration.Status, resourcecollection.Status{}, time.Now())
+	object := collectionTestDeclarationObject(t, declaration)
+	object.Object["spec"] = map[string]interface{}{"resources": "malformed"}
+	_, err := resourcecollection.Decode(object)
+	require.Error(t, err)
+	client := collectionRuntimeClient(t, object)
+	r := newCollectionRuntime(testSettings(t), cfg, client, nil, nil)
+	r.ctx = context.Background()
+	for range 3 {
+		r.readControls([]collectionWatchSnapshot{{
+			Spec:  collectionWatchSpec{Key: collectionWatchKey{GVR: resourcecollection.GVR()}},
+			State: resourcecollection.Active, Synced: true, Objects: []resourceObject{object},
+		}})
+		plan := buildCollectionPlan(cfg, collectionTestDiscovery(), r.declarations)
+		r.publishStatuses(plan, nil)
+	}
+	assert.Empty(t, client.Actions(), "current invalid-declaration feedback needs neither GET nor PATCH")
+}
 
 func TestCollectionReportingRetainedPeerObjectsStillHonorPayloadBudgets(t *testing.T) {
 	forEachCacheMode(t, func(t *testing.T, compact bool) {

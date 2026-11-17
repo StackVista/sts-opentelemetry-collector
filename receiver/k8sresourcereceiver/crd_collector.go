@@ -131,11 +131,9 @@ func (c *resourceCollector) runIncrementLoop(ctx context.Context) {
 // cache, and emits changes. Periodically emits full snapshots for TTL freshness.
 func (c *resourceCollector) runIncrement(ctx context.Context) {
 	start := time.Now()
-	// Checked before reading: HasSynced is monotonic, so every watch counted as
-	// synced here is fully represented in the objects read below.
-	staticSynced := c.informers.StaticWatchesSynced()
-	currentCRDs := c.informers.ReadCRDs()
-	currentObjects := c.informers.ReadObjects()
+	var staticSynced bool
+	var currentCRDs []*unstructured.Unstructured
+	var currentObjects map[schema.GroupVersionResource]ObjectGroup
 	var allowDelete func(ResourceChange) bool
 	if source, ok := c.informers.(collectionReportingSource); ok {
 		snapshot := source.collectionSnapshot()
@@ -145,6 +143,11 @@ func (c *resourceCollector) runIncrement(ctx context.Context) {
 			c.watchedResources[key] = watched
 		}
 		allowDelete = snapshot.AllowDelete
+	} else {
+		// HasSynced is monotonic, so synced watches are represented in the following reads.
+		staticSynced = c.informers.StaticWatchesSynced()
+		currentCRDs = c.informers.ReadCRDs()
+		currentObjects = c.informers.ReadObjects()
 	}
 	if allowDelete != nil {
 		var retained bool

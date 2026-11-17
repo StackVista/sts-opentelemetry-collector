@@ -58,6 +58,8 @@ func TestCollectionTelemetryDeniedAndUnresolvedSelections(t *testing.T) {
 		collectionTestDeclaration("a", selection), collectionTestDeclaration("b", selection),
 	})
 	r := newCollectionRuntime(testSettings(t), cfg, nil, nil, recorder)
+	core, logs := observer.New(zap.InfoLevel)
+	r.settings.Logger = zap.New(core)
 	r.ctx = context.Background()
 	r.recordWatchHealth(plan, nil, nil, true)
 	assert.ElementsMatch(t, []reconcileRecord{
@@ -66,6 +68,18 @@ func TestCollectionTelemetryDeniedAndUnresolvedSelections(t *testing.T) {
 	}, recorder.snapshot(), "unresolved baseline and shared denied type remain visible without watches")
 	r.recordWatchHealth(plan, nil, nil, false)
 	assert.Len(t, recorder.snapshot(), 2)
+	r.recordWatchHealth(plan, nil, nil, true)
+	assert.Equal(t, 1, logs.FilterMessage("Configured collection selection could not be resolved").Len())
+	fields := logs.FilterMessage("Configured collection selection could not be resolved").All()[0].ContextMap()
+	assert.Equal(t, int64(0), fields["selectionIndex"])
+	assert.Equal(t, "missing-resources", fields["resource"])
+	assert.False(t, collectionBaselineSynced(plan, nil), "an unresolved required watch cannot prove absence")
+
+	cfg.Objects[0].Name = "pods"
+	plan = buildCollectionPlan(cfg, collectionTestDiscovery(), nil)
+	r.recordWatchHealth(plan, nil, nil, true)
+	r.recordWatchHealth(plan, nil, nil, true)
+	assert.Equal(t, 1, logs.FilterMessage("Configured collection selection resolved").Len())
 }
 
 func TestCollectionRuntimeTelemetryPermissionRecovery(t *testing.T) {
