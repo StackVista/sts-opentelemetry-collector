@@ -388,7 +388,9 @@ func TestCollectionRegistryConcurrentReconciliationAndShutdown(t *testing.T) {
 	}
 }
 
-var collectionTestWidgetsGVR = schema.GroupVersionResource{Group: collectionTestGroup, Version: "v1", Resource: "widgets"}
+func collectionTestWidgetsGVR() schema.GroupVersionResource {
+	return schema.GroupVersionResource{Group: collectionTestGroup, Version: "v1", Resource: "widgets"}
+}
 
 func collectionTestWidget(name, namespace string) *unstructured.Unstructured {
 	object := &unstructured.Unstructured{Object: map[string]interface{}{
@@ -405,5 +407,5 @@ func collectionTestWidgetClient(objects ...*unstructured.Unstructured) *dynamicf
 		fixtures[index] = object
 	}
 	return dynamicfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(),
-		map[schema.GroupVersionResource]string{collectionTestWidgetsGVR: "WidgetList"}, fixtures...)
+		map[schema.GroupVersionResource]string{collectionTestWidgetsGVR(): "WidgetList"}, fixtures...)
 }

@@ -101,6 +101,10 @@ func TestCanonicalSelectionSchema(t *testing.T) {
 	if err := yaml.Unmarshal(resourcecollection.CRD, &crd); err != nil {
 		t.Fatal(err)
 	}
+	gvr := resourcecollection.GVR()
+	if gvr.Group != crd.Spec.Group || gvr.Version != crd.Spec.Versions[0].Name || gvr.Resource != crd.Spec.Names.Plural {
+		t.Fatal("discovery identity and canonical CRD differ")
+	}
 	selection := crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"].Properties["resources"].Items.Schema
 	if len(selection.Properties) != 5 {
 		t.Fatalf("expected five selection fields, got %v", selection.Properties)

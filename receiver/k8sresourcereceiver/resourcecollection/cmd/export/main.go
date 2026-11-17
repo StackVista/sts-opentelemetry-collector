@@ -18,7 +18,7 @@ func main() {
 		}
 		return
 	}
-	if err := os.WriteFile(*output, resourcecollection.CRD, 0o644); err != nil {
+	if err := os.WriteFile(*output, resourcecollection.CRD, 0o600); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

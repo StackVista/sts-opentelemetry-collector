@@ -230,7 +230,9 @@ func (r *k8sresourceReceiver) startCollector(ctx, lifetimeCtx context.Context) e
 	if r.config.ResourceCollections.Enabled {
 		informers = newCollectionRuntime(r.settings, r.config, r.dynamicClient, r.discoveryClient, r.metrics)
 	} else {
-		informers = newResourceInformers(r.settings, r.config, r.dynamicClient, r.resolvedObjects, tracker.NewDefault(), r.metrics)
+		informers = newResourceInformers(
+			r.settings, r.config, r.dynamicClient, r.resolvedObjects, tracker.NewDefault(), r.metrics,
+		)
 	}
 	var enricher resourceAttributeEnricher
 	if r.resourceAttributeManager != nil {

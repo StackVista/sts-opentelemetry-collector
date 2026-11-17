@@ -14,9 +14,13 @@ import (
 )
 
 const (
-	collectionBaselineDiscovery = "baseline-discovery"
-	collectionBaselineObject    = "baseline-object"
-	collectionDeclaration       = "declaration"
+	collectionAwaitingObservation = "AwaitingObservation"
+	collectionPolicyDenied        = "PolicyDenied"
+	collectionAPINotAvailable     = "APINotAvailable"
+	collectionWatching            = "Watching"
+	collectionBaselineDiscovery   = "baseline-discovery"
+	collectionBaselineObject      = "baseline-object"
+	collectionDeclaration         = "declaration"
 )
 
 type collectionContributor struct {
@@ -105,7 +109,7 @@ func buildCollectionPlan(
 		contributor := collectionContributor{Kind: collectionBaselineObject, SelectionIndex: index}
 		gvr, namespaced, err := planner.catalog.resolveBaseline(selection)
 		if err != nil {
-			state, reason := resourcecollection.Pending, "APINotAvailable"
+			state, reason := resourcecollection.Pending, collectionAPINotAvailable
 			var resolutionError *collectionResolutionError
 			if errors.As(err, &resolutionError) {
 				state, reason = resourcecollection.Blocked, resolutionError.reason
@@ -184,7 +188,7 @@ func (p *collectionPlanner) resolveDeclaration(
 	}
 	if selection.Resource != "*" && p.denied(selection.Group, selection.Resource) {
 		return unresolvedCollectionSelection(contributor, selection.Group, selection.Resource,
-			resourcecollection.Blocked, "PolicyDenied", "The agent administrator excludes this resource")
+			resourcecollection.Blocked, collectionPolicyDenied, "The agent administrator excludes this resource")
 	}
 	for _, key := range p.catalog.keys() {
 		if key.Group != selection.Group || (selection.Resource != "*" && key.Resource != selection.Resource) {
@@ -203,7 +207,7 @@ func (p *collectionPlanner) resolveDeclaration(
 	}
 	if len(result.Resolved) == 0 {
 		return unresolvedCollectionSelection(contributor, selection.Group, selection.Resource,
-			resourcecollection.Pending, "APINotAvailable", "No matching resource API is available")
+			resourcecollection.Pending, collectionAPINotAvailable, "No matching resource API is available")
 	}
 	aggregateCollectionResult(&result)
 	return result
@@ -217,10 +221,10 @@ func (p *collectionPlanner) resolve(
 	resolved := collectionResolvedSelection{Resource: key, GVR: resource.gvr}
 	switch {
 	case p.denied(key.Group, key.Resource):
-		resolved.State, resolved.Reason = resourcecollection.Blocked, "PolicyDenied"
+		resolved.State, resolved.Reason = resourcecollection.Blocked, collectionPolicyDenied
 		resolved.Message = "The agent administrator excludes this resource"
 	case resource.gvr.Version == "":
-		resolved.State, resolved.Reason = resourcecollection.Pending, "APINotAvailable"
+		resolved.State, resolved.Reason = resourcecollection.Pending, collectionAPINotAvailable
 		resolved.Message = "No usable served API version is available"
 		if resource.source == ObjectSourceCR {
 			resolved.Message = "No usable served storage-version API is available"
@@ -256,7 +260,7 @@ func (p *collectionPlanner) resolve(
 			resolved.Watches = append(resolved.Watches, watchKey)
 		}
 		// Resolution does not claim that the later informer has synchronized.
-		resolved.State, resolved.Reason = resourcecollection.Pending, "AwaitingObservation"
+		resolved.State, resolved.Reason = resourcecollection.Pending, collectionAwaitingObservation
 	}
 	result.Resolved = []collectionResolvedSelection{resolved}
 	aggregateCollectionResult(&result)
@@ -277,10 +281,10 @@ func unresolvedCollectionSelection(
 }
 
 func aggregateCollectionResult(result *collectionSelectionResult) {
-	result.State, result.Reason = resourcecollection.Pending, "AwaitingObservation"
+	result.State, result.Reason = resourcecollection.Pending, collectionAwaitingObservation
 	for _, resolved := range result.Resolved {
 		if resolved.State == resourcecollection.Blocked ||
-			(result.State != resourcecollection.Blocked && resolved.Reason != "AwaitingObservation") {
+			(result.State != resourcecollection.Blocked && resolved.Reason != collectionAwaitingObservation) {
 			result.State, result.Reason = resolved.State, resolved.Reason
 			result.Message = fmt.Sprintf("%s: %s", resolved.Resource.String(), resolved.Message)
 			if resolved.State == resourcecollection.Blocked {

@@ -208,13 +208,13 @@ func (r *collectionWatchRegistry) snapshot() []collectionWatchSnapshot {
 		entry.mu.Lock()
 		observation := collectionWatchSnapshot{
 			Spec: copyCollectionWatchSpec(entry.spec), Synced: entry.informer.HasSynced(),
-			State: resourcecollection.Pending, Reason: "AwaitingObservation",
+			State: resourcecollection.Pending, Reason: collectionAwaitingObservation,
 		}
 		switch err := entry.lastErr; {
 		case err != nil:
 			observation.State, observation.Reason, observation.Message = collectionObservationError(err)
 		case observation.Synced:
-			observation.State, observation.Reason = resourcecollection.Active, "Watching"
+			observation.State, observation.Reason = resourcecollection.Active, collectionWatching
 		}
 		// Keep known objects beside failure state; consumers must not infer an empty observation.
 		if observation.Synced {
@@ -270,13 +270,13 @@ func (r *collectionWatchRegistry) shutdown(ctx context.Context) error {
 	}
 }
 
-func collectionObservationError(err error) (state, reason, message string) {
-	state, reason = resourcecollection.Pending, "ObservationFailed"
+func collectionObservationError(err error) (string, string, string) {
+	state, reason := resourcecollection.Pending, "ObservationFailed"
 	switch {
 	case isPermissionDenied(err):
 		state, reason = resourcecollection.Blocked, "AccessDenied"
 	case apierrors.IsNotFound(err):
-		reason = "APINotAvailable"
+		reason = collectionAPINotAvailable
 	case apierrors.IsBadRequest(err) || apierrors.IsInvalid(err):
 		state, reason = resourcecollection.Blocked, "InvalidSelection"
 	}

@@ -412,7 +412,9 @@ func TestCollectionHandoverWithClientGoInformers(t *testing.T) {
 		allowNew := make(chan struct{})
 		var release sync.Once
 		client.PrependReactor("list", "widgets", func(action clienttesting.Action) (bool, runtime.Object, error) {
-			selector := action.(clienttesting.ListAction).GetListRestrictions().Labels.String()
+			listAction, ok := action.(clienttesting.ListAction)
+			require.True(t, ok)
+			selector := listAction.GetListRestrictions().Labels.String()
 			object := old
 			if selector == "app=new" {
 				object = next
@@ -441,15 +443,15 @@ func TestCollectionHandoverWithClientGoInformers(t *testing.T) {
 			return collectionRegistryObservation(registry, plan.Watches[0].Key).State == resourcecollection.Active
 		}, 5*time.Second, 10*time.Millisecond)
 		view := collectionHandoverRead(t, handover)
-		require.Len(t, view.Objects[collectionTestWidgetsGVR].Objects, 1)
-		assertRepresentation(t, compact, view.Objects[collectionTestWidgetsGVR].Objects[0])
+		require.Len(t, view.Objects[collectionTestWidgetsGVR()].Objects, 1)
+		assertRepresentation(t, compact, view.Objects[collectionTestWidgetsGVR()].Objects[0])
 		declaration.Generation++
 		declaration.Spec.Resources[0].LabelSelector.MatchLabels["app"] = "new"
 		replacement := collectionHandoverPlan(t, declaration)
 		require.NoError(t, handover.update(replacement))
 		view = collectionHandoverRead(t, handover)
 		assert.False(t, view.Complete)
-		assert.Equal(t, "old", view.Objects[collectionTestWidgetsGVR].Objects[0].GetName())
+		assert.Equal(t, "old", view.Objects[collectionTestWidgetsGVR()].Objects[0].GetName())
 		require.Len(t, registry.snapshot(), 2)
 		release.Do(func() { close(allowNew) })
 		require.Eventually(t, func() bool {
@@ -457,7 +459,7 @@ func TestCollectionHandoverWithClientGoInformers(t *testing.T) {
 		}, 5*time.Second, 10*time.Millisecond)
 		view = collectionHandoverRead(t, handover)
 		assert.True(t, view.Complete)
-		assert.Equal(t, "new", view.Objects[collectionTestWidgetsGVR].Objects[0].GetName())
+		assert.Equal(t, "new", view.Objects[collectionTestWidgetsGVR()].Objects[0].GetName())
 		assert.Len(t, registry.snapshot(), 1)
 	})
 }

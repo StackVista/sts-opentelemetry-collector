@@ -29,7 +29,7 @@ func (r *collectionRuntime) recordWatchHealth(
 			switch {
 			case health.Reason == "AccessDenied":
 				outcome = metrics.InformerForbidden
-			case health.Reason == "AwaitingObservation":
+			case health.Reason == collectionAwaitingObservation:
 				outcome = metrics.InformerStarted
 				if known {
 					outcome = metrics.InformerExists
@@ -49,11 +49,11 @@ func (r *collectionRuntime) recordWatchHealth(
 			zap.String("gvr", formatGVR(key.GVR)), zap.String("namespace", key.Namespace),
 			zap.String("reason", health.Reason),
 		}
-		if health.State != resourcecollection.Active && health.Reason != "AwaitingObservation" {
+		if health.State != resourcecollection.Active && health.Reason != collectionAwaitingObservation {
 			r.settings.Logger.Warn("Collection watch is unavailable; retaining known objects",
 				append(fields, zap.String("message", observation.Message))...)
 		} else if health.State == resourcecollection.Active && known &&
-			previous.State != resourcecollection.Active && previous.Reason != "AwaitingObservation" {
+			previous.State != resourcecollection.Active && previous.Reason != collectionAwaitingObservation {
 			r.settings.Logger.Info("Collection watch recovered", fields...)
 		}
 	}
@@ -80,11 +80,11 @@ func (r *collectionRuntime) recordWatchHealth(
 	unresolved := map[unresolvedKey]bool{}
 	recordSelection := func(selection collectionSelectionResult, kind metrics.InformerKind) {
 		recordReason := func(resource schema.GroupResource, version, reason string) {
-			if reason == "" || reason == "AwaitingObservation" {
+			if reason == "" || reason == collectionAwaitingObservation {
 				return
 			}
 			outcome := metrics.InformerFailed
-			if reason == "PolicyDenied" {
+			if reason == collectionPolicyDenied {
 				outcome = metrics.InformerPolicyDenied
 			}
 			key := unresolvedKey{Resource: resource, Version: version, Kind: kind, Outcome: outcome}

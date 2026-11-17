@@ -117,7 +117,7 @@ func (r *collectionRuntime) Start(ctx context.Context) error {
 	})
 	if err := r.controls.reconcile([]collectionWatchSpec{
 		{Key: collectionWatchKey{GVR: crdGVR}},
-		{Key: collectionWatchKey{GVR: resourcecollection.GVR}, Source: ObjectSourceCR},
+		{Key: collectionWatchKey{GVR: resourcecollection.GVR()}, Source: ObjectSourceCR},
 	}); err != nil {
 		return err
 	}
@@ -209,7 +209,7 @@ func (r *collectionRuntime) reconcile() {
 			if crdsReady {
 				r.crds, r.catalog.CRDs = raw, typed
 			}
-		case resourcecollection.GVR:
+		case resourcecollection.GVR():
 			declarationsReady = true
 			var declarations []*resourcecollection.ResourceCollection
 			var raw []*unstructured.Unstructured
@@ -289,14 +289,14 @@ func collectionBaselineSynced(plan collectionPlan, observations []collectionWatc
 		watches[observation.Spec.Key] = observation
 	}
 	for _, selection := range plan.Baseline {
-		if selection.Contributor.Kind != collectionBaselineObject || selection.Reason == "PolicyDenied" {
+		if selection.Contributor.Kind != collectionBaselineObject || selection.Reason == collectionPolicyDenied {
 			continue
 		}
 		if len(selection.Resolved) == 0 {
 			return false
 		}
 		for _, resolved := range selection.Resolved {
-			if resolved.Reason != "AwaitingObservation" {
+			if resolved.Reason != collectionAwaitingObservation {
 				return false
 			}
 			for _, key := range resolved.Watches {
@@ -370,10 +370,10 @@ func collectionCRDKeys(crds []*apiextensionsv1.CustomResourceDefinition) map[sch
 }
 
 func (r *collectionRuntime) includeDeclarations(view *collectionReportingSnapshot) {
-	if r.config.isDeniedResource(resourcecollection.Group, resourcecollection.GVR.Resource) {
+	if r.config.isDeniedResource(resourcecollection.Group, resourcecollection.GVR().Resource) {
 		return
 	}
-	group := view.Objects[resourcecollection.GVR]
+	group := view.Objects[resourcecollection.GVR()]
 	group.Source = ObjectSourceCR
 	byName := map[string]resourceObject{}
 	for _, object := range group.Objects {
@@ -397,8 +397,8 @@ func (r *collectionRuntime) includeDeclarations(view *collectionReportingSnapsho
 		group.Objects = append(group.Objects, object)
 	}
 	sort.Slice(group.Objects, func(i, j int) bool { return group.Objects[i].GetName() < group.Objects[j].GetName() })
-	view.Objects[resourcecollection.GVR] = group
-	view.Watched[resourcecollection.GVR.GroupResource()] = true
+	view.Objects[resourcecollection.GVR()] = group
+	view.Watched[resourcecollection.GVR().GroupResource()] = true
 }
 
 func collectionDeletionPolicy(
@@ -440,20 +440,20 @@ func collectionDeletionPolicy(
 			if !crdsReady {
 				return false
 			}
-			if !custom[gvr.GroupResource()] && gvr != resourcecollection.GVR {
+			if !custom[gvr.GroupResource()] && gvr != resourcecollection.GVR() {
 				return true
 			}
 			if !declarationsReady || invalid {
 				return false
 			}
-			if gvr == resourcecollection.GVR {
+			if gvr == resourcecollection.GVR() {
 				return true
 			}
 		}
 		for _, selection := range selections {
 			matches := (selection.Group == gvr.Group || selection.Group == "") &&
 				(selection.Resource == gvr.Resource || selection.Resource == "*")
-			if !matches || selection.Reason == "PolicyDenied" {
+			if !matches || selection.Reason == collectionPolicyDenied {
 				continue
 			}
 			if len(selection.Resolved) == 0 {
@@ -463,7 +463,7 @@ func collectionDeletionPolicy(
 				if resolved.Resource != gvr.GroupResource() {
 					continue
 				}
-				if resolved.Reason != "AwaitingObservation" && resolved.Reason != "PolicyDenied" {
+				if resolved.Reason != collectionAwaitingObservation && resolved.Reason != collectionPolicyDenied {
 					return false
 				}
 				for _, key := range resolved.Watches {

@@ -33,3 +33,7 @@ Exact administrator `denied_objects` restrictions now also apply to discovered
 custom resources. Group include/exclude remains baseline discovery filtering.
 An explicit static selection that contradicts denied_objects retains its existing
 configuration validation failure.
+
+The discovery identity is returned as a value to avoid mutable global API identity.
+The wire types and canonical schema are unchanged; the schema regression checks
+that discovery identity matches the exported CRD.

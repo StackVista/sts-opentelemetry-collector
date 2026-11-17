@@ -70,11 +70,11 @@ func collectionSelectionStatus(
 	}
 	counts := map[string]int{}
 	var failures []string
-	entry.State, entry.Reason, entry.Message = resourcecollection.Active, "Watching", ""
+	entry.State, entry.Reason, entry.Message = resourcecollection.Active, collectionWatching, ""
 	for _, resolved := range selection.Resolved {
 		state, reason, message := resolved.State, resolved.Reason, resolved.Message
-		if reason == "AwaitingObservation" {
-			state, reason = resourcecollection.Active, "Watching"
+		if reason == collectionAwaitingObservation {
+			state, reason = resourcecollection.Active, collectionWatching
 			for _, key := range resolved.Watches {
 				observation := watches[key]
 				if !collectionWatchObserved(observation) {
@@ -85,7 +85,7 @@ func collectionSelectionStatus(
 					if state != resourcecollection.Blocked {
 						state, reason, message = failedState, observation.Reason, observation.Message
 						if reason == "" {
-							reason = "AwaitingObservation"
+							reason = collectionAwaitingObservation
 						}
 					}
 				}
@@ -118,6 +118,14 @@ func collectionSelectionStatus(
 	return entry
 }
 
+const collectionStatusPatchTest = "test"
+
+type collectionStatusPatch struct {
+	Op    string      `json:"op"`
+	Path  string      `json:"path"`
+	Value interface{} `json:"value"`
+}
+
 func boundedCollectionMessage(message string) string {
 	runes := []rune(message)
 	if len(runes) > 2048 {
@@ -126,7 +134,9 @@ func boundedCollectionMessage(message string) string {
 	return message
 }
 
-func preserveCollectionTransition(status *resourcecollection.Status, previous resourcecollection.Status, now time.Time) {
+func preserveCollectionTransition(
+	status *resourcecollection.Status, previous resourcecollection.Status, now time.Time,
+) {
 	for index := range status.Conditions {
 		condition := &status.Conditions[index]
 		condition.LastTransitionTime = metav1.NewTime(now)
@@ -147,7 +157,7 @@ func writeCollectionStatus(
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		current, err := client.Resource(resourcecollection.GVR).Get(ctx, result.Name, metav1.GetOptions{})
+		current, err := client.Resource(resourcecollection.GVR()).Get(ctx, result.Name, metav1.GetOptions{})
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
@@ -170,11 +180,11 @@ func writeCollectionStatus(
 		if err != nil {
 			return err
 		}
-		patch, err := json.Marshal([]map[string]interface{}{
-			{"op": "test", "path": "/metadata/uid", "value": string(result.UID)},
-			{"op": "test", "path": "/metadata/generation", "value": result.Generation},
-			{"op": "test", "path": "/metadata/resourceVersion", "value": current.GetResourceVersion()},
-			{"op": "add", "path": "/status", "value": raw},
+		patch, err := json.Marshal([]collectionStatusPatch{
+			{collectionStatusPatchTest, "/metadata/uid", string(result.UID)},
+			{collectionStatusPatchTest, "/metadata/generation", result.Generation},
+			{collectionStatusPatchTest, "/metadata/resourceVersion", current.GetResourceVersion()},
+			{"add", "/status", raw},
 		})
 		if err != nil {
 			return err
@@ -182,7 +192,7 @@ func writeCollectionStatus(
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		_, err = client.Resource(resourcecollection.GVR).Patch(ctx, result.Name, types.JSONPatchType, patch,
+		_, err = client.Resource(resourcecollection.GVR()).Patch(ctx, result.Name, types.JSONPatchType, patch,
 			metav1.PatchOptions{}, "status")
 		if err == nil || apierrors.IsNotFound(err) {
 			return nil

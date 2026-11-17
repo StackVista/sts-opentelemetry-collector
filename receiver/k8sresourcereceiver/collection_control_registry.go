@@ -21,7 +21,7 @@ func (r *collectionControlRegistry) reconcile(specs []collectionWatchSpec) error
 	var declaration *collectionWatchSpec
 	targets := make([]collectionWatchSpec, 0, len(specs))
 	for _, spec := range specs {
-		if spec.Key == (collectionWatchKey{GVR: resourcecollection.GVR}) {
+		if spec.Key == (collectionWatchKey{GVR: resourcecollection.GVR()}) {
 			copySpec := copyCollectionWatchSpec(spec)
 			declaration = &copySpec
 		} else {

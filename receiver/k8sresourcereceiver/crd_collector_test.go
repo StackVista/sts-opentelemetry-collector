@@ -684,7 +684,7 @@ func TestResourceCollector_DeniedObjectsNeverEmitCachedBodies(t *testing.T) {
 				deniedGVR := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"}
 				allowedGVR := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "gadgets"}
 				denied := makeTestCR("sensitive", "payments", "example.com", "v1", "Widget")
-				denied.Object["spec"] = map[string]interface{}{"secret": "must-not-be-exported"}
+				denied.Object["spec"] = map[string]interface{}{"payload": "must-not-be-exported"}
 				allowed := makeTestCR("allowed", "payments", "example.com", "v1", "Gadget")
 				cfg := testConfig([]string{"*"}, nil)
 				cfg.CompactCache = compact

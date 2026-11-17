@@ -25,7 +25,9 @@ const (
 	MaxSelections = 32
 )
 
-var GVR = schema.GroupVersionResource{Group: Group, Version: Version, Resource: "resourcecollections"}
+func GVR() schema.GroupVersionResource {
+	return schema.GroupVersionResource{Group: Group, Version: Version, Resource: "resourcecollections"}
+}
 
 //go:embed resourcecollection-crd.yaml
 var CRD []byte

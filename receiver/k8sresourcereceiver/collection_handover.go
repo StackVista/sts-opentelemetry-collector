@@ -119,7 +119,7 @@ func (h *collectionHandover) read() (collectionEffectiveView, error) {
 	}
 	complete := true
 	for key, desired := range h.desired {
-		ready := desired.Reason == "AwaitingObservation" && len(desired.Watches) > 0
+		ready := desired.Reason == collectionAwaitingObservation && len(desired.Watches) > 0
 		for _, spec := range desired.Watches {
 			ready = ready && collectionWatchObserved(observations[spec.Key])
 		}
@@ -158,7 +158,9 @@ func collectionWatchObserved(observation collectionWatchSnapshot) bool {
 	return observation.Synced && observation.State == resourcecollection.Active
 }
 
-func collectionContributionID(contributor collectionContributor, resource schema.GroupResource) collectionContributionKey {
+func collectionContributionID(
+	contributor collectionContributor, resource schema.GroupResource,
+) collectionContributionKey {
 	return collectionContributionKey{
 		Kind: contributor.Kind, Declaration: contributor.Declaration,
 		UID: contributor.UID, SelectionIndex: contributor.SelectionIndex, Resource: resource,
@@ -241,13 +243,13 @@ func retainCollectionContribution(
 	desired map[collectionContributionKey]collectionDesiredContribution,
 ) bool {
 	if current, exists := desired[key]; exists {
-		return current.Reason != "PolicyDenied"
+		return current.Reason != collectionPolicyDenied
 	}
 	if key.Kind != collectionDeclaration {
 		return false
 	}
 	for nextKey, next := range desired {
-		if sameCollectionFamily(key, nextKey) && next.Reason != "PolicyDenied" &&
+		if sameCollectionFamily(key, nextKey) && next.Reason != collectionPolicyDenied &&
 			(next.Group != previous.Group || next.Resource != previous.Resource ||
 				(next.Resource == "*" && nextKey.Resource == (schema.GroupResource{}))) {
 			return true
@@ -266,7 +268,7 @@ func collectionFamilyReady(
 			continue
 		}
 		found = true
-		if next.Reason != "AwaitingObservation" || len(next.Watches) == 0 {
+		if next.Reason != collectionAwaitingObservation || len(next.Watches) == 0 {
 			return false
 		}
 		for _, spec := range next.Watches {

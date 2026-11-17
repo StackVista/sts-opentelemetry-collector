@@ -25,11 +25,11 @@ func TestCollectionTelemetrySharedWatchesAndRetryCadence(t *testing.T) {
 	r := newCollectionRuntime(testSettings(t), collectionTestConfig(t, nil, nil, nil, nil), nil, nil, recorder)
 	r.ctx = context.Background()
 	control := collectionWatchSnapshot{
-		Spec:  collectionWatchSpec{Key: collectionWatchKey{GVR: resourcecollection.GVR}, Source: ObjectSourceCR},
+		Spec:  collectionWatchSpec{Key: collectionWatchKey{GVR: resourcecollection.GVR()}, Source: ObjectSourceCR},
 		State: resourcecollection.Active, Reason: "Watching",
 	}
 	watch := collectionWatchSnapshot{
-		Spec:  collectionWatchSpec{Key: collectionWatchKey{GVR: collectionTestWidgetsGVR}, Source: ObjectSourceCR},
+		Spec:  collectionWatchSpec{Key: collectionWatchKey{GVR: collectionTestWidgetsGVR()}, Source: ObjectSourceCR},
 		State: resourcecollection.Blocked, Reason: "AccessDenied",
 	}
 	controls := []collectionWatchSnapshot{control}
@@ -77,7 +77,7 @@ func TestCollectionRuntimeTelemetryPermissionRecovery(t *testing.T) {
 	var granted atomic.Bool
 	client.PrependReactor("list", "widgets", func(clienttesting.Action) (bool, runtime.Object, error) {
 		if !granted.Load() {
-			return true, nil, apierrors.NewForbidden(collectionTestWidgetsGVR.GroupResource(), "", errors.New("reads not granted"))
+			return true, nil, apierrors.NewForbidden(collectionTestWidgetsGVR().GroupResource(), "", errors.New("reads not granted"))
 		}
 		return false, nil, nil
 	})

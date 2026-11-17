@@ -42,7 +42,7 @@ type collectionRuntimeDiscovery struct {
 func (d *collectionRuntimeDiscovery) ServerPreferredResources() ([]*metav1.APIResourceList, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	var result []*metav1.APIResourceList
+	result := make([]*metav1.APIResourceList, 0, len(d.resources))
 	for _, resources := range d.resources {
 		result = append(result, resources.DeepCopy())
 	}
@@ -69,9 +69,9 @@ func collectionRuntimeClient(t *testing.T, objects ...runtime.Object) *dynamicfa
 	registerCRGVR(scheme, collectionTestGroup, "v1", "Gadget")
 	registerCRGVR(scheme, "", "v1", "Pod")
 	return dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme, map[schema.GroupVersionResource]string{
-		crdGVR:                   "CustomResourceDefinitionList",
-		resourcecollection.GVR:   resourcecollection.Kind + "List",
-		collectionTestWidgetsGVR: "WidgetList",
+		crdGVR:                     "CustomResourceDefinitionList",
+		resourcecollection.GVR():   resourcecollection.Kind + "List",
+		collectionTestWidgetsGVR(): "WidgetList",
 		{Group: collectionTestGroup, Version: "v2", Resource: "widgets"}: "WidgetList",
 		{Group: collectionTestGroup, Version: "v1", Resource: "gadgets"}: "GadgetList",
 		podsGVR: "PodList",
@@ -100,7 +100,7 @@ func collectionRuntimeStatus(t *testing.T, client dynamic.Interface, name string
 	t.Helper()
 	var decoded *resourcecollection.ResourceCollection
 	require.Eventually(t, func() bool {
-		object, err := client.Resource(resourcecollection.GVR).Get(context.Background(), name, metav1.GetOptions{})
+		object, err := client.Resource(resourcecollection.GVR()).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			return false
 		}
@@ -133,14 +133,14 @@ func TestCollectionRuntimeDeclarationChangesPreserveBaselineAndShareWatches(t *t
 		require.Eventually(t, func() bool {
 			view := r.collectionSnapshot()
 			return view.Complete && len(view.Objects[podsGVR].Objects) == 1 &&
-				len(view.Objects[collectionTestWidgetsGVR].Objects) == 1
+				len(view.Objects[collectionTestWidgetsGVR()].Objects) == 1
 		}, 5*time.Second, 20*time.Millisecond)
 		view := r.collectionSnapshot()
-		assert.Equal(t, ObjectSourceCR, view.Objects[collectionTestWidgetsGVR].Source)
-		assertRepresentation(t, compact, view.Objects[collectionTestWidgetsGVR].Objects[0])
+		assert.Equal(t, ObjectSourceCR, view.Objects[collectionTestWidgetsGVR()].Source)
+		assertRepresentation(t, compact, view.Objects[collectionTestWidgetsGVR()].Objects[0])
 		watches := 0
 		for _, action := range client.Actions() {
-			if action.GetVerb() == "watch" && action.GetResource() == collectionTestWidgetsGVR {
+			if action.GetVerb() == "watch" && action.GetResource() == collectionTestWidgetsGVR() {
 				watches++
 				assert.Equal(t, "team-a", action.GetNamespace())
 			}
@@ -149,21 +149,21 @@ func TestCollectionRuntimeDeclarationChangesPreserveBaselineAndShareWatches(t *t
 
 		a.Generation = 2
 		a.Spec.Resources[0].Namespaces = []string{"team-b"}
-		_, err := client.Resource(resourcecollection.GVR).Update(ctx, collectionTestDeclarationObject(t, a), metav1.UpdateOptions{})
+		_, err := client.Resource(resourcecollection.GVR()).Update(ctx, collectionTestDeclarationObject(t, a), metav1.UpdateOptions{})
 		require.NoError(t, err)
 		collectionRuntimeStatus(t, client, "a", resourcecollection.Active)
 		require.Eventually(t, func() bool {
-			return len(r.ReadObjects()[collectionTestWidgetsGVR].Objects) == 2
+			return len(r.ReadObjects()[collectionTestWidgetsGVR()].Objects) == 2
 		}, 5*time.Second, 20*time.Millisecond)
 
-		require.NoError(t, client.Resource(resourcecollection.GVR).Delete(ctx, "a", metav1.DeleteOptions{}))
-		require.NoError(t, client.Resource(resourcecollection.GVR).Delete(ctx, "b", metav1.DeleteOptions{}))
+		require.NoError(t, client.Resource(resourcecollection.GVR()).Delete(ctx, "a", metav1.DeleteOptions{}))
+		require.NoError(t, client.Resource(resourcecollection.GVR()).Delete(ctx, "b", metav1.DeleteOptions{}))
 		require.Eventually(t, func() bool {
 			view := r.collectionSnapshot()
-			return len(view.Objects[collectionTestWidgetsGVR].Objects) == 1 &&
-				len(view.Objects[resourcecollection.GVR].Objects) == 0
+			return len(view.Objects[collectionTestWidgetsGVR()].Objects) == 1 &&
+				len(view.Objects[resourcecollection.GVR()].Objects) == 0
 		}, 5*time.Second, 20*time.Millisecond)
-		assert.Equal(t, "a-widget", r.ReadObjects()[collectionTestWidgetsGVR].Objects[0].GetName())
+		assert.Equal(t, "a-widget", r.ReadObjects()[collectionTestWidgetsGVR()].Objects[0].GetName())
 		assert.Len(t, r.ReadObjects()[podsGVR].Objects, 1)
 	})
 }
@@ -183,7 +183,7 @@ func TestCollectionRuntimeMissingAPIRecoversAndReportsDeclarationStatus(t *testi
 		collectionTestAPI("", "v1", true, "pods"),
 		collectionTestAPI(collectionTestGroup, "v1", true, "widgets"),
 	}, nil)
-	_, err := client.Resource(collectionTestWidgetsGVR).Namespace("payments").Create(ctx,
+	_, err := client.Resource(collectionTestWidgetsGVR()).Namespace("payments").Create(ctx,
 		collectionTestWidget("installed-later", "payments"), metav1.CreateOptions{})
 	require.NoError(t, err)
 	_, err = client.Resource(crdGVR).Create(ctx, collectionRuntimeCRD(), metav1.CreateOptions{})
@@ -191,10 +191,10 @@ func TestCollectionRuntimeMissingAPIRecoversAndReportsDeclarationStatus(t *testi
 	collectionRuntimeStatus(t, client, declaration.Name, resourcecollection.Active)
 	require.Eventually(t, func() bool {
 		view := r.collectionSnapshot()
-		if len(view.Objects[resourcecollection.GVR].Objects) != 1 || len(view.Objects[collectionTestWidgetsGVR].Objects) != 1 {
+		if len(view.Objects[resourcecollection.GVR()].Objects) != 1 || len(view.Objects[collectionTestWidgetsGVR()].Objects) != 1 {
 			return false
 		}
-		object, decodeErr := decodeObject(view.Objects[resourcecollection.GVR].Objects[0])
+		object, decodeErr := decodeObject(view.Objects[resourcecollection.GVR()].Objects[0])
 		if decodeErr != nil {
 			return false
 		}
@@ -202,7 +202,7 @@ func TestCollectionRuntimeMissingAPIRecoversAndReportsDeclarationStatus(t *testi
 		return decodeErr == nil && reported.Status.ObservedGeneration == 1 &&
 			reported.Status.Resources[0].State == resourcecollection.Active
 	}, 5*time.Second, 20*time.Millisecond, "automatic declaration collection must preserve feedback")
-	assert.True(t, r.collectionSnapshot().Watched[collectionTestWidgetsGVR.GroupResource()])
+	assert.True(t, r.collectionSnapshot().Watched[collectionTestWidgetsGVR().GroupResource()])
 }
 
 func TestCollectionRuntimeRetainsCatalogOnDiscoveryFailuresAndRemovesDeletedCRDs(t *testing.T) {
@@ -225,7 +225,7 @@ func TestCollectionRuntimeRetainsCatalogOnDiscoveryFailuresAndRemovesDeletedCRDs
 				Source: ObjectSourceStatic,
 			})
 		}, 5*time.Second, 20*time.Millisecond)
-		assert.Len(t, r.ReadObjects()[collectionTestWidgetsGVR].Objects, 1)
+		assert.Len(t, r.ReadObjects()[collectionTestWidgetsGVR()].Objects, 1)
 
 		disc.set(nil, &discovery.ErrGroupDiscoveryFailed{Groups: map[schema.GroupVersion]error{
 			{Group: collectionTestGroup, Version: "v1"}: errors.New("API group temporarily unavailable"),
@@ -235,8 +235,8 @@ func TestCollectionRuntimeRetainsCatalogOnDiscoveryFailuresAndRemovesDeletedCRDs
 		require.NoError(t, client.Resource(crdGVR).Delete(ctx, "widgets."+collectionTestGroup, metav1.DeleteOptions{}))
 		require.Eventually(t, func() bool {
 			view := r.collectionSnapshot()
-			return len(view.Objects[collectionTestWidgetsGVR].Objects) == 0 &&
-				view.AllowDelete(ResourceChange{GVR: collectionTestWidgetsGVR, Source: ObjectSourceCR})
+			return len(view.Objects[collectionTestWidgetsGVR()].Objects) == 0 &&
+				view.AllowDelete(ResourceChange{GVR: collectionTestWidgetsGVR(), Source: ObjectSourceCR})
 		}, 5*time.Second, 20*time.Millisecond, "authoritative CRD removal differs from transient discovery loss")
 	})
 }
@@ -250,7 +250,7 @@ func TestCollectionRuntimeRemovedCRDCannotReuseStaticCachedObjects(t *testing.T)
 	var removed atomic.Bool
 	client.PrependReactor("list", "widgets", func(clienttesting.Action) (bool, runtime.Object, error) {
 		if removed.Load() {
-			return true, nil, apierrors.NewNotFound(collectionTestWidgetsGVR.GroupResource(), "")
+			return true, nil, apierrors.NewNotFound(collectionTestWidgetsGVR().GroupResource(), "")
 		}
 		return false, nil, nil
 	})
@@ -259,19 +259,19 @@ func TestCollectionRuntimeRemovedCRDCannotReuseStaticCachedObjects(t *testing.T)
 	}}
 	r, ctx := startCollectionTestRuntime(t, cfg, client, disc)
 	require.Eventually(t, func() bool {
-		return len(r.ReadObjects()[collectionTestWidgetsGVR].Objects) == 1
+		return len(r.ReadObjects()[collectionTestWidgetsGVR()].Objects) == 1
 	}, 5*time.Second, 20*time.Millisecond)
 	removed.Store(true)
 	disc.set(nil, errors.New("discovery temporarily unavailable"))
 	require.NoError(t, client.Resource(crdGVR).Delete(ctx, "widgets."+collectionTestGroup, metav1.DeleteOptions{}))
 	require.Eventually(t, func() bool {
 		view := r.collectionSnapshot()
-		return len(view.CRDs) == 0 && len(view.Objects[collectionTestWidgetsGVR].Objects) == 0 &&
+		return len(view.CRDs) == 0 && len(view.Objects[collectionTestWidgetsGVR()].Objects) == 0 &&
 			len(view.Objects[podsGVR].Objects) == 1
 	}, 5*time.Second, 20*time.Millisecond)
 	lists := 0
 	for _, action := range client.Actions() {
-		if action.GetVerb() == "list" && action.GetResource() == collectionTestWidgetsGVR {
+		if action.GetVerb() == "list" && action.GetResource() == collectionTestWidgetsGVR() {
 			lists++
 		}
 	}
@@ -295,7 +295,7 @@ func TestCollectionRuntimeWildcardDeniedAndForbiddenChildrenKeepHealthyTypes(t *
 			if policy == "rbac" {
 				client.PrependReactor("list", "widgets", func(clienttesting.Action) (bool, runtime.Object, error) {
 					if !granted.Load() {
-						return true, nil, apierrors.NewForbidden(collectionTestWidgetsGVR.GroupResource(), "", errors.New("reads not granted"))
+						return true, nil, apierrors.NewForbidden(collectionTestWidgetsGVR().GroupResource(), "", errors.New("reads not granted"))
 					}
 					return false, nil, nil
 				})
@@ -313,12 +313,12 @@ func TestCollectionRuntimeWildcardDeniedAndForbiddenChildrenKeepHealthyTypes(t *
 			}, 5*time.Second, 20*time.Millisecond)
 			if policy == "deny" {
 				for _, action := range client.Actions() {
-					assert.NotEqual(t, collectionTestWidgetsGVR, action.GetResource())
+					assert.NotEqual(t, collectionTestWidgetsGVR(), action.GetResource())
 				}
 			} else {
 				granted.Store(true)
 				collectionRuntimeStatus(t, client, declaration.Name, resourcecollection.Active)
-				assert.Len(t, r.ReadObjects()[collectionTestWidgetsGVR].Objects, 1)
+				assert.Len(t, r.ReadObjects()[collectionTestWidgetsGVR()].Objects, 1)
 			}
 		})
 	}
@@ -354,7 +354,7 @@ func TestCollectionRuntimeTakeoverPreservesPeerObjectsUntilObservation(t *testin
 		}, 5*time.Second, 20*time.Millisecond)
 		peer := newRecordingPeerStore()
 		require.NoError(t, peer.ApplyDelta(ctx, &PeerSyncDelta{Changes: []ResourceChange{{
-			GVR: collectionTestWidgetsGVR, Source: ObjectSourceCR, EventType: watch.Added,
+			GVR: collectionTestWidgetsGVR(), Source: ObjectSourceCR, EventType: watch.Added,
 			Obj: cachedAs(t, compact, collectionTestWidget("previously-observed", "held")),
 		}}}))
 		sink := &consumertest.LogsSink{}
@@ -374,9 +374,9 @@ func TestCollectionRuntimeTakeoverPreservesPeerObjectsUntilObservation(t *testin
 		assert.True(t, found)
 		assert.True(t, complete, "pending custom declarations must not block the healthy native baseline")
 		assert.Len(t, peer.ComputeChanges(nil, nil), 4, "the prior object remains beside the pod, declaration and CRD")
-		require.NoError(t, client.Resource(resourcecollection.GVR).Delete(ctx, declaration.Name, metav1.DeleteOptions{}))
+		require.NoError(t, client.Resource(resourcecollection.GVR()).Delete(ctx, declaration.Name, metav1.DeleteOptions{}))
 		require.Eventually(t, func() bool {
-			return r.collectionSnapshot().AllowDelete(ResourceChange{GVR: collectionTestWidgetsGVR, Source: ObjectSourceCR})
+			return r.collectionSnapshot().AllowDelete(ResourceChange{GVR: collectionTestWidgetsGVR(), Source: ObjectSourceCR})
 		}, 5*time.Second, 20*time.Millisecond)
 		sink.Reset()
 		collector.runIncrement(ctx)
@@ -421,7 +421,7 @@ func TestCollectionReportingRetainedPeerObjectsStillHonorPayloadBudgets(t *testi
 		peer := newRecordingPeerStore()
 		require.NoError(t, peer.ApplyDelta(ctx, &PeerSyncDelta{Changes: []ResourceChange{{
 			Obj: cachedAs(t, compact, collectionTestWidget("previously-observed", "payments")),
-			GVR: collectionTestWidgetsGVR, Source: ObjectSourceCR, EventType: watch.Added,
+			GVR: collectionTestWidgetsGVR(), Source: ObjectSourceCR, EventType: watch.Added,
 		}}}))
 		source := &collectionReportingFixture{view: collectionReportingSnapshot{
 			Objects: map[schema.GroupVersionResource]ObjectGroup{}, Complete: true,
@@ -442,26 +442,26 @@ func TestCollectionRuntimeReusesControlWatchWhenDeclarationsAreSelected(t *testi
 		cfg := collectionTestConfig(t, []string{resourcecollection.Group}, nil, nil, nil)
 		cfg.CompactCache = compact
 		declaration := collectionTestDeclaration("integration", resourcecollection.Selection{
-			Group: resourcecollection.Group, Resource: resourcecollection.GVR.Resource,
+			Group: resourcecollection.Group, Resource: resourcecollection.GVR().Resource,
 		})
 		crd := makeTestCRDWithVersions("resourcecollections."+resourcecollection.Group,
-			resourcecollection.Group, resourcecollection.Kind, resourcecollection.GVR.Resource,
+			resourcecollection.Group, resourcecollection.Kind, resourcecollection.GVR().Resource,
 			[]map[string]interface{}{{"name": resourcecollection.Version, "storage": true, "served": true}})
 		require.NoError(t, unstructured.SetNestedField(crd.Object, "Cluster", "spec", "scope"))
 		client := collectionRuntimeClient(t, crd, collectionTestDeclarationObject(t, declaration))
 		disc := &collectionRuntimeDiscovery{resources: []*metav1.APIResourceList{
-			collectionTestAPI(resourcecollection.Group, resourcecollection.Version, false, resourcecollection.GVR.Resource),
+			collectionTestAPI(resourcecollection.Group, resourcecollection.Version, false, resourcecollection.GVR().Resource),
 		}}
 		r, _ := startCollectionTestRuntime(t, cfg, client, disc)
 		collectionRuntimeStatus(t, client, declaration.Name, resourcecollection.Active)
 		watches := 0
 		for _, action := range client.Actions() {
-			if action.GetVerb() == "watch" && action.GetResource() == resourcecollection.GVR {
+			if action.GetVerb() == "watch" && action.GetResource() == resourcecollection.GVR() {
 				watches++
 			}
 		}
 		assert.Equal(t, 1, watches, "control, baseline, declaration and automatic reporting reuse one source")
-		assert.Len(t, r.ReadObjects()[resourcecollection.GVR].Objects, 1)
+		assert.Len(t, r.ReadObjects()[resourcecollection.GVR()].Objects, 1)
 	})
 }
 
@@ -493,7 +493,7 @@ func TestCollectionRuntimeHealthyVersionDeletesWhileAnotherVersionIsForbidden(t 
 		v2Object := makeTestCR("old-v2", "payments", collectionTestGroup, "v2", "Widget")
 		peer := newRecordingPeerStore()
 		require.NoError(t, peer.ApplyDelta(ctx, &PeerSyncDelta{Changes: []ResourceChange{
-			{Obj: cachedAs(t, compact, v1Object), GVR: collectionTestWidgetsGVR, Source: ObjectSourceCR, EventType: watch.Added},
+			{Obj: cachedAs(t, compact, v1Object), GVR: collectionTestWidgetsGVR(), Source: ObjectSourceCR, EventType: watch.Added},
 			{Obj: cachedAs(t, compact, v2Object), GVR: v2, Source: ObjectSourceCR, EventType: watch.Added},
 		}}))
 		sink := &consumertest.LogsSink{}
@@ -517,16 +517,16 @@ func TestCollectionRuntimeUnavailableDeclarationAPIKeepsNativeBaseline(t *testin
 			client := collectionRuntimeClient(t, collectionRuntimeCRD(), makeTestPod("baseline-pod", "base", nil))
 			client.PrependReactor("list", "resourcecollections", func(clienttesting.Action) (bool, runtime.Object, error) {
 				if reason == "absent" {
-					return true, nil, apierrors.NewNotFound(resourcecollection.GVR.GroupResource(), "")
+					return true, nil, apierrors.NewNotFound(resourcecollection.GVR().GroupResource(), "")
 				}
-				return true, nil, apierrors.NewForbidden(resourcecollection.GVR.GroupResource(), "", errors.New("no declaration reads"))
+				return true, nil, apierrors.NewForbidden(resourcecollection.GVR().GroupResource(), "", errors.New("no declaration reads"))
 			})
 			disc := &collectionRuntimeDiscovery{resources: []*metav1.APIResourceList{collectionTestAPI("", "v1", true, "pods")}}
 			r, _ := startCollectionTestRuntime(t, cfg, client, disc)
 			require.Eventually(t, func() bool {
 				return r.StaticWatchesSynced() && len(r.ReadObjects()[podsGVR].Objects) == 1
 			}, 5*time.Second, 20*time.Millisecond)
-			assert.False(t, r.collectionSnapshot().AllowDelete(ResourceChange{GVR: collectionTestWidgetsGVR, Source: ObjectSourceCR}))
+			assert.False(t, r.collectionSnapshot().AllowDelete(ResourceChange{GVR: collectionTestWidgetsGVR(), Source: ObjectSourceCR}))
 		})
 	}
 }
@@ -611,7 +611,7 @@ func TestReceiverResourceCollectionsFollowLeadershipAndRestart(t *testing.T) {
 	client.ClearActions()
 	declaration.Generation = 2
 	declaration.Spec.Resources[0].Namespaces = []string{"team-b"}
-	_, err := client.Resource(resourcecollection.GVR).Update(context.Background(),
+	_, err := client.Resource(resourcecollection.GVR()).Update(context.Background(),
 		collectionTestDeclarationObject(t, declaration), metav1.UpdateOptions{})
 	require.NoError(t, err)
 	for _, action := range client.Actions() {
@@ -627,7 +627,7 @@ func TestReceiverResourceCollectionsFollowLeadershipAndRestart(t *testing.T) {
 	require.NotNil(t, second)
 	assert.NotSame(t, first, second)
 	require.Eventually(t, func() bool {
-		objects := second.informers.ReadObjects()[collectionTestWidgetsGVR].Objects
+		objects := second.informers.ReadObjects()[collectionTestWidgetsGVR()].Objects
 		return len(objects) == 1 && objects[0].GetNamespace() == "team-b"
 	}, 5*time.Second, 20*time.Millisecond)
 }

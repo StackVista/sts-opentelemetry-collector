@@ -36,7 +36,7 @@ func collectionTestStatusClient(t *testing.T, object *unstructured.Unstructured)
 	scheme := testScheme()
 	registerCRGVR(scheme, resourcecollection.Group, resourcecollection.Version, resourcecollection.Kind)
 	return dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme, map[schema.GroupVersionResource]string{
-		resourcecollection.GVR: resourcecollection.Kind + "List",
+		resourcecollection.GVR(): resourcecollection.Kind + "List",
 	}, object)
 }
 
@@ -53,12 +53,13 @@ func TestCollectionStatusPartialWildcardAndBoundedErrors(t *testing.T) {
 	declaration := collectionTestDeclaration("integration", collectionTestSelection("*", nil, nil))
 	cfg := collectionTestConfig(t, nil, nil, nil, nil)
 	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{declaration})
-	var observations []collectionWatchSnapshot
+	observations := make([]collectionWatchSnapshot, 0, len(plan.Watches))
 	for index, spec := range plan.Watches {
 		observation := collectionWatchSnapshot{Spec: spec, Synced: true, State: resourcecollection.Active, Reason: "Watching"}
-		if index == 0 {
+		switch index {
+		case 0:
 			observation.State, observation.Reason, observation.Message = resourcecollection.Blocked, "AccessDenied", strings.Repeat("é", 3000)
-		} else if index == 1 {
+		case 1:
 			observation.Synced, observation.State, observation.Reason = false, resourcecollection.Pending, "AwaitingObservation"
 		}
 		observations = append(observations, observation)
@@ -91,7 +92,7 @@ func TestCollectionStatusWritesOnlyChangesAndPreservesSpec(t *testing.T) {
 	result := collectionTestStatusResult(declaration.Name)
 	status := collectionDeclarationStatus(result, nil)
 	require.NoError(t, writeCollectionStatus(ctx, client, result, status))
-	current, err := client.Resource(resourcecollection.GVR).Get(ctx, declaration.Name, metav1.GetOptions{})
+	current, err := client.Resource(resourcecollection.GVR()).Get(ctx, declaration.Name, metav1.GetOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, object.Object["spec"], current.Object["spec"])
 	assert.Equal(t, int64(1), current.GetGeneration())
@@ -108,7 +109,7 @@ func TestCollectionStatusWritesOnlyChangesAndPreservesSpec(t *testing.T) {
 	status.Conditions[0].Reason = "ResourcesPending"
 	status.Conditions[0].Message = "Still waiting."
 	require.NoError(t, writeCollectionStatus(ctx, client, result, status))
-	current, err = client.Resource(resourcecollection.GVR).Get(ctx, declaration.Name, metav1.GetOptions{})
+	current, err = client.Resource(resourcecollection.GVR()).Get(ctx, declaration.Name, metav1.GetOptions{})
 	require.NoError(t, err)
 	decoded, err = resourcecollection.Decode(current)
 	require.NoError(t, err)
@@ -124,7 +125,8 @@ func TestCollectionStatusConflictCannotWriteNewGeneration(t *testing.T) {
 	client.PrependReactor("patch", "resourcecollections", func(action clienttesting.Action) (bool, runtime.Object, error) {
 		attempts++
 		assert.Equal(t, "status", action.GetSubresource())
-		patch := action.(clienttesting.PatchAction)
+		patch, ok := action.(clienttesting.PatchAction)
+		require.True(t, ok)
 		var operations []map[string]interface{}
 		require.NoError(t, json.Unmarshal(patch.GetPatch(), &operations))
 		require.Len(t, operations, 4)
@@ -137,12 +139,12 @@ func TestCollectionStatusConflictCannotWriteNewGeneration(t *testing.T) {
 		newer := object.DeepCopy()
 		newer.SetGeneration(2)
 		newer.SetResourceVersion("11")
-		require.NoError(t, client.Tracker().Update(resourcecollection.GVR, newer, ""))
-		return true, nil, apierrors.NewConflict(resourcecollection.GVR.GroupResource(), declaration.Name, nil)
+		require.NoError(t, client.Tracker().Update(resourcecollection.GVR(), newer, ""))
+		return true, nil, apierrors.NewConflict(resourcecollection.GVR().GroupResource(), declaration.Name, nil)
 	})
 	require.NoError(t, writeCollectionStatus(context.Background(), client, result, collectionDeclarationStatus(result, nil)))
 	assert.Equal(t, 1, attempts)
-	current, err := client.Resource(resourcecollection.GVR).Get(context.Background(), declaration.Name, metav1.GetOptions{})
+	current, err := client.Resource(resourcecollection.GVR()).Get(context.Background(), declaration.Name, metav1.GetOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), current.GetGeneration())
 	assert.Equal(t, object.Object["status"], current.Object["status"])
