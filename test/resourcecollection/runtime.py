@@ -212,15 +212,29 @@ def qualify(client, args, artifacts, report):
                                "verbs": ["get", "list", "watch"]}],
                 })
                 binding("rc-runtime-widgets", "rc-runtime-widgets", "rc-team-a")
+                wait_for("namespace-a read grant", lambda: actor.run(
+                    "auth", "can-i", "list", f"widgets.{GROUP}",
+                    "--namespace=rc-team-a", check=False).stdout.strip() == "yes")
+                # Unchanged-watch backoff recovery is covered with a fake clock in Go.
+                renewed_a = json.loads(json.dumps(DECLARATIONS["a"]))
+                renewed_a["spec"]["resources"][0]["fieldSelector"] = "metadata.name!=backoff-probe-unmatched"
+                client.apply(renewed_a)
                 status("rc-test-a", ["Active"])
                 only_a = ["widgets/rc-team-a/both", "widgets/rc-team-a/only-a"]
                 wait_for("namespace-a selected widgets", lambda: state(only_a))
-                record_case(report, "runtime/late-api-namespace-read-recovery", "Active without restart")
+                record_case(report, "runtime/late-api-namespace-read-recovery",
+                            "Active after selection edit; no restart")
 
                 client.apply(DECLARATIONS["b"])
                 status("rc-test-b", ["Blocked"])
                 wait_for("healthy union child", lambda: state(only_a))
                 binding("rc-runtime-widgets", "rc-runtime-widgets", "rc-team-b")
+                wait_for("namespace-b read grant", lambda: actor.run(
+                    "auth", "can-i", "list", f"widgets.{GROUP}",
+                    "--namespace=rc-team-b", check=False).stdout.strip() == "yes")
+                renewed_b = json.loads(json.dumps(DECLARATIONS["b"]))
+                renewed_b["spec"]["resources"][0]["fieldSelector"] = "metadata.name!=backoff-probe-unmatched"
+                client.apply(renewed_b)
                 status("rc-test-b", ["Active"])
                 union = only_a + ["widgets/rc-team-b/only-b"]
                 wait_for("union", lambda: state(union))
