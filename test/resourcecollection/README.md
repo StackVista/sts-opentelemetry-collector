@@ -47,69 +47,6 @@ agent still uses the repository's BCI builder and runtime images. Pin the node
 image by digest and verify downloaded cluster-tool binaries against their
 published checksums.
 
-## Helm lifecycle and two-Pod takeover
-
-`chart.py` packages the supplied source chart, checks that its CRD matches the
-canonical file, and installs its candidate agent image into a new owned k3d
-cluster. Other agent workloads are disabled. A host relay accepts the chart's
-normal OTLP protocol and records JSON; collector ConfigMaps are not patched for
-capture. The report binds the chart archive, canonical CRD, image ID, binary and
-harness hashes.
-
-```sh
-python3 test/resourcecollection/chart.py \
-  --chart /path/to/helm-charts-internal/stable/suse-observability-agent \
-  --crd receiver/k8sresourcereceiver/resourcecollection/resourcecollection-crd.yaml \
-  --agent-binary /path/to/candidate-agent \
-  --agent-image candidate-agent:local \
-  --node-image "$RC_NODE_IMAGE" \
-  --kubernetes-version "$RC_KUBERNETES_MINOR" \
-  --artifacts /tmp/resourcecollection-chart-evidence
-```
-
-The node image must be pinned by digest. The local candidate image and binary
-must come from the same build. The runner uses restricted chart RBAC plus an
-administrator-created exact resource-read grant. It checks selector edits
-without ConfigMap, Deployment or Pod changes, replicated peer caches, and leader
-replacement while custom-resource reads are revoked. The new leader must retain
-inherited objects, report blocked access, and recover after restoring reads.
-During takeover, the owned node is temporarily cordoned so the populated follower
-gets the lease before a replacement Pod can compete.
-
-Lifecycle checks cover same-source upgrade, feature disable/re-enable, rollback
-to the disabled profile, retained declarations after uninstall, and reinstall
-with the same release name. Metrics are read through the API proxy because the
-chart binds them to the Pod IP. Both peer snapshots must contain unique selected
-objects.
-
-The default `--profile native` does not emit snapshot boundaries.
-
-## Topology compatibility
-
-Use the same command with `--profile topology` and a separate empty artifact
-directory. This enables the existing chart topology gates, compact caching and
-complete snapshot boundaries. The cluster agent has zero replicas; its existing
-resource switches configure the native baseline. Events and state metrics are
-disabled for this profile.
-
-A local intake sink receives the actual gzip JSON sent by `stsk8stopology`.
-It checks producer identity, snapshot start/stop ordering, required lists,
-component uniqueness and native fixture identifiers. Pending APIs and blocked
-custom reads must preserve native topology. Native ConfigMap deletion must
-remove that component while keeping the Secret and Pods. Secret values must
-remain sanitized in both export paths.
-
-After revoking native ConfigMap reads, the populated follower takes over.
-Incomplete observer snapshots must suppress intake from that new producer for
-longer than the exporter's default handover delay. Restoring reads must resume
-complete observer and legacy snapshots without restarting that Pod. The
-artifact directory includes raw intake and reconstructed completed snapshots.
-
-This profile checks collector output and local intake acceptance. Older
-chart/image rollback bundles, installation order between separate releases,
-other architectures and platform persistence/presentation require separate
-qualification.
-
 ## CI
 
 The collector workflow runs the host-binary runtime checks on the two pinned
@@ -130,4 +67,5 @@ python3 test/resourcecollection/check_compatibility.py \
 ```
 
 This job does not establish the product support floor. Helm lifecycle,
-two-Pod takeover, other architectures and backend checks remain separate gates.
+two-Pod takeover and backend acceptance are deferred to BEEST qualification.
+They are outside this component test suite.

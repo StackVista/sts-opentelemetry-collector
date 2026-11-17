@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Owned disposable Kubernetes admission and collector acceptance."""
+"""Owned disposable Kubernetes admission and collector integration checks."""
 
 import argparse
 import base64

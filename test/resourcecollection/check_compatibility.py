@@ -15,7 +15,6 @@ REGRESSIONS = {
     "test/resourcecollection/fixtures.py",
     "test/resourcecollection/run.py",
     "test/resourcecollection/runtime.py",
-    "test/resourcecollection/chart.py",
 }
 
 
@@ -64,7 +63,7 @@ def check(repo, base, head="HEAD", worktree=False):
     if not assessments:
         missing.append("a changed nonempty compatibility/*.md assessment")
     if not regressions:
-        missing.append("changed admission, wire, runtime or upgrade regressions")
+        missing.append("changed admission, wire or runtime regressions")
     if missing:
         raise ValueError("ResourceCollection contract changes require " + " and ".join(missing))
     return ("ResourceCollection compatibility evidence: " +
