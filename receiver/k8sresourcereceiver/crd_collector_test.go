@@ -1057,9 +1057,8 @@ func TestConfig_Simplified(t *testing.T) {
 				Include: []string{},
 			},
 		}
-		err := cfg.Validate()
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "cannot be empty")
+		require.NoError(t, cfg.Validate())
+		assert.Empty(t, cfg.CustomResourceAPIGroups.Include)
 	})
 
 	t.Run("invalid discovery mode", func(t *testing.T) {

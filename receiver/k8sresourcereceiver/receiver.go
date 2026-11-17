@@ -7,7 +7,6 @@ import (
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/metrics"
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/tracker"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componentstatus"
 	"go.opentelemetry.io/collector/consumer"
@@ -25,10 +24,6 @@ type k8sresourceReceiver struct {
 	metrics         metrics.Recorder
 	dynamicClient   dynamic.Interface            // injectable for testing
 	discoveryClient discovery.DiscoveryInterface // injectable for testing
-
-	// resolvedObjects is populated in Start() from Config.Objects via
-	// discovery. Consumed by the informer layer to build dynamic informers.
-	resolvedObjects []resolvedObjectWatch
 
 	// Peer store — runs regardless of leadership for push/pull sync.
 	peerStore *peerSyncCacheStore
@@ -97,21 +92,8 @@ func (r *k8sresourceReceiver) Start(ctx context.Context, host component.Host) er
 		r.dynamicClient = client
 	}
 
-	if len(r.config.Objects) > 0 || len(r.config.ResourceAttributes) > 0 || r.config.ResourceCollections.Enabled {
-		if err := r.ensureDiscoveryClient(); err != nil {
-			return err
-		}
-	}
-
-	if len(r.config.Objects) > 0 && !r.config.ResourceCollections.Enabled {
-		resolved, err := resolveObjectGVRs(r.discoveryClient, r.config.Objects, r.settings.Logger)
-		if err != nil {
-			return fmt.Errorf("failed to resolve object GVRs: %w", err)
-		}
-		if err := classifyStaticObjectsCRDOverlap(ctx, r.dynamicClient, r.config, resolved); err != nil {
-			return err
-		}
-		r.resolvedObjects = resolved
+	if err := r.ensureDiscoveryClient(); err != nil {
+		return err
 	}
 
 	if len(r.config.ResourceAttributes) > 0 {
@@ -226,14 +208,7 @@ func (r *k8sresourceReceiver) startCollector(ctx, lifetimeCtx context.Context) e
 		r.mu.Unlock()
 	}()
 
-	var informers Informers
-	if r.config.ResourceCollections.Enabled {
-		informers = newCollectionRuntime(r.settings, r.config, r.dynamicClient, r.discoveryClient, r.metrics)
-	} else {
-		informers = newResourceInformers(
-			r.settings, r.config, r.dynamicClient, r.resolvedObjects, tracker.NewDefault(), r.metrics,
-		)
-	}
+	informers := newCollectionRuntime(r.settings, r.config, r.dynamicClient, r.discoveryClient, r.metrics)
 	var enricher resourceAttributeEnricher
 	if r.resourceAttributeManager != nil {
 		enricher = r.resourceAttributeManager

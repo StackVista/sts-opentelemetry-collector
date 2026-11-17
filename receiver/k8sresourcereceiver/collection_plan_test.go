@@ -20,7 +20,6 @@ const collectionTestGroup = "collection-test.example.com"
 func collectionTestConfig(t *testing.T, includes, excludes []string, objects []ObjectWatch, denied []ObjectMatcher) *Config {
 	t.Helper()
 	cfg := &Config{
-		ResourceCollections:     ResourceCollectionsConfig{Enabled: true},
 		CustomResourceAPIGroups: &APIGroups{Include: includes, Exclude: excludes},
 		Objects:                 objects,
 		DeniedObjects:           denied,

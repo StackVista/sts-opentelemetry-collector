@@ -3,7 +3,9 @@ package k8sresourcereceiver
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
+	"strings"
 
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -64,6 +66,11 @@ type collectionSelectionResult struct {
 	Reason      string
 	Message     string
 	Resolved    []collectionResolvedSelection
+	Scope       collectionSelectionScope
+}
+
+type collectionSelectionScope struct {
+	Namespaces, LabelSelector, FieldSelector string
 }
 
 type collectionDeclarationResult struct {
@@ -154,7 +161,9 @@ func buildCollectionPlan(
 					Kind: collectionDeclaration, Declaration: declaration.Name,
 					UID: declaration.UID, Generation: declaration.Generation, SelectionIndex: index,
 				}
-				result.Selections = append(result.Selections, planner.resolveDeclaration(contributor, selection))
+				resolved := planner.resolveDeclaration(contributor, selection)
+				resolved.Scope = collectionDeclarationScope(selection)
+				result.Selections = append(result.Selections, resolved)
 			}
 		}
 		plan.Declarations = append(plan.Declarations, result)
@@ -166,6 +175,26 @@ func buildCollectionPlan(
 		return collectionWatchLess(plan.Watches[i].Key, plan.Watches[j].Key)
 	})
 	return plan
+}
+
+func collectionDeclarationScope(selection resourcecollection.Selection) collectionSelectionScope {
+	namespaces := append([]string(nil), selection.Namespaces...)
+	sort.Strings(namespaces)
+	scope := collectionSelectionScope{
+		Namespaces:    strings.Join(slices.Compact(namespaces), ","),
+		FieldSelector: selection.FieldSelector,
+	}
+	if selector, err := fields.ParseSelector(selection.FieldSelector); err == nil {
+		scope.FieldSelector = selector.String()
+	}
+	if selection.LabelSelector != nil {
+		if selector, err := metav1.LabelSelectorAsSelector(selection.LabelSelector); err == nil {
+			scope.LabelSelector = selector.String()
+		} else {
+			scope.LabelSelector = fmt.Sprintf("%#v", selection.LabelSelector)
+		}
+	}
+	return scope
 }
 
 func (p *collectionPlanner) resolveDeclaration(

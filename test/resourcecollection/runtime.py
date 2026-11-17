@@ -134,7 +134,6 @@ def qualify(client, args, artifacts, report):
             config = {
                 "receivers": {"k8sresource": {
                     "auth_type": "kubeConfig", "cluster_name": "rc-runtime",
-                    "resource_collections": {"enabled": True},
                     "discovery_mode": "api_groups", "cr_api_groups": {"include": []},
                     "objects": [{"name": "pods", "group": ""}],
                     "denied_objects": [{"name": "gadgets", "group": GROUP}],

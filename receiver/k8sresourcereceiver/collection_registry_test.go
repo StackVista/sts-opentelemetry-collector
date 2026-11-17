@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/tracker"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,6 +21,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	clienttesting "k8s.io/client-go/testing"
+	clocktesting "k8s.io/utils/clock/testing"
 )
 
 // Intercept before entering Fake.Invokes: its mutex serializes reactor calls.
@@ -301,6 +303,8 @@ func TestCollectionRegistryReportsScopedObservationFailures(t *testing.T) {
 func TestCollectionRegistryRetainsKnownObjectsThroughWatchFailureAndRecovery(t *testing.T) {
 	client := staticPodClient(makeTestPod("checkout", "payments", nil))
 	registry := collectionTestRegistry(t, client, false)
+	watchClock := clocktesting.NewFakeClock(time.Now())
+	registry.clock = watchClock
 	spec := collectionRegistrySpec("payments")
 	var denied atomic.Bool
 	streams := make(chan *watch.RaceFreeFakeWatcher, 10)
@@ -335,11 +339,143 @@ func TestCollectionRegistryRetainsKnownObjectsThroughWatchFailureAndRecovery(t *
 	assert.True(t, failed.Synced, "initial synchronization alone cannot describe current observation health")
 	require.Len(t, failed.Objects, 1)
 	assert.Equal(t, "checkout", failed.Objects[0].GetName())
+	require.Eventually(t, watchClock.HasWaiters, 5*time.Second, 10*time.Millisecond)
 	denied.Store(false)
+	watchClock.Step(tracker.DefaultRetryInterval)
 	require.Eventually(t, func() bool {
 		observation := collectionRegistryObservation(registry, spec.Key)
 		return observation.State == resourcecollection.Active && len(observation.Objects) == 1
 	}, 10*time.Second, 10*time.Millisecond)
+}
+
+func TestCollectionRegistryPermissionBackoffIsScopedAndRecovers(t *testing.T) {
+	for _, verb := range []string{"list", "watch"} {
+		t.Run(verb, func(t *testing.T) {
+			client := staticPodClient()
+			registry := collectionTestRegistry(t, client, false)
+			watchClock := clocktesting.NewFakeClock(time.Now())
+			registry.clock = watchClock
+			failed := collectionRegistrySpec("restricted")
+			failed.Key.LabelSelector = "app=denied"
+			failed.Key.FieldSelector = "metadata.name=restricted"
+			otherNamespace := failed
+			otherNamespace.Key.Namespace = "permitted"
+			otherSelector := failed
+			otherSelector.Key.LabelSelector = "app=permitted"
+			otherField := failed
+			otherField.Key.FieldSelector = "metadata.name=permitted"
+			var requests atomic.Int32
+			var denied atomic.Bool
+			denied.Store(true)
+			forbidden := apierrors.NewForbidden(podsGVR.GroupResource(), "", errors.New("read denied"))
+			matches := func(action clienttesting.Action) bool {
+				if action.GetNamespace() != failed.Key.Namespace {
+					return false
+				}
+				if list, ok := action.(clienttesting.ListAction); ok {
+					filters := list.GetListRestrictions()
+					return filters.Labels.String() == failed.Key.LabelSelector &&
+						filters.Fields.String() == failed.Key.FieldSelector
+				}
+				watch, ok := action.(clienttesting.WatchAction)
+				require.True(t, ok)
+				filters := watch.GetWatchRestrictions()
+				return filters.Labels.String() == failed.Key.LabelSelector &&
+					filters.Fields.String() == failed.Key.FieldSelector
+			}
+			client.PrependReactor("list", "pods", func(action clienttesting.Action) (bool, runtime.Object, error) {
+				if matches(action) {
+					requests.Add(1)
+					if verb == "list" && denied.Load() {
+						return true, nil, forbidden
+					}
+				}
+				return false, nil, nil
+			})
+			client.PrependWatchReactor("pods", func(action clienttesting.Action) (bool, watch.Interface, error) {
+				if matches(action) {
+					requests.Add(1)
+					if verb == "watch" && denied.Load() {
+						return true, nil, forbidden
+					}
+				}
+				return false, nil, nil
+			})
+			require.NoError(t, registry.reconcile([]collectionWatchSpec{failed, otherNamespace, otherSelector, otherField}))
+			require.Eventually(t, func() bool {
+				return collectionRegistryObservation(registry, failed.Key).Reason == "AccessDenied" &&
+					watchClock.HasWaiters() &&
+					collectionRegistryObservation(registry, otherNamespace.Key).State == resourcecollection.Active &&
+					collectionRegistryObservation(registry, otherSelector.Key).State == resourcecollection.Active &&
+					collectionRegistryObservation(registry, otherField.Key).State == resourcecollection.Active
+			}, 5*time.Second, 10*time.Millisecond)
+			initialRequests := requests.Load()
+			assert.Equal(t, map[string]int32{"list": 1, "watch": 2}[verb], initialRequests)
+			denied.Store(false)
+			watchClock.Step(tracker.DefaultRetryInterval - time.Minute)
+			assert.Equal(t, initialRequests, requests.Load(), "list and watch must share the same retry deadline")
+			assert.Equal(t, resourcecollection.Blocked, collectionRegistryObservation(registry, failed.Key).State)
+			watchClock.Step(time.Minute)
+			require.Eventually(t, func() bool {
+				return collectionRegistryObservation(registry, failed.Key).State == resourcecollection.Active &&
+					requests.Load() > initialRequests
+			}, 5*time.Second, 10*time.Millisecond, "permission recovery must resume without replacing the watch")
+		})
+	}
+}
+
+func TestCollectionRegistryPermissionBackoffCancellation(t *testing.T) {
+	for _, removal := range []string{"selection removal", "CRD removal", "shutdown"} {
+		t.Run(removal, func(t *testing.T) {
+			client := staticPodClient()
+			registry := collectionTestRegistry(t, client, false)
+			watchClock := clocktesting.NewFakeClock(time.Now())
+			registry.clock = watchClock
+			spec := collectionRegistrySpec("restricted")
+			spec.Source = ObjectSourceCR
+			var requests atomic.Int32
+			client.PrependReactor("list", "pods", func(clienttesting.Action) (bool, runtime.Object, error) {
+				requests.Add(1)
+				return true, nil, apierrors.NewForbidden(podsGVR.GroupResource(), "", errors.New("read denied"))
+			})
+			require.NoError(t, registry.reconcile([]collectionWatchSpec{spec}))
+			require.Eventually(t, watchClock.HasWaiters, 5*time.Second, 10*time.Millisecond)
+			switch removal {
+			case "selection removal":
+				require.NoError(t, registry.reconcile(nil))
+			case "CRD removal":
+				registry.invalidateRemovedCRDs([]schema.GroupResource{podsGVR.GroupResource()})
+			case "shutdown":
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				require.NoError(t, registry.shutdown(ctx))
+			}
+			require.Eventually(t, func() bool { return !watchClock.HasWaiters() }, 5*time.Second, 10*time.Millisecond)
+			assert.Empty(t, registry.snapshot())
+			assert.Equal(t, int32(1), requests.Load())
+		})
+	}
+}
+
+func TestCollectionRegistryTransientFailureUsesNormalRetry(t *testing.T) {
+	client := staticPodClient()
+	registry := collectionTestRegistry(t, client, false)
+	watchClock := clocktesting.NewFakeClock(time.Now())
+	registry.clock = watchClock
+	var requests atomic.Int32
+	client.PrependReactor("list", "pods", func(clienttesting.Action) (bool, runtime.Object, error) {
+		if requests.Add(1) == 1 {
+			return true, nil, apierrors.NewServiceUnavailable("temporarily unavailable")
+		}
+		return false, nil, nil
+	})
+	spec := collectionRegistrySpec("payments")
+	require.NoError(t, registry.reconcile([]collectionWatchSpec{spec}))
+	require.Eventually(t, func() bool {
+		return requests.Load() >= 2 &&
+			collectionRegistryObservation(registry, spec.Key).State == resourcecollection.Active
+	}, 5*time.Second, 10*time.Millisecond)
+	assert.False(t, watchClock.HasWaiters(), "transient API errors must not use the permission delay")
 }
 
 func TestCollectionRegistryShutdownCancelsBlockedWatchForwarding(t *testing.T) {

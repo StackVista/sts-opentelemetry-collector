@@ -3,8 +3,11 @@ package k8sresourcereceiver
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
+	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -16,11 +19,14 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/utils/clock"
 )
 
 type collectionReportingSnapshot struct {
@@ -48,11 +54,12 @@ type collectionReportingState struct {
 }
 
 type collectionRuntime struct {
-	settings  receiver.Settings
-	config    *Config
-	client    dynamic.Interface
-	discovery discovery.DiscoveryInterfaceWithContext
-	metrics   metrics.Recorder
+	settings   receiver.Settings
+	config     *Config
+	client     dynamic.Interface
+	discovery  discovery.DiscoveryInterfaceWithContext
+	metrics    metrics.Recorder
+	watchClock clock.Clock
 
 	ctx             context.Context //nolint:containedctx
 	cancel          context.CancelFunc
@@ -123,6 +130,9 @@ func (r *collectionRuntime) Start(ctx context.Context) error {
 		)
 	})
 	r.controls.notify = func() { r.controlDirty.Store(true); r.enqueue() }
+	if r.watchClock != nil {
+		r.registry.clock, r.controls.clock = r.watchClock, r.watchClock
+	}
 	r.controls.onChange = r.controlChanged
 	transform := sanitizeObject(r.config.ConfigMapMaxDataSize)
 	if r.config.CompactCache {
@@ -377,9 +387,9 @@ func collectionBaselineSynced(plan collectionPlan, observations []collectionWatc
 func (r *collectionRuntime) refreshDiscovery() {
 	ctx, cancel := context.WithTimeout(r.ctx, 30*time.Second)
 	defer cancel()
-	// YAML defaults use preferred discovery; explicit and storage versions use served discovery.
-	preferred, preferredErr := r.discovery.ServerPreferredResourcesWithContext(ctx)
-	_, served, servedErr := r.discovery.ServerGroupsAndResourcesWithContext(ctx)
+	groups, served, servedErr := r.discovery.ServerGroupsAndResourcesWithContext(ctx)
+	// Reuse client-go's per-resource fallback without fetching discovery twice.
+	preferred, preferredErr := preferredCollectionResources(ctx, groups, served, servedErr)
 	r.catalog.PreferredResources = mergeCollectionDiscovery(r.catalog.PreferredResources, preferred, preferredErr)
 	r.catalog.ServedResources = mergeCollectionDiscovery(r.catalog.ServedResources, served, servedErr)
 	r.discoveryComplete = preferredErr == nil && servedErr == nil
@@ -387,6 +397,46 @@ func (r *collectionRuntime) refreshDiscovery() {
 		r.settings.Logger.Warn("Collection API discovery is incomplete; retaining known API resources",
 			zap.Error(preferredErr), zap.NamedError("served_discovery_error", servedErr))
 	}
+}
+
+type collectionDiscoveryCache struct {
+	discovery.DiscoveryInterfaceWithContext
+	groups    *metav1.APIGroupList
+	resources map[schema.GroupVersion]*metav1.APIResourceList
+	failures  map[schema.GroupVersion]error
+}
+
+func (c *collectionDiscoveryCache) GroupsAndMaybeResourcesWithContext(
+	ctx context.Context,
+) (*metav1.APIGroupList, map[schema.GroupVersion]*metav1.APIResourceList, map[schema.GroupVersion]error, error) {
+	return c.groups, c.resources, c.failures, ctx.Err()
+}
+
+func preferredCollectionResources(
+	ctx context.Context, groups []*metav1.APIGroup, resources []*metav1.APIResourceList, err error,
+) ([]*metav1.APIResourceList, error) {
+	var failed *discovery.ErrGroupDiscoveryFailed
+	if err != nil && !errors.As(err, &failed) {
+		return nil, err
+	}
+	cached := &collectionDiscoveryCache{
+		groups: &metav1.APIGroupList{}, resources: map[schema.GroupVersion]*metav1.APIResourceList{},
+	}
+	if failed != nil {
+		cached.failures = failed.Groups
+	}
+	for _, group := range groups {
+		cached.groups.Groups = append(cached.groups.Groups, *group)
+	}
+	for _, list := range resources {
+		if list == nil {
+			continue
+		}
+		if gv, parseErr := schema.ParseGroupVersion(list.GroupVersion); parseErr == nil {
+			cached.resources[gv] = list
+		}
+	}
+	return discovery.ServerPreferredResourcesWithContext(ctx, cached)
 }
 
 func mergeCollectionDiscovery(
@@ -471,7 +521,7 @@ func (r *collectionRuntime) includeDeclarations(
 
 func collectionDeletionPolicy(
 	cfg *Config, plan collectionPlan, catalog collectionDiscoverySnapshot, observations []collectionWatchSnapshot,
-	crdsReady, declarationsReady, discoveryComplete bool,
+	withdrawn []collectionDesiredContribution, crdsReady, declarationsReady, discoveryComplete bool,
 ) func(ResourceChange) bool {
 	custom := collectionCRDKeys(catalog.CRDs)
 	ready := map[schema.GroupVersionResource]bool{}
@@ -479,6 +529,11 @@ func collectionDeletionPolicy(
 	for _, observation := range observations {
 		watches[observation.Spec.Key] = observation
 		ready[observation.Spec.Key.GVR] = ready[observation.Spec.Key.GVR] || collectionWatchObserved(observation)
+	}
+	withdrawnBySelection := map[collectionContributionKey][]collectionDesiredContribution{}
+	for _, previous := range withdrawn {
+		key := collectionContributionID(previous.Contributor, schema.GroupResource{})
+		withdrawnBySelection[key] = append(withdrawnBySelection[key], previous)
 	}
 	var selections []collectionSelectionResult
 	selections = append(selections, plan.Baseline...)
@@ -525,6 +580,14 @@ func collectionDeletionPolicy(
 			if !matches || selection.Reason == collectionPolicyDenied {
 				continue
 			}
+			key := collectionContributionID(selection.Contributor, schema.GroupResource{})
+			if collectionWithdrawnObject(withdrawnBySelection[key], change) {
+				continue
+			}
+			if selection.Contributor.Kind == collectionDeclaration && change.Obj != nil &&
+				!collectionSelectionCoversObject(selection.Scope, change.Obj) {
+				continue
+			}
 			if len(selection.Resolved) == 0 {
 				return false
 			}
@@ -542,8 +605,60 @@ func collectionDeletionPolicy(
 				}
 			}
 		}
-		return discoveryComplete || ready[gvr]
+		// Known declarations can withdraw a scope without waiting for its replacement API.
+		return change.Source == ObjectSourceCR || discoveryComplete || ready[gvr]
 	}
+}
+
+func collectionWithdrawnObject(withdrawn []collectionDesiredContribution, change ResourceChange) bool {
+	if change.Obj == nil {
+		return false
+	}
+	for _, previous := range withdrawn {
+		for _, spec := range previous.Watches {
+			if spec.Key.GVR == change.GVR {
+				matches, known := collectionSelectionMatchesObject(previous.Scope, change.Obj)
+				if known && matches {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func collectionSelectionCoversObject(scope collectionSelectionScope, object resourceObject) bool {
+	matches, known := collectionSelectionMatchesObject(scope, object)
+	return !known || matches
+}
+
+func collectionSelectionMatchesObject(scope collectionSelectionScope, object resourceObject) (bool, bool) {
+	if scope.Namespaces != "" && !slices.Contains(strings.Split(scope.Namespaces, ","), object.GetNamespace()) {
+		return false, true
+	}
+	if scope.LabelSelector == "" && scope.FieldSelector == "" {
+		return true, true
+	}
+	decoded, err := decodeObject(object)
+	if err != nil {
+		return false, false
+	}
+	labelFilter, labelErr := labels.Parse(scope.LabelSelector)
+	fieldFilter, fieldErr := fields.ParseSelector(scope.FieldSelector)
+	if labelErr != nil || fieldErr != nil {
+		return false, false
+	}
+	if !labelFilter.Matches(labels.Set(decoded.GetLabels())) {
+		return false, true
+	}
+	values := fields.Set{}
+	for _, requirement := range fieldFilter.Requirements() {
+		value, found, _ := unstructured.NestedFieldNoCopy(decoded.Object, strings.Split(requirement.Field, ".")...)
+		if found && value != nil {
+			values[requirement.Field] = fmt.Sprint(value)
+		}
+	}
+	return fieldFilter.Matches(values), true
 }
 
 func (r *collectionRuntime) publishStatuses(plan collectionPlan, observations []collectionWatchSnapshot) {
@@ -637,7 +752,7 @@ func (r *collectionRuntime) collectionSnapshot() collectionReportingSnapshot {
 	}
 	r.includeDeclarations(&view, declarations)
 	view.AllowDelete = collectionDeletionPolicy(r.config, state.Plan, state.Catalog, observations,
-		state.CRDsReady, state.DeclarationsReady, state.Discovered)
+		effective.Withdrawn, state.CRDsReady, state.DeclarationsReady, state.Discovered)
 	r.view = view
 	return r.view
 }

@@ -10,38 +10,33 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-func TestResourceCollectionsConfigDefaults(t *testing.T) {
+func TestConfigBaselineDefaults(t *testing.T) {
 	cfg := &Config{}
 	require.NoError(t, cfg.Validate())
-	assert.False(t, cfg.ResourceCollections.Enabled)
 	assert.Equal(t, []string{"*"}, cfg.CustomResourceAPIGroups.Include)
 }
 
-func TestResourceCollectionsEmptyBaseline(t *testing.T) {
-	for _, enabled := range []bool{false, true} {
-		name := "disabled"
-		if enabled {
-			name = "enabled"
-		}
-		t.Run(name, func(t *testing.T) {
+func TestConfigExplicitEmptyBaselineGroups(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		includes []string
+	}{
+		{"omitted include", nil},
+		{"empty include", []string{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			cfg := &Config{
-				ResourceCollections:     ResourceCollectionsConfig{Enabled: enabled},
-				CustomResourceAPIGroups: &APIGroups{Include: []string{}},
+				CustomResourceAPIGroups: &APIGroups{Include: tc.includes},
 			}
-			err := cfg.Validate()
-			if !enabled {
-				require.ErrorContains(t, err, "cr_api_groups.include cannot be empty")
-				return
-			}
-			require.NoError(t, err)
+			require.NoError(t, cfg.Validate())
 			assert.False(t, cfg.shouldWatchAPIGroup("collection-test.example.com"))
 			assert.Empty(t, cfg.CustomResourceAPIGroups.Include)
 		})
 	}
 }
 
-func TestResourceCollectionsPreservesOmittedBaseline(t *testing.T) {
-	cfg := &Config{ResourceCollections: ResourceCollectionsConfig{Enabled: true}}
+func TestConfigObjectsPreserveOmittedBaselineGroups(t *testing.T) {
+	cfg := &Config{Objects: []ObjectWatch{{Name: "pods"}}}
 	require.NoError(t, cfg.Validate())
 	assert.Equal(t, []string{"*"}, cfg.CustomResourceAPIGroups.Include)
 	assert.True(t, cfg.shouldWatchAPIGroup("collection-test.example.com"))
@@ -92,8 +87,7 @@ func TestConfigValidate(t *testing.T) {
 					Exclude: []string{},
 				},
 			},
-			wantErr: true,
-			errMsg:  "cr_api_groups.include cannot be empty",
+			wantErr: false,
 		},
 		{
 			name: "invalid discovery mode",

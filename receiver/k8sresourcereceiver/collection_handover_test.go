@@ -10,6 +10,7 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -100,18 +101,14 @@ func TestCollectionHandoverSelectorReplacement(t *testing.T) {
 	declaration.Spec.Resources[0].LabelSelector.MatchLabels["app"] = "new"
 	next := collectionHandoverPlan(t, declaration)
 	require.NoError(t, handover.update(next))
-	require.Len(t, registry.observations, 2)
+	require.Len(t, registry.observations, 1)
 	view = collectionHandoverRead(t, handover)
 	assert.False(t, view.Complete)
-	assert.Equal(t, int64(1), view.Active[0].Generation)
-	assert.Empty(t, cache.computeChanges(nil, view.Objects), "an unobserved replacement must not delete the old view")
-
-	// The active view continues to receive updates while its replacement loads.
-	registry.observe(old.Watches[0].Key, collectionHandoverObject("old", "opaque-updated"))
-	view = collectionHandoverRead(t, handover)
-	require.Len(t, cache.computeChanges(nil, view.Objects), 1)
-	assert.Equal(t, watch.Modified, cache.computeChanges(nil, view.Objects)[0].EventType)
-	cache.applyAdditions(cache.computeChanges(nil, view.Objects))
+	assert.Empty(t, view.Active)
+	withdrawn := cache.computeChanges(nil, view.Objects)
+	require.Len(t, withdrawn, 1)
+	assert.Equal(t, watch.Deleted, withdrawn[0].EventType)
+	assert.NotContains(t, registry.observations, old.Watches[0].Key)
 
 	registry.observe(next.Watches[0].Key, collectionHandoverObject("new", "opaque-new"))
 	view = collectionHandoverRead(t, handover)
@@ -145,8 +142,8 @@ func TestCollectionHandoverSupersedesPendingReplacement(t *testing.T) {
 	next := collectionHandoverPlan(t, declaration)
 	require.NoError(t, handover.update(next))
 	assert.NotContains(t, registry.observations, pending.Watches[0].Key)
-	assert.Contains(t, registry.observations, old.Watches[0].Key)
-	assert.Equal(t, int64(1), collectionHandoverRead(t, handover).Active[0].Generation)
+	assert.NotContains(t, registry.observations, old.Watches[0].Key)
+	assert.Empty(t, collectionHandoverRead(t, handover).Active)
 	registry.observe(next.Watches[0].Key)
 	view := collectionHandoverRead(t, handover)
 	assert.True(t, view.Complete, "a successful empty observation is authoritative")
@@ -170,8 +167,8 @@ func TestCollectionHandoverNamespaceReplacementWaitsForEveryScope(t *testing.T) 
 	registry.observe(next.Watches[0].Key)
 	view := collectionHandoverRead(t, handover)
 	assert.False(t, view.Complete)
-	assert.Equal(t, "old", view.Objects[old.Watches[0].Key.GVR].Objects[0].GetName())
-	assert.Len(t, registry.observations, 3)
+	assert.Empty(t, view.Objects[old.Watches[0].Key.GVR].Objects)
+	assert.Len(t, registry.observations, 2)
 	registry.observe(next.Watches[1].Key)
 	view = collectionHandoverRead(t, handover)
 	assert.True(t, view.Complete)
@@ -198,10 +195,11 @@ func TestCollectionHandoverIndependentProgressAndImmediateRemoval(t *testing.T) 
 	view := collectionHandoverRead(t, handover)
 	assert.False(t, view.Complete)
 	changes := cache.computeChanges(nil, view.Objects)
-	require.Len(t, changes, 1)
-	assert.Equal(t, "gadgets", changes[0].Obj.GetName())
-	assert.Equal(t, watch.Deleted, changes[0].EventType)
-	assert.Len(t, registry.observations, 2, "removal withdraws only that contribution")
+	require.Len(t, changes, 2)
+	for _, change := range changes {
+		assert.Equal(t, watch.Deleted, change.EventType)
+	}
+	assert.Len(t, registry.observations, 1, "changed and deleted selections withdraw their old contributions")
 	require.NoError(t, handover.update(collectionHandoverPlan(t)))
 	view = collectionHandoverRead(t, handover)
 	assert.True(t, view.Complete)
@@ -249,7 +247,6 @@ func TestCollectionHandoverWildcardProgressAndPolicyDenial(t *testing.T) {
 	}
 	require.Len(t, collectionHandoverRead(t, handover).Active, 1, "wildcard children share one contributor")
 	declaration.Generation++
-	declaration.Spec.Resources[0].LabelSelector = &metav1.LabelSelector{MatchLabels: map[string]string{"app": "new"}}
 	cfg := collectionTestConfig(t, nil, nil, nil, []ObjectMatcher{{Group: collectionTestGroup, Name: "widgets"}})
 	next := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{declaration})
 	require.NoError(t, handover.update(next))
@@ -338,7 +335,10 @@ func TestCollectionHandoverResourceTypeReplacement(t *testing.T) {
 	view := collectionHandoverRead(t, handover)
 	assert.False(t, view.Complete)
 	widgets := old.Watches[0].Key.GVR
-	assert.Equal(t, "widgets", view.Objects[widgets].Objects[0].GetName())
+	assert.Len(t, view.Objects[widgets].Objects, 1)
+	for _, contributor := range view.Active {
+		assert.Equal(t, int64(2), contributor.Generation)
+	}
 	for _, spec := range next.Watches {
 		registry.observe(spec.Key)
 	}
@@ -347,6 +347,70 @@ func TestCollectionHandoverResourceTypeReplacement(t *testing.T) {
 	assert.Empty(t, view.Objects[widgets].Objects)
 	assert.Len(t, view.Active, 1)
 	assert.Equal(t, int64(2), view.Active[0].Generation)
+}
+
+func TestCollectionHandoverWithdrawalProvenanceLifecycle(t *testing.T) {
+	registry := newCollectionHandoverTestRegistry()
+	handover := newCollectionHandover(registry)
+	declaration := collectionTestDeclaration("apps", collectionTestSelection("widgets", nil, map[string]string{"app": "old"}))
+	original := collectionHandoverPlan(t, declaration)
+	require.NoError(t, handover.update(original))
+	registry.observe(original.Watches[0].Key, collectionHandoverObject("old", "old"))
+	assert.Empty(t, collectionHandoverRead(t, handover).Withdrawn)
+
+	for generation, selector := range []string{"new", "other", "old", "last"} {
+		declaration.Generation = int64(generation + 2)
+		declaration.Spec.Resources[0].LabelSelector.MatchLabels["app"] = selector
+		plan := collectionHandoverPlan(t, declaration)
+		require.NoError(t, handover.update(plan))
+		view := collectionHandoverRead(t, handover)
+		require.Len(t, view.Withdrawn, 1)
+		assert.Equal(t, int64(1), view.Withdrawn[0].Contributor.Generation)
+		assert.Equal(t, "app=old", view.Withdrawn[0].Scope.LabelSelector)
+		assert.Empty(t, view.Objects)
+	}
+
+	latest := collectionHandoverPlan(t, declaration)
+	registry.observe(latest.Watches[0].Key)
+	assert.Empty(t, collectionHandoverRead(t, handover).Withdrawn, "observing the replacement retires prior scope metadata")
+	registry.fail(latest.Watches[0].Key, "AccessDenied")
+	require.NoError(t, handover.update(latest))
+	assert.Empty(t, collectionHandoverRead(t, handover).Withdrawn, "unchanged failures must retain the new contribution")
+
+	declaration.Generation++
+	declaration.Spec.Resources[0].LabelSelector.MatchLabels["app"] = "pending"
+	require.NoError(t, handover.update(collectionHandoverPlan(t, declaration)))
+	require.Len(t, collectionHandoverRead(t, handover).Withdrawn, 1)
+	require.NoError(t, handover.update(collectionHandoverPlan(t)))
+	assert.Empty(t, collectionHandoverRead(t, handover).Withdrawn, "removing a declaration retires prior scope metadata")
+}
+
+func TestCollectionHandoverStorageVersionFailureRetainsObjects(t *testing.T) {
+	registry := newCollectionHandoverTestRegistry()
+	handover := newCollectionHandover(registry)
+	declaration := collectionTestDeclaration("apps", collectionTestSelection("widgets", nil, map[string]string{"app": "old"}))
+	original := collectionHandoverPlan(t, declaration)
+	require.NoError(t, handover.update(original))
+	object := collectionHandoverObject("old", "old")
+	object.SetLabels(map[string]string{"app": "old"})
+	registry.observe(original.Watches[0].Key, object)
+	collectionHandoverRead(t, handover)
+
+	catalog := collectionTestDiscovery()
+	catalog.CRDs[0] = collectionTestCRD("widgets", catalog.CRDs[0].Spec.Scope, "v2", "v1")
+	catalog.ServedResources = append(catalog.ServedResources, collectionTestAPI(collectionTestGroup, "v2", true, "widgets"))
+	cfg := collectionTestConfig(t, nil, nil, nil, nil)
+	next := buildCollectionPlan(cfg, catalog, []*resourcecollection.ResourceCollection{declaration})
+	require.NoError(t, handover.update(next))
+	for _, spec := range registry.snapshot() {
+		registry.fail(spec.Spec.Key, "AccessDenied")
+	}
+	view := collectionHandoverRead(t, handover)
+	require.Len(t, view.Objects[collectionTestWidgetsGVR()].Objects, 1)
+	assert.Empty(t, view.Withdrawn)
+	assert.Len(t, registry.snapshot(), 2)
+	allowDelete := collectionDeletionPolicy(cfg, next, catalog, registry.snapshot(), view.Withdrawn, true, true, false)
+	assert.False(t, allowDelete(ResourceChange{GVR: collectionTestWidgetsGVR(), Obj: object, Source: ObjectSourceCR}))
 }
 
 func TestCollectionHandoverOverlapNormalizesRepresentations(t *testing.T) {
@@ -451,8 +515,8 @@ func TestCollectionHandoverWithClientGoInformers(t *testing.T) {
 		require.NoError(t, handover.update(replacement))
 		view = collectionHandoverRead(t, handover)
 		assert.False(t, view.Complete)
-		assert.Equal(t, "old", view.Objects[collectionTestWidgetsGVR()].Objects[0].GetName())
-		require.Len(t, registry.snapshot(), 2)
+		assert.Empty(t, view.Objects[collectionTestWidgetsGVR()].Objects)
+		require.Len(t, registry.snapshot(), 1)
 		release.Do(func() { close(allowNew) })
 		require.Eventually(t, func() bool {
 			return collectionRegistryObservation(registry, replacement.Watches[0].Key).State == resourcecollection.Active
@@ -462,4 +526,86 @@ func TestCollectionHandoverWithClientGoInformers(t *testing.T) {
 		assert.Equal(t, "new", view.Objects[collectionTestWidgetsGVR()].Objects[0].GetName())
 		assert.Len(t, registry.snapshot(), 1)
 	})
+}
+
+func TestCollectionHandoverFailedChangedScopeWithClientGoInformers(t *testing.T) {
+	for _, rejectedField := range []bool{false, true} {
+		name := "broader-label"
+		if rejectedField {
+			name = "rejected-neq-field"
+		}
+		t.Run(name, func(t *testing.T) {
+			forEachCacheMode(t, func(t *testing.T, compact bool) {
+				object := collectionTestWidget("old", "team-a")
+				object.SetLabels(map[string]string{"app": "old"})
+				client := collectionTestWidgetClient()
+				allowReplacement := make(chan struct{})
+				var release sync.Once
+				client.PrependReactor("list", "widgets", func(clienttesting.Action) (bool, runtime.Object, error) {
+					return true, &unstructured.UnstructuredList{Items: []unstructured.Unstructured{*object}}, nil
+				})
+				intercepted := collectionListInterceptClient{Interface: client, beforeList: func(ctx context.Context, _ string, options metav1.ListOptions) error {
+					if options.FieldSelector != "" {
+						return apierrors.NewBadRequest("field label not supported: spec.unsupported")
+					}
+					if options.LabelSelector != "app=old" {
+						select {
+						case <-allowReplacement:
+						case <-ctx.Done():
+							return ctx.Err()
+						}
+					}
+					return nil
+				}}
+				registry := collectionTestRegistry(t, intercepted, compact)
+				t.Cleanup(func() { release.Do(func() { close(allowReplacement) }) })
+				handover := newCollectionHandover(registry)
+				declaration := collectionTestDeclaration("apps", collectionTestSelection("widgets", nil, map[string]string{"app": "old"}))
+				original := collectionHandoverPlan(t, declaration)
+				require.NoError(t, handover.update(original))
+				require.Eventually(t, func() bool {
+					return collectionRegistryObservation(registry, original.Watches[0].Key).State == resourcecollection.Active
+				}, 5*time.Second, 10*time.Millisecond)
+				peers := newResourceCache()
+				peers.applyAdditions(peers.computeChanges(nil, collectionHandoverRead(t, handover).Objects))
+
+				declaration.Generation++
+				if rejectedField {
+					declaration.Spec.Resources[0].FieldSelector = "spec.unsupported!=x"
+				} else {
+					declaration.Spec.Resources[0].LabelSelector = &metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{
+						Key: "app", Operator: metav1.LabelSelectorOpIn, Values: []string{"old", "new"},
+					}}}
+				}
+				next := collectionHandoverPlan(t, declaration)
+				require.NoError(t, handover.update(next))
+				if rejectedField {
+					require.Eventually(t, func() bool {
+						return collectionRegistryObservation(registry, next.Watches[0].Key).Reason == "InvalidSelection"
+					}, 5*time.Second, 10*time.Millisecond)
+				}
+				observations := registry.snapshot()
+				require.Len(t, observations, 1)
+				assert.Equal(t, next.Watches[0].Key, observations[0].Spec.Key)
+				assert.Empty(t, observations[0].Objects, "the withdrawn watch's cache must not survive replacement")
+				view := collectionHandoverRead(t, handover)
+				assert.Empty(t, view.Objects)
+				require.Len(t, view.Withdrawn, 1)
+				cfg := collectionTestConfig(t, nil, nil, nil, nil)
+				allowDelete := collectionDeletionPolicy(cfg, next, collectionTestDiscovery(), observations, view.Withdrawn, true, true, false)
+				_, reported, _ := preserveCollectionPeerView(nil, view.Objects, peers.computeChanges(nil, view.Objects), allowDelete)
+				assert.Empty(t, reported)
+				if !rejectedField {
+					release.Do(func() { close(allowReplacement) })
+					require.Eventually(t, func() bool {
+						return collectionRegistryObservation(registry, next.Watches[0].Key).State == resourcecollection.Active
+					}, 5*time.Second, 10*time.Millisecond)
+					view = collectionHandoverRead(t, handover)
+					require.Len(t, view.Objects[collectionTestWidgetsGVR()].Objects, 1)
+					assert.Empty(t, view.Withdrawn)
+					assert.Equal(t, int64(2), view.Active[0].Generation)
+				}
+			})
+		})
+	}
 }

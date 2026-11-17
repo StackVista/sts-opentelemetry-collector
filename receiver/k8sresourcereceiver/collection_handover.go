@@ -26,6 +26,7 @@ type collectionDesiredContribution struct {
 	Group, Resource string
 	Reason          string
 	Watches         []collectionWatchSpec
+	Scope           collectionSelectionScope
 }
 
 type collectionActiveContribution struct {
@@ -34,23 +35,26 @@ type collectionActiveContribution struct {
 }
 
 type collectionEffectiveView struct {
-	Objects  map[schema.GroupVersionResource]ObjectGroup
-	Active   []collectionContributor
-	Complete bool
+	Objects   map[schema.GroupVersionResource]ObjectGroup
+	Active    []collectionContributor
+	Withdrawn []collectionDesiredContribution
+	Complete  bool
 }
 
 type collectionHandover struct {
-	mu       sync.Mutex
-	registry collectionRegistry
-	desired  map[collectionContributionKey]collectionDesiredContribution
-	active   map[collectionContributionKey]collectionActiveContribution
+	mu        sync.Mutex
+	registry  collectionRegistry
+	desired   map[collectionContributionKey]collectionDesiredContribution
+	active    map[collectionContributionKey]collectionActiveContribution
+	withdrawn map[collectionContributionKey]collectionDesiredContribution
 }
 
 func newCollectionHandover(registry collectionRegistry) *collectionHandover {
 	return &collectionHandover{
-		registry: registry,
-		desired:  map[collectionContributionKey]collectionDesiredContribution{},
-		active:   map[collectionContributionKey]collectionActiveContribution{},
+		registry:  registry,
+		desired:   map[collectionContributionKey]collectionDesiredContribution{},
+		active:    map[collectionContributionKey]collectionActiveContribution{},
+		withdrawn: map[collectionContributionKey]collectionDesiredContribution{},
 	}
 }
 
@@ -73,17 +77,29 @@ func (h *collectionHandover) update(plan collectionPlan) error {
 		}
 	}
 	active := make(map[collectionContributionKey]collectionActiveContribution, len(h.active))
+	withdrawn := make(map[collectionContributionKey]collectionDesiredContribution, len(h.withdrawn))
+	for key, previous := range h.withdrawn {
+		if _, wanted := collectionFamilyRequest(key, desired); wanted &&
+			!collectionContributionDenied(previous, plan.DeniedObjects) &&
+			!collectionContributionRemoved(previous, plan.RemovedResources) {
+			withdrawn[key] = previous
+		}
+	}
 	for key, previous := range h.active {
 		if !collectionContributionDenied(previous.Request, plan.DeniedObjects) &&
 			!collectionContributionRemoved(previous.Request, plan.RemovedResources) &&
 			retainCollectionContribution(key, previous.Request, desired) {
 			active[key] = previous
+		} else if current, wanted := collectionFamilyRequest(key, desired); wanted &&
+			key.Kind == collectionDeclaration && !sameCollectionSelection(previous.Request, current) {
+			// Prior scopes prevent a failed replacement from restoring withdrawn peer data.
+			withdrawn[key] = previous.Request
 		}
 	}
 	if err := h.registry.reconcile(collectionTransitionWatches(desired, active)); err != nil {
 		return err
 	}
-	h.desired, h.active = desired, active
+	h.desired, h.active, h.withdrawn = desired, active, withdrawn
 	return nil
 }
 
@@ -157,7 +173,15 @@ func (h *collectionHandover) readSnapshot() (collectionEffectiveView, []collecti
 		return collectionEffectiveView{}, nil, err
 	}
 	h.active = active
-	return collectionView(active, observations, complete), snapshot, nil
+	view := collectionView(active, observations, complete)
+	for key, previous := range h.withdrawn {
+		if collectionFamilyReady(key, h.desired, observations) {
+			delete(h.withdrawn, key)
+		} else {
+			view.Withdrawn = append(view.Withdrawn, previous)
+		}
+	}
+	return view, snapshot, nil
 }
 
 func collectionWatchObserved(observation collectionWatchSnapshot) bool {
@@ -176,6 +200,21 @@ func collectionContributionID(
 func sameCollectionFamily(a, b collectionContributionKey) bool {
 	a.Resource, b.Resource = schema.GroupResource{}, schema.GroupResource{}
 	return a == b
+}
+
+func collectionFamilyRequest(
+	key collectionContributionKey, desired map[collectionContributionKey]collectionDesiredContribution,
+) (collectionDesiredContribution, bool) {
+	for nextKey, next := range desired {
+		if sameCollectionFamily(key, nextKey) {
+			return next, true
+		}
+	}
+	return collectionDesiredContribution{}, false
+}
+
+func sameCollectionSelection(a, b collectionDesiredContribution) bool {
+	return a.Group == b.Group && a.Resource == b.Resource && a.Scope == b.Scope
 }
 
 func collectionContributionDenied(request collectionDesiredContribution, denied []ObjectMatcher) bool {
@@ -200,6 +239,7 @@ func desiredCollectionContributions(plan collectionPlan) map[collectionContribut
 		put := func(resource schema.GroupResource, reason string, keys []collectionWatchKey) {
 			desired := collectionDesiredContribution{
 				Contributor: selection.Contributor, Group: selection.Group, Resource: selection.Resource, Reason: reason,
+				Scope: selection.Scope,
 			}
 			for _, key := range keys {
 				spec := copyCollectionWatchSpec(specs[key])
@@ -249,6 +289,10 @@ func retainCollectionContribution(
 	desired map[collectionContributionKey]collectionDesiredContribution,
 ) bool {
 	if current, exists := desired[key]; exists {
+		if key.Kind == collectionDeclaration && !sameCollectionSelection(current, previous) {
+			// Explicit selection changes withdraw old data even if the new API cannot be read.
+			return false
+		}
 		return current.Reason != collectionPolicyDenied
 	}
 	if key.Kind != collectionDeclaration {
@@ -256,8 +300,8 @@ func retainCollectionContribution(
 	}
 	for nextKey, next := range desired {
 		if sameCollectionFamily(key, nextKey) && next.Reason != collectionPolicyDenied &&
-			(next.Group != previous.Group || next.Resource != previous.Resource ||
-				(next.Resource == "*" && nextKey.Resource == (schema.GroupResource{}))) {
+			next.Group == previous.Group && next.Resource == previous.Resource && next.Scope == previous.Scope &&
+			next.Resource == "*" && nextKey.Resource == (schema.GroupResource{}) {
 			return true
 		}
 	}

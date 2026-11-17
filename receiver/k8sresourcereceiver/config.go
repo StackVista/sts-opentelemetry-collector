@@ -88,8 +88,6 @@ type Config struct {
 	// Conflicting explicit Objects entries are rejected by validation.
 	DeniedObjects []ObjectMatcher `mapstructure:"denied_objects"`
 
-	ResourceCollections ResourceCollectionsConfig `mapstructure:"resource_collections"`
-
 	// ConfigMapMaxDataSize caps the ConfigMap data kept per object, shared
 	// evenly between its keys. Zero keeps all data. Binary data is never kept.
 	ConfigMapMaxDataSize int `mapstructure:"configmap_max_datasize"`
@@ -122,10 +120,6 @@ func (c *Config) isDeniedResource(group, name string) bool {
 		}
 	}
 	return false
-}
-
-type ResourceCollectionsConfig struct {
-	Enabled bool `mapstructure:"enabled"`
 }
 
 // ObjectWatch declares a Kubernetes resource to watch.
@@ -255,10 +249,6 @@ func (c *Config) Validate() error {
 			}
 		}
 
-		if len(c.CustomResourceAPIGroups.Include) == 0 && !c.ResourceCollections.Enabled {
-			return errors.New("cr_api_groups.include cannot be empty when discovery_mode is 'api_groups'")
-		}
-
 		// Pre-compile and cache include patterns for performance
 		c.CustomResourceAPIGroups.includeRegexes = make([]*regexp.Regexp, 0, len(c.CustomResourceAPIGroups.Include))
 		for _, pattern := range c.CustomResourceAPIGroups.Include {
@@ -360,7 +350,7 @@ func (c *Config) validateResourceAttributes() error {
 // validateObjects enforces static rules on c.Objects: required name, not
 // denied, parseable selectors, and uniqueness across namespace expansion.
 // GVR resolution (ambiguity, missing-from-server, version-mismatch) is
-// deferred to receiver startup, where the discovery client is available.
+// deferred to collection planning, where the discovery client is available.
 func (c *Config) validateObjects() error {
 	if c.ConfigMapMaxDataSize < 0 {
 		return errors.New("configmap_max_datasize must not be negative")

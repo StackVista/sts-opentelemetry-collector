@@ -3,7 +3,6 @@ package k8sresourcereceiver
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -18,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	clienttesting "k8s.io/client-go/testing"
 )
@@ -104,7 +104,7 @@ func TestCollectionStatusWritesOnlyChangesAndPreservesSpec(t *testing.T) {
 	client.ClearActions()
 	require.NoError(t, writeCollectionStatus(ctx, client, result, status))
 	for _, action := range client.Actions() {
-		assert.NotEqual(t, "patch", action.GetVerb(), "identical feedback must not generate writes")
+		assert.NotEqual(t, "update", action.GetVerb(), "identical feedback must not generate writes")
 	}
 	status.Conditions[0].Reason = "ResourcesPending"
 	status.Conditions[0].Message = "Still waiting."
@@ -122,20 +122,16 @@ func TestCollectionStatusConflictCannotWriteNewGeneration(t *testing.T) {
 	client := collectionTestStatusClient(t, object)
 	result := collectionTestStatusResult(declaration.Name)
 	attempts := 0
-	client.PrependReactor("patch", "resourcecollections", func(action clienttesting.Action) (bool, runtime.Object, error) {
+	client.PrependReactor("update", "resourcecollections", func(action clienttesting.Action) (bool, runtime.Object, error) {
 		attempts++
 		assert.Equal(t, "status", action.GetSubresource())
-		patch, ok := action.(clienttesting.PatchAction)
+		update, ok := action.(clienttesting.UpdateAction)
 		require.True(t, ok)
-		var operations []map[string]interface{}
-		require.NoError(t, json.Unmarshal(patch.GetPatch(), &operations))
-		require.Len(t, operations, 4)
-		assert.Equal(t, "/metadata/uid", operations[0]["path"])
-		assert.Equal(t, string(result.UID), operations[0]["value"])
-		assert.Equal(t, "/metadata/generation", operations[1]["path"])
-		assert.Equal(t, float64(result.Generation), operations[1]["value"])
-		assert.Equal(t, "/metadata/resourceVersion", operations[2]["path"])
-		assert.Equal(t, object.GetResourceVersion(), operations[2]["value"])
+		written, ok := update.GetObject().(*unstructured.Unstructured)
+		require.True(t, ok)
+		assert.Equal(t, result.UID, written.GetUID())
+		assert.Equal(t, result.Generation, written.GetGeneration())
+		assert.Equal(t, object.GetResourceVersion(), written.GetResourceVersion())
 		newer := object.DeepCopy()
 		newer.SetGeneration(2)
 		newer.SetResourceVersion("11")
@@ -175,10 +171,25 @@ func TestCollectionStatusRejectsRecreatedIdentityAndCancellation(t *testing.T) {
 				require.ErrorIs(t, err, context.Canceled)
 			}
 			for _, action := range client.Actions() {
-				assert.NotEqual(t, "patch", action.GetVerb())
+				assert.NotEqual(t, "update", action.GetVerb())
 			}
 		})
 	}
+}
+
+func TestCollectionStatusSchemaRejectionIsNotRetried(t *testing.T) {
+	declaration := collectionTestDeclaration("integration", collectionTestSelection("widgets", nil, nil))
+	client := collectionTestStatusClient(t, collectionTestDeclarationObject(t, declaration))
+	result := collectionTestStatusResult(declaration.Name)
+	rejection := apierrors.NewInvalid(schema.GroupKind{Group: resourcecollection.Group, Kind: resourcecollection.Kind},
+		declaration.Name, field.ErrorList{field.Invalid(field.NewPath("status"), nil, "schema rejected status")})
+	attempts := 0
+	client.PrependReactor("update", "resourcecollections", func(clienttesting.Action) (bool, runtime.Object, error) {
+		attempts++
+		return true, nil, rejection
+	})
+	require.ErrorIs(t, writeCollectionStatus(context.Background(), client, result, collectionDeclarationStatus(result, nil)), rejection)
+	assert.Equal(t, 1, attempts)
 }
 
 func TestCollectionStatusTransitionOnlyChangesWithReadiness(t *testing.T) {

@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/tracker"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/utils/clock"
 )
 
 type collectionWatchSnapshot struct {
@@ -30,6 +33,7 @@ type collectionRegistryEntry struct {
 	cancel   context.CancelFunc
 	mu       sync.Mutex
 	lastErr  error
+	retryAt  time.Time
 }
 
 type collectionObservedWatch struct {
@@ -60,6 +64,7 @@ type collectionWatchRegistry struct {
 	closed        bool
 	notify        func()
 	onChange      func(old, current interface{})
+	clock         clock.Clock
 }
 
 func newCollectionWatchRegistry(
@@ -70,7 +75,7 @@ func newCollectionWatchRegistry(
 	return &collectionWatchRegistry{
 		client: client, buildInformer: buildInformer, ctx: ctx, cancel: cancel,
 		entries: map[collectionWatchKey]*collectionRegistryEntry{},
-		stopped: make(chan struct{}),
+		stopped: make(chan struct{}), clock: clock.RealClock{},
 	}
 }
 
@@ -108,11 +113,17 @@ func (r *collectionWatchRegistry) reconcile(specs []collectionWatchSpec) error {
 func (r *collectionWatchRegistry) start(spec collectionWatchSpec) (*collectionRegistryEntry, error) {
 	ctx, cancel := context.WithCancel(r.ctx)
 	entry := &collectionRegistryEntry{spec: copyCollectionWatchSpec(spec), cancel: cancel}
+	watchClock := r.clock
 	resource := resourceClientFor(r.client, spec.Key.GVR, spec.Key.Namespace)
 	record := func(err error) {
 		entry.mu.Lock()
 		if ctx.Err() == nil {
 			entry.lastErr = err
+			if isPermissionDenied(err) {
+				entry.retryAt = watchClock.Now().Add(tracker.DefaultRetryInterval)
+			} else if err == nil {
+				entry.retryAt = time.Time{}
+			}
 		}
 		entry.mu.Unlock()
 		if r.notify != nil && ctx.Err() == nil {
@@ -125,12 +136,18 @@ func (r *collectionWatchRegistry) start(spec collectionWatchSpec) (*collectionRe
 	}
 	entry.informer = r.buildInformer(&cache.ListWatch{
 		ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
+			if err := entry.waitForRetry(ctx, watchClock); err != nil {
+				return nil, err
+			}
 			selectors(&options)
 			result, err := resource.List(ctx, options)
 			record(err)
 			return result, err
 		},
 		WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
+			if err := entry.waitForRetry(ctx, watchClock); err != nil {
+				return nil, err
+			}
 			selectors(&options)
 			result, err := resource.Watch(ctx, options)
 			record(err)
@@ -163,6 +180,29 @@ func (r *collectionWatchRegistry) start(spec collectionWatchSpec) (*collectionRe
 		entry.informer.RunWithContext(ctx)
 	}()
 	return entry, nil
+}
+
+func (e *collectionRegistryEntry) waitForRetry(ctx context.Context, watchClock clock.Clock) error {
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		e.mu.Lock()
+		delay := e.retryAt.Sub(watchClock.Now())
+		e.mu.Unlock()
+		if delay <= 0 {
+			return nil
+		}
+		// Delay only this watch's requests; keep its cache and failure status readable.
+		timer := watchClock.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C():
+			timer.Stop()
+		}
+	}
 }
 
 func (r *collectionWatchRegistry) observeWatch(

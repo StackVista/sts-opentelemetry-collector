@@ -15,6 +15,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/emit"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/metrics"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/tracker"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,6 +33,8 @@ import (
 	"k8s.io/client-go/rest"
 	clienttesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/utils/clock"
+	clocktesting "k8s.io/utils/clock/testing"
 )
 
 type collectionRuntimeDiscovery struct {
@@ -55,7 +58,23 @@ func (d *collectionRuntimeDiscovery) ServerPreferredResources() ([]*metav1.APIRe
 
 func (d *collectionRuntimeDiscovery) ServerGroupsAndResources() ([]*metav1.APIGroup, []*metav1.APIResourceList, error) {
 	resources, err := d.ServerPreferredResources()
-	return nil, resources, err
+	byGroup := map[string]*metav1.APIGroup{}
+	var groups []*metav1.APIGroup
+	for _, list := range resources {
+		gv, parseErr := schema.ParseGroupVersion(list.GroupVersion)
+		if parseErr != nil {
+			continue
+		}
+		group := byGroup[gv.Group]
+		version := metav1.GroupVersionForDiscovery{GroupVersion: list.GroupVersion, Version: gv.Version}
+		if group == nil {
+			group = &metav1.APIGroup{Name: gv.Group, PreferredVersion: version}
+			byGroup[gv.Group] = group
+			groups = append(groups, group)
+		}
+		group.Versions = append(group.Versions, version)
+	}
+	return groups, resources, err
 }
 
 func (d *collectionRuntimeDiscovery) set(resources []*metav1.APIResourceList, err error) {
@@ -86,10 +105,15 @@ func collectionRuntimeCRD() *unstructured.Unstructured {
 	return makeTestCRDUnstructured("widgets."+collectionTestGroup, collectionTestGroup, "Widget", "widgets")
 }
 
-func startCollectionTestRuntime(t *testing.T, cfg *Config, client dynamic.Interface, disc discovery.DiscoveryInterface) (*collectionRuntime, context.Context) {
+func startCollectionTestRuntime(
+	t *testing.T, cfg *Config, client dynamic.Interface, disc discovery.DiscoveryInterface, watchClocks ...clock.Clock,
+) (*collectionRuntime, context.Context) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	r := newCollectionRuntime(testSettings(t), cfg, client, disc, nil)
+	if len(watchClocks) > 0 {
+		r.watchClock = watchClocks[0]
+	}
 	require.NoError(t, r.Start(ctx))
 	t.Cleanup(func() {
 		cancel()
@@ -308,7 +332,8 @@ func TestCollectionRuntimeWildcardDeniedAndForbiddenChildrenKeepHealthyTypes(t *
 				collectionTestAPI("", "v1", true, "pods"),
 				collectionTestAPI(collectionTestGroup, "v1", true, "widgets", "gadgets"),
 			}}
-			r, _ := startCollectionTestRuntime(t, cfg, client, disc)
+			watchClock := clocktesting.NewFakeClock(time.Now())
+			r, _ := startCollectionTestRuntime(t, cfg, client, disc, watchClock)
 			feedback := collectionRuntimeStatus(t, client, declaration.Name, resourcecollection.Blocked)
 			require.Eventually(t, func() bool {
 				object, err := client.Resource(resourcecollection.GVR()).Get(context.Background(), declaration.Name, metav1.GetOptions{})
@@ -330,6 +355,8 @@ func TestCollectionRuntimeWildcardDeniedAndForbiddenChildrenKeepHealthyTypes(t *
 				}
 			} else {
 				granted.Store(true)
+				require.Eventually(t, watchClock.HasWaiters, 5*time.Second, 10*time.Millisecond)
+				watchClock.Step(tracker.DefaultRetryInterval)
 				collectionRuntimeStatus(t, client, declaration.Name, resourcecollection.Active)
 				assert.Len(t, r.collectionSnapshot().Objects[collectionTestWidgetsGVR()].Objects, 1)
 			}
@@ -725,7 +752,8 @@ func TestReceiverResourceCollectionsFollowLeadershipAndRestart(t *testing.T) {
 		collectionTestDeclarationObject(t, declaration), metav1.UpdateOptions{})
 	require.NoError(t, err)
 	for _, action := range client.Actions() {
-		assert.NotEqual(t, "patch", action.GetVerb(), "a stopped replica must not publish declaration feedback")
+		assert.False(t, action.GetSubresource() == "status" && action.GetVerb() == "update",
+			"a stopped replica must not publish declaration feedback")
 	}
 	secondLeader, stopSecond := context.WithCancel(context.Background())
 	defer stopSecond()

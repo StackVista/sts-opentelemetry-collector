@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/metrics"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/tracker"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clienttesting "k8s.io/client-go/testing"
+	clocktesting "k8s.io/utils/clock/testing"
 )
 
 func TestCollectionTelemetrySharedWatchesAndRetryCadence(t *testing.T) {
@@ -104,6 +106,8 @@ func TestCollectionRuntimeTelemetryPermissionRecovery(t *testing.T) {
 	settings := testSettings(t)
 	settings.Logger = zap.New(core)
 	r := newCollectionRuntime(settings, cfg, client, disc, recorder)
+	watchClock := clocktesting.NewFakeClock(time.Now())
+	r.watchClock = watchClock
 	ctx, cancel := context.WithCancel(context.Background())
 	require.NoError(t, r.Start(ctx))
 	t.Cleanup(func() {
@@ -126,6 +130,8 @@ func TestCollectionRuntimeTelemetryPermissionRecovery(t *testing.T) {
 	}, 5*time.Second, 20*time.Millisecond)
 	assert.True(t, r.collectionSnapshot().Complete)
 	granted.Store(true)
+	require.Eventually(t, watchClock.HasWaiters, 5*time.Second, 10*time.Millisecond)
+	watchClock.Step(tracker.DefaultRetryInterval)
 	collectionRuntimeStatus(t, client, declaration.Name, resourcecollection.Active)
 	require.Eventually(t, func() bool {
 		return logs.FilterMessage("Collection watch recovered").Len() == 1

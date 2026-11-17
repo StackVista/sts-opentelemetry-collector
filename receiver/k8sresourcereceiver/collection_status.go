@@ -2,7 +2,6 @@ package k8sresourcereceiver
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -13,8 +12,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/util/retry"
 )
 
 func collectionDeclarationStatus(
@@ -118,14 +117,6 @@ func collectionSelectionStatus(
 	return entry
 }
 
-const collectionStatusPatchTest = "test"
-
-type collectionStatusPatch struct {
-	Op    string      `json:"op"`
-	Path  string      `json:"path"`
-	Value interface{} `json:"value"`
-}
-
 func boundedCollectionMessage(message string) string {
 	runes := []rune(message)
 	if len(runes) > 2048 {
@@ -153,7 +144,7 @@ func writeCollectionStatus(
 	ctx context.Context, client dynamic.Interface, result collectionDeclarationResult,
 	status resourcecollection.Status,
 ) error {
-	for attempt := 0; attempt < 3; attempt++ {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -180,29 +171,14 @@ func writeCollectionStatus(
 		if err != nil {
 			return err
 		}
-		patch, err := json.Marshal([]collectionStatusPatch{
-			{collectionStatusPatchTest, "/metadata/uid", string(result.UID)},
-			{collectionStatusPatchTest, "/metadata/generation", result.Generation},
-			{collectionStatusPatchTest, "/metadata/resourceVersion", current.GetResourceVersion()},
-			{"add", "/status", raw},
-		})
-		if err != nil {
-			return err
-		}
+		current.Object["status"] = raw
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		_, err = client.Resource(resourcecollection.GVR()).Patch(ctx, result.Name, types.JSONPatchType, patch,
-			metav1.PatchOptions{}, "status")
+		_, err = client.Resource(resourcecollection.GVR()).UpdateStatus(ctx, current, metav1.UpdateOptions{})
 		if err == nil || apierrors.IsNotFound(err) {
 			return nil
 		}
-		if !apierrors.IsConflict(err) && !apierrors.IsInvalid(err) {
-			return err
-		}
-		if attempt == 2 {
-			return err
-		}
-	}
-	return nil
+		return err
+	})
 }

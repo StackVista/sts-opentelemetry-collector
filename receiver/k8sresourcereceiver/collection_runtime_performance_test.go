@@ -41,8 +41,8 @@ func collectionCachedRuntime(tb testing.TB, count int, compact bool) (
 ) {
 	tb.Helper()
 	cfg := &Config{
-		ResourceCollections: ResourceCollectionsConfig{Enabled: true}, CompactCache: compact,
-		Objects: []ObjectWatch{{Name: "pods"}},
+		CompactCache: compact,
+		Objects:      []ObjectWatch{{Name: "pods"}},
 	}
 	require.NoError(tb, cfg.Validate())
 	disc := &collectionRuntimeDiscovery{resources: []*metav1.APIResourceList{collectionTestAPI("", "v1", true, "pods")}}

@@ -25,20 +25,24 @@ deletion events. Previously exported data follows downstream retention.
 
 ## ResourceCollection declarations
 
-With `resource_collections.enabled: true`, the active leader reads cluster-scoped
+The receiver uses one runtime for YAML baseline collection and declarations.
+When the declaration API is available, the active leader reads cluster-scoped
 `observability.suse.com/v1alpha1` ResourceCollections directly. Their spec selects
 CRD-backed custom resources through each type's served storage version, using
-namespace names and Kubernetes label selectors. Declaration version pinning is
+namespace names and Kubernetes label and field selectors. Declaration version pinning is
 not supported; existing YAML version selections remain.
 
 Baseline selections and declarations contribute a union. Identical watches are
-shared, objects are deduplicated per API representation before payload budgets,
-and replacement watches synchronize before withdrawing previous contributions.
+shared and objects are deduplicated per API representation before payload budgets.
+Editing a declaration's resource or filters withdraws its previous contribution,
+including when the replacement is pending or blocked. Representation changes
+for an unchanged selection retain previous observations until replacements synchronize.
 Unavailable APIs and missing resource-read permissions are retried. Declarations
 do not change RBAC or render ConfigMaps or collector rollouts.
 
 The leader publishes generation-bound feedback through the status subresource
-using UID, generation and resourceVersion preconditions. Status-only updates do
+using `UpdateStatus` with the current resourceVersion. Conflict retries read the
+declaration again and check its UID, generation and deletion state. Status-only updates do
 not trigger discovery. The current per-selection summary is provisional; wildcard
 children are tracked internally even when their details are not on the wire.
 
@@ -46,12 +50,17 @@ Declaration objects and their status are also reported as custom resources,
 subject to the same administrator denies and CR payload budget. Disabling their
 export does not disable the control reads needed to process selections.
 
-Blocked watches retain their last successful objects until observation recovers.
+Blocked watches for unchanged selections retain their last successful objects until observation recovers.
+Permission failures delay further API requests for that watch by 30 minutes.
+Other failures follow client-go retry behavior. Removing a watch cancels its wait.
 There is no retention timeout because an unavailable API cannot prove deletion.
 Discovery failures retain known APIs and contributions; an authoritative CRD
 deletion withdraws its resources. On takeover, uncertain objects from the peer
-cache remain in the reporting view until their watches synchronize. Retention
-is applied before payload budgets. A pending custom declaration does not stop
+cache remain in the reporting view until their watches synchronize. After an
+explicit edit, local previous-scope metadata prevents peer data
+from restoring the withdrawn contribution. That metadata is not in the peer
+protocol, so a fresh runtime retains uncertain peer objects conservatively.
+Retention is applied before payload budgets. A pending custom declaration does not stop
 the healthy standard Kubernetes baseline from being reported.
 
 Informer recovery remains visible in `informer_reconciles_total`. The declaration
@@ -247,17 +256,10 @@ Each cached object carries an `ObjectSource` (`cr` / `static`) recorded at
 discovery time; `eventNameForSource` maps that to the emitted event name on
 both the snapshot and increment paths.
 
-`Config.Objects` entries are classified at startup against the cluster's CRDs:
-
-- Entry whose GVR is **also covered by `cr_api_groups`** → reject (both
-  informers would emit the same resource); operator must remove the entry or
-  exclude the CRD's group.
-- Entry whose GVR is **defined by a CRD but filter-excluded** → marked
-  `CRDBacked`; the static informer is the only path but downstream still gets
-  the CR log shape.
-- Entry with no backing CRD → plain static, emits the Object shape.
-
-See `classifyStaticObjectsCRDOverlap` for the resolution rules.
+The collection plan resolves YAML objects, CR group discovery and declarations
+together. Overlapping selections form a union and share identical watches.
+CRD-backed objects use the CR log shape; resources without a backing CRD use
+the Object shape.
 
 ## Secrets and ConfigMaps
 
