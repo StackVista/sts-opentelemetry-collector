@@ -31,6 +31,7 @@ import (
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/rest"
 	clienttesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/tools/cache"
 )
 
 type collectionRuntimeDiscovery struct {
@@ -156,7 +157,7 @@ func TestCollectionRuntimeDeclarationChangesPreserveBaselineAndShareWatches(t *t
 		require.NoError(t, err)
 		collectionRuntimeStatus(t, client, "a", resourcecollection.Active)
 		require.Eventually(t, func() bool {
-			return len(r.ReadObjects()[collectionTestWidgetsGVR()].Objects) == 2
+			return len(r.collectionSnapshot().Objects[collectionTestWidgetsGVR()].Objects) == 2
 		}, 5*time.Second, 20*time.Millisecond)
 
 		require.NoError(t, client.Resource(resourcecollection.GVR()).Delete(ctx, "a", metav1.DeleteOptions{}))
@@ -166,8 +167,8 @@ func TestCollectionRuntimeDeclarationChangesPreserveBaselineAndShareWatches(t *t
 			return len(view.Objects[collectionTestWidgetsGVR()].Objects) == 1 &&
 				len(view.Objects[resourcecollection.GVR()].Objects) == 0
 		}, 5*time.Second, 20*time.Millisecond)
-		assert.Equal(t, "a-widget", r.ReadObjects()[collectionTestWidgetsGVR()].Objects[0].GetName())
-		assert.Len(t, r.ReadObjects()[podsGVR].Objects, 1)
+		assert.Equal(t, "a-widget", r.collectionSnapshot().Objects[collectionTestWidgetsGVR()].Objects[0].GetName())
+		assert.Len(t, r.collectionSnapshot().Objects[podsGVR].Objects, 1)
 	})
 }
 
@@ -180,7 +181,7 @@ func TestCollectionRuntimeMissingAPIRecoversAndReportsDeclarationStatus(t *testi
 	r, ctx := startCollectionTestRuntime(t, cfg, client, disc)
 	collectionRuntimeStatus(t, client, declaration.Name, resourcecollection.Pending)
 	require.Eventually(t, func() bool {
-		return r.StaticWatchesSynced() && len(r.ReadObjects()[podsGVR].Objects) == 1
+		return r.collectionSnapshot().Complete && len(r.collectionSnapshot().Objects[podsGVR].Objects) == 1
 	}, 5*time.Second, 20*time.Millisecond)
 	disc.set([]*metav1.APIResourceList{
 		collectionTestAPI("", "v1", true, "pods"),
@@ -228,7 +229,7 @@ func TestCollectionRuntimeRetainsCatalogOnDiscoveryFailuresAndRemovesDeletedCRDs
 				Source: ObjectSourceStatic,
 			})
 		}, 5*time.Second, 20*time.Millisecond)
-		assert.Len(t, r.ReadObjects()[collectionTestWidgetsGVR()].Objects, 1)
+		assert.Len(t, r.collectionSnapshot().Objects[collectionTestWidgetsGVR()].Objects, 1)
 
 		disc.set(nil, &discovery.ErrGroupDiscoveryFailed{Groups: map[schema.GroupVersion]error{
 			{Group: collectionTestGroup, Version: "v1"}: errors.New("API group temporarily unavailable"),
@@ -262,7 +263,7 @@ func TestCollectionRuntimeRemovedCRDCannotReuseStaticCachedObjects(t *testing.T)
 	}}
 	r, ctx := startCollectionTestRuntime(t, cfg, client, disc)
 	require.Eventually(t, func() bool {
-		return len(r.ReadObjects()[collectionTestWidgetsGVR()].Objects) == 1
+		return len(r.collectionSnapshot().Objects[collectionTestWidgetsGVR()].Objects) == 1
 	}, 5*time.Second, 20*time.Millisecond)
 	removed.Store(true)
 	disc.set(nil, errors.New("discovery temporarily unavailable"))
@@ -320,8 +321,8 @@ func TestCollectionRuntimeWildcardDeniedAndForbiddenChildrenKeepHealthyTypes(t *
 			}, 5*time.Second, 20*time.Millisecond, "Blocked can precede the healthy wildcard child's synchronization")
 			assert.Contains(t, feedback.Status.Resources[0].Message, "1 types active, 1 blocked, 0 pending.")
 			require.Eventually(t, func() bool {
-				return r.StaticWatchesSynced() && len(r.ReadObjects()[gadgetsGVR].Objects) == 1 &&
-					len(r.ReadObjects()[podsGVR].Objects) == 1
+				return r.collectionSnapshot().Complete && len(r.collectionSnapshot().Objects[gadgetsGVR].Objects) == 1 &&
+					len(r.collectionSnapshot().Objects[podsGVR].Objects) == 1
 			}, 5*time.Second, 20*time.Millisecond)
 			if policy == "deny" {
 				for _, action := range client.Actions() {
@@ -330,7 +331,7 @@ func TestCollectionRuntimeWildcardDeniedAndForbiddenChildrenKeepHealthyTypes(t *
 			} else {
 				granted.Store(true)
 				collectionRuntimeStatus(t, client, declaration.Name, resourcecollection.Active)
-				assert.Len(t, r.ReadObjects()[collectionTestWidgetsGVR()].Objects, 1)
+				assert.Len(t, r.collectionSnapshot().Objects[collectionTestWidgetsGVR()].Objects, 1)
 			}
 		})
 	}
@@ -362,7 +363,7 @@ func TestCollectionRuntimeTakeoverPreservesPeerObjectsUntilObservation(t *testin
 		}}
 		r, ctx := startCollectionTestRuntime(t, cfg, wrapped, disc)
 		require.Eventually(t, func() bool {
-			return blocked.Load() && r.StaticWatchesSynced() && len(r.ReadObjects()[podsGVR].Objects) == 1
+			return blocked.Load() && r.collectionSnapshot().Complete && len(r.collectionSnapshot().Objects[podsGVR].Objects) == 1
 		}, 5*time.Second, 20*time.Millisecond)
 		peer := newRecordingPeerStore()
 		require.NoError(t, peer.ApplyDelta(ctx, &PeerSyncDelta{Changes: []ResourceChange{{
@@ -411,8 +412,8 @@ func TestCollectionRuntimeIgnoresStatusOnlyControlEvents(t *testing.T) {
 	after.SetResourceVersion("11")
 	r.controlChanged(before, after)
 	assert.False(t, r.dirty.Load())
-	assert.True(t, r.controlDirty.Load(), "reported declarations must refresh their cached status")
-	assert.Len(t, r.trigger, 1)
+	assert.False(t, r.controlDirty.Load(), "status-only updates must not rebuild the plan")
+	assert.Empty(t, r.trigger)
 	after.SetGeneration(2)
 	r.controlChanged(before, after)
 	assert.False(t, r.dirty.Load(), "declaration changes resolve against the cached API catalog")
@@ -462,8 +463,12 @@ func TestCollectionRuntimeIgnoresStatusOnlyControlEvents(t *testing.T) {
 			r := &collectionRuntime{trigger: make(chan struct{}, 1)}
 			r.controlChanged(before, after)
 			assert.Equal(t, change.discovery, r.dirty.Load())
-			assert.True(t, r.controlDirty.Load())
-			assert.Len(t, r.trigger, 1)
+			assert.Equal(t, change.discovery, r.controlDirty.Load())
+			if change.discovery {
+				assert.Len(t, r.trigger, 1)
+			} else {
+				assert.Empty(t, r.trigger)
+			}
 		})
 	}
 }
@@ -499,6 +504,14 @@ func TestCollectionRuntimeInvalidSpecPreservesCachedStatus(t *testing.T) {
 	client := collectionRuntimeClient(t, object)
 	r := newCollectionRuntime(testSettings(t), cfg, client, nil, nil)
 	r.ctx = context.Background()
+	r.controls = newCollectionWatchRegistry(r.ctx, client, nil)
+	t.Cleanup(r.controls.cancel)
+	store := cache.NewStore(cache.DeletionHandlingMetaNamespaceKeyFunc)
+	require.NoError(t, store.Add(object))
+	key := collectionWatchKey{GVR: resourcecollection.GVR()}
+	r.controls.entries[key] = &collectionRegistryEntry{
+		spec: collectionWatchSpec{Key: key}, informer: &collectionSyncedInformer{store: store},
+	}
 	for range 3 {
 		r.readControls([]collectionWatchSnapshot{{
 			Spec:  collectionWatchSpec{Key: collectionWatchKey{GVR: resourcecollection.GVR()}},
@@ -558,7 +571,7 @@ func TestCollectionRuntimeReusesControlWatchWhenDeclarationsAreSelected(t *testi
 			}
 		}
 		assert.Equal(t, 1, watches, "control, baseline, declaration and automatic reporting reuse one source")
-		assert.Len(t, r.ReadObjects()[resourcecollection.GVR()].Objects, 1)
+		assert.Len(t, r.collectionSnapshot().Objects[resourcecollection.GVR()].Objects, 1)
 	})
 }
 
@@ -621,7 +634,7 @@ func TestCollectionRuntimeUnavailableDeclarationAPIKeepsNativeBaseline(t *testin
 			disc := &collectionRuntimeDiscovery{resources: []*metav1.APIResourceList{collectionTestAPI("", "v1", true, "pods")}}
 			r, _ := startCollectionTestRuntime(t, cfg, client, disc)
 			require.Eventually(t, func() bool {
-				return r.StaticWatchesSynced() && len(r.ReadObjects()[podsGVR].Objects) == 1
+				return r.collectionSnapshot().Complete && len(r.collectionSnapshot().Objects[podsGVR].Objects) == 1
 			}, 5*time.Second, 20*time.Millisecond)
 			assert.False(t, r.collectionSnapshot().AllowDelete(ResourceChange{GVR: collectionTestWidgetsGVR(), Source: ObjectSourceCR}))
 		})
@@ -723,8 +736,10 @@ func TestReceiverResourceCollectionsFollowLeadershipAndRestart(t *testing.T) {
 	r.mu.Unlock()
 	require.NotNil(t, second)
 	assert.NotSame(t, first, second)
+	source, ok := second.informers.(collectionReportingSource)
+	require.True(t, ok)
 	require.Eventually(t, func() bool {
-		objects := second.informers.ReadObjects()[collectionTestWidgetsGVR()].Objects
+		objects := source.collectionSnapshot().Objects[collectionTestWidgetsGVR()].Objects
 		return len(objects) == 1 && objects[0].GetNamespace() == "team-b"
 	}, 5*time.Second, 20*time.Millisecond)
 }

@@ -158,21 +158,33 @@ func (r *collectionRuntime) controlChanged(old, current interface{}) {
 	if tombstone, ok := old.(cache.DeletedFinalStateUnknown); ok {
 		before, _ = toUnstructured(tombstone.Obj)
 	}
-	r.controlDirty.Store(true)
 	object := after
 	if object == nil {
 		object = before
 	}
-	if object != nil && object.GetKind() == "CustomResourceDefinition" && collectionCRDDiscoveryChanged(before, after) {
-		r.dirty.Store(true)
+	changed := collectionControlIdentityChanged(before, after)
+	if object != nil && object.GetKind() == "CustomResourceDefinition" {
+		changed = collectionCRDDiscoveryChanged(before, after)
+		if changed {
+			r.dirty.Store(true)
+		}
 	}
+	if !changed {
+		// Reporting and status comparisons read current control objects from their stores.
+		return
+	}
+	r.controlDirty.Store(true)
 	r.enqueue()
 }
 
-func collectionCRDDiscoveryChanged(before, after *unstructured.Unstructured) bool {
-	if before == nil || after == nil || before.GetUID() != after.GetUID() ||
+func collectionControlIdentityChanged(before, after *unstructured.Unstructured) bool {
+	return before == nil || after == nil || before.GetUID() != after.GetUID() ||
 		before.GetGeneration() != after.GetGeneration() ||
-		!reflect.DeepEqual(before.GetDeletionTimestamp(), after.GetDeletionTimestamp()) {
+		!reflect.DeepEqual(before.GetDeletionTimestamp(), after.GetDeletionTimestamp())
+}
+
+func collectionCRDDiscoveryChanged(before, after *unstructured.Unstructured) bool {
+	if collectionControlIdentityChanged(before, after) {
 		return true
 	}
 	// Establishment can expose an API without changing the CRD generation.
@@ -541,9 +553,18 @@ func (r *collectionRuntime) publishStatuses(plan collectionPlan, observations []
 	}
 	for _, result := range plan.Declarations {
 		declaration := current[result.Name]
+		object := r.controls.cachedObject(collectionWatchKey{GVR: resourcecollection.GVR()}, result.Name)
+		if declaration == nil || object == nil || object.GetUID() != result.UID ||
+			object.GetGeneration() != result.Generation || object.GetDeletionTimestamp() != nil {
+			continue
+		}
+		var previous resourcecollection.Status
+		if raw, found, _ := unstructured.NestedMap(object.Object, "status"); found {
+			_ = runtime.DefaultUnstructuredConverter.FromUnstructured(raw, &previous)
+		}
 		status := collectionDeclarationStatus(result, observations)
-		preserveCollectionTransition(&status, declaration.Status, time.Now())
-		if reflect.DeepEqual(status, declaration.Status) {
+		preserveCollectionTransition(&status, previous, time.Now())
+		if reflect.DeepEqual(status, previous) {
 			delete(r.statusRetries, result.Name)
 			continue
 		}
@@ -590,20 +611,53 @@ func (r *collectionRuntime) collectionSnapshot() collectionReportingSnapshot {
 			view.Watched[spec.Key.GVR.GroupResource()] = true
 		}
 	}
-	r.includeDeclarations(&view, state.Declarations)
+	declarations := state.Declarations
+	for _, observation := range r.controls.snapshot() {
+		if !observation.Synced {
+			continue
+		}
+		objects := make([]*unstructured.Unstructured, 0, len(observation.Objects))
+		valid := true
+		for _, cached := range observation.Objects {
+			object, ok := toUnstructured(cached)
+			if !ok {
+				valid = false
+				break
+			}
+			objects = append(objects, object)
+		}
+		if valid {
+			switch observation.Spec.Key.GVR {
+			case crdGVR:
+				view.CRDs = objects
+			case resourcecollection.GVR():
+				declarations = objects
+			}
+		}
+	}
+	r.includeDeclarations(&view, declarations)
 	view.AllowDelete = collectionDeletionPolicy(r.config, state.Plan, state.Catalog, observations,
 		state.CRDsReady, state.DeclarationsReady, state.Discovered)
 	r.view = view
 	return r.view
 }
 
+// Legacy accessors expose the last report; only collectionSnapshot advances handover.
 func (r *collectionRuntime) ReadCRDs() []*unstructured.Unstructured {
-	return r.collectionSnapshot().CRDs
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.view.CRDs
 }
 func (r *collectionRuntime) ReadObjects() map[schema.GroupVersionResource]ObjectGroup {
-	return r.collectionSnapshot().Objects
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.view.Objects
 }
-func (r *collectionRuntime) StaticWatchesSynced() bool { return r.collectionSnapshot().Complete }
+func (r *collectionRuntime) StaticWatchesSynced() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.view.Complete
+}
 
 func (r *collectionRuntime) Shutdown(ctx context.Context) error {
 	r.stopOnce.Do(func() {

@@ -124,7 +124,7 @@ func TestCollectionRuntimeTelemetryPermissionRecovery(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return logs.FilterMessage("Collection watch is unavailable; retaining known objects").Len() == 1
 	}, 5*time.Second, 20*time.Millisecond)
-	assert.True(t, r.StaticWatchesSynced())
+	assert.True(t, r.collectionSnapshot().Complete)
 	granted.Store(true)
 	collectionRuntimeStatus(t, client, declaration.Name, resourcecollection.Active)
 	require.Eventually(t, func() bool {

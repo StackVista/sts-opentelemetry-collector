@@ -9,6 +9,7 @@ import (
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
@@ -203,6 +204,24 @@ func (r *collectionWatchRegistry) snapshot() []collectionWatchSnapshot {
 
 func (r *collectionWatchRegistry) healthSnapshot() []collectionWatchSnapshot {
 	return r.readSnapshot(false)
+}
+
+func (r *collectionWatchRegistry) cachedObject(key collectionWatchKey, name string) *unstructured.Unstructured {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	entry := r.entries[key]
+	if entry == nil {
+		return nil
+	}
+	if key.Namespace != "" {
+		name = key.Namespace + "/" + name
+	}
+	object, exists, err := entry.informer.GetStore().GetByKey(name)
+	if err != nil || !exists {
+		return nil
+	}
+	current, _ := toUnstructured(object)
+	return current
 }
 
 func (r *collectionWatchRegistry) readSnapshot(objects bool) []collectionWatchSnapshot {
