@@ -56,15 +56,8 @@ downloaded cluster tools against upstream checksums, and uploads synthetic
 evidence on success or failure. The job is required by publication and ci-success.
 Receiver race tests and canonical export reproducibility run in the unit-test job.
 
-The separate compatibility gate requires a changed assessment and API regression
-when the canonical CRD or wire types change. Its tests use real Git trees and
-verify missing, unchanged, empty and deleted evidence fails. Run the same gate
-against an uncommitted local candidate with:
-
-```sh
-python3 test/resourcecollection/check_compatibility.py \
-  --base "$(git rev-parse HEAD)" --worktree
-```
+This is the first ResourceCollection API release. Schema compatibility checks
+against a released CRD and relevant upgrade tests follow once that baseline exists.
 
 This job does not establish the product support floor. Helm lifecycle,
 two-Pod takeover and backend acceptance are deferred to BEEST qualification.

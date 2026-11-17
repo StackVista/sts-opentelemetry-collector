@@ -166,7 +166,7 @@ jobs:
 
   publish:
     name: Scan, sign, and publish (${{ matrix.image }})
-    needs: [zizmor, build, lint, test, integration-test, schema-compatibility, e2e-test, resourcecollection-contract, resource-collection, logs-process-faults, validate]
+    needs: [zizmor, build, lint, test, integration-test, schema-compatibility, e2e-test, resource-collection, logs-process-faults, validate]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -462,40 +462,6 @@ jobs:
           OTEL_COLLECTOR_IMAGE: sts-opentelemetry-collector:e2e
         run: go test -v ./test/e2e/...
 
-  resourcecollection-contract:
-    name: ResourceCollection compatibility assessment and regressions
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout contract and comparison history
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-
-      - name: Test compatibility enforcement
-        run: python3 -m unittest discover -s test/resourcecollection -p test_compatibility.py -v
-
-      - name: Require an assessment and regressions for contract changes
-        env:
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          REF: ${{ github.ref }}
-          BEFORE: ${{ github.event.before }}
-        run: |
-          set -euo pipefail
-          if [[ "$REF" == "refs/heads/$DEFAULT_BRANCH" ]]; then
-            if [[ "$BEFORE" =~ ^0{40}$ ]]; then
-              base=$(git mktree < /dev/null)
-            else
-              base="$BEFORE"
-            fi
-          else
-            base=$(git merge-base HEAD "refs/remotes/origin/$DEFAULT_BRANCH")
-          fi
-          python3 test/resourcecollection/check_compatibility.py --base "$base"
-
   resource-collection:
     name: ResourceCollection real Kubernetes (${{ matrix.kubernetes }})
     needs: build
@@ -663,7 +629,7 @@ jobs:
   ci-success:
     name: ci-success
     if: always()
-    needs: [zizmor, build, lint, test, integration-test, schema-compatibility, e2e-test, resourcecollection-contract, resource-collection, logs-process-faults, validate, publish]
+    needs: [zizmor, build, lint, test, integration-test, schema-compatibility, e2e-test, resource-collection, logs-process-faults, validate, publish]
     runs-on: ubuntu-latest
     permissions: {}
     steps:

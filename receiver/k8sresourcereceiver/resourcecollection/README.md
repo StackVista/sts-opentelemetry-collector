@@ -59,13 +59,12 @@ git rev-parse HEAD
 ```
 
 Chart imports retain the source commit and exported SHA-256. Do not independently
-edit a chart copy. Every API/schema change requires a compatibility assessment
-under `compatibility/` and appropriate admission or upgrade fixtures.
+edit a chart copy.
 
-CI rejects changes to the CRD or `types.go` without a changed nonempty assessment
-and API regression. It compares feature branches with the default branch's merge
-base and default-branch pushes with their previous head. Reviewers still need to
-check that the assessment and regression cover the change.
+This is the first ResourceCollection API release. Canonical CRD export
+verification, Go regressions and real API admission checks cover the initial
+contract. Keep additions backward-compatible. Once a released CRD is available,
+add schema compatibility checks against that release and relevant upgrade tests.
 
 Status is collector-local progress for the observed generation. It does not
 acknowledge backend delivery or topology creation.
