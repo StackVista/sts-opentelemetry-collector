@@ -9,6 +9,44 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestCollectionWatchBudgetSharesDeclarationControlWatch(t *testing.T) {
+	cfg := collectionTestConfig(t, nil, nil, nil, nil)
+	cfg.MaxDeclarationWatches = 1
+	catalog := collectionTestDiscovery()
+	controlAPI := collectionTestAPI(resourcecollection.Group, resourcecollection.Version, false, "resourcecollections")
+	catalog.PreferredResources = append(catalog.PreferredResources, controlAPI)
+	catalog.ServedResources = append(catalog.ServedResources, controlAPI)
+	crd := collectionTestCRD("resourcecollections", "Cluster", resourcecollection.Version)
+	crd.Spec.Group = resourcecollection.Group
+	catalog.CRDs = append(catalog.CRDs, crd)
+	widgets := collectionTestDeclaration("a", collectionTestSelection("widgets", nil, nil))
+	control := collectionTestDeclaration("b", resourcecollection.Selection{
+		Group: resourcecollection.Group, Resource: "resourcecollections",
+	})
+	filtered := collectionTestDeclaration("c", control.Spec.Resources[0])
+	filtered.Spec.Resources[0].FieldSelector = "metadata.name=example"
+	plan := buildCollectionPlan(cfg, catalog, []*resourcecollection.ResourceCollection{widgets, control, filtered})
+	require.Len(t, plan.Watches, 2)
+	assert.Equal(t, collectionAwaitingObservation, plan.Declarations[1].Selections[0].Reason)
+	assert.Equal(t, collectionWatchBudgetExceeded, plan.Declarations[2].Selections[0].Reason,
+		"a filtered declaration watch requires its own informer")
+
+	cfg.MaxDeclarationWatches = 2
+	declarations := []*resourcecollection.ResourceCollection{widgets, control}
+	plan = buildCollectionPlan(cfg, catalog, declarations)
+	registry := newCollectionHandoverTestRegistry()
+	handover := newCollectionHandover(registry)
+	require.NoError(t, handover.update(plan))
+	oldKey := collectionTestWidgetsGVR()
+	registry.observe(collectionWatchKey{GVR: oldKey}, collectionHandoverObject("old", "old"))
+	registry.observe(collectionWatchKey{GVR: resourcecollection.GVR()})
+	collectionHandoverRead(t, handover)
+	catalog.CRDs[0] = collectionTestCRD("widgets", catalog.CRDs[0].Spec.Scope, "v2", "v1")
+	catalog.ServedResources = append(catalog.ServedResources, collectionTestAPI(collectionTestGroup, "v2", true, "widgets"))
+	require.NoError(t, handover.update(buildCollectionPlan(cfg, catalog, declarations)))
+	assert.Len(t, registry.snapshot(), 3, "a shared control watch must not consume handover capacity")
+}
+
 func TestCollectionWatchBudgetSharesWatchesAndProtectsBaseline(t *testing.T) {
 	cfg := collectionTestConfig(t, nil, nil, []ObjectWatch{
 		{Name: "pods"},

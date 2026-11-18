@@ -370,6 +370,9 @@ func collectionTransitionWatches(
 	}
 	sort.Slice(result, func(i, j int) bool { return collectionWatchLess(result[i].Key, result[j].Key) })
 	baseline := func(spec collectionWatchSpec) bool {
+		if sharesDeclarationControlWatch(spec.Key) {
+			return true
+		}
 		for _, contributor := range spec.Contributors {
 			if contributor.Kind != collectionDeclaration {
 				return true

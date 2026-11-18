@@ -15,13 +15,17 @@ type collectionControlRegistry struct {
 	declaration      *collectionWatchSpec
 }
 
+func sharesDeclarationControlWatch(key collectionWatchKey) bool {
+	return key == (collectionWatchKey{GVR: resourcecollection.GVR()})
+}
+
 func (r *collectionControlRegistry) reconcile(specs []collectionWatchSpec) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var declaration *collectionWatchSpec
 	targets := make([]collectionWatchSpec, 0, len(specs))
 	for _, spec := range specs {
-		if spec.Key == (collectionWatchKey{GVR: resourcecollection.GVR()}) {
+		if sharesDeclarationControlWatch(spec.Key) {
 			copySpec := copyCollectionWatchSpec(spec)
 			declaration = &copySpec
 		} else {

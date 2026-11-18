@@ -291,7 +291,7 @@ func (p *collectionPlanner) resolve(
 				LabelSelector: labelFilter.String(), FieldSelector: fieldFilter.String(),
 			}
 			keys = append(keys, watchKey)
-			if _, exists := p.watches[watchKey]; !exists {
+			if _, exists := p.watches[watchKey]; !exists && !sharesDeclarationControlWatch(watchKey) {
 				additional++
 			}
 		}
