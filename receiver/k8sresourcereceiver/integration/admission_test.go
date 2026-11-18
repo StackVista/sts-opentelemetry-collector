@@ -153,12 +153,12 @@ func maximumSelection() map[string]any {
 
 func testAuthorization(ctx context.Context, t *testing.T, client kubernetes.Interface, admin dynamic.Interface, config *rest.Config) {
 	namespace(ctx, t, client, testNS)
-	write := rbacv1.PolicyRule{APIGroups: []string{"observability.suse.com"}, Resources: []string{"resourcecollections"},
+	write := rbacv1.PolicyRule{APIGroups: []string{"observability.suse.com"}, Resources: []string{"collectiondeclarations"},
 		Verbs: []string{"get", "list", "watch", "create", "delete", "patch", "update"}}
 	statusRule := rbacv1.PolicyRule{APIGroups: []string{"observability.suse.com"},
-		Resources: []string{"resourcecollections/status"}, Verbs: []string{"patch", "update"}}
+		Resources: []string{"collectiondeclarations/status"}, Verbs: []string{"patch", "update"}}
 	role(ctx, t, client, "integration", write)
-	role(ctx, t, client, "collector", readRule("observability.suse.com", "resourcecollections"), statusRule)
+	role(ctx, t, client, "collector", readRule("observability.suse.com", "collectiondeclarations"), statusRule)
 	obj := declaration("auth", selection("widgets"))
 	createDeclaration(ctx, t, admin, obj)
 	defer func() { require.NoError(t, declarations(admin).Delete(ctx, obj.GetName(), metav1.DeleteOptions{})) }()
@@ -177,7 +177,7 @@ func testAuthorization(ctx context.Context, t *testing.T, client kubernetes.Inte
 				allowed := name == "integration" || name == "collector" && (verb == "get" || verb == "list" || verb == "watch")
 				review, err := actorKube.AuthorizationV1().SelfSubjectAccessReviews().Create(ctx, &authzv1.SelfSubjectAccessReview{
 					Spec: authzv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authzv1.ResourceAttributes{
-						Group: "observability.suse.com", Resource: "resourcecollections", Verb: verb,
+						Group: "observability.suse.com", Resource: "collectiondeclarations", Verb: verb,
 					}},
 				}, metav1.CreateOptions{})
 				require.NoError(t, err)

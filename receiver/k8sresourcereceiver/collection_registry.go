@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/collectiondeclaration"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/tracker"
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -278,13 +278,13 @@ func (r *collectionWatchRegistry) readSnapshot(objects bool) []collectionWatchSn
 		entry.mu.Lock()
 		observation := collectionWatchSnapshot{
 			Spec: copyCollectionWatchSpec(entry.spec), Synced: entry.informer.HasSynced(),
-			State: resourcecollection.Pending, Reason: collectionAwaitingObservation,
+			State: collectiondeclaration.Pending, Reason: collectionAwaitingObservation,
 		}
 		switch err := entry.lastErr; {
 		case err != nil:
 			observation.State, observation.Reason, observation.Message = collectionObservationError(err)
 		case observation.Synced:
-			observation.State, observation.Reason = resourcecollection.Active, collectionWatching
+			observation.State, observation.Reason = collectiondeclaration.Active, collectionWatching
 		}
 		// Keep known objects beside failure state; consumers must not infer an empty observation.
 		if objects && observation.Synced {
@@ -341,14 +341,14 @@ func (r *collectionWatchRegistry) shutdown(ctx context.Context) error {
 }
 
 func collectionObservationError(err error) (string, string, string) {
-	state, reason := resourcecollection.Pending, "ObservationFailed"
+	state, reason := collectiondeclaration.Pending, "ObservationFailed"
 	switch {
 	case isPermissionDenied(err):
-		state, reason = resourcecollection.Blocked, "AccessDenied"
+		state, reason = collectiondeclaration.Blocked, "AccessDenied"
 	case apierrors.IsNotFound(err):
 		reason = collectionAPINotAvailable
 	case apierrors.IsBadRequest(err) || apierrors.IsInvalid(err):
-		state, reason = resourcecollection.Blocked, "InvalidSelection"
+		state, reason = collectiondeclaration.Blocked, "InvalidSelection"
 	}
 	return state, reason, err.Error()
 }

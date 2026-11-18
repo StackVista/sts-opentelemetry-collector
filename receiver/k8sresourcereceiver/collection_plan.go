@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/collectiondeclaration"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -100,7 +100,7 @@ type collectionPlanner struct {
 
 // Inputs are snapshots; Config.Validate must have completed before planning.
 func buildCollectionPlan(
-	cfg *Config, discovery collectionDiscoverySnapshot, declarations []*resourcecollection.ResourceCollection,
+	cfg *Config, discovery collectionDiscoverySnapshot, declarations []*collectiondeclaration.CollectionDeclaration,
 ) collectionPlan {
 	planner := collectionPlanner{
 		config: cfg, catalog: newCollectionCatalog(discovery),
@@ -122,10 +122,10 @@ func buildCollectionPlan(
 		contributor := collectionContributor{Kind: collectionBaselineObject, SelectionIndex: index}
 		gvr, namespaced, err := planner.catalog.resolveBaseline(selection)
 		if err != nil {
-			state, reason := resourcecollection.Pending, collectionAPINotAvailable
+			state, reason := collectiondeclaration.Pending, collectionAPINotAvailable
 			var resolutionError *collectionResolutionError
 			if errors.As(err, &resolutionError) {
-				state, reason = resourcecollection.Blocked, resolutionError.reason
+				state, reason = collectiondeclaration.Blocked, resolutionError.reason
 			}
 			result := unresolvedCollectionSelection(contributor, selection.Group, selection.Name, state, reason, err.Error())
 			result.Version = selection.Version
@@ -142,7 +142,7 @@ func buildCollectionPlan(
 		result.Version = selection.Version
 		plan.Baseline = append(plan.Baseline, result)
 	}
-	ordered := append([]*resourcecollection.ResourceCollection(nil), declarations...)
+	ordered := append([]*collectiondeclaration.CollectionDeclaration(nil), declarations...)
 	sort.Slice(ordered, func(i, j int) bool {
 		if ordered[i] == nil || ordered[j] == nil {
 			return ordered[i] != nil
@@ -159,7 +159,7 @@ func buildCollectionPlan(
 		result := collectionDeclarationResult{
 			Name: declaration.Name, UID: declaration.UID, Generation: declaration.Generation,
 		}
-		if len(declaration.Spec.Resources) == 0 || len(declaration.Spec.Resources) > resourcecollection.MaxSelections {
+		if len(declaration.Spec.Resources) == 0 || len(declaration.Spec.Resources) > collectiondeclaration.MaxSelections {
 			result.Reason = "InvalidDeclaration"
 		} else {
 			for index, selection := range declaration.Spec.Resources {
@@ -183,7 +183,7 @@ func buildCollectionPlan(
 	return plan
 }
 
-func collectionDeclarationScope(selection resourcecollection.Selection) collectionSelectionScope {
+func collectionDeclarationScope(selection collectiondeclaration.Selection) collectionSelectionScope {
 	namespaces := append([]string(nil), selection.Namespaces...)
 	sort.Strings(namespaces)
 	scope := collectionSelectionScope{
@@ -204,14 +204,14 @@ func collectionDeclarationScope(selection resourcecollection.Selection) collecti
 }
 
 func (p *collectionPlanner) resolveDeclaration(
-	contributor collectionContributor, selection resourcecollection.Selection,
+	contributor collectionContributor, selection collectiondeclaration.Selection,
 ) collectionSelectionResult {
 	if selection.LabelSelector != nil {
 		selection.LabelSelector = selection.LabelSelector.DeepCopy()
 	}
-	if err := resourcecollection.ValidateSelection(selection); err != nil {
+	if err := collectiondeclaration.ValidateSelection(selection); err != nil {
 		return unresolvedCollectionSelection(contributor, selection.Group, selection.Resource,
-			resourcecollection.Blocked, "InvalidSelection", err.Error())
+			collectiondeclaration.Blocked, "InvalidSelection", err.Error())
 	}
 	labelSelector := ""
 	if selection.LabelSelector != nil {
@@ -223,7 +223,7 @@ func (p *collectionPlanner) resolveDeclaration(
 	}
 	if selection.Resource != "*" && p.denied(selection.Group, selection.Resource) {
 		return unresolvedCollectionSelection(contributor, selection.Group, selection.Resource,
-			resourcecollection.Blocked, collectionPolicyDenied, "The agent administrator excludes this resource")
+			collectiondeclaration.Blocked, collectionPolicyDenied, "The agent administrator excludes this resource")
 	}
 	for _, key := range p.catalog.keys() {
 		if key.Group != selection.Group || (selection.Resource != "*" && key.Resource != selection.Resource) {
@@ -234,7 +234,7 @@ func (p *collectionPlanner) resolveDeclaration(
 				continue
 			}
 			return unresolvedCollectionSelection(contributor, selection.Group, selection.Resource,
-				resourcecollection.Blocked, "NotCustomResource", "Only CRD-backed custom resources can be declared")
+				collectiondeclaration.Blocked, "NotCustomResource", "Only CRD-backed custom resources can be declared")
 		}
 		resource := p.catalog.forDeclaration(key)
 		resolved := p.resolve(contributor, key, resource, selection.Namespaces, labelSelector, selection.FieldSelector)
@@ -242,7 +242,7 @@ func (p *collectionPlanner) resolveDeclaration(
 	}
 	if len(result.Resolved) == 0 {
 		return unresolvedCollectionSelection(contributor, selection.Group, selection.Resource,
-			resourcecollection.Pending, collectionAPINotAvailable, "No matching resource API is available")
+			collectiondeclaration.Pending, collectionAPINotAvailable, "No matching resource API is available")
 	}
 	aggregateCollectionResult(&result)
 	return result
@@ -256,22 +256,22 @@ func (p *collectionPlanner) resolve(
 	resolved := collectionResolvedSelection{Resource: key, GVR: resource.gvr}
 	switch {
 	case p.denied(key.Group, key.Resource):
-		resolved.State, resolved.Reason = resourcecollection.Blocked, collectionPolicyDenied
+		resolved.State, resolved.Reason = collectiondeclaration.Blocked, collectionPolicyDenied
 		resolved.Message = "The agent administrator excludes this resource"
 	case resource.gvr.Version == "":
-		resolved.State, resolved.Reason = resourcecollection.Pending, collectionAPINotAvailable
+		resolved.State, resolved.Reason = collectiondeclaration.Pending, collectionAPINotAvailable
 		resolved.Message = "No usable served API version is available"
 		if resource.source == ObjectSourceCR {
 			resolved.Message = "No usable served storage-version API is available"
 		}
 	case !resource.namespaced && len(namespaces) > 0:
-		resolved.State, resolved.Reason = resourcecollection.Blocked, "IncompatibleScope"
+		resolved.State, resolved.Reason = collectiondeclaration.Blocked, "IncompatibleScope"
 		resolved.Message = "Namespace filters cannot select a cluster-scoped resource"
 	default:
 		labelFilter, labelErr := labels.Parse(labelSelector)
 		fieldFilter, fieldErr := fields.ParseSelector(fieldSelector)
 		if labelErr != nil || fieldErr != nil {
-			resolved.State, resolved.Reason = resourcecollection.Blocked, "InvalidSelection"
+			resolved.State, resolved.Reason = collectiondeclaration.Blocked, "InvalidSelection"
 			resolved.Message = "A selection filter is invalid"
 			break
 		}
@@ -298,7 +298,7 @@ func (p *collectionPlanner) resolve(
 		if contributor.Kind == collectionDeclaration &&
 			p.declarationWatches+additional > p.config.MaxDeclarationWatches {
 			// Admit every namespace for this type together; never silently collect a subset.
-			resolved.State, resolved.Reason = resourcecollection.Blocked, collectionWatchBudgetExceeded
+			resolved.State, resolved.Reason = collectiondeclaration.Blocked, collectionWatchBudgetExceeded
 			resolved.Message = fmt.Sprintf("Resource needs %d additional watches; %d of %d declaration watches are in use. "+
 				"Reduce the selection or increase max_declaration_watches.",
 				additional, p.declarationWatches, p.config.MaxDeclarationWatches)
@@ -315,7 +315,7 @@ func (p *collectionPlanner) resolve(
 			resolved.Watches = append(resolved.Watches, watchKey)
 		}
 		// Resolution does not claim that the later informer has synchronized.
-		resolved.State, resolved.Reason = resourcecollection.Pending, collectionAwaitingObservation
+		resolved.State, resolved.Reason = collectiondeclaration.Pending, collectionAwaitingObservation
 	}
 	result.Resolved = []collectionResolvedSelection{resolved}
 	aggregateCollectionResult(&result)
@@ -336,13 +336,13 @@ func unresolvedCollectionSelection(
 }
 
 func aggregateCollectionResult(result *collectionSelectionResult) {
-	result.State, result.Reason = resourcecollection.Pending, collectionAwaitingObservation
+	result.State, result.Reason = collectiondeclaration.Pending, collectionAwaitingObservation
 	for _, resolved := range result.Resolved {
-		if resolved.State == resourcecollection.Blocked ||
-			(result.State != resourcecollection.Blocked && resolved.Reason != collectionAwaitingObservation) {
+		if resolved.State == collectiondeclaration.Blocked ||
+			(result.State != collectiondeclaration.Blocked && resolved.Reason != collectionAwaitingObservation) {
 			result.State, result.Reason = resolved.State, resolved.Reason
 			result.Message = fmt.Sprintf("%s: %s", resolved.Resource.String(), resolved.Message)
-			if resolved.State == resourcecollection.Blocked {
+			if resolved.State == collectiondeclaration.Blocked {
 				break
 			}
 		}

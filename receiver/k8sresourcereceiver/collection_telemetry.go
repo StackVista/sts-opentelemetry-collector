@@ -1,8 +1,8 @@
 package k8sresourcereceiver
 
 import (
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/collectiondeclaration"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/metrics"
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -23,7 +23,7 @@ func (r *collectionRuntime) recordWatchHealth(
 		}
 		health := collectionWatchHealth{State: observation.State, Reason: observation.Reason}
 		previous, known := r.watchHealth[key]
-		health.Failed = health.State != resourcecollection.Active &&
+		health.Failed = health.State != collectiondeclaration.Active &&
 			(previous.Failed || health.Reason != collectionAwaitingObservation)
 		next[key] = health
 		changed := !known || health != previous
@@ -37,9 +37,9 @@ func (r *collectionRuntime) recordWatchHealth(
 				if known {
 					outcome = metrics.InformerExists
 				}
-			case health.State != resourcecollection.Active:
+			case health.State != collectiondeclaration.Active:
 				outcome = metrics.InformerFailed
-			case !known || previous.State != resourcecollection.Active:
+			case !known || previous.State != collectiondeclaration.Active:
 				outcome = metrics.InformerStarted
 			}
 			r.metrics.RecordInformerReconcile(r.ctx, kind, outcome)
@@ -52,10 +52,10 @@ func (r *collectionRuntime) recordWatchHealth(
 			zap.String("gvr", formatGVR(key.GVR)), zap.String("namespace", key.Namespace),
 			zap.String("reason", health.Reason),
 		}
-		if health.State != resourcecollection.Active && health.Reason != collectionAwaitingObservation {
+		if health.State != collectiondeclaration.Active && health.Reason != collectionAwaitingObservation {
 			r.settings.Logger.Warn("Collection watch is unavailable; retaining known objects",
 				append(fields, zap.String("message", observation.Message))...)
-		} else if health.State == resourcecollection.Active && known && previous.Failed {
+		} else if health.State == collectiondeclaration.Active && known && previous.Failed {
 			r.settings.Logger.Info("Collection watch recovered", fields...)
 		}
 	}

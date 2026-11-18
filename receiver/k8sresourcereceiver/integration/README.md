@@ -1,4 +1,4 @@
-# ResourceCollection Go/K3s integration tests
+# CollectionDeclaration Go/K3s integration tests
 
 These tests run the receiver through its public factory with an in-process logs
 sink and a real Kubernetes API. Testcontainers starts and removes an owned K3s
@@ -21,11 +21,11 @@ Unchanged-watch retry timing remains covered by the receiver's fake-clock tests.
 Run from this directory with Docker available:
 
 ```sh
-mkdir -p /tmp/resourcecollection-evidence
+mkdir -p /tmp/collectiondeclaration-evidence
 RC_NODE_IMAGE='rancher/k3s@sha256:<qualified-node-digest>' \
 RC_KUBERNETES_MINOR='<expected-minor>' \
 RC_COMPACT=false \
-RC_ARTIFACTS=/tmp/resourcecollection-evidence \
+RC_ARTIFACTS=/tmp/collectiondeclaration-evidence \
 GOWORK=off go test -race -tags=integration -count=1 -timeout=15m -v ./...
 ```
 

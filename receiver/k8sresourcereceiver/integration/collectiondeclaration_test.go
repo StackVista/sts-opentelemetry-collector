@@ -41,11 +41,11 @@ const (
 
 func declarations(client dynamic.Interface) dynamic.ResourceInterface {
 	return client.Resource(schema.GroupVersionResource{
-		Group: "observability.suse.com", Version: "v1alpha1", Resource: "resourcecollections",
+		Group: "observability.suse.com", Version: "v1alpha1", Resource: "collectiondeclarations",
 	})
 }
 
-func TestResourceCollection(t *testing.T) {
+func TestCollectionDeclaration(t *testing.T) {
 	image := os.Getenv("RC_NODE_IMAGE")
 	require.NotEmpty(t, image, "set RC_NODE_IMAGE to a digest-pinned K3s image")
 	ctx, cancel := context.WithTimeout(t.Context(), 12*time.Minute)
@@ -78,7 +78,7 @@ func TestResourceCollection(t *testing.T) {
 	require.NoError(t, err)
 	extensions, err := extclient.NewForConfig(config)
 	require.NoError(t, err)
-	data, err := os.ReadFile("../resourcecollection/resourcecollection-crd.yaml")
+	data, err := os.ReadFile("../collectiondeclaration/collectiondeclaration-crd.yaml")
 	require.NoError(t, err)
 	var crd extv1.CustomResourceDefinition
 	require.NoError(t, yaml.UnmarshalStrict(data, &crd))
@@ -139,7 +139,7 @@ func declaration(name string, selections ...map[string]any) *unstructured.Unstru
 		entries[i] = entry
 	}
 	return &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "observability.suse.com/v1alpha1", "kind": "ResourceCollection",
+		"apiVersion": "observability.suse.com/v1alpha1", "kind": "CollectionDeclaration",
 		"metadata": map[string]any{"name": "rc-test-" + name},
 		"spec":     map[string]any{"resources": entries},
 	}}

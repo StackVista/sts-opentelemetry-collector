@@ -1,6 +1,6 @@
 {
   "apiVersion": "observability.suse.com/v1alpha1",
-  "kind": "ResourceCollection",
+  "kind": "CollectionDeclaration",
   "metadata": {"name": "monitored-widgets"},
   "spec": {
     "resources": [

@@ -4,7 +4,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/collectiondeclaration"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -187,7 +187,7 @@ func (h *collectionHandover) readSnapshot() (collectionEffectiveView, []collecti
 }
 
 func collectionWatchObserved(observation collectionWatchSnapshot) bool {
-	return observation.Synced && observation.State == resourcecollection.Active
+	return observation.Synced && observation.State == collectiondeclaration.Active
 }
 
 func collectionContributionID(

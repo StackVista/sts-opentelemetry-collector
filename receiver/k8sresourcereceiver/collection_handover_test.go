@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/collectiondeclaration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -53,20 +53,20 @@ func (r *collectionHandoverRegistry) snapshot() []collectionWatchSnapshot {
 
 func (r *collectionHandoverRegistry) observe(key collectionWatchKey, objects ...resourceObject) {
 	observation := r.observations[key]
-	observation.Synced, observation.State = true, resourcecollection.Active
+	observation.Synced, observation.State = true, collectiondeclaration.Active
 	observation.Objects = objects
 	r.observations[key] = observation
 }
 
 func (r *collectionHandoverRegistry) fail(key collectionWatchKey, reason string) {
 	observation := r.observations[key]
-	observation.State, observation.Reason = resourcecollection.Pending, reason
+	observation.State, observation.Reason = collectiondeclaration.Pending, reason
 	// A failed relist may leave the informer cache stale or empty.
 	observation.Objects = nil
 	r.observations[key] = observation
 }
 
-func collectionHandoverPlan(t *testing.T, declarations ...*resourcecollection.ResourceCollection) collectionPlan {
+func collectionHandoverPlan(t *testing.T, declarations ...*collectiondeclaration.CollectionDeclaration) collectionPlan {
 	t.Helper()
 	return buildCollectionPlan(collectionTestConfig(t, nil, nil, nil, nil), collectionTestDiscovery(), declarations)
 }
@@ -248,7 +248,7 @@ func TestCollectionHandoverWildcardProgressAndPolicyDenial(t *testing.T) {
 	require.Len(t, collectionHandoverRead(t, handover).Active, 1, "wildcard children share one contributor")
 	declaration.Generation++
 	cfg := collectionTestConfig(t, nil, nil, nil, []ObjectMatcher{{Group: collectionTestGroup, Name: "widgets"}})
-	next := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{declaration})
+	next := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{declaration})
 	require.NoError(t, handover.update(next))
 	for key := range registry.observations {
 		assert.NotEqual(t, "widgets", key.GVR.Resource, "denial immediately overrides old and new contributions")
@@ -281,7 +281,7 @@ func TestCollectionHandoverPendingAPIAndInvalidDeclarationPreserveView(t *testin
 				declaration.Spec.Resources = nil
 				discovery = collectionTestDiscovery()
 			}
-			plan := buildCollectionPlan(collectionTestConfig(t, nil, nil, nil, nil), discovery, []*resourcecollection.ResourceCollection{declaration})
+			plan := buildCollectionPlan(collectionTestConfig(t, nil, nil, nil, nil), discovery, []*collectiondeclaration.CollectionDeclaration{declaration})
 			require.NoError(t, handover.update(plan))
 			view := collectionHandoverRead(t, handover)
 			assert.False(t, view.Complete)
@@ -309,7 +309,7 @@ func TestCollectionHandoverPolicyAppliesToRetainedResourceTypes(t *testing.T) {
 				declaration.Spec.Resources[0].Resource = "*"
 			}
 			cfg := collectionTestConfig(t, nil, nil, nil, []ObjectMatcher{{Group: collectionTestGroup, Name: "widgets"}})
-			next := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{declaration})
+			next := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{declaration})
 			require.NoError(t, handover.update(next))
 			view := collectionHandoverRead(t, handover)
 			assert.False(t, view.Complete)
@@ -400,7 +400,7 @@ func TestCollectionHandoverStorageVersionFailureRetainsObjects(t *testing.T) {
 	catalog.CRDs[0] = collectionTestCRD("widgets", catalog.CRDs[0].Spec.Scope, "v2", "v1")
 	catalog.ServedResources = append(catalog.ServedResources, collectionTestAPI(collectionTestGroup, "v2", true, "widgets"))
 	cfg := collectionTestConfig(t, nil, nil, nil, nil)
-	next := buildCollectionPlan(cfg, catalog, []*resourcecollection.ResourceCollection{declaration})
+	next := buildCollectionPlan(cfg, catalog, []*collectiondeclaration.CollectionDeclaration{declaration})
 	require.NoError(t, handover.update(next))
 	for _, spec := range registry.snapshot() {
 		registry.fail(spec.Spec.Key, "AccessDenied")
@@ -423,7 +423,7 @@ func TestCollectionHandoverOverlapNormalizesRepresentations(t *testing.T) {
 	discovery.ServedResources = append(discovery.ServedResources, collectionTestAPI(collectionTestGroup, "v2", true, "widgets"))
 	discovery.CRDs[0] = collectionTestCRD("widgets", "Namespaced", "v1", "v2")
 	cfg.Objects = append(cfg.Objects, ObjectWatch{Group: collectionTestGroup, Name: "widgets", Version: "v2"})
-	plan := buildCollectionPlan(cfg, discovery, []*resourcecollection.ResourceCollection{declaration, second})
+	plan := buildCollectionPlan(cfg, discovery, []*collectiondeclaration.CollectionDeclaration{declaration, second})
 	require.NoError(t, handover.update(plan))
 	require.Len(t, plan.Watches, 3)
 	for _, spec := range plan.Watches {
@@ -498,13 +498,13 @@ func TestCollectionHandoverWithClientGoInformers(t *testing.T) {
 		registry := collectionTestRegistry(t, intercepted, compact)
 		t.Cleanup(func() { release.Do(func() { close(allowNew) }) })
 		handover := newCollectionHandover(registry)
-		declaration := collectionTestDeclaration("apps", resourcecollection.Selection{
+		declaration := collectionTestDeclaration("apps", collectiondeclaration.Selection{
 			Group: collectionTestGroup, Resource: "widgets", LabelSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "old"}},
 		})
 		plan := collectionHandoverPlan(t, declaration)
 		require.NoError(t, handover.update(plan))
 		require.Eventually(t, func() bool {
-			return collectionRegistryObservation(registry, plan.Watches[0].Key).State == resourcecollection.Active
+			return collectionRegistryObservation(registry, plan.Watches[0].Key).State == collectiondeclaration.Active
 		}, 5*time.Second, 10*time.Millisecond)
 		view := collectionHandoverRead(t, handover)
 		require.Len(t, view.Objects[collectionTestWidgetsGVR()].Objects, 1)
@@ -519,7 +519,7 @@ func TestCollectionHandoverWithClientGoInformers(t *testing.T) {
 		require.Len(t, registry.snapshot(), 1)
 		release.Do(func() { close(allowNew) })
 		require.Eventually(t, func() bool {
-			return collectionRegistryObservation(registry, replacement.Watches[0].Key).State == resourcecollection.Active
+			return collectionRegistryObservation(registry, replacement.Watches[0].Key).State == collectiondeclaration.Active
 		}, 5*time.Second, 10*time.Millisecond)
 		view = collectionHandoverRead(t, handover)
 		assert.True(t, view.Complete)
@@ -564,7 +564,7 @@ func TestCollectionHandoverFailedChangedScopeWithClientGoInformers(t *testing.T)
 				original := collectionHandoverPlan(t, declaration)
 				require.NoError(t, handover.update(original))
 				require.Eventually(t, func() bool {
-					return collectionRegistryObservation(registry, original.Watches[0].Key).State == resourcecollection.Active
+					return collectionRegistryObservation(registry, original.Watches[0].Key).State == collectiondeclaration.Active
 				}, 5*time.Second, 10*time.Millisecond)
 				peers := newResourceCache()
 				peers.applyAdditions(peers.computeChanges(nil, collectionHandoverRead(t, handover).Objects))
@@ -598,7 +598,7 @@ func TestCollectionHandoverFailedChangedScopeWithClientGoInformers(t *testing.T)
 				if !rejectedField {
 					release.Do(func() { close(allowReplacement) })
 					require.Eventually(t, func() bool {
-						return collectionRegistryObservation(registry, next.Watches[0].Key).State == resourcecollection.Active
+						return collectionRegistryObservation(registry, next.Watches[0].Key).State == collectiondeclaration.Active
 					}, 5*time.Second, 10*time.Millisecond)
 					view = collectionHandoverRead(t, handover)
 					require.Len(t, view.Objects[collectionTestWidgetsGVR()].Objects, 1)

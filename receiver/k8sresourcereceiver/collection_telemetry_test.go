@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/collectiondeclaration"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/metrics"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/tracker"
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -27,12 +27,12 @@ func TestCollectionTelemetrySharedWatchesAndRetryCadence(t *testing.T) {
 	r := newCollectionRuntime(testSettings(t), collectionTestConfig(t, nil, nil, nil, nil), nil, nil, recorder)
 	r.ctx = context.Background()
 	control := collectionWatchSnapshot{
-		Spec:  collectionWatchSpec{Key: collectionWatchKey{GVR: resourcecollection.GVR()}, Source: ObjectSourceCR},
-		State: resourcecollection.Active, Reason: "Watching",
+		Spec:  collectionWatchSpec{Key: collectionWatchKey{GVR: collectiondeclaration.GVR()}, Source: ObjectSourceCR},
+		State: collectiondeclaration.Active, Reason: "Watching",
 	}
 	watch := collectionWatchSnapshot{
 		Spec:  collectionWatchSpec{Key: collectionWatchKey{GVR: collectionTestWidgetsGVR()}, Source: ObjectSourceCR},
-		State: resourcecollection.Blocked, Reason: "AccessDenied",
+		State: collectiondeclaration.Blocked, Reason: "AccessDenied",
 	}
 	controls := []collectionWatchSnapshot{control}
 	observations := []collectionWatchSnapshot{control, watch, watch}
@@ -56,7 +56,7 @@ func TestCollectionTelemetryDeniedAndUnresolvedSelections(t *testing.T) {
 		{Name: "widgets", Group: collectionTestGroup},
 	})
 	selection := collectionTestSelection("widgets", nil, nil)
-	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{
+	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{
 		collectionTestDeclaration("a", selection), collectionTestDeclaration("b", selection),
 	})
 	r := newCollectionRuntime(testSettings(t), cfg, nil, nil, recorder)
@@ -116,7 +116,7 @@ func TestCollectionRuntimeTelemetryPermissionRecovery(t *testing.T) {
 		defer stop()
 		require.NoError(t, r.Shutdown(shutdown))
 	})
-	collectionRuntimeStatus(t, client, declaration.Name, resourcecollection.Blocked)
+	collectionRuntimeStatus(t, client, declaration.Name, collectiondeclaration.Blocked)
 	require.Eventually(t, func() bool {
 		for _, record := range recorder.snapshot() {
 			if record.kind == metrics.InformerKindCR && record.outcome == metrics.InformerForbidden {
@@ -132,7 +132,7 @@ func TestCollectionRuntimeTelemetryPermissionRecovery(t *testing.T) {
 	granted.Store(true)
 	require.Eventually(t, watchClock.HasWaiters, 5*time.Second, 10*time.Millisecond)
 	watchClock.Step(tracker.DefaultRetryInterval)
-	collectionRuntimeStatus(t, client, declaration.Name, resourcecollection.Active)
+	collectionRuntimeStatus(t, client, declaration.Name, collectiondeclaration.Active)
 	require.Eventually(t, func() bool {
 		return logs.FilterMessage("Collection watch recovered").Len() == 1
 	}, 5*time.Second, 20*time.Millisecond)

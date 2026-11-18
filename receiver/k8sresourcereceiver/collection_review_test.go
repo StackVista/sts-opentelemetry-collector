@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/collectiondeclaration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -63,7 +63,7 @@ func TestCollectionStatusConflictRetriesCurrentResourceVersion(t *testing.T) {
 	object := collectionTestDeclarationObject(t, declaration)
 	client := collectionTestStatusClient(t, object)
 	attempts := 0
-	client.PrependReactor("update", "resourcecollections", func(action clienttesting.Action) (bool, runtime.Object, error) {
+	client.PrependReactor("update", "collectiondeclarations", func(action clienttesting.Action) (bool, runtime.Object, error) {
 		attempts++
 		update, ok := action.(clienttesting.UpdateAction)
 		require.True(t, ok)
@@ -73,8 +73,8 @@ func TestCollectionStatusConflictRetriesCurrentResourceVersion(t *testing.T) {
 			current := object.DeepCopy()
 			current.SetResourceVersion("11")
 			current.SetLabels(map[string]string{"other-writer": "kept"})
-			require.NoError(t, client.Tracker().Update(resourcecollection.GVR(), current, ""))
-			return true, nil, apierrors.NewConflict(resourcecollection.GVR().GroupResource(), declaration.Name, nil)
+			require.NoError(t, client.Tracker().Update(collectiondeclaration.GVR(), current, ""))
+			return true, nil, apierrors.NewConflict(collectiondeclaration.GVR().GroupResource(), declaration.Name, nil)
 		}
 		assert.Equal(t, "11", written.GetResourceVersion())
 		assert.Equal(t, "kept", written.GetLabels()["other-writer"])
@@ -87,35 +87,35 @@ func TestCollectionStatusConflictRetriesCurrentResourceVersion(t *testing.T) {
 
 func TestCollectionExplicitChangesWithdrawPreviousAndPeerObjects(t *testing.T) {
 	changes := map[string]struct {
-		before, after func(*resourcecollection.Selection)
+		before, after func(*collectiondeclaration.Selection)
 	}{
-		"missing-resource": {after: func(selection *resourcecollection.Selection) { selection.Resource = "notinstalled" }},
-		"namespace":        {after: func(selection *resourcecollection.Selection) { selection.Namespaces = []string{"team-b"} }},
-		"label": {after: func(selection *resourcecollection.Selection) {
+		"missing-resource": {after: func(selection *collectiondeclaration.Selection) { selection.Resource = "notinstalled" }},
+		"namespace":        {after: func(selection *collectiondeclaration.Selection) { selection.Namespaces = []string{"team-b"} }},
+		"label": {after: func(selection *collectiondeclaration.Selection) {
 			selection.LabelSelector = &metav1.LabelSelector{MatchLabels: map[string]string{"app": "new"}}
 		}},
 		"broader-label": {
-			before: func(selection *resourcecollection.Selection) {
+			before: func(selection *collectiondeclaration.Selection) {
 				selection.LabelSelector = &metav1.LabelSelector{MatchLabels: map[string]string{"app": "old"}}
 			},
-			after: func(selection *resourcecollection.Selection) {
+			after: func(selection *collectiondeclaration.Selection) {
 				selection.LabelSelector = &metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{
 					Key: "app", Operator: metav1.LabelSelectorOpIn, Values: []string{"old", "new"},
 				}}}
 			},
 		},
 		"removed-label": {
-			before: func(selection *resourcecollection.Selection) {
+			before: func(selection *collectiondeclaration.Selection) {
 				selection.LabelSelector = &metav1.LabelSelector{MatchLabels: map[string]string{"app": "old"}}
 			},
-			after: func(selection *resourcecollection.Selection) { selection.LabelSelector = nil },
+			after: func(selection *collectiondeclaration.Selection) { selection.LabelSelector = nil },
 		},
 		"broader-namespaces": {
-			before: func(selection *resourcecollection.Selection) { selection.Namespaces = []string{"team-a"} },
-			after:  func(selection *resourcecollection.Selection) { selection.Namespaces = []string{"team-a", "team-b"} },
+			before: func(selection *collectiondeclaration.Selection) { selection.Namespaces = []string{"team-a"} },
+			after:  func(selection *collectiondeclaration.Selection) { selection.Namespaces = []string{"team-a", "team-b"} },
 		},
-		"rejected-field":     {after: func(selection *resourcecollection.Selection) { selection.FieldSelector = "metadata.name=new" }},
-		"rejected-neq-field": {after: func(selection *resourcecollection.Selection) { selection.FieldSelector = "spec.unsupported!=x" }},
+		"rejected-field":     {after: func(selection *collectiondeclaration.Selection) { selection.FieldSelector = "metadata.name=new" }},
+		"rejected-neq-field": {after: func(selection *collectiondeclaration.Selection) { selection.FieldSelector = "spec.unsupported!=x" }},
 	}
 	for name, change := range changes {
 		t.Run(name, func(t *testing.T) {
@@ -209,7 +209,7 @@ func TestCollectionWithdrawalsKeepIndependentPeerProtections(t *testing.T) {
 			forEachCacheMode(t, func(t *testing.T, compact bool) {
 				cfg := collectionTestConfig(t, nil, nil, nil, nil)
 				changed := collectionTestDeclaration("changed", collectionTestSelection("widgets", nil, map[string]string{"app": "old"}))
-				declarations := []*resourcecollection.ResourceCollection{changed}
+				declarations := []*collectiondeclaration.CollectionDeclaration{changed}
 				if baseline {
 					cfg.Objects = []ObjectWatch{{Group: collectionTestGroup, Name: "widgets", LabelSelector: "app in (old,other)"}}
 				} else {

@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/collectiondeclaration"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/metrics"
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer/consumertest"
@@ -110,9 +110,9 @@ func TestReceiverCollectsBaselineWithoutDeclarations(t *testing.T) {
 			cfg.PeerSyncPort = 0
 			client := collectionRuntimeClient(t, makeTestPod("baseline", "payments", nil))
 			if !available {
-				client.PrependReactor("list", resourcecollection.GVR().Resource,
+				client.PrependReactor("list", collectiondeclaration.GVR().Resource,
 					func(clienttesting.Action) (bool, runtime.Object, error) {
-						return true, nil, apierrors.NewNotFound(resourcecollection.GVR().GroupResource(), "")
+						return true, nil, apierrors.NewNotFound(collectiondeclaration.GVR().GroupResource(), "")
 					})
 			}
 			r := &k8sresourceReceiver{

@@ -1,4 +1,4 @@
-package resourcecollection_test
+package collectiondeclaration_test
 
 import (
 	"encoding/json"
@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/collectiondeclaration"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
@@ -33,7 +33,7 @@ func TestSelectionFixturesAndWireRoundTrip(t *testing.T) {
 			if err = json.Unmarshal(data, &object); err != nil {
 				t.Fatal(err)
 			}
-			declaration, err := resourcecollection.Decode(&unstructured.Unstructured{Object: object})
+			declaration, err := collectiondeclaration.Decode(&unstructured.Unstructured{Object: object})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -41,7 +41,7 @@ func TestSelectionFixturesAndWireRoundTrip(t *testing.T) {
 				t.Fatal("expected one fixture selection")
 			}
 			selection := declaration.Spec.Resources[0]
-			if err = resourcecollection.ValidateSelection(selection); (err == nil) != fixture.valid {
+			if err = collectiondeclaration.ValidateSelection(selection); (err == nil) != fixture.valid {
 				t.Fatalf("valid=%v, validation=%v", fixture.valid, err)
 			}
 			if fixture.valid {
@@ -88,8 +88,8 @@ func TestSelectionFields(t *testing.T) {
 		{"too long field selector", "metadata.name=" + strings.Repeat("a", 2048), false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			selection := resourcecollection.Selection{Group: "collection-test.example.com", Resource: "widgets", FieldSelector: tc.field}
-			if err := resourcecollection.ValidateSelection(selection); (err == nil) != tc.valid {
+			selection := collectiondeclaration.Selection{Group: "collection-test.example.com", Resource: "widgets", FieldSelector: tc.field}
+			if err := collectiondeclaration.ValidateSelection(selection); (err == nil) != tc.valid {
 				t.Fatalf("valid=%v, validation=%v", tc.valid, err)
 			}
 		})
@@ -98,10 +98,10 @@ func TestSelectionFields(t *testing.T) {
 
 func TestCanonicalSelectionSchema(t *testing.T) {
 	var crd apiextensionsv1.CustomResourceDefinition
-	if err := yaml.Unmarshal(resourcecollection.CRD, &crd); err != nil {
+	if err := yaml.Unmarshal(collectiondeclaration.CRD, &crd); err != nil {
 		t.Fatal(err)
 	}
-	gvr := resourcecollection.GVR()
+	gvr := collectiondeclaration.GVR()
 	if gvr.Group != crd.Spec.Group || gvr.Version != crd.Spec.Versions[0].Name || gvr.Resource != crd.Spec.Names.Plural {
 		t.Fatal("discovery identity and canonical CRD differ")
 	}
@@ -114,7 +114,7 @@ func TestCanonicalSelectionSchema(t *testing.T) {
 			t.Errorf("missing field %s", name)
 		}
 	}
-	wire := reflect.TypeOf(resourcecollection.Selection{})
+	wire := reflect.TypeOf(collectiondeclaration.Selection{})
 	if wire.NumField() != len(selection.Properties) {
 		t.Fatal("selection wire type and schema have different field counts")
 	}

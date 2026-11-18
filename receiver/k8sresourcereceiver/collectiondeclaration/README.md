@@ -1,4 +1,4 @@
-# ResourceCollection API
+# CollectionDeclaration API
 
 This package owns the wire types and CRD consumed by the Kubernetes resource receiver.
 V1 declarations select only CRD-backed custom resources. Required `group` and
@@ -30,7 +30,7 @@ namespaces inside one selection are ANDed; separate selections are ORed.
 
 ```yaml
 apiVersion: observability.suse.com/v1alpha1
-kind: ResourceCollection
+kind: CollectionDeclaration
 metadata:
   name: monitored-widgets
 spec:
@@ -52,16 +52,16 @@ representation alongside the declaration's storage-version representation.
 Export the canonical definition from the collector repository root:
 
 ```sh
-go run ./receiver/k8sresourcereceiver/resourcecollection/cmd/export \
-  -output /tmp/resourcecollections.observability.suse.com.yaml
-sha256sum /tmp/resourcecollections.observability.suse.com.yaml
+go run ./receiver/k8sresourcereceiver/collectiondeclaration/cmd/export \
+  -output /tmp/collectiondeclarations.observability.suse.com.yaml
+sha256sum /tmp/collectiondeclarations.observability.suse.com.yaml
 git rev-parse HEAD
 ```
 
 Chart imports retain the source commit and exported SHA-256. Do not independently
 edit a chart copy.
 
-This is the first ResourceCollection API release. Canonical CRD export
+This is the first CollectionDeclaration API release. Canonical CRD export
 verification, Go regressions and real API admission checks cover the initial
 contract. Keep additions backward-compatible. Once a released CRD is available,
 add schema compatibility checks against that release and relevant upgrade tests.

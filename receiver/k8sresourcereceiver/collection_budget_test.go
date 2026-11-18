@@ -4,7 +4,7 @@ package k8sresourcereceiver
 import (
 	"testing"
 
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/collectiondeclaration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -13,33 +13,33 @@ func TestCollectionWatchBudgetSharesDeclarationControlWatch(t *testing.T) {
 	cfg := collectionTestConfig(t, nil, nil, nil, nil)
 	cfg.MaxDeclarationWatches = 1
 	catalog := collectionTestDiscovery()
-	controlAPI := collectionTestAPI(resourcecollection.Group, resourcecollection.Version, false, "resourcecollections")
+	controlAPI := collectionTestAPI(collectiondeclaration.Group, collectiondeclaration.Version, false, "collectiondeclarations")
 	catalog.PreferredResources = append(catalog.PreferredResources, controlAPI)
 	catalog.ServedResources = append(catalog.ServedResources, controlAPI)
-	crd := collectionTestCRD("resourcecollections", "Cluster", resourcecollection.Version)
-	crd.Spec.Group = resourcecollection.Group
+	crd := collectionTestCRD("collectiondeclarations", "Cluster", collectiondeclaration.Version)
+	crd.Spec.Group = collectiondeclaration.Group
 	catalog.CRDs = append(catalog.CRDs, crd)
 	widgets := collectionTestDeclaration("a", collectionTestSelection("widgets", nil, nil))
-	control := collectionTestDeclaration("b", resourcecollection.Selection{
-		Group: resourcecollection.Group, Resource: "resourcecollections",
+	control := collectionTestDeclaration("b", collectiondeclaration.Selection{
+		Group: collectiondeclaration.Group, Resource: "collectiondeclarations",
 	})
 	filtered := collectionTestDeclaration("c", control.Spec.Resources[0])
 	filtered.Spec.Resources[0].FieldSelector = "metadata.name=example"
-	plan := buildCollectionPlan(cfg, catalog, []*resourcecollection.ResourceCollection{widgets, control, filtered})
+	plan := buildCollectionPlan(cfg, catalog, []*collectiondeclaration.CollectionDeclaration{widgets, control, filtered})
 	require.Len(t, plan.Watches, 2)
 	assert.Equal(t, collectionAwaitingObservation, plan.Declarations[1].Selections[0].Reason)
 	assert.Equal(t, collectionWatchBudgetExceeded, plan.Declarations[2].Selections[0].Reason,
 		"a filtered declaration watch requires its own informer")
 
 	cfg.MaxDeclarationWatches = 2
-	declarations := []*resourcecollection.ResourceCollection{widgets, control}
+	declarations := []*collectiondeclaration.CollectionDeclaration{widgets, control}
 	plan = buildCollectionPlan(cfg, catalog, declarations)
 	registry := newCollectionHandoverTestRegistry()
 	handover := newCollectionHandover(registry)
 	require.NoError(t, handover.update(plan))
 	oldKey := collectionTestWidgetsGVR()
 	registry.observe(collectionWatchKey{GVR: oldKey}, collectionHandoverObject("old", "old"))
-	registry.observe(collectionWatchKey{GVR: resourcecollection.GVR()})
+	registry.observe(collectionWatchKey{GVR: collectiondeclaration.GVR()})
 	collectionHandoverRead(t, handover)
 	catalog.CRDs[0] = collectionTestCRD("widgets", catalog.CRDs[0].Spec.Scope, "v2", "v1")
 	catalog.ServedResources = append(catalog.ServedResources, collectionTestAPI(collectionTestGroup, "v2", true, "widgets"))
@@ -58,19 +58,19 @@ func TestCollectionWatchBudgetSharesWatchesAndProtectsBaseline(t *testing.T) {
 	b := collectionTestDeclaration("b", shared)
 	c := collectionTestDeclaration("c", collectionTestSelection("widgets", []string{"team-b"}, nil))
 	d := collectionTestDeclaration("d", collectionTestSelection("widgets", nil, nil))
-	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{d, c, b, a})
+	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{d, c, b, a})
 
 	require.Len(t, plan.Watches, 3, "two baseline watches plus one shared declaration watch")
 	assert.Len(t, plan.Watches[1].Contributors, 2)
 	blocked := plan.Declarations[2].Selections[0]
-	assert.Equal(t, resourcecollection.Blocked, blocked.State)
+	assert.Equal(t, collectiondeclaration.Blocked, blocked.State)
 	assert.Equal(t, "WatchBudgetExceeded", blocked.Reason)
 	assert.Contains(t, blocked.Message, "1")
 	assert.Empty(t, blocked.Resolved[0].Watches)
 	assert.Equal(t, collectionAwaitingObservation, plan.Declarations[3].Selections[0].Reason,
 		"a declaration can still share a baseline watch when the budget is full")
 
-	recovered := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{c, d})
+	recovered := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{c, d})
 	require.Len(t, recovered.Watches, 3)
 	assert.Equal(t, collectionAwaitingObservation, recovered.Declarations[0].Selections[0].Reason)
 }
@@ -80,7 +80,7 @@ func TestCollectionWatchBudgetBoundsStorageVersionHandover(t *testing.T) {
 	cfg.MaxDeclarationWatches = 1
 	declaration := collectionTestDeclaration("widgets", collectionTestSelection("widgets", nil, nil))
 	catalog := collectionTestDiscovery()
-	original := buildCollectionPlan(cfg, catalog, []*resourcecollection.ResourceCollection{declaration})
+	original := buildCollectionPlan(cfg, catalog, []*collectiondeclaration.CollectionDeclaration{declaration})
 	registry := newCollectionHandoverTestRegistry()
 	handover := newCollectionHandover(registry)
 	require.NoError(t, handover.update(original))
@@ -90,7 +90,7 @@ func TestCollectionWatchBudgetBoundsStorageVersionHandover(t *testing.T) {
 
 	catalog.CRDs[0] = collectionTestCRD("widgets", catalog.CRDs[0].Spec.Scope, "v2", "v1")
 	catalog.ServedResources = append(catalog.ServedResources, collectionTestAPI(collectionTestGroup, "v2", true, "widgets"))
-	next := buildCollectionPlan(cfg, catalog, []*resourcecollection.ResourceCollection{declaration})
+	next := buildCollectionPlan(cfg, catalog, []*collectiondeclaration.CollectionDeclaration{declaration})
 	require.NoError(t, handover.update(next))
 	require.Len(t, registry.snapshot(), 1, "retained watches must also respect the budget")
 	assert.Contains(t, registry.observations, next.Watches[0].Key)
@@ -113,19 +113,19 @@ func TestCollectionWatchBudgetAdmitsAllNamespacesForEachType(t *testing.T) {
 		collectionTestSelection("widgets", []string{"team-c", "team-b"}, nil),
 		collectionTestSelection("gadgets", nil, nil),
 	)
-	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{b, a})
+	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{b, a})
 	require.Len(t, plan.Watches, 2)
-	assert.Equal(t, resourcecollection.Blocked, plan.Declarations[1].Selections[0].State)
+	assert.Equal(t, collectiondeclaration.Blocked, plan.Declarations[1].Selections[0].State)
 	assert.Empty(t, plan.Declarations[1].Selections[0].Resolved[0].Watches)
 	assert.Equal(t, collectionAwaitingObservation, plan.Declarations[1].Selections[1].Reason,
 		"an oversized selection must not consume capacity")
 
-	b.Spec.Resources = []resourcecollection.Selection{collectionTestSelection("*", nil, nil)}
-	plan = buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{b})
+	b.Spec.Resources = []collectiondeclaration.Selection{collectionTestSelection("*", nil, nil)}
+	plan = buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{b})
 	require.Len(t, plan.Watches, 2, "wildcard expansion also consumes the budget")
 	status := collectionDeclarationStatus(plan.Declarations[0], nil)
 	require.Len(t, status.Resources, 1)
-	assert.Equal(t, resourcecollection.Blocked, status.Resources[0].State)
+	assert.Equal(t, collectiondeclaration.Blocked, status.Resources[0].State)
 	assert.Equal(t, "WatchBudgetExceeded", status.Resources[0].Reason)
 }
 
@@ -133,7 +133,7 @@ func TestCollectionWatchBudgetWithdrawsDisplacedContribution(t *testing.T) {
 	cfg := collectionTestConfig(t, nil, nil, nil, nil)
 	cfg.MaxDeclarationWatches = 1
 	original := collectionTestDeclaration("z", collectionTestSelection("widgets", nil, nil))
-	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{original})
+	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{original})
 	registry := newCollectionHandoverTestRegistry()
 	handover := newCollectionHandover(registry)
 	require.NoError(t, handover.update(plan))
@@ -142,7 +142,7 @@ func TestCollectionWatchBudgetWithdrawsDisplacedContribution(t *testing.T) {
 	collectionHandoverRead(t, handover)
 
 	first := collectionTestDeclaration("a", collectionTestSelection("gadgets", nil, nil))
-	plan = buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{original, first})
+	plan = buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{original, first})
 	require.NoError(t, handover.update(plan))
 	require.Len(t, registry.snapshot(), 1)
 	view := collectionHandoverRead(t, handover)
@@ -152,7 +152,7 @@ func TestCollectionWatchBudgetWithdrawsDisplacedContribution(t *testing.T) {
 	assert.True(t, allowDelete(ResourceChange{GVR: collectionTestWidgetsGVR(), Obj: object, Source: ObjectSourceCR}),
 		"budget withdrawal must remove prior peer observations too")
 
-	plan = buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{original})
+	plan = buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{original})
 	require.NoError(t, handover.update(plan))
 	registry.observe(plan.Watches[0].Key, object)
 	assert.True(t, collectionHandoverRead(t, handover).Complete)

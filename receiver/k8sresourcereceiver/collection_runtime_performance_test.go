@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/collectiondeclaration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
@@ -69,7 +69,7 @@ func collectionCachedRuntime(tb testing.TB, count int, compact bool) (
 	}
 	for _, spec := range []collectionWatchSpec{
 		{Key: collectionWatchKey{GVR: crdGVR}},
-		{Key: collectionWatchKey{GVR: resourcecollection.GVR()}},
+		{Key: collectionWatchKey{GVR: collectiondeclaration.GVR()}},
 	} {
 		r.controls.entries[spec.Key] = &collectionRegistryEntry{
 			spec: spec, cancel: func() {},
@@ -112,7 +112,7 @@ func TestCollectionRuntimeStatusOnlyControlsStayFreshWithoutReplanning(t *testin
 		object := collectionTestDeclarationObject(t, declaration)
 		client := collectionRuntimeClient(t, object)
 		r.client = client
-		key := collectionWatchKey{GVR: resourcecollection.GVR()}
+		key := collectionWatchKey{GVR: collectiondeclaration.GVR()}
 		store := r.controls.entries[key].informer.GetStore()
 		require.NoError(t, store.Add(object))
 		crd := collectionRuntimeCRD()
@@ -124,7 +124,7 @@ func TestCollectionRuntimeStatusOnlyControlsStayFreshWithoutReplanning(t *testin
 		state := r.reporting
 		discoveryCalls := disc.calls.Load()
 
-		current, err := client.Resource(resourcecollection.GVR()).Get(context.Background(), object.GetName(), metav1.GetOptions{})
+		current, err := client.Resource(collectiondeclaration.GVR()).Get(context.Background(), object.GetName(), metav1.GetOptions{})
 		require.NoError(t, err)
 		require.NoError(t, store.Update(current))
 		r.controlChanged(object, current)
@@ -151,16 +151,16 @@ func TestCollectionRuntimeStatusOnlyControlsStayFreshWithoutReplanning(t *testin
 		view := r.collectionSnapshot()
 		require.Len(t, view.CRDs, 1)
 		assert.Equal(t, "yes", view.CRDs[0].GetLabels()["updated"])
-		require.Len(t, view.Objects[resourcecollection.GVR()].Objects, 1)
-		reported, err := decodeObject(view.Objects[resourcecollection.GVR()].Objects[0])
+		require.Len(t, view.Objects[collectiondeclaration.GVR()].Objects, 1)
+		reported, err := decodeObject(view.Objects[collectiondeclaration.GVR()].Objects[0])
 		require.NoError(t, err)
 		assert.Equal(t, current.Object["status"], reported.Object["status"])
 
 		r.controls.entries[key].lastErr = apierrors.NewForbidden(key.GVR.GroupResource(), "", assert.AnError)
 		r.reconcile()
 		view = r.collectionSnapshot()
-		require.Len(t, view.Objects[resourcecollection.GVR()].Objects, 1)
-		reported, err = decodeObject(view.Objects[resourcecollection.GVR()].Objects[0])
+		require.Len(t, view.Objects[collectiondeclaration.GVR()].Objects, 1)
+		reported, err = decodeObject(view.Objects[collectiondeclaration.GVR()].Objects[0])
 		require.NoError(t, err)
 		assert.Equal(t, current.Object["status"], reported.Object["status"], "a control failure must retain current cached feedback")
 	})

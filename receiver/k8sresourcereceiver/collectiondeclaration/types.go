@@ -1,4 +1,4 @@
-package resourcecollection
+package collectiondeclaration
 
 import (
 	_ "embed"
@@ -16,7 +16,7 @@ import (
 const (
 	Group   = "observability.suse.com"
 	Version = "v1alpha1"
-	Kind    = "ResourceCollection"
+	Kind    = "CollectionDeclaration"
 
 	Active  = "Active"
 	Pending = "Pending"
@@ -26,13 +26,13 @@ const (
 )
 
 func GVR() schema.GroupVersionResource {
-	return schema.GroupVersionResource{Group: Group, Version: Version, Resource: "resourcecollections"}
+	return schema.GroupVersionResource{Group: Group, Version: Version, Resource: "collectiondeclarations"}
 }
 
-//go:embed resourcecollection-crd.yaml
+//go:embed collectiondeclaration-crd.yaml
 var CRD []byte
 
-type ResourceCollection struct {
+type CollectionDeclaration struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	Spec              Spec   `json:"spec"`
@@ -66,10 +66,10 @@ type SelectionStatus struct {
 	Message        string `json:"message,omitempty"`
 }
 
-func Decode(obj *unstructured.Unstructured) (*ResourceCollection, error) {
-	var result ResourceCollection
+func Decode(obj *unstructured.Unstructured) (*CollectionDeclaration, error) {
+	var result CollectionDeclaration
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &result); err != nil {
-		return nil, fmt.Errorf("decode ResourceCollection: %w", err)
+		return nil, fmt.Errorf("decode CollectionDeclaration: %w", err)
 	}
 	return &result, nil
 }

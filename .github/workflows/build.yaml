@@ -166,7 +166,7 @@ jobs:
 
   publish:
     name: Scan, sign, and publish (${{ matrix.image }})
-    needs: [zizmor, build, lint, test, integration-test, schema-compatibility, e2e-test, resource-collection, logs-process-faults, validate]
+    needs: [zizmor, build, lint, test, integration-test, schema-compatibility, e2e-test, collection-declaration, logs-process-faults, validate]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -357,16 +357,16 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: Race-test ResourceCollection reconciliation and reporting
+      - name: Race-test CollectionDeclaration reconciliation and reporting
         run: go test -race -count=1 ./receiver/k8sresourcereceiver/...
 
-      - name: Verify canonical ResourceCollection export
+      - name: Verify canonical CollectionDeclaration export
         run: |
           set -euo pipefail
-          go run ./receiver/k8sresourcereceiver/resourcecollection/cmd/export \
-            -output "$RUNNER_TEMP/resourcecollection-crd.yaml"
-          cmp receiver/k8sresourcereceiver/resourcecollection/resourcecollection-crd.yaml \
-            "$RUNNER_TEMP/resourcecollection-crd.yaml"
+          go run ./receiver/k8sresourcereceiver/collectiondeclaration/cmd/export \
+            -output "$RUNNER_TEMP/collectiondeclaration-crd.yaml"
+          cmp receiver/k8sresourcereceiver/collectiondeclaration/collectiondeclaration-crd.yaml \
+            "$RUNNER_TEMP/collectiondeclaration-crd.yaml"
 
   integration-test:
     runs-on: ubuntu-latest
@@ -462,8 +462,8 @@ jobs:
           OTEL_COLLECTOR_IMAGE: sts-opentelemetry-collector:e2e
         run: go test -v ./test/e2e/...
 
-  resource-collection:
-    name: ResourceCollection Go/K3s integration (${{ matrix.kubernetes }})
+  collection-declaration:
+    name: CollectionDeclaration Go/K3s integration (${{ matrix.kubernetes }})
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -495,7 +495,7 @@ jobs:
           RC_NODE_IMAGE: ${{ matrix.node }}
           RC_KUBERNETES_MINOR: ${{ matrix.kubernetes }}
           RC_COMPACT: ${{ matrix.compact }}
-          RC_ARTIFACTS: ${{ runner.temp }}/resourcecollection-evidence
+          RC_ARTIFACTS: ${{ runner.temp }}/collectiondeclaration-evidence
         run: |
           set -euo pipefail
           mkdir -p "$RC_ARTIFACTS"
@@ -507,8 +507,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: resourcecollection-${{ matrix.kubernetes }}
-          path: ${{ runner.temp }}/resourcecollection-evidence
+          name: collectiondeclaration-${{ matrix.kubernetes }}
+          path: ${{ runner.temp }}/collectiondeclaration-evidence
           if-no-files-found: error
           retention-days: 7
 
@@ -585,7 +585,7 @@ jobs:
   ci-success:
     name: ci-success
     if: always()
-    needs: [zizmor, build, lint, test, integration-test, schema-compatibility, e2e-test, resource-collection, logs-process-faults, validate, publish]
+    needs: [zizmor, build, lint, test, integration-test, schema-compatibility, e2e-test, collection-declaration, logs-process-faults, validate, publish]
     runs-on: ubuntu-latest
     permissions: {}
     steps:

@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/collectiondeclaration"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/metrics"
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
 	"go.opentelemetry.io/collector/receiver"
 	"go.uber.org/zap"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -81,7 +81,7 @@ type collectionRuntime struct {
 	catalog                      collectionDiscoverySnapshot
 	discoveryComplete            bool
 	crds                         []*unstructured.Unstructured
-	declarations                 []*resourcecollection.ResourceCollection
+	declarations                 []*collectiondeclaration.CollectionDeclaration
 	declarationObjects           []*unstructured.Unstructured
 	controlErrors                map[collectionWatchKey]string
 	statusRetries                map[string]collectionStatusRetry
@@ -144,7 +144,7 @@ func (r *collectionRuntime) Start(ctx context.Context) error {
 	r.handover = newCollectionHandover(r.controlRegistry)
 	if err := r.controls.reconcile([]collectionWatchSpec{
 		{Key: collectionWatchKey{GVR: crdGVR}},
-		{Key: collectionWatchKey{GVR: resourcecollection.GVR()}, Source: ObjectSourceCR},
+		{Key: collectionWatchKey{GVR: collectiondeclaration.GVR()}, Source: ObjectSourceCR},
 	}); err != nil {
 		return err
 	}
@@ -324,9 +324,9 @@ func (r *collectionRuntime) readControls(controls []collectionWatchSnapshot) {
 			if r.crdsReady {
 				r.crds, r.catalog.CRDs = raw, typed
 			}
-		case resourcecollection.GVR():
+		case collectiondeclaration.GVR():
 			r.declarationsReady = true
-			var declarations []*resourcecollection.ResourceCollection
+			var declarations []*collectiondeclaration.CollectionDeclaration
 			var raw []*unstructured.Unstructured
 			for _, object := range observation.Objects {
 				obj, ok := toUnstructured(object)
@@ -338,9 +338,9 @@ func (r *collectionRuntime) readControls(controls []collectionWatchSnapshot) {
 				if obj.GetDeletionTimestamp() != nil {
 					continue
 				}
-				decoded, err := resourcecollection.Decode(obj)
+				decoded, err := collectiondeclaration.Decode(obj)
 				if err != nil {
-					decoded = &resourcecollection.ResourceCollection{ObjectMeta: metav1.ObjectMeta{
+					decoded = &collectiondeclaration.CollectionDeclaration{ObjectMeta: metav1.ObjectMeta{
 						Name: obj.GetName(), UID: obj.GetUID(), Generation: obj.GetGeneration(),
 					}}
 					// Keep valid feedback when an invalid spec cannot decode.
@@ -488,10 +488,10 @@ func collectionCRDKeys(crds []*apiextensionsv1.CustomResourceDefinition) map[sch
 func (r *collectionRuntime) includeDeclarations(
 	view *collectionReportingSnapshot, declarations []*unstructured.Unstructured,
 ) {
-	if r.config.isDeniedResource(resourcecollection.Group, resourcecollection.GVR().Resource) {
+	if r.config.isDeniedResource(collectiondeclaration.Group, collectiondeclaration.GVR().Resource) {
 		return
 	}
-	group := view.Objects[resourcecollection.GVR()]
+	group := view.Objects[collectiondeclaration.GVR()]
 	group.Source = ObjectSourceCR
 	byName := map[string]resourceObject{}
 	for _, object := range group.Objects {
@@ -515,8 +515,8 @@ func (r *collectionRuntime) includeDeclarations(
 		group.Objects = append(group.Objects, object)
 	}
 	sort.Slice(group.Objects, func(i, j int) bool { return group.Objects[i].GetName() < group.Objects[j].GetName() })
-	view.Objects[resourcecollection.GVR()] = group
-	view.Watched[resourcecollection.GVR().GroupResource()] = true
+	view.Objects[collectiondeclaration.GVR()] = group
+	view.Watched[collectiondeclaration.GVR().GroupResource()] = true
 }
 
 func collectionDeletionPolicy(
@@ -563,14 +563,14 @@ func collectionDeletionPolicy(
 			if !crdsReady {
 				return false
 			}
-			if !custom[gvr.GroupResource()] && gvr != resourcecollection.GVR() {
+			if !custom[gvr.GroupResource()] && gvr != collectiondeclaration.GVR() {
 				return true
 			}
 			if !declarationsReady || invalid {
 				// Invalid declarations cannot identify which prior filtered results they owned.
 				return false
 			}
-			if gvr == resourcecollection.GVR() {
+			if gvr == collectiondeclaration.GVR() {
 				return true
 			}
 		}
@@ -663,18 +663,18 @@ func collectionSelectionMatchesObject(scope collectionSelectionScope, object res
 }
 
 func (r *collectionRuntime) publishStatuses(plan collectionPlan, observations []collectionWatchSnapshot) {
-	current := map[string]*resourcecollection.ResourceCollection{}
+	current := map[string]*collectiondeclaration.CollectionDeclaration{}
 	for _, declaration := range r.declarations {
 		current[declaration.Name] = declaration
 	}
 	for _, result := range plan.Declarations {
 		declaration := current[result.Name]
-		object := r.controls.cachedObject(collectionWatchKey{GVR: resourcecollection.GVR()}, result.Name)
+		object := r.controls.cachedObject(collectionWatchKey{GVR: collectiondeclaration.GVR()}, result.Name)
 		if declaration == nil || object == nil || object.GetUID() != result.UID ||
 			object.GetGeneration() != result.Generation || object.GetDeletionTimestamp() != nil {
 			continue
 		}
-		var previous resourcecollection.Status
+		var previous collectiondeclaration.Status
 		if raw, found, _ := unstructured.NestedMap(object.Object, "status"); found {
 			_ = runtime.DefaultUnstructuredConverter.FromUnstructured(raw, &previous)
 		}
@@ -694,7 +694,7 @@ func (r *collectionRuntime) publishStatuses(plan collectionPlan, observations []
 				Contributor: contributor, Next: time.Now().Add(informerReconcileInterval),
 			}
 			if r.ctx.Err() == nil {
-				r.settings.Logger.Warn("Could not update ResourceCollection status",
+				r.settings.Logger.Warn("Could not update CollectionDeclaration status",
 					zap.String("name", result.Name), zap.Error(err))
 			}
 		}
@@ -746,7 +746,7 @@ func (r *collectionRuntime) collectionSnapshot() collectionReportingSnapshot {
 			switch observation.Spec.Key.GVR {
 			case crdGVR:
 				view.CRDs = objects
-			case resourcecollection.GVR():
+			case collectiondeclaration.GVR():
 				declarations = objects
 			}
 		}

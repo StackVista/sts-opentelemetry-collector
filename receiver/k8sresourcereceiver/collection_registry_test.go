@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/collectiondeclaration"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/tracker"
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -108,21 +108,21 @@ func TestCollectionRegistrySharesAndWithdrawsContributions(t *testing.T) {
 		})
 		registry := collectionTestRegistry(t, client, compact)
 		cfg := collectionTestConfig(t, nil, nil, []ObjectWatch{{Name: "widgets", Group: collectionTestGroup, Version: "v1", Namespaces: []string{"payments"}}}, nil)
-		a := collectionTestDeclaration("a", resourcecollection.Selection{Group: collectionTestGroup, Resource: "widgets", Namespaces: []string{"payments"}})
+		a := collectionTestDeclaration("a", collectiondeclaration.Selection{Group: collectionTestGroup, Resource: "widgets", Namespaces: []string{"payments"}})
 		b := collectionTestDeclaration("b", a.Spec.Resources[0])
-		plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{a, b})
+		plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{a, b})
 		require.Len(t, plan.Watches, 1)
 		require.NoError(t, registry.reconcile(plan.Watches))
 		key := plan.Watches[0].Key
 		require.Eventually(t, func() bool {
-			return collectionRegistryObservation(registry, key).State == resourcecollection.Active
+			return collectionRegistryObservation(registry, key).State == collectiondeclaration.Active
 		}, 5*time.Second, 10*time.Millisecond)
 		observation := collectionRegistryObservation(registry, key)
 		require.Len(t, observation.Objects, 1)
 		assertRepresentation(t, compact, observation.Objects[0])
 		require.Len(t, observation.Spec.Contributors, 3)
 
-		plan = buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{b})
+		plan = buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{b})
 		require.NoError(t, registry.reconcile(plan.Watches))
 		assert.Len(t, collectionRegistryObservation(registry, key).Spec.Contributors, 2)
 		require.False(t, stream.IsStopped())
@@ -167,7 +167,7 @@ func TestCollectionRegistryPreservesNamespaceAndSelectorRequests(t *testing.T) {
 			return false
 		}
 		for _, observation := range observations {
-			if observation.State != resourcecollection.Active {
+			if observation.State != collectiondeclaration.Active {
 				return false
 			}
 		}
@@ -221,14 +221,14 @@ func TestCollectionRegistryKeepsVersionWatchesIndependent(t *testing.T) {
 	a.Source, b.Source = ObjectSourceCR, ObjectSourceCR
 	require.NoError(t, registry.reconcile([]collectionWatchSpec{a, b}))
 	require.Eventually(t, func() bool {
-		return collectionRegistryObservation(registry, a.Key).State == resourcecollection.Active &&
-			collectionRegistryObservation(registry, b.Key).State == resourcecollection.Active
+		return collectionRegistryObservation(registry, a.Key).State == collectiondeclaration.Active &&
+			collectionRegistryObservation(registry, b.Key).State == collectiondeclaration.Active
 	}, 5*time.Second, 10*time.Millisecond)
 	require.NoError(t, registry.reconcile([]collectionWatchSpec{b}))
 	observations := registry.snapshot()
 	require.Len(t, observations, 1)
 	assert.Equal(t, b.Key, observations[0].Spec.Key)
-	assert.Equal(t, resourcecollection.Active, observations[0].State)
+	assert.Equal(t, collectiondeclaration.Active, observations[0].State)
 	assert.Equal(t, ObjectSourceCR, observations[0].Spec.Source)
 }
 
@@ -258,11 +258,11 @@ func TestCollectionRegistryPendingInitialObservationDoesNotBlockHealthyWatch(t *
 	case <-time.After(5 * time.Second):
 		t.Fatal("initial list did not start")
 	}
-	assert.Equal(t, resourcecollection.Pending, collectionRegistryObservation(registry, waiting.Key).State)
+	assert.Equal(t, collectiondeclaration.Pending, collectionRegistryObservation(registry, waiting.Key).State)
 	assert.False(t, collectionRegistryObservation(registry, waiting.Key).Synced)
 	require.Eventually(t, func() bool {
 		observation := collectionRegistryObservation(registry, healthy.Key)
-		return observation.State == resourcecollection.Active && len(observation.Objects) == 0
+		return observation.State == collectiondeclaration.Active && len(observation.Objects) == 0
 	}, 5*time.Second, 10*time.Millisecond, "a successful empty list is an active observation")
 }
 
@@ -271,11 +271,11 @@ func TestCollectionRegistryReportsScopedObservationFailures(t *testing.T) {
 		name, state, reason string
 		err                 error
 	}{
-		{"forbidden", resourcecollection.Blocked, "AccessDenied", apierrors.NewForbidden(podsGVR.GroupResource(), "", errors.New("read denied"))},
-		{"unauthorized", resourcecollection.Blocked, "AccessDenied", apierrors.NewUnauthorized("credentials unavailable")},
-		{"missing API", resourcecollection.Pending, "APINotAvailable", apierrors.NewNotFound(podsGVR.GroupResource(), "")},
-		{"unsupported field", resourcecollection.Blocked, "InvalidSelection", apierrors.NewBadRequest("field is unsupported")},
-		{"transient API", resourcecollection.Pending, "ObservationFailed", apierrors.NewServiceUnavailable("API unavailable")},
+		{"forbidden", collectiondeclaration.Blocked, "AccessDenied", apierrors.NewForbidden(podsGVR.GroupResource(), "", errors.New("read denied"))},
+		{"unauthorized", collectiondeclaration.Blocked, "AccessDenied", apierrors.NewUnauthorized("credentials unavailable")},
+		{"missing API", collectiondeclaration.Pending, "APINotAvailable", apierrors.NewNotFound(podsGVR.GroupResource(), "")},
+		{"unsupported field", collectiondeclaration.Blocked, "InvalidSelection", apierrors.NewBadRequest("field is unsupported")},
+		{"transient API", collectiondeclaration.Pending, "ObservationFailed", apierrors.NewServiceUnavailable("API unavailable")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			client := staticPodClient()
@@ -291,7 +291,7 @@ func TestCollectionRegistryReportsScopedObservationFailures(t *testing.T) {
 			require.Eventually(t, func() bool {
 				failure := collectionRegistryObservation(registry, failed.Key)
 				return failure.State == tc.state && failure.Reason == tc.reason &&
-					collectionRegistryObservation(registry, healthy.Key).State == resourcecollection.Active
+					collectionRegistryObservation(registry, healthy.Key).State == collectiondeclaration.Active
 			}, 5*time.Second, 10*time.Millisecond)
 			failure := collectionRegistryObservation(registry, failed.Key)
 			assert.Contains(t, failure.Message, tc.err.Error())
@@ -326,14 +326,14 @@ func TestCollectionRegistryRetainsKnownObjectsThroughWatchFailureAndRecovery(t *
 	require.NoError(t, registry.reconcile([]collectionWatchSpec{spec}))
 	require.Eventually(t, func() bool {
 		observation := collectionRegistryObservation(registry, spec.Key)
-		return observation.State == resourcecollection.Active && len(observation.Objects) == 1
+		return observation.State == collectiondeclaration.Active && len(observation.Objects) == 1
 	}, 5*time.Second, 10*time.Millisecond)
 	stream := <-streams
 	denied.Store(true)
 	stream.Error(&metav1.Status{Status: metav1.StatusFailure, Reason: metav1.StatusReasonForbidden, Code: 403, Message: "read denied"})
 	require.Eventually(t, func() bool {
 		observation := collectionRegistryObservation(registry, spec.Key)
-		return observation.State == resourcecollection.Blocked && observation.Reason == "AccessDenied"
+		return observation.State == collectiondeclaration.Blocked && observation.Reason == "AccessDenied"
 	}, 5*time.Second, 10*time.Millisecond)
 	failed := collectionRegistryObservation(registry, spec.Key)
 	assert.True(t, failed.Synced, "initial synchronization alone cannot describe current observation health")
@@ -344,7 +344,7 @@ func TestCollectionRegistryRetainsKnownObjectsThroughWatchFailureAndRecovery(t *
 	watchClock.Step(tracker.DefaultRetryInterval)
 	require.Eventually(t, func() bool {
 		observation := collectionRegistryObservation(registry, spec.Key)
-		return observation.State == resourcecollection.Active && len(observation.Objects) == 1
+		return observation.State == collectiondeclaration.Active && len(observation.Objects) == 1
 	}, 10*time.Second, 10*time.Millisecond)
 }
 
@@ -405,19 +405,19 @@ func TestCollectionRegistryPermissionBackoffIsScopedAndRecovers(t *testing.T) {
 			require.Eventually(t, func() bool {
 				return collectionRegistryObservation(registry, failed.Key).Reason == "AccessDenied" &&
 					watchClock.HasWaiters() &&
-					collectionRegistryObservation(registry, otherNamespace.Key).State == resourcecollection.Active &&
-					collectionRegistryObservation(registry, otherSelector.Key).State == resourcecollection.Active &&
-					collectionRegistryObservation(registry, otherField.Key).State == resourcecollection.Active
+					collectionRegistryObservation(registry, otherNamespace.Key).State == collectiondeclaration.Active &&
+					collectionRegistryObservation(registry, otherSelector.Key).State == collectiondeclaration.Active &&
+					collectionRegistryObservation(registry, otherField.Key).State == collectiondeclaration.Active
 			}, 5*time.Second, 10*time.Millisecond)
 			initialRequests := requests.Load()
 			assert.Equal(t, map[string]int32{"list": 1, "watch": 2}[verb], initialRequests)
 			denied.Store(false)
 			watchClock.Step(tracker.DefaultRetryInterval - time.Minute)
 			assert.Equal(t, initialRequests, requests.Load(), "list and watch must share the same retry deadline")
-			assert.Equal(t, resourcecollection.Blocked, collectionRegistryObservation(registry, failed.Key).State)
+			assert.Equal(t, collectiondeclaration.Blocked, collectionRegistryObservation(registry, failed.Key).State)
 			watchClock.Step(time.Minute)
 			require.Eventually(t, func() bool {
-				return collectionRegistryObservation(registry, failed.Key).State == resourcecollection.Active &&
+				return collectionRegistryObservation(registry, failed.Key).State == collectiondeclaration.Active &&
 					requests.Load() > initialRequests
 			}, 5*time.Second, 10*time.Millisecond, "permission recovery must resume without replacing the watch")
 		})
@@ -473,7 +473,7 @@ func TestCollectionRegistryTransientFailureUsesNormalRetry(t *testing.T) {
 	require.NoError(t, registry.reconcile([]collectionWatchSpec{spec}))
 	require.Eventually(t, func() bool {
 		return requests.Load() >= 2 &&
-			collectionRegistryObservation(registry, spec.Key).State == resourcecollection.Active
+			collectionRegistryObservation(registry, spec.Key).State == collectiondeclaration.Active
 	}, 5*time.Second, 10*time.Millisecond)
 	assert.False(t, watchClock.HasWaiters(), "transient API errors must not use the permission delay")
 }

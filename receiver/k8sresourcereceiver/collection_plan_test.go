@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/collectiondeclaration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -64,15 +64,15 @@ func collectionTestDiscovery() collectionDiscoverySnapshot {
 	}
 }
 
-func collectionTestDeclaration(name string, selections ...resourcecollection.Selection) *resourcecollection.ResourceCollection {
-	return &resourcecollection.ResourceCollection{
+func collectionTestDeclaration(name string, selections ...collectiondeclaration.Selection) *collectiondeclaration.CollectionDeclaration {
+	return &collectiondeclaration.CollectionDeclaration{
 		ObjectMeta: metav1.ObjectMeta{Name: name, UID: types.UID("uid-" + name), Generation: 1},
-		Spec:       resourcecollection.Spec{Resources: selections},
+		Spec:       collectiondeclaration.Spec{Resources: selections},
 	}
 }
 
-func collectionTestSelection(resource string, namespaces []string, labels map[string]string) resourcecollection.Selection {
-	selection := resourcecollection.Selection{
+func collectionTestSelection(resource string, namespaces []string, labels map[string]string) collectiondeclaration.Selection {
+	selection := collectiondeclaration.Selection{
 		Group: collectionTestGroup, Resource: resource, Namespaces: namespaces,
 	}
 	if labels != nil {
@@ -88,13 +88,13 @@ func TestCollectionPlanOverlapAndContributionRemoval(t *testing.T) {
 	}}, nil)
 	a := collectionTestDeclaration("a", collectionTestSelection("widgets", nil, nil))
 	b := collectionTestDeclaration("b", collectionTestSelection("widgets", []string{"team-a"}, map[string]string{"monitoring": "enabled"}))
-	full := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{b, a})
+	full := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{b, a})
 	require.Len(t, full.Watches, 2)
 	require.Len(t, full.Watches[1].Contributors, 2)
 	assert.Equal(t, collectionBaselineObject, full.Watches[1].Contributors[0].Kind)
 	assert.Equal(t, "b", full.Watches[1].Contributors[1].Declaration)
 
-	afterA := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{b})
+	afterA := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{b})
 	require.Len(t, afterA.Watches, 1)
 	assert.Equal(t, full.Watches[1], afterA.Watches[0])
 	afterB := buildCollectionPlan(cfg, collectionTestDiscovery(), nil)
@@ -109,7 +109,7 @@ func TestCollectionPlanPreservesNamespaceSelectorClauses(t *testing.T) {
 		collectionTestSelection("widgets", []string{"team-a"}, map[string]string{"app": "alpha"}),
 		collectionTestSelection("widgets", []string{"team-b"}, map[string]string{"app": "beta"}),
 	)
-	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{declaration})
+	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{declaration})
 	require.Len(t, plan.Watches, 2)
 	assert.Equal(t, "team-a", plan.Watches[0].Key.Namespace)
 	assert.Equal(t, "app=alpha", plan.Watches[0].Key.LabelSelector)
@@ -131,18 +131,18 @@ func TestCollectionPlanSharesCanonicalExactWatches(t *testing.T) {
 	assert.Len(t, plan.Watches[0].Contributors, 2)
 	assert.Equal(t, "app=web,env=prod", plan.Watches[0].Key.LabelSelector)
 	assert.Equal(t, "metadata.name=web,metadata.namespace=team-a", plan.Watches[0].Key.FieldSelector)
-	cr := collectionTestDeclaration("widgets", resourcecollection.Selection{
+	cr := collectionTestDeclaration("widgets", collectiondeclaration.Selection{
 		Group: collectionTestGroup, Resource: "widgets", Namespaces: []string{"team-a"},
 		LabelSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"env": "prod", "app": "web"}},
 	})
-	withCR := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{cr})
+	withCR := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{cr})
 	assert.Len(t, withCR.Watches, 2)
 }
 
 func TestCollectionPlanNamespacesExpandWithoutChangingInputs(t *testing.T) {
 	cfg := collectionTestConfig(t, nil, nil, nil, nil)
 	cr := collectionTestDeclaration("scoped", collectionTestSelection("widgets", []string{"team-b", "team-a", "team-a"}, nil))
-	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{cr})
+	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{cr})
 	require.Len(t, plan.Watches, 2)
 	assert.Equal(t, "team-a", plan.Watches[0].Key.Namespace)
 	assert.Equal(t, "team-b", plan.Watches[1].Key.Namespace)
@@ -154,19 +154,19 @@ func TestCollectionPlanPolicyOverridesBaselineAndDeclarations(t *testing.T) {
 	cfg := collectionTestConfig(t, []string{collectionTestGroup}, nil, nil, []ObjectMatcher{{Group: collectionTestGroup, Name: "widgets"}})
 	a := collectionTestDeclaration("a", collectionTestSelection("*", nil, nil))
 	b := collectionTestDeclaration("b", collectionTestSelection("widgets", nil, nil))
-	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{a, b})
+	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{a, b})
 	require.Len(t, plan.Watches, 2)
 	for _, watch := range plan.Watches {
 		assert.NotEqual(t, "widgets", watch.Key.GVR.Resource)
 		assert.Equal(t, ObjectSourceCR, watch.Source)
 	}
 	for _, declaration := range plan.Declarations {
-		assert.Equal(t, resourcecollection.Blocked, declaration.Selections[0].State)
+		assert.Equal(t, collectiondeclaration.Blocked, declaration.Selections[0].State)
 		assert.Equal(t, "PolicyDenied", declaration.Selections[0].Reason)
 	}
 	assert.Contains(t, plan.Declarations[0].Selections[0].Message, "widgets")
 	missing := collectionDiscoverySnapshot{}
-	deniedWithoutAPI := buildCollectionPlan(cfg, missing, []*resourcecollection.ResourceCollection{b})
+	deniedWithoutAPI := buildCollectionPlan(cfg, missing, []*collectiondeclaration.CollectionDeclaration{b})
 	assert.Equal(t, "PolicyDenied", deniedWithoutAPI.Declarations[0].Selections[0].Reason)
 }
 
@@ -174,14 +174,14 @@ func TestCollectionPlanBaselineFiltersDoNotVetoDeclarations(t *testing.T) {
 	for _, excludes := range [][]string{nil, {collectionTestGroup}} {
 		cfg := collectionTestConfig(t, []string{"other.example.com"}, excludes, nil, nil)
 		cr := collectionTestDeclaration("explicit", collectionTestSelection("widgets", nil, nil))
-		plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{cr})
+		plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{cr})
 		require.Len(t, plan.Watches, 1)
 		assert.Equal(t, ObjectSourceCR, plan.Watches[0].Source)
 		assert.Equal(t, "widgets", plan.Watches[0].Key.GVR.Resource)
 	}
 	cfg := collectionTestConfig(t, []string{collectionTestGroup}, []string{collectionTestGroup}, nil, nil)
 	cr := collectionTestDeclaration("wildcard", collectionTestSelection("*", nil, nil))
-	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{cr})
+	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{cr})
 	assert.Empty(t, plan.Baseline)
 	assert.Len(t, plan.Watches, 3)
 }
@@ -194,18 +194,18 @@ func TestCollectionPlanDeclarationsRejectNativeAndAggregatedResources(t *testing
 	)
 	cfg := collectionTestConfig(t, nil, nil, []ObjectWatch{{Name: "pods"}, {Name: "deployments", Group: "apps"}}, nil)
 	cr := collectionTestDeclaration("custom-only",
-		resourcecollection.Selection{Group: "", Resource: "pods"},
-		resourcecollection.Selection{Group: "apps", Resource: "deployments"},
-		resourcecollection.Selection{Group: "metrics.example.com", Resource: "pods"},
-		resourcecollection.Selection{Group: "metrics.example.com", Resource: "*"},
+		collectiondeclaration.Selection{Group: "", Resource: "pods"},
+		collectiondeclaration.Selection{Group: "apps", Resource: "deployments"},
+		collectiondeclaration.Selection{Group: "metrics.example.com", Resource: "pods"},
+		collectiondeclaration.Selection{Group: "metrics.example.com", Resource: "*"},
 		collectionTestSelection("widgets", nil, nil),
 	)
-	plan := buildCollectionPlan(cfg, discovery, []*resourcecollection.ResourceCollection{cr})
+	plan := buildCollectionPlan(cfg, discovery, []*collectiondeclaration.CollectionDeclaration{cr})
 	require.Len(t, plan.Watches, 3)
 	results := plan.Declarations[0].Selections
 	assert.Equal(t, "InvalidSelection", results[0].Reason)
 	for _, index := range []int{1, 2} {
-		assert.Equal(t, resourcecollection.Blocked, results[index].State)
+		assert.Equal(t, collectiondeclaration.Blocked, results[index].State)
 		assert.Equal(t, "NotCustomResource", results[index].Reason)
 	}
 	assert.Equal(t, "APINotAvailable", results[3].Reason)
@@ -226,7 +226,7 @@ func TestCollectionPlanWildcardAddsOnlyCRDTypes(t *testing.T) {
 		collectionTestAPI(collectionTestGroup, "v1", true, "builtins"),
 		collectionTestAPI("unrelated.example.com", "v1", true, "others"),
 	)
-	before := buildCollectionPlan(cfg, discovery, []*resourcecollection.ResourceCollection{cr})
+	before := buildCollectionPlan(cfg, discovery, []*collectiondeclaration.CollectionDeclaration{cr})
 	require.Len(t, before.Watches, 3)
 	for _, watch := range before.Watches {
 		assert.NotEqual(t, "builtins", watch.Key.GVR.Resource)
@@ -234,7 +234,7 @@ func TestCollectionPlanWildcardAddsOnlyCRDTypes(t *testing.T) {
 	}
 	discovery.CRDs = append(discovery.CRDs, collectionTestCRD("gizmos", apiextensionsv1.NamespaceScoped, "v1"))
 	discovery.PreferredResources = append(discovery.PreferredResources, collectionTestAPI(collectionTestGroup, "v1", true, "gizmos"))
-	after := buildCollectionPlan(cfg, discovery, []*resourcecollection.ResourceCollection{cr})
+	after := buildCollectionPlan(cfg, discovery, []*collectiondeclaration.CollectionDeclaration{cr})
 	assert.Len(t, after.Watches, 4)
 	assert.Len(t, after.Declarations[0].Selections[0].Resolved, 4)
 }
@@ -246,16 +246,16 @@ func TestCollectionPlanMissingAPIsAndRuntimeScopes(t *testing.T) {
 		collectionTestSelection("fleets", []string{"team-a"}, nil),
 		collectionTestSelection("widgets", nil, nil),
 	)
-	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{cr})
+	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{cr})
 	require.Len(t, plan.Watches, 1)
 	assert.Equal(t, "widgets", plan.Watches[0].Key.GVR.Resource)
 	assert.Equal(t, "APINotAvailable", plan.Baseline[0].Reason)
 	results := plan.Declarations[0].Selections
-	assert.Equal(t, resourcecollection.Pending, results[0].State)
+	assert.Equal(t, collectiondeclaration.Pending, results[0].State)
 	assert.Equal(t, "APINotAvailable", results[0].Reason)
-	assert.Equal(t, resourcecollection.Blocked, results[1].State)
+	assert.Equal(t, collectiondeclaration.Blocked, results[1].State)
 	assert.Equal(t, "IncompatibleScope", results[1].Reason)
-	assert.Equal(t, resourcecollection.Pending, results[2].State)
+	assert.Equal(t, collectiondeclaration.Pending, results[2].State)
 	assert.Equal(t, "AwaitingObservation", results[2].Reason)
 }
 
@@ -267,18 +267,18 @@ func TestCollectionPlanStorageVersionDoesNotRequirePreferredDiscovery(t *testing
 	cfg := collectionTestConfig(t, nil, nil, []ObjectWatch{{
 		Name: "widgets", Group: collectionTestGroup, Namespaces: []string{"team-a"},
 	}}, nil)
-	cr := collectionTestDeclaration("waiting", resourcecollection.Selection{
+	cr := collectionTestDeclaration("waiting", collectiondeclaration.Selection{
 		Group: collectionTestGroup, Resource: "widgets", Namespaces: []string{"team-a"},
 	})
-	plan := buildCollectionPlan(cfg, discovery, []*resourcecollection.ResourceCollection{cr})
+	plan := buildCollectionPlan(cfg, discovery, []*collectiondeclaration.CollectionDeclaration{cr})
 	require.Len(t, plan.Watches, 1)
-	assert.Equal(t, resourcecollection.Pending, plan.Baseline[0].State)
+	assert.Equal(t, collectiondeclaration.Pending, plan.Baseline[0].State)
 	assert.Equal(t, "APINotAvailable", plan.Baseline[0].Reason)
-	assert.Equal(t, resourcecollection.Pending, plan.Declarations[0].Selections[0].State)
+	assert.Equal(t, collectiondeclaration.Pending, plan.Declarations[0].Selections[0].State)
 	assert.Equal(t, "AwaitingObservation", plan.Declarations[0].Selections[0].Reason)
 	assert.Equal(t, "team-a", plan.Watches[0].Key.Namespace)
 	discovery.PreferredResources = discovery.ServedResources
-	available := buildCollectionPlan(cfg, discovery, []*resourcecollection.ResourceCollection{cr})
+	available := buildCollectionPlan(cfg, discovery, []*collectiondeclaration.CollectionDeclaration{cr})
 	require.Len(t, available.Watches, 1)
 	assert.Equal(t, "team-a", available.Watches[0].Key.Namespace)
 	assert.Len(t, available.Watches[0].Contributors, 2)
@@ -289,12 +289,12 @@ func TestCollectionPlanWildcardPartialScopeAndMissingPreferred(t *testing.T) {
 	cr := collectionTestDeclaration("partial", collectionTestSelection("*", []string{"team-a"}, nil))
 	discovery := collectionTestDiscovery()
 	discovery.CRDs = append(discovery.CRDs, collectionTestCRD("late", apiextensionsv1.NamespaceScoped, "v1"))
-	plan := buildCollectionPlan(cfg, discovery, []*resourcecollection.ResourceCollection{cr})
+	plan := buildCollectionPlan(cfg, discovery, []*collectiondeclaration.CollectionDeclaration{cr})
 	require.Len(t, plan.Watches, 2)
 	assert.Equal(t, "IncompatibleScope", plan.Declarations[0].Selections[0].Reason)
 	for _, result := range plan.Declarations[0].Selections[0].Resolved {
 		if result.Resource.Resource == "late" {
-			assert.Equal(t, resourcecollection.Pending, result.State)
+			assert.Equal(t, collectiondeclaration.Pending, result.State)
 			assert.Equal(t, "APINotAvailable", result.Reason)
 		}
 	}
@@ -327,10 +327,10 @@ func TestCollectionPlanStorageVersionAndIndependentYAMLDefaultsAndPins(t *testin
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := collectionTestConfig(t, tc.includes, nil, tc.objects, nil)
-			full := buildCollectionPlan(cfg, discovery, []*resourcecollection.ResourceCollection{b, a})
-			reordered := buildCollectionPlan(cfg, discovery, []*resourcecollection.ResourceCollection{a, b})
+			full := buildCollectionPlan(cfg, discovery, []*collectiondeclaration.CollectionDeclaration{b, a})
+			reordered := buildCollectionPlan(cfg, discovery, []*collectiondeclaration.CollectionDeclaration{a, b})
 			require.Equal(t, full, reordered)
-			removed := buildCollectionPlan(cfg, discovery, []*resourcecollection.ResourceCollection{b})
+			removed := buildCollectionPlan(cfg, discovery, []*collectiondeclaration.CollectionDeclaration{b})
 			require.Len(t, full.Watches, len(tc.versions))
 			require.Len(t, removed.Watches, len(tc.versions))
 			for i, version := range tc.versions {
@@ -347,7 +347,7 @@ func TestCollectionPlanStorageVersionAndIndependentYAMLDefaultsAndPins(t *testin
 				}
 			}
 			if len(tc.objects) > 0 && tc.objects[0].Version == "v9" {
-				assert.Equal(t, resourcecollection.Pending, full.Baseline[0].State)
+				assert.Equal(t, collectiondeclaration.Pending, full.Baseline[0].State)
 				assert.Equal(t, "v9", full.Baseline[0].Version)
 				assert.Equal(t, "APINotAvailable", full.Baseline[0].Reason)
 			}
@@ -370,7 +370,7 @@ func TestCollectionPlanMultipleBaselinePinsCoexist(t *testing.T) {
 	}
 	cfg := collectionTestConfig(t, []string{collectionTestGroup}, nil, objects, nil)
 	cr := collectionTestDeclaration("widgets", collectionTestSelection("widgets", nil, nil))
-	plan := buildCollectionPlan(cfg, discovery, []*resourcecollection.ResourceCollection{cr})
+	plan := buildCollectionPlan(cfg, discovery, []*collectiondeclaration.CollectionDeclaration{cr})
 	require.Len(t, plan.Watches, 2)
 	assert.Equal(t, "v1", plan.Watches[0].Key.GVR.Version)
 	assert.Len(t, plan.Watches[0].Contributors, 3)
@@ -381,7 +381,7 @@ func TestCollectionPlanMultipleBaselinePinsCoexist(t *testing.T) {
 	}
 	assert.Equal(t, "AwaitingObservation", plan.Declarations[0].Selections[0].Reason)
 	cfg = collectionTestConfig(t, []string{collectionTestGroup}, nil, []ObjectWatch{objects[1], objects[0]}, nil)
-	reordered := buildCollectionPlan(cfg, discovery, []*resourcecollection.ResourceCollection{cr})
+	reordered := buildCollectionPlan(cfg, discovery, []*collectiondeclaration.CollectionDeclaration{cr})
 	require.Len(t, reordered.Watches, 2)
 	for i := range plan.Watches {
 		assert.Equal(t, plan.Watches[i].Key, reordered.Watches[i].Key)
@@ -440,7 +440,7 @@ func TestCollectionPlanLegacyGroupAmbiguityAndCorePreference(t *testing.T) {
 		cfg := collectionTestConfig(t, nil, nil, []ObjectWatch{{Name: "widgets", Version: version}}, nil)
 		plan := buildCollectionPlan(cfg, discovery, nil)
 		assert.Empty(t, plan.Watches)
-		assert.Equal(t, resourcecollection.Blocked, plan.Baseline[0].State)
+		assert.Equal(t, collectiondeclaration.Blocked, plan.Baseline[0].State)
 		assert.Equal(t, "AmbiguousResource", plan.Baseline[0].Reason)
 	}
 	discovery.PreferredResources = append(discovery.PreferredResources, collectionTestAPI("", "v1", true, "widgets"))
@@ -491,12 +491,12 @@ func TestCollectionPlanIsDeterministicAndDoesNotMutateSnapshots(t *testing.T) {
 	b.Spec.Resources[0].LabelSelector.MatchExpressions = []metav1.LabelSelectorRequirement{{
 		Key: "monitoring", Operator: metav1.LabelSelectorOpIn, Values: []string{"z", "a"},
 	}}
-	declarations := []*resourcecollection.ResourceCollection{b, nil, a}
+	declarations := []*collectiondeclaration.CollectionDeclaration{b, nil, a}
 	before, err := json.Marshal([]interface{}{cfg, discovery, declarations})
 	require.NoError(t, err)
 	plan := buildCollectionPlan(cfg, discovery, declarations)
 	for i := 0; i < 20; i++ {
-		assert.Equal(t, plan, buildCollectionPlan(cfg, discovery, []*resourcecollection.ResourceCollection{a, b, nil}))
+		assert.Equal(t, plan, buildCollectionPlan(cfg, discovery, []*collectiondeclaration.CollectionDeclaration{a, b, nil}))
 	}
 	reversed := collectionDiscoverySnapshot{}
 	for i := len(discovery.PreferredResources) - 1; i >= 0; i-- {
@@ -508,14 +508,14 @@ func TestCollectionPlanIsDeterministicAndDoesNotMutateSnapshots(t *testing.T) {
 	for i := len(discovery.CRDs) - 1; i >= 0; i-- {
 		reversed.CRDs = append(reversed.CRDs, discovery.CRDs[i])
 	}
-	assert.Equal(t, plan, buildCollectionPlan(cfg, reversed, []*resourcecollection.ResourceCollection{a, b, nil}))
+	assert.Equal(t, plan, buildCollectionPlan(cfg, reversed, []*collectiondeclaration.CollectionDeclaration{a, b, nil}))
 	after, err := json.Marshal([]interface{}{cfg, discovery, declarations})
 	require.NoError(t, err)
 	assert.Equal(t, string(before), string(after))
 	assert.Same(t, b, declarations[0])
 	assert.Equal(t, []string{"z", "a"}, b.Spec.Resources[0].LabelSelector.MatchExpressions[0].Values)
 	for _, selection := range plan.Declarations[0].Selections {
-		assert.NotEqual(t, resourcecollection.Active, selection.State)
+		assert.NotEqual(t, collectiondeclaration.Active, selection.State)
 	}
 }
 
@@ -523,16 +523,16 @@ func TestCollectionPlanUnavailableDiscoveryRetainsRequests(t *testing.T) {
 	cfg := collectionTestConfig(t, nil, nil, nil, nil)
 	explicit := collectionTestDeclaration("explicit", collectionTestSelection("widgets", nil, nil))
 	wildcard := collectionTestDeclaration("wildcard", collectionTestSelection("*", nil, nil))
-	before := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{explicit, wildcard})
+	before := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{explicit, wildcard})
 	discovery := collectionTestDiscovery()
 	discovery.PreferredResources, discovery.ServedResources = nil, nil
-	after := buildCollectionPlan(cfg, discovery, []*resourcecollection.ResourceCollection{explicit, wildcard})
+	after := buildCollectionPlan(cfg, discovery, []*collectiondeclaration.CollectionDeclaration{explicit, wildcard})
 	assert.Empty(t, after.Watches)
 	require.Len(t, after.Declarations, 2)
 	for i, declaration := range after.Declarations {
 		require.Len(t, declaration.Selections, 1)
 		result := declaration.Selections[0]
-		assert.Equal(t, resourcecollection.Pending, result.State)
+		assert.Equal(t, collectiondeclaration.Pending, result.State)
 		assert.Equal(t, "APINotAvailable", result.Reason)
 		assert.Equal(t, before.Declarations[i].Selections[0].Contributor, result.Contributor)
 		assert.Equal(t, before.Declarations[i].Selections[0].Group, result.Group)
@@ -541,19 +541,19 @@ func TestCollectionPlanUnavailableDiscoveryRetainsRequests(t *testing.T) {
 			assert.Equal(t, "APINotAvailable", resolved.Reason)
 		}
 	}
-	missingEverything := buildCollectionPlan(cfg, collectionDiscoverySnapshot{}, []*resourcecollection.ResourceCollection{explicit, wildcard})
+	missingEverything := buildCollectionPlan(cfg, collectionDiscoverySnapshot{}, []*collectiondeclaration.CollectionDeclaration{explicit, wildcard})
 	require.Len(t, missingEverything.Declarations, 2)
 	assert.Equal(t, after.Declarations[0].Selections[0].Contributor, missingEverything.Declarations[0].Selections[0].Contributor)
-	assert.Equal(t, resourcecollection.Pending, missingEverything.Declarations[0].Selections[0].State)
+	assert.Equal(t, collectiondeclaration.Pending, missingEverything.Declarations[0].Selections[0].State)
 }
 
 func TestCollectionPlanInvalidSelectionDoesNotBreakOtherSelections(t *testing.T) {
 	cfg := collectionTestConfig(t, nil, nil, nil, nil)
 	cr := collectionTestDeclaration("invalid",
-		resourcecollection.Selection{Group: "", Resource: "*"},
+		collectiondeclaration.Selection{Group: "", Resource: "*"},
 		collectionTestSelection("widgets", nil, nil),
 	)
-	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{cr})
+	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{cr})
 	require.Len(t, plan.Watches, 1)
 	assert.Equal(t, "InvalidSelection", plan.Declarations[0].Selections[0].Reason)
 	assert.Equal(t, "AwaitingObservation", plan.Declarations[0].Selections[1].Reason)
@@ -567,18 +567,18 @@ func TestCollectionPlanDeclarationFieldsShareOnlyExactScopes(t *testing.T) {
 		FieldSelector: "metadata.namespace=team-a,metadata.name=web",
 	}}, nil)
 	cr := collectionTestDeclaration("fields",
-		resourcecollection.Selection{Group: collectionTestGroup, Resource: "widgets", Namespaces: []string{"team-a"},
+		collectiondeclaration.Selection{Group: collectionTestGroup, Resource: "widgets", Namespaces: []string{"team-a"},
 			FieldSelector: "metadata.name==web,metadata.namespace=team-a"},
-		resourcecollection.Selection{Group: collectionTestGroup, Resource: "widgets", Namespaces: []string{"team-a"},
+		collectiondeclaration.Selection{Group: collectionTestGroup, Resource: "widgets", Namespaces: []string{"team-a"},
 			FieldSelector: "metadata.name!=web"},
 	)
-	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{cr})
+	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{cr})
 	require.Len(t, plan.Watches, 2)
 	assert.Equal(t, "metadata.name!=web", plan.Watches[0].Key.FieldSelector)
 	assert.Equal(t, "metadata.name=web,metadata.namespace=team-a", plan.Watches[1].Key.FieldSelector)
 	assert.Len(t, plan.Watches[1].Contributors, 2)
 	cr.Spec.Resources[0].FieldSelector = "status.phase in (Running)"
-	invalid := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{cr})
+	invalid := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{cr})
 	assert.Equal(t, "InvalidSelection", invalid.Declarations[0].Selections[0].Reason)
 	assert.Len(t, invalid.Watches, 2) // Valid baseline and second selection remain independent.
 }
@@ -591,12 +591,12 @@ func TestCollectionPlanPartialServedDiscoveryIncludesPreferredVersions(t *testin
 	}
 	cfg := collectionTestConfig(t, nil, nil, []ObjectWatch{{Name: "widgets", Group: collectionTestGroup, Version: "v1", Namespaces: []string{"team-a"}}}, nil)
 	cr := collectionTestDeclaration("partial", collectionTestSelection("widgets", []string{"team-a"}, nil))
-	plan := buildCollectionPlan(cfg, discovery, []*resourcecollection.ResourceCollection{cr})
+	plan := buildCollectionPlan(cfg, discovery, []*collectiondeclaration.CollectionDeclaration{cr})
 	require.Len(t, plan.Watches, 1)
 	assert.Equal(t, "v1", plan.Watches[0].Key.GVR.Version)
 	assert.Len(t, plan.Watches[0].Contributors, 2)
 	discovery.CRDs[0] = collectionTestCRD("widgets", apiextensionsv1.NamespaceScoped, "v9")
-	missing := buildCollectionPlan(cfg, discovery, []*resourcecollection.ResourceCollection{cr})
+	missing := buildCollectionPlan(cfg, discovery, []*collectiondeclaration.CollectionDeclaration{cr})
 	assert.Equal(t, "APINotAvailable", missing.Declarations[0].Selections[0].Reason)
 	require.Len(t, missing.Watches, 1)
 	assert.Len(t, missing.Watches[0].Contributors, 1)
@@ -631,19 +631,19 @@ func TestCollectionPlanWildcardUsesEachTypeStorageVersion(t *testing.T) {
 	}
 	cr := collectionTestDeclaration("wildcard", collectionTestSelection("*", nil, nil))
 	cfg := collectionTestConfig(t, nil, nil, nil, nil)
-	plan := buildCollectionPlan(cfg, discovery, []*resourcecollection.ResourceCollection{cr})
+	plan := buildCollectionPlan(cfg, discovery, []*collectiondeclaration.CollectionDeclaration{cr})
 	require.Len(t, plan.Watches, 2)
 	assert.Equal(t, "v1", plan.Watches[0].Key.GVR.Version)
 	assert.Equal(t, "widgets", plan.Watches[0].Key.GVR.Resource)
 	assert.Equal(t, "v2", plan.Watches[1].Key.GVR.Version)
 	assert.Equal(t, "gadgets", plan.Watches[1].Key.GVR.Resource)
 	discovery.CRDs[1].Spec.Versions[0].Served = false
-	partial := buildCollectionPlan(cfg, discovery, []*resourcecollection.ResourceCollection{cr})
+	partial := buildCollectionPlan(cfg, discovery, []*collectiondeclaration.CollectionDeclaration{cr})
 	require.Len(t, partial.Watches, 1)
 	assert.Equal(t, "widgets", partial.Watches[0].Key.GVR.Resource)
 	assert.Equal(t, "APINotAvailable", partial.Declarations[0].Selections[0].Reason)
 	discovery.CRDs[1].Spec.Versions[0].Served = true
-	assert.Equal(t, plan, buildCollectionPlan(cfg, discovery, []*resourcecollection.ResourceCollection{cr}))
+	assert.Equal(t, plan, buildCollectionPlan(cfg, discovery, []*collectiondeclaration.CollectionDeclaration{cr}))
 }
 
 func TestCollectionPlanStorageAndYAMLContributionsRemoveIndependently(t *testing.T) {
@@ -658,14 +658,14 @@ func TestCollectionPlanStorageAndYAMLContributionsRemoveIndependently(t *testing
 	cfg := collectionTestConfig(t, nil, nil, []ObjectWatch{{Name: "widgets", Group: collectionTestGroup, Version: "v2"}}, nil)
 	a := collectionTestDeclaration("a", collectionTestSelection("widgets", nil, nil))
 	b := collectionTestDeclaration("b", collectionTestSelection("widgets", nil, nil))
-	plan := buildCollectionPlan(cfg, discovery, []*resourcecollection.ResourceCollection{b, a})
+	plan := buildCollectionPlan(cfg, discovery, []*collectiondeclaration.CollectionDeclaration{b, a})
 	require.Len(t, plan.Watches, 2)
 	assert.Equal(t, "v1", plan.Watches[0].Key.GVR.Version)
 	assert.Len(t, plan.Watches[0].Contributors, 2)
 	assert.Equal(t, "v2", plan.Watches[1].Key.GVR.Version)
 	assert.Len(t, plan.Watches[1].Contributors, 1)
-	assert.Equal(t, plan, buildCollectionPlan(cfg, discovery, []*resourcecollection.ResourceCollection{a, b}))
-	afterRemoval := buildCollectionPlan(cfg, discovery, []*resourcecollection.ResourceCollection{b})
+	assert.Equal(t, plan, buildCollectionPlan(cfg, discovery, []*collectiondeclaration.CollectionDeclaration{a, b}))
+	afterRemoval := buildCollectionPlan(cfg, discovery, []*collectiondeclaration.CollectionDeclaration{b})
 	require.Len(t, afterRemoval.Watches, 2)
 	assert.Len(t, afterRemoval.Watches[0].Contributors, 1)
 	assert.Equal(t, plan.Watches[1], afterRemoval.Watches[1])
@@ -683,7 +683,7 @@ func TestCollectionPlanLabelExpressions(t *testing.T) {
 		{Key: "monitoring", Operator: metav1.LabelSelectorOpExists},
 		{Key: "disabled", Operator: metav1.LabelSelectorOpDoesNotExist},
 	}
-	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{cr})
+	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{cr})
 	require.Len(t, plan.Watches, 1)
 	selector, err := labels.Parse(plan.Watches[0].Key.LabelSelector)
 	require.NoError(t, err)
@@ -710,7 +710,7 @@ func TestCollectionPlanAbsentAndEmptyLabelSelectorsHaveNoFilter(t *testing.T) {
 	a := collectionTestDeclaration("a", collectionTestSelection("widgets", nil, nil))
 	b := collectionTestDeclaration("b", collectionTestSelection("widgets", nil, nil))
 	b.Spec.Resources[0].LabelSelector = &metav1.LabelSelector{}
-	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*resourcecollection.ResourceCollection{a, b})
+	plan := buildCollectionPlan(cfg, collectionTestDiscovery(), []*collectiondeclaration.CollectionDeclaration{a, b})
 	require.Len(t, plan.Watches, 1)
 	assert.Empty(t, plan.Watches[0].Key.LabelSelector)
 	assert.Empty(t, plan.Watches[0].Key.Namespace)

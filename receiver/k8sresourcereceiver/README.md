@@ -23,11 +23,11 @@ collected. This does not change Kubernetes read permissions.
 Cached denied objects are removed without exporting their bodies, including in
 deletion events. Previously exported data follows downstream retention.
 
-## ResourceCollection declarations
+## CollectionDeclaration declarations
 
 The receiver uses one runtime for YAML baseline collection and declarations.
 When the declaration API is available, the active leader reads cluster-scoped
-`observability.suse.com/v1alpha1` ResourceCollections directly. Their spec selects
+`observability.suse.com/v1alpha1` CollectionDeclarations directly. Their spec selects
 CRD-backed custom resources through each type's served storage version, using
 namespace names and Kubernetes label and field selectors. Declaration version pinning is
 not supported; existing YAML version selections remain.

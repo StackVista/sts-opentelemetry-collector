@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/collectiondeclaration"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -18,21 +18,21 @@ import (
 
 func collectionDeclarationStatus(
 	result collectionDeclarationResult, observations []collectionWatchSnapshot,
-) resourcecollection.Status {
+) collectiondeclaration.Status {
 	watches := map[collectionWatchKey]collectionWatchSnapshot{}
 	for _, observation := range observations {
 		watches[observation.Spec.Key] = observation
 	}
-	status := resourcecollection.Status{ObservedGeneration: result.Generation}
-	state := resourcecollection.Active
+	status := collectiondeclaration.Status{ObservedGeneration: result.Generation}
+	state := collectiondeclaration.Active
 	if result.Reason != "" {
-		state = resourcecollection.Blocked
+		state = collectiondeclaration.Blocked
 	}
 	for _, selection := range result.Selections {
 		entry := collectionSelectionStatus(selection, watches)
 		status.Resources = append(status.Resources, entry)
-		if entry.State == resourcecollection.Blocked ||
-			(state == resourcecollection.Active && entry.State == resourcecollection.Pending) {
+		if entry.State == collectiondeclaration.Blocked ||
+			(state == collectiondeclaration.Active && entry.State == collectiondeclaration.Pending) {
 			state = entry.State
 		}
 	}
@@ -41,10 +41,10 @@ func collectionDeclarationStatus(
 		Reason: "CollectionActive", Message: "All selections are collecting.",
 	}
 	switch state {
-	case resourcecollection.Blocked:
+	case collectiondeclaration.Blocked:
 		condition.Status, condition.Reason = metav1.ConditionFalse, "CollectionBlocked"
 		condition.Message = "One or more selections are blocked; permitted resources continue collecting."
-	case resourcecollection.Pending:
+	case collectiondeclaration.Pending:
 		condition.Status, condition.Reason = metav1.ConditionFalse, "ResourcesPending"
 		condition.Message = "One or more selections are waiting for an API or successful observation."
 	}
@@ -57,8 +57,8 @@ func collectionDeclarationStatus(
 
 func collectionSelectionStatus(
 	selection collectionSelectionResult, watches map[collectionWatchKey]collectionWatchSnapshot,
-) resourcecollection.SelectionStatus {
-	entry := resourcecollection.SelectionStatus{
+) collectiondeclaration.SelectionStatus {
+	entry := collectiondeclaration.SelectionStatus{
 		SelectionIndex: selection.Contributor.SelectionIndex,
 		Group:          selection.Group, Resource: selection.Resource,
 		State: selection.State, Reason: selection.Reason, Message: selection.Message,
@@ -69,19 +69,19 @@ func collectionSelectionStatus(
 	}
 	counts := map[string]int{}
 	var failures []string
-	entry.State, entry.Reason, entry.Message = resourcecollection.Active, collectionWatching, ""
+	entry.State, entry.Reason, entry.Message = collectiondeclaration.Active, collectionWatching, ""
 	for _, resolved := range selection.Resolved {
 		state, reason, message := resolved.State, resolved.Reason, resolved.Message
 		if reason == collectionAwaitingObservation {
-			state, reason = resourcecollection.Active, collectionWatching
+			state, reason = collectiondeclaration.Active, collectionWatching
 			for _, key := range resolved.Watches {
 				observation := watches[key]
 				if !collectionWatchObserved(observation) {
 					failedState := observation.State
-					if failedState == "" || failedState == resourcecollection.Active {
-						failedState = resourcecollection.Pending
+					if failedState == "" || failedState == collectiondeclaration.Active {
+						failedState = collectiondeclaration.Pending
 					}
-					if state != resourcecollection.Blocked {
+					if state != collectiondeclaration.Blocked {
 						state, reason, message = failedState, observation.Reason, observation.Message
 						if reason == "" {
 							reason = collectionAwaitingObservation
@@ -91,17 +91,17 @@ func collectionSelectionStatus(
 			}
 		}
 		counts[state]++
-		if state != resourcecollection.Active {
+		if state != collectiondeclaration.Active {
 			failures = append(failures, fmt.Sprintf("%s (%s)", resolved.Resource.String(), reason))
 		}
-		if state == resourcecollection.Blocked ||
-			(entry.State == resourcecollection.Active && state == resourcecollection.Pending) {
+		if state == collectiondeclaration.Blocked ||
+			(entry.State == collectiondeclaration.Active && state == collectiondeclaration.Pending) {
 			entry.State, entry.Reason, entry.Message = state, reason, message
 		}
 	}
 	if len(selection.Resolved) > 1 {
 		entry.Message = fmt.Sprintf("%d types active, %d blocked, %d pending.",
-			counts[resourcecollection.Active], counts[resourcecollection.Blocked], counts[resourcecollection.Pending])
+			counts[collectiondeclaration.Active], counts[collectiondeclaration.Blocked], counts[collectiondeclaration.Pending])
 		if len(failures) > 0 {
 			total := len(failures)
 			if total > 3 {
@@ -126,7 +126,7 @@ func boundedCollectionMessage(message string) string {
 }
 
 func preserveCollectionTransition(
-	status *resourcecollection.Status, previous resourcecollection.Status, now time.Time,
+	status *collectiondeclaration.Status, previous collectiondeclaration.Status, now time.Time,
 ) {
 	for index := range status.Conditions {
 		condition := &status.Conditions[index]
@@ -142,13 +142,13 @@ func preserveCollectionTransition(
 
 func writeCollectionStatus(
 	ctx context.Context, client dynamic.Interface, result collectionDeclarationResult,
-	status resourcecollection.Status,
+	status collectiondeclaration.Status,
 ) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		current, err := client.Resource(resourcecollection.GVR()).Get(ctx, result.Name, metav1.GetOptions{})
+		current, err := client.Resource(collectiondeclaration.GVR()).Get(ctx, result.Name, metav1.GetOptions{})
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
@@ -159,7 +159,7 @@ func writeCollectionStatus(
 			current.GetDeletionTimestamp() != nil {
 			return nil
 		}
-		var previous resourcecollection.Status
+		var previous collectiondeclaration.Status
 		if raw, found, _ := unstructured.NestedMap(current.Object, "status"); found {
 			_ = runtime.DefaultUnstructuredConverter.FromUnstructured(raw, &previous)
 		}
@@ -175,7 +175,7 @@ func writeCollectionStatus(
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		_, err = client.Resource(resourcecollection.GVR()).UpdateStatus(ctx, current, metav1.UpdateOptions{})
+		_, err = client.Resource(collectiondeclaration.GVR()).UpdateStatus(ctx, current, metav1.UpdateOptions{})
 		if err == nil || apierrors.IsNotFound(err) {
 			return nil
 		}

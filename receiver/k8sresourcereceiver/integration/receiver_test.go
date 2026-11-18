@@ -40,9 +40,9 @@ func testReceiver(ctx context.Context, t *testing.T, client kubernetes.Interface
 	account := serviceAccount(ctx, t, client, config, "runtime")
 	actor := dynamicClient(t, account)
 	role(ctx, t, client, "runtime-control",
-		readRule("observability.suse.com", "resourcecollections"),
+		readRule("observability.suse.com", "collectiondeclarations"),
 		rbacv1.PolicyRule{APIGroups: []string{"observability.suse.com"},
-			Resources: []string{"resourcecollections/status"}, Verbs: []string{"patch", "update"}},
+			Resources: []string{"collectiondeclarations/status"}, Verbs: []string{"patch", "update"}},
 		readRule("apiextensions.k8s.io", "customresourcedefinitions"), readRule("", "pods"))
 	binding(ctx, t, client, "runtime-control", "runtime-control", "runtime", "")
 	a := labeled(selection("*", teamA), "app", "alpha")
@@ -191,7 +191,7 @@ func testReceiver(ctx context.Context, t *testing.T, client kubernetes.Interface
 	createDeclaration(ctx, t, admin, declaration("z-shared", b))
 	waitStatus(ctx, t, admin, "z-shared", "Active")
 	createDeclaration(ctx, t, admin, declaration("z-self",
-		map[string]any{"group": "observability.suse.com", "resource": "resourcecollections"}))
+		map[string]any{"group": "observability.suse.com", "resource": "collectiondeclarations"}))
 	waitStatus(ctx, t, admin, "z-self", "Active")
 	require.NoError(t, declarations(admin).Delete(ctx, "rc-test-field", metav1.DeleteOptions{}))
 	waitStatus(ctx, t, admin, "z-budget", "Active")
@@ -228,7 +228,7 @@ func testReceiver(ctx context.Context, t *testing.T, client kubernetes.Interface
 		for _, record := range records(sink) {
 			obj := object(record)
 			results, _, _ := unstructured.NestedSlice(obj.Object, "status", "resources")
-			if obj.GetKind() == "ResourceCollection" && len(results) > 0 {
+			if obj.GetKind() == "CollectionDeclaration" && len(results) > 0 {
 				return true
 			}
 		}

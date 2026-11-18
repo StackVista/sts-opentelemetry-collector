@@ -3,7 +3,7 @@ package k8sresourcereceiver
 import (
 	"sync"
 
-	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/resourcecollection"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/collectiondeclaration"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -16,7 +16,7 @@ type collectionControlRegistry struct {
 }
 
 func sharesDeclarationControlWatch(key collectionWatchKey) bool {
-	return key == (collectionWatchKey{GVR: resourcecollection.GVR()})
+	return key == (collectionWatchKey{GVR: collectiondeclaration.GVR()})
 }
 
 func (r *collectionControlRegistry) reconcile(specs []collectionWatchSpec) error {
@@ -70,7 +70,7 @@ func (r *collectionControlRegistry) readSnapshot(objects bool) []collectionWatch
 					continue
 				}
 			}
-			observation.State, observation.Reason = resourcecollection.Pending, "ObservationFailed"
+			observation.State, observation.Reason = collectiondeclaration.Pending, "ObservationFailed"
 			observation.Message = "A declaration object could not be read from the cache."
 		}
 		observation.Objects = transformedObjects
