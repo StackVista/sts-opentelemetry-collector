@@ -12,6 +12,8 @@ permissions, including namespace-only delegation and revoked status access.
 Receiver tests cover missing and late APIs, namespace-only read grants, overlapping
 selections, removal, label changes, wildcard denies, custom-resource-only scope,
 field selectors, automatic declaration/status export and all 32 selection results.
+They also verify watch-budget blocking, exact sharing at capacity, and automatic
+recovery after another selection releases its watch.
 A complete snapshot must contain each expected custom resource once.
 Permission recovery uses an explicit selection edit after a read grant.
 Unchanged-watch retry timing remains covered by the receiver's fake-clock tests.

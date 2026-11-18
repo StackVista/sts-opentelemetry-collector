@@ -42,11 +42,12 @@ type collectionEffectiveView struct {
 }
 
 type collectionHandover struct {
-	mu        sync.Mutex
-	registry  collectionRegistry
-	desired   map[collectionContributionKey]collectionDesiredContribution
-	active    map[collectionContributionKey]collectionActiveContribution
-	withdrawn map[collectionContributionKey]collectionDesiredContribution
+	mu                    sync.Mutex
+	registry              collectionRegistry
+	desired               map[collectionContributionKey]collectionDesiredContribution
+	active                map[collectionContributionKey]collectionActiveContribution
+	withdrawn             map[collectionContributionKey]collectionDesiredContribution
+	maxDeclarationWatches int
 }
 
 func newCollectionHandover(registry collectionRegistry) *collectionHandover {
@@ -96,10 +97,11 @@ func (h *collectionHandover) update(plan collectionPlan) error {
 			withdrawn[key] = previous.Request
 		}
 	}
-	if err := h.registry.reconcile(collectionTransitionWatches(desired, active)); err != nil {
+	if err := h.registry.reconcile(collectionTransitionWatches(desired, active, plan.MaxDeclarationWatches)); err != nil {
 		return err
 	}
 	h.desired, h.active, h.withdrawn = desired, active, withdrawn
+	h.maxDeclarationWatches = plan.MaxDeclarationWatches
 	return nil
 }
 
@@ -168,8 +170,8 @@ func (h *collectionHandover) readSnapshot() (collectionEffectiveView, []collecti
 			}
 		}
 	}
-	// Retire old watches only after the replacement's effective view is available.
-	if err := h.registry.reconcile(collectionTransitionWatches(h.desired, active)); err != nil {
+	// Retire superseded watches after replacement sync or when the budget requires it.
+	if err := h.registry.reconcile(collectionTransitionWatches(h.desired, active, h.maxDeclarationWatches)); err != nil {
 		return collectionEffectiveView{}, nil, err
 	}
 	h.active = active
@@ -293,7 +295,7 @@ func retainCollectionContribution(
 			// Explicit selection changes withdraw old data even if the new API cannot be read.
 			return false
 		}
-		return current.Reason != collectionPolicyDenied
+		return current.Reason != collectionPolicyDenied && current.Reason != collectionWatchBudgetExceeded
 	}
 	if key.Kind != collectionDeclaration {
 		return false
@@ -333,8 +335,10 @@ func collectionFamilyReady(
 func collectionTransitionWatches(
 	desired map[collectionContributionKey]collectionDesiredContribution,
 	active map[collectionContributionKey]collectionActiveContribution,
+	maxDeclarationWatches int,
 ) []collectionWatchSpec {
 	merged := map[collectionWatchKey]collectionWatchSpec{}
+	currentKeys := map[collectionWatchKey]bool{}
 	add := func(request collectionDesiredContribution) {
 		for _, spec := range request.Watches {
 			current := merged[spec.Key]
@@ -348,6 +352,9 @@ func collectionTransitionWatches(
 	}
 	for _, next := range desired {
 		add(next)
+		for _, spec := range next.Watches {
+			currentKeys[spec.Key] = true
+		}
 	}
 	result := make([]collectionWatchSpec, 0, len(merged))
 	for _, spec := range merged {
@@ -362,7 +369,31 @@ func collectionTransitionWatches(
 		result = append(result, spec)
 	}
 	sort.Slice(result, func(i, j int) bool { return collectionWatchLess(result[i].Key, result[j].Key) })
-	return result
+	baseline := func(spec collectionWatchSpec) bool {
+		for _, contributor := range spec.Contributors {
+			if contributor.Kind != collectionDeclaration {
+				return true
+			}
+		}
+		return false
+	}
+	count := 0
+	for _, spec := range result {
+		if currentKeys[spec.Key] && !baseline(spec) {
+			count++
+		}
+	}
+	admitted := result[:0]
+	for _, spec := range result {
+		if currentKeys[spec.Key] || baseline(spec) {
+			admitted = append(admitted, spec)
+		} else if count < maxDeclarationWatches {
+			admitted = append(admitted, spec)
+			count++
+		}
+	}
+	// At capacity, retire superseded watches but retain their last observed objects.
+	return admitted
 }
 
 func collectionView(

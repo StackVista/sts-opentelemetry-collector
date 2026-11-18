@@ -595,7 +595,8 @@ func collectionDeletionPolicy(
 				if resolved.Resource != gvr.GroupResource() {
 					continue
 				}
-				if resolved.Reason != collectionAwaitingObservation && resolved.Reason != collectionPolicyDenied {
+				if resolved.Reason != collectionAwaitingObservation && resolved.Reason != collectionPolicyDenied &&
+					resolved.Reason != collectionWatchBudgetExceeded {
 					return false
 				}
 				for _, key := range resolved.Watches {

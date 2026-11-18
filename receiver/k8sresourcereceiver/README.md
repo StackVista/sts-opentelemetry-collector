@@ -34,6 +34,19 @@ not supported; existing YAML version selections remain.
 
 Baseline selections and declarations contribute a union. Identical watches are
 shared and objects are deduplicated per API representation before payload budgets.
+`max_declaration_watches` limits additional distinct watches beyond the YAML
+baseline. The provisional default is 256; zero uses that default and negative
+values are invalid. A key includes API version, resource, namespace, label and
+field selectors. Exact shared watches count once; baseline and control watches
+do not consume this budget. Declarations are considered by name, then selection
+index and resource name. Adding an earlier declaration can displace a later one.
+Every namespace for a resolved type must fit together, otherwise that type
+reports `Blocked / WatchBudgetExceeded`. Other permitted wildcard types keep
+collecting. Freeing capacity automatically retries blocked selections.
+Superseded declaration watches use spare capacity during version handover;
+at capacity, their last observations are retained without keeping their watches.
+This limits registered watches, not cache bytes or the number of objects.
+
 Editing a declaration's resource or filters withdraws its previous contribution,
 including when the replacement is pending or blocked. Representation changes
 for an unchanged selection retain previous observations until replacements synchronize.
@@ -284,6 +297,7 @@ out entirely.
 | `PeerSyncPort`       | 4319    | HTTP server port on each replica.                  |
 | `PeerSyncDNS`        | —       | Headless service FQDN. Empty ⇒ single-replica.    |
 | `MaxCRTotalDataSizeBytes` | 10MiB   | Total CR payload budget per collection cycle.      |
+| `MaxDeclarationWatches` | 256 | Maximum distinct declaration watches beyond the YAML baseline. Zero uses the default. |
 | `MaxObjectTotalDataSizeBytes` | 10MiB | Total static object payload budget per collection cycle. Zero disables it. |
 | `ConfigMapMaxDataSize` | 100KiB | ConfigMap data kept per object. Zero keeps all. |
 | `CompactCache` | false | Cache objects as compact JSON. See [Compact object cache](#compact-object-cache). |

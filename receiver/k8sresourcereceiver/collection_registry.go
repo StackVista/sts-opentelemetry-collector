@@ -91,6 +91,15 @@ func (r *collectionWatchRegistry) reconcile(specs []collectionWatchSpec) error {
 	desired := make(map[collectionWatchKey]bool, len(specs))
 	for _, spec := range specs {
 		desired[spec.Key] = true
+	}
+	// Cancel retired watches before starting replacements at the watch limit.
+	for key, entry := range r.entries {
+		if !desired[key] {
+			entry.cancel()
+			delete(r.entries, key)
+		}
+	}
+	for _, spec := range specs {
 		if entry, exists := r.entries[spec.Key]; exists {
 			entry.spec = copyCollectionWatchSpec(spec)
 			continue
@@ -100,12 +109,6 @@ func (r *collectionWatchRegistry) reconcile(specs []collectionWatchSpec) error {
 			return err
 		}
 		r.entries[spec.Key] = entry
-	}
-	for key, entry := range r.entries {
-		if !desired[key] {
-			entry.cancel()
-			delete(r.entries, key)
-		}
 	}
 	return nil
 }

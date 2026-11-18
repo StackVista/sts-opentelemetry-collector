@@ -23,6 +23,7 @@ const (
 	DiscoveryModeAll                   DiscoveryMode = "all"
 	defaultMaxCRTotalDataSizeBytes                   = 10 * 1024 * 1024
 	defaultMaxObjectTotalDataSizeBytes               = 10 * 1024 * 1024
+	defaultMaxDeclarationWatches                     = 256
 	// Matches the cluster agent's ConfigMap collector.
 	defaultConfigMapMaxDataSize = 100 * 1024
 )
@@ -62,6 +63,10 @@ type Config struct {
 	// configured Kubernetes object watches per collection cycle. Zero disables it, which
 	// consumers of complete snapshots need: a dropped object reads as deleted.
 	MaxObjectTotalDataSizeBytes int `mapstructure:"max_object_total_data_size_bytes"`
+
+	// MaxDeclarationWatches caps distinct watches added beyond the YAML baseline.
+	// Zero uses the default; exact shared watches count once.
+	MaxDeclarationWatches int `mapstructure:"max_declaration_watches"`
 
 	// PeerSyncPort is the port on which the HTTP server listens for peer sync requests.
 	// Each replica serves its serialized cache on this port. Default: 4319.
@@ -239,6 +244,12 @@ func (c *Config) Validate() error {
 	}
 	if c.MaxObjectTotalDataSizeBytes < 0 {
 		return fmt.Errorf("max_object_total_data_size_bytes must be non-negative, got %d", c.MaxObjectTotalDataSizeBytes)
+	}
+	if c.MaxDeclarationWatches < 0 {
+		return fmt.Errorf("max_declaration_watches must be non-negative, got %d", c.MaxDeclarationWatches)
+	}
+	if c.MaxDeclarationWatches == 0 {
+		c.MaxDeclarationWatches = defaultMaxDeclarationWatches
 	}
 
 	if c.DiscoveryMode == DiscoveryModeAPIGroups {

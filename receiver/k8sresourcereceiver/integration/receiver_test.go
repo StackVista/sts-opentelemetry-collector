@@ -58,6 +58,7 @@ func testReceiver(ctx context.Context, t *testing.T, client kubernetes.Interface
 	cfg.CustomResourceAPIGroups = &k8sreceiver.APIGroups{Include: []string{}}
 	cfg.Objects = []k8sreceiver.ObjectWatch{{Name: "pods"}}
 	cfg.DeniedObjects = []k8sreceiver.ObjectMatcher{{Name: "gadgets", Group: testGroup}}
+	cfg.MaxDeclarationWatches = 4
 	cfg.IncrementInterval = time.Second
 	cfg.SnapshotInterval = time.Minute
 	cfg.EmitSnapshotBoundaries = true
@@ -176,6 +177,25 @@ func testReceiver(ctx context.Context, t *testing.T, client kubernetes.Interface
 	field["fieldSelector"] = "spec.value=initial"
 	replaceSelection(ctx, t, admin, declaration("field", field))
 	waitStatus(ctx, t, admin, "field", "Blocked")
+	budget := selection("widgets", teamA)
+	budget["fieldSelector"] = "metadata.name=cross-a"
+	createDeclaration(ctx, t, admin, declaration("z-budget", budget))
+	blocked := waitStatus(ctx, t, admin, "z-budget", "Blocked")
+	results, found, err := unstructured.NestedSlice(blocked.Object, "status", "resources")
+	require.NoError(t, err)
+	require.True(t, found)
+	budgetResult, ok := results[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "WatchBudgetExceeded", budgetResult["reason"])
+	waitObjects(t, sink, union)
+	createDeclaration(ctx, t, admin, declaration("z-shared", b))
+	waitStatus(ctx, t, admin, "z-shared", "Active")
+	require.NoError(t, declarations(admin).Delete(ctx, "rc-test-field", metav1.DeleteOptions{}))
+	waitStatus(ctx, t, admin, "z-budget", "Active")
+	waitObjects(t, sink, append(append([]string(nil), union...), "widgets/"+teamA+"/cross-a"))
+	require.NoError(t, declarations(admin).Delete(ctx, "rc-test-z-budget", metav1.DeleteOptions{}))
+	require.NoError(t, declarations(admin).Delete(ctx, "rc-test-z-shared", metav1.DeleteOptions{}))
+	waitObjects(t, sink, union)
 	createDeclaration(ctx, t, admin, declaration("maximum", repeatedSelections(32, absentSelection)...))
 	states := make([]string, 32)
 	for i := range states {

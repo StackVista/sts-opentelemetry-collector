@@ -18,6 +18,7 @@ import (
 const (
 	collectionAwaitingObservation = "AwaitingObservation"
 	collectionPolicyDenied        = "PolicyDenied"
+	collectionWatchBudgetExceeded = "WatchBudgetExceeded"
 	collectionAPINotAvailable     = "APINotAvailable"
 	collectionWatching            = "Watching"
 	collectionBaselineDiscovery   = "baseline-discovery"
@@ -82,17 +83,19 @@ type collectionDeclarationResult struct {
 }
 
 type collectionPlan struct {
-	Watches          []collectionWatchSpec
-	Baseline         []collectionSelectionResult
-	Declarations     []collectionDeclarationResult
-	DeniedObjects    []ObjectMatcher
-	RemovedResources []schema.GroupResource
+	Watches               []collectionWatchSpec
+	Baseline              []collectionSelectionResult
+	Declarations          []collectionDeclarationResult
+	DeniedObjects         []ObjectMatcher
+	RemovedResources      []schema.GroupResource
+	MaxDeclarationWatches int
 }
 
 type collectionPlanner struct {
-	config  *Config
-	catalog collectionCatalog
-	watches map[collectionWatchKey]collectionWatchSpec
+	config             *Config
+	catalog            collectionCatalog
+	watches            map[collectionWatchKey]collectionWatchSpec
+	declarationWatches int
 }
 
 // Inputs are snapshots; Config.Validate must have completed before planning.
@@ -103,7 +106,10 @@ func buildCollectionPlan(
 		config: cfg, catalog: newCollectionCatalog(discovery),
 		watches: map[collectionWatchKey]collectionWatchSpec{},
 	}
-	plan := collectionPlan{DeniedObjects: append([]ObjectMatcher(nil), cfg.DeniedObjects...)}
+	plan := collectionPlan{
+		DeniedObjects:         append([]ObjectMatcher(nil), cfg.DeniedObjects...),
+		MaxDeclarationWatches: cfg.MaxDeclarationWatches,
+	}
 	for _, key := range sortedCollectionResourceKeys(planner.catalog.baselineResources) {
 		if cfg.shouldWatchAPIGroup(key.Group) {
 			plan.Baseline = append(plan.Baseline, planner.resolve(
@@ -274,6 +280,8 @@ func (p *collectionPlanner) resolve(
 			scope = []string{""}
 		}
 		sort.Strings(scope)
+		var keys []collectionWatchKey
+		additional := 0
 		for i, namespace := range scope {
 			if i > 0 && namespace == scope[i-1] {
 				continue
@@ -282,6 +290,24 @@ func (p *collectionPlanner) resolve(
 				GVR: resource.gvr, Namespace: namespace,
 				LabelSelector: labelFilter.String(), FieldSelector: fieldFilter.String(),
 			}
+			keys = append(keys, watchKey)
+			if _, exists := p.watches[watchKey]; !exists {
+				additional++
+			}
+		}
+		if contributor.Kind == collectionDeclaration &&
+			p.declarationWatches+additional > p.config.MaxDeclarationWatches {
+			// Admit every namespace for this type together; never silently collect a subset.
+			resolved.State, resolved.Reason = resourcecollection.Blocked, collectionWatchBudgetExceeded
+			resolved.Message = fmt.Sprintf("Resource needs %d additional watches; %d of %d declaration watches are in use. "+
+				"Reduce the selection or increase max_declaration_watches.",
+				additional, p.declarationWatches, p.config.MaxDeclarationWatches)
+			break
+		}
+		if contributor.Kind == collectionDeclaration {
+			p.declarationWatches += additional
+		}
+		for _, watchKey := range keys {
 			spec := p.watches[watchKey]
 			spec.Key, spec.Namespaced, spec.Source = watchKey, resource.namespaced, resource.source
 			spec.Contributors = append(spec.Contributors, contributor)
