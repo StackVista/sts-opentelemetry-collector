@@ -9,7 +9,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/stackvista/sts-opentelemetry-collector/exporter/clickhousestsexporter v0.0.0
 	github.com/stretchr/testify v1.12.1
-	github.com/testcontainers/testcontainers-go v0.44.0
+	github.com/testcontainers/testcontainers-go v0.45.0
 	go.opentelemetry.io/collector/component/componenttest v0.164.0
 	go.opentelemetry.io/collector/consumer/consumererror v0.164.0
 	go.opentelemetry.io/collector/pdata v1.70.0
