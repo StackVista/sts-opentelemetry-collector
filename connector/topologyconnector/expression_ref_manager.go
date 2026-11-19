@@ -336,26 +336,27 @@ func (r *expressionRefAggregator) walkAttributeRef(
 	sel *entityFieldSelector,
 	ref internal.Reference,
 ) {
+	if len(ref.Path) == 0 {
+		return
+	}
+
+	if ref.Path[0] != "attributes" {
+		// Nested accesses must hash the containing field, including the log body.
+		sel.fieldKeys[ref.Path[0]] = struct{}{}
+		return
+	}
+
 	if sel.allAttributes {
 		return
 	}
 
-	// attributes
-	if len(ref.Path) == 1 && ref.Path[0] == "attributes" {
+	if len(ref.Path) == 1 {
 		sel.allAttributes = true
 		sel.attributeKeys = nil
 		return
 	}
 
-	// top-level fields (span.name, metric.unit, etc.)
-	if len(ref.Path) == 1 {
-		sel.fieldKeys[ref.Path[0]] = struct{}{}
-	}
-
-	// attributes["key"]
-	if len(ref.Path) >= 2 && ref.Path[0] == "attributes" {
-		sel.attributeKeys[ref.Path[1]] = struct{}{}
-	}
+	sel.attributeKeys[ref.Path[1]] = struct{}{}
 }
 
 func (r *expressionRefAggregator) toSummary() *types.ExpressionRefSummary {
