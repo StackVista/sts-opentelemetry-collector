@@ -511,10 +511,13 @@ func (ri *ResourceInformers) onCRDDelete(obj interface{}) {
 // startCRInformer creates and starts an informer for the given GVR.
 // The informer has no event handlers — the collector reads its cache directly.
 //
-// Returns the outcome (started, exists, forbidden, failed) and an error if the
-// outcome is failed.
+// Administrator denies are checked before any permission probe or list/watch.
 func (ri *ResourceInformers) startCRInformer(gvr schema.GroupVersionResource) (metrics.InformerOutcome, error) {
 	key := emit.FormatGVRKey(gvr)
+
+	if ri.config.isDeniedResource(gvr.Group, gvr.Resource) {
+		return metrics.InformerPolicyDenied, nil
+	}
 
 	if shouldRetry, retryIn := ri.forbiddenTracker.ShouldRetry(gvr); !shouldRetry {
 		ri.settings.Logger.Debug("Skipping forbidden resource",
@@ -639,7 +642,7 @@ func (ri *ResourceInformers) ReadObjects() map[schema.GroupVersionResource]Objec
 		// waitForCRInformersSync only covers informers that existed at startup;
 		// informers started later (CRD added at runtime, reconciler retry) may not
 		// have synced yet when the collector reads.
-		if !entry.informer.HasSynced() {
+		if ri.config.isDeniedResource(entry.gvr.Group, entry.gvr.Resource) || !entry.informer.HasSynced() {
 			continue
 		}
 		if shouldRetry, _ := ri.forbiddenTracker.ShouldRetry(entry.gvr); !shouldRetry {
@@ -649,7 +652,7 @@ func (ri *ResourceInformers) ReadObjects() map[schema.GroupVersionResource]Objec
 	}
 
 	for _, entry := range staticEntries {
-		if !entry.informer.HasSynced() {
+		if ri.config.isDeniedResource(entry.gvr.Group, entry.gvr.Resource) || !entry.informer.HasSynced() {
 			continue
 		}
 		appendStoreObjects(result, entry, entry.source)
@@ -663,6 +666,9 @@ func (ri *ResourceInformers) StaticWatchesSynced() bool {
 	defer ri.informersMu.RUnlock()
 	for i := range ri.resolvedObjects {
 		ow := &ri.resolvedObjects[i]
+		if ri.config.isDeniedResource(ow.GVR.Group, ow.GVR.Resource) {
+			continue
+		}
 		for _, namespace := range expandNamespaces(ow) {
 			entry, ok := ri.staticInformers[formatStaticInformerKey(ow.GVR, namespace, ow.LabelSelector, ow.FieldSelector)]
 			if !ok || !entry.informer.HasSynced() {
@@ -743,6 +749,9 @@ func (ri *ResourceInformers) startStaticInformer(
 	ow *resolvedObjectWatch,
 	namespace string,
 ) (metrics.InformerOutcome, error) {
+	if ri.config.isDeniedResource(ow.GVR.Group, ow.GVR.Resource) {
+		return metrics.InformerPolicyDenied, nil
+	}
 	key := formatStaticInformerKey(ow.GVR, namespace, ow.LabelSelector, ow.FieldSelector)
 
 	if shouldRetry, retryIn := ri.staticShouldRetry(key); !shouldRetry {

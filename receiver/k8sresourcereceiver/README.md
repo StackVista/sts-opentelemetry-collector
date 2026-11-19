@@ -3,6 +3,89 @@
 > [!NOTE]
 > The Go module of this component is internal to SUSE Observability: its API and configuration can change in any release. Configure the collector as described in the [SUSE Observability documentation](https://documentation.suse.com/cloudnative/suse-observability/latest/en/setup/otel/overview.html).
 
+## Administrator collection denies
+
+`denied_objects` blocks an exact plural resource name and API group:
+
+```yaml
+denied_objects:
+  - name: certificates
+    group: cert-manager.io
+  - name: virtualmachines
+    group: kubevirt.io
+```
+
+The deny covers every namespace and API version of that type. It is checked
+before automatic CR discovery or resolved static watches make API requests.
+An explicit `objects` entry with the same name and group fails configuration
+validation. CRD definitions remain visible; their denied instances are not
+collected. This does not change Kubernetes read permissions.
+Cached denied objects are removed without exporting their bodies, including in
+deletion events. Previously exported data follows downstream retention.
+
+## CollectionDeclaration declarations
+
+The receiver uses one runtime for YAML baseline collection and declarations.
+When the declaration API is available, the active leader reads cluster-scoped
+`observability.suse.com/v1alpha1` CollectionDeclarations directly. Their spec selects
+CRD-backed custom resources through each type's served storage version, using
+namespace names and Kubernetes label and field selectors. Declaration version pinning is
+not supported; existing YAML version selections remain.
+
+Baseline selections and declarations contribute a union. Identical watches are
+shared and objects are deduplicated per API representation before payload budgets.
+`max_declaration_watches` limits additional distinct watches beyond the YAML
+baseline. The provisional default is 256; zero uses that default and negative
+values are invalid. A key includes API version, resource, namespace, label and
+field selectors. Exact shared watches count once; baseline and control watches
+do not consume this budget. Declarations are considered by name, then selection
+index and resource name. Adding an earlier declaration can displace a later one.
+Every namespace for a resolved type must fit together, otherwise that type
+reports `Blocked / WatchBudgetExceeded`. Other permitted wildcard types keep
+collecting. Freeing capacity automatically retries blocked selections.
+Superseded declaration watches use spare capacity during version handover;
+at capacity, their last observations are retained without keeping their watches.
+This limits registered watches, not cache bytes or the number of objects.
+
+Editing a declaration's resource or filters withdraws its previous contribution,
+including when the replacement is pending or blocked. Representation changes
+for an unchanged selection retain previous observations until replacements synchronize.
+Unavailable APIs and missing resource-read permissions are retried. Declarations
+do not change RBAC or render ConfigMaps or collector rollouts.
+
+The leader publishes generation-bound feedback through the status subresource
+using `UpdateStatus` with the current resourceVersion. Conflict retries read the
+declaration again and check its UID, generation and deletion state. Status-only updates do
+not trigger discovery. The current per-selection summary is provisional; wildcard
+children are tracked internally even when their details are not on the wire.
+
+Declaration objects and their status are also reported as custom resources,
+subject to the same administrator denies and CR payload budget. Disabling their
+export does not disable the control reads needed to process selections.
+
+Blocked watches for unchanged selections retain their last successful objects until observation recovers.
+Permission failures delay further API requests for that watch by 30 minutes.
+Other failures follow client-go retry behavior. Removing a watch cancels its wait.
+There is no retention timeout because an unavailable API cannot prove deletion.
+Discovery failures retain known APIs and contributions; an authoritative CRD
+deletion withdraws its resources. On takeover, uncertain objects from the peer
+cache remain in the reporting view until their watches synchronize. After an
+explicit edit, local previous-scope metadata prevents peer data
+from restoring the withdrawn contribution. That metadata is not in the peer
+protocol, so a fresh runtime retains uncertain peer objects conservatively.
+Retention is applied before payload budgets. A pending custom declaration does not stop
+the healthy standard Kubernetes baseline from being reported.
+
+Informer recovery remains visible in `informer_reconciles_total`. The declaration
+path records watch transitions and periodic reconciliation, with bounded
+`kind` (`cr`, `static`, `control`) and `outcome` labels. Shared watches are counted
+once. Unresolved APIs and administrator denies also appear in the counter.
+Watch failures and recovery log once per health transition.
+Unresolved YAML object selections also log once per resolution transition.
+Required YAML watches must synchronize before a snapshot can be complete.
+Health and status checks run independently of object snapshot assembly, which
+reads informer stores at the reporting interval.
+
 ## Pod container summary attributes
 
 Core Pod object logs include three integer attributes when
@@ -186,17 +269,10 @@ Each cached object carries an `ObjectSource` (`cr` / `static`) recorded at
 discovery time; `eventNameForSource` maps that to the emitted event name on
 both the snapshot and increment paths.
 
-`Config.Objects` entries are classified at startup against the cluster's CRDs:
-
-- Entry whose GVR is **also covered by `cr_api_groups`** → reject (both
-  informers would emit the same resource); operator must remove the entry or
-  exclude the CRD's group.
-- Entry whose GVR is **defined by a CRD but filter-excluded** → marked
-  `CRDBacked`; the static informer is the only path but downstream still gets
-  the CR log shape.
-- Entry with no backing CRD → plain static, emits the Object shape.
-
-See `classifyStaticObjectsCRDOverlap` for the resolution rules.
+The collection plan resolves YAML objects, CR group discovery and declarations
+together. Overlapping selections form a union and share identical watches.
+CRD-backed objects use the CR log shape; resources without a backing CRD use
+the Object shape.
 
 ## Secrets and ConfigMaps
 
@@ -221,6 +297,7 @@ out entirely.
 | `PeerSyncPort`       | 4319    | HTTP server port on each replica.                  |
 | `PeerSyncDNS`        | —       | Headless service FQDN. Empty ⇒ single-replica.    |
 | `MaxCRTotalDataSizeBytes` | 10MiB   | Total CR payload budget per collection cycle.      |
+| `MaxDeclarationWatches` | 256 | Maximum distinct declaration watches beyond the YAML baseline. Zero uses the default. |
 | `MaxObjectTotalDataSizeBytes` | 10MiB | Total static object payload budget per collection cycle. Zero disables it. |
 | `ConfigMapMaxDataSize` | 100KiB | ConfigMap data kept per object. Zero keeps all. |
 | `CompactCache` | false | Cache objects as compact JSON. See [Compact object cache](#compact-object-cache). |

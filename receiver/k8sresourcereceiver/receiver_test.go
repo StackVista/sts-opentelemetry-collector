@@ -10,13 +10,18 @@ import (
 	"time"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector"
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/collectiondeclaration"
 	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/internal/metrics"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer/consumertest"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/rest"
+	clienttesting "k8s.io/client-go/testing"
 )
 
 type receiverTestHost struct {
@@ -48,6 +53,7 @@ func TestReceiverColdBootstrapDoesNotBlockStartupOrShutdown(t *testing.T) {
 	r := &k8sresourceReceiver{
 		settings: testSettings(t), config: cfg, consumer: consumertest.NewNop(),
 		metrics: metrics.NoopRecorder{}, dynamicClient: dynamicfake.NewSimpleDynamicClient(testScheme()),
+		discoveryClient: &collectionRuntimeDiscovery{},
 	}
 	// A short caller deadline must not become the background receiver lifetime.
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -93,6 +99,46 @@ func TestReceiverIgnoresLeadershipAfterShutdown(t *testing.T) {
 	require.Nil(t, r.collector)
 }
 
+func TestReceiverCollectsBaselineWithoutDeclarations(t *testing.T) {
+	for _, available := range []bool{false, true} {
+		name := "missing declaration API"
+		if available {
+			name = "empty declaration API"
+		}
+		t.Run(name, func(t *testing.T) {
+			cfg := collectionTestConfig(t, nil, nil, []ObjectWatch{{Name: "pods"}}, nil)
+			cfg.PeerSyncPort = 0
+			client := collectionRuntimeClient(t, makeTestPod("baseline", "payments", nil))
+			if !available {
+				client.PrependReactor("list", collectiondeclaration.GVR().Resource,
+					func(clienttesting.Action) (bool, runtime.Object, error) {
+						return true, nil, apierrors.NewNotFound(collectiondeclaration.GVR().GroupResource(), "")
+					})
+			}
+			r := &k8sresourceReceiver{
+				settings: testSettings(t), config: cfg, consumer: consumertest.NewNop(),
+				metrics: metrics.NoopRecorder{}, dynamicClient: client,
+				discoveryClient: &collectionRuntimeDiscovery{resources: []*metav1.APIResourceList{
+					collectionTestAPI("", "v1", true, "pods"),
+				}},
+			}
+			require.NoError(t, r.Start(context.Background(), receiverTestHost{}))
+			t.Cleanup(func() { require.NoError(t, r.Shutdown(context.Background())) })
+			r.mu.Lock()
+			collector := r.collector
+			r.mu.Unlock()
+			require.NotNil(t, collector)
+			source, ok := collector.informers.(*collectionRuntime)
+			require.True(t, ok)
+			require.Eventually(t, func() bool {
+				view := source.collectionSnapshot()
+				return view.Complete && len(view.Objects[podsGVR].Objects) == 1 &&
+					view.Objects[podsGVR].Objects[0].GetName() == "baseline"
+			}, 5*time.Second, 10*time.Millisecond)
+		})
+	}
+}
+
 func TestReceiverShutdownCancelsAlreadyLeaderInformerStartup(t *testing.T) {
 	listStarted, listCanceled := make(chan struct{}), make(chan struct{})
 	var startedOnce, canceledOnce sync.Once
@@ -117,6 +163,7 @@ func TestReceiverShutdownCancelsAlreadyLeaderInformerStartup(t *testing.T) {
 	r := &k8sresourceReceiver{
 		settings: testSettings(t), config: cfg, consumer: consumertest.NewNop(),
 		metrics: metrics.NoopRecorder{}, dynamicClient: client,
+		discoveryClient: &collectionRuntimeDiscovery{},
 	}
 	startDone := make(chan error, 1)
 	go func() {

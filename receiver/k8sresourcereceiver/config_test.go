@@ -10,6 +10,38 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
+func TestConfigBaselineDefaults(t *testing.T) {
+	cfg := &Config{}
+	require.NoError(t, cfg.Validate())
+	assert.Equal(t, []string{"*"}, cfg.CustomResourceAPIGroups.Include)
+}
+
+func TestConfigExplicitEmptyBaselineGroups(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		includes []string
+	}{
+		{"omitted include", nil},
+		{"empty include", []string{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &Config{
+				CustomResourceAPIGroups: &APIGroups{Include: tc.includes},
+			}
+			require.NoError(t, cfg.Validate())
+			assert.False(t, cfg.shouldWatchAPIGroup("collection-test.example.com"))
+			assert.Empty(t, cfg.CustomResourceAPIGroups.Include)
+		})
+	}
+}
+
+func TestConfigObjectsPreserveOmittedBaselineGroups(t *testing.T) {
+	cfg := &Config{Objects: []ObjectWatch{{Name: "pods"}}}
+	require.NoError(t, cfg.Validate())
+	assert.Equal(t, []string{"*"}, cfg.CustomResourceAPIGroups.Include)
+	assert.True(t, cfg.shouldWatchAPIGroup("collection-test.example.com"))
+}
+
 func TestConfigValidate(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -55,8 +87,7 @@ func TestConfigValidate(t *testing.T) {
 					Exclude: []string{},
 				},
 			},
-			wantErr: true,
-			errMsg:  "cr_api_groups.include cannot be empty",
+			wantErr: false,
 		},
 		{
 			name: "invalid discovery mode",

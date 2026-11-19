@@ -23,6 +23,7 @@ const (
 	DiscoveryModeAll                   DiscoveryMode = "all"
 	defaultMaxCRTotalDataSizeBytes                   = 10 * 1024 * 1024
 	defaultMaxObjectTotalDataSizeBytes               = 10 * 1024 * 1024
+	defaultMaxDeclarationWatches                     = 256
 	// Matches the cluster agent's ConfigMap collector.
 	defaultConfigMapMaxDataSize = 100 * 1024
 )
@@ -63,6 +64,10 @@ type Config struct {
 	// consumers of complete snapshots need: a dropped object reads as deleted.
 	MaxObjectTotalDataSizeBytes int `mapstructure:"max_object_total_data_size_bytes"`
 
+	// MaxDeclarationWatches caps distinct watches added beyond the YAML baseline.
+	// Zero uses the default; exact shared watches count once.
+	MaxDeclarationWatches int `mapstructure:"max_declaration_watches"`
+
 	// PeerSyncPort is the port on which the HTTP server listens for peer sync requests.
 	// Each replica serves its serialized cache on this port. Default: 4319.
 	PeerSyncPort int `mapstructure:"peer_sync_port"`
@@ -84,11 +89,8 @@ type Config struct {
 	// These attributes are added to emitted logs for matching Kubernetes resources.
 	ResourceAttributes []ResourceAttributeEnrichment `mapstructure:"resource_attributes"`
 
-	// DeniedObjects lists resources that must not appear under Objects. Use this
-	// to block third-party resources with sensitive contents (e.g. cert-manager
-	// Certificates). Core Secrets and ConfigMaps are allowed because they are
-	// sanitized on ingestion: Secret data is replaced by its hash and ConfigMap
-	// data is truncated.
+	// DeniedObjects vetoes exact resource types across discovery and declarations.
+	// Conflicting explicit Objects entries are rejected by validation.
 	DeniedObjects []ObjectMatcher `mapstructure:"denied_objects"`
 
 	// ConfigMapMaxDataSize caps the ConfigMap data kept per object, shared
@@ -114,6 +116,15 @@ type ObjectMatcher struct {
 
 	// Group is the API group. Empty matches the core API group.
 	Group string `mapstructure:"group"`
+}
+
+func (c *Config) isDeniedResource(group, name string) bool {
+	for _, matcher := range c.DeniedObjects {
+		if matcher.Group == group && matcher.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // ObjectWatch declares a Kubernetes resource to watch.
@@ -234,6 +245,12 @@ func (c *Config) Validate() error {
 	if c.MaxObjectTotalDataSizeBytes < 0 {
 		return fmt.Errorf("max_object_total_data_size_bytes must be non-negative, got %d", c.MaxObjectTotalDataSizeBytes)
 	}
+	if c.MaxDeclarationWatches < 0 {
+		return fmt.Errorf("max_declaration_watches must be non-negative, got %d", c.MaxDeclarationWatches)
+	}
+	if c.MaxDeclarationWatches == 0 {
+		c.MaxDeclarationWatches = defaultMaxDeclarationWatches
+	}
 
 	if c.DiscoveryMode == DiscoveryModeAPIGroups {
 		if c.CustomResourceAPIGroups == nil {
@@ -241,10 +258,6 @@ func (c *Config) Validate() error {
 				Include: []string{"*"},
 				Exclude: []string{},
 			}
-		}
-
-		if len(c.CustomResourceAPIGroups.Include) == 0 {
-			return errors.New("cr_api_groups.include cannot be empty when discovery_mode is 'api_groups'")
 		}
 
 		// Pre-compile and cache include patterns for performance
@@ -348,7 +361,7 @@ func (c *Config) validateResourceAttributes() error {
 // validateObjects enforces static rules on c.Objects: required name, not
 // denied, parseable selectors, and uniqueness across namespace expansion.
 // GVR resolution (ambiguity, missing-from-server, version-mismatch) is
-// deferred to receiver startup, where the discovery client is available.
+// deferred to collection planning, where the discovery client is available.
 func (c *Config) validateObjects() error {
 	if c.ConfigMapMaxDataSize < 0 {
 		return errors.New("configmap_max_datasize must not be negative")

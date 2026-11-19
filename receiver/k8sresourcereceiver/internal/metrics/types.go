@@ -107,13 +107,13 @@ const (
 	BootstrapSourceSecondary BootstrapSource = "secondary"
 )
 
-// InformerKind distinguishes the two informer flavours that share the reconcile
-// metric: CRD-discovered CR informers and statically-configured object informers.
+// InformerKind identifies the observation or control watch being reconciled.
 type InformerKind string
 
 const (
-	InformerKindCR     InformerKind = "cr"
-	InformerKindStatic InformerKind = "static"
+	InformerKindCR      InformerKind = "cr"
+	InformerKindStatic  InformerKind = "static"
+	InformerKindControl InformerKind = "control"
 )
 
 // InformerOutcome categorises the result of a (re-)attempt to start an informer.
@@ -122,10 +122,11 @@ const (
 type InformerOutcome string
 
 const (
-	InformerStarted   InformerOutcome = "started"
-	InformerExists    InformerOutcome = "exists"
-	InformerForbidden InformerOutcome = "forbidden"
-	InformerFailed    InformerOutcome = "failed"
+	InformerStarted      InformerOutcome = "started"
+	InformerExists       InformerOutcome = "exists"
+	InformerForbidden    InformerOutcome = "forbidden"
+	InformerPolicyDenied InformerOutcome = "policy_denied"
+	InformerFailed       InformerOutcome = "failed"
 )
 
 // EnrichmentSyncOutcome is the result of waiting for a resource attribute

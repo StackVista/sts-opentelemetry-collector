@@ -1,0 +1,80 @@
+package k8sresourcereceiver
+
+import (
+	"sync"
+
+	"github.com/stackvista/sts-opentelemetry-collector/receiver/k8sresourcereceiver/collectiondeclaration"
+	"k8s.io/client-go/tools/cache"
+)
+
+// Reuse the required declaration informer for an identical collection watch.
+type collectionControlRegistry struct {
+	target, controls *collectionWatchRegistry
+	transform        cache.TransformFunc
+	mu               sync.Mutex
+	declaration      *collectionWatchSpec
+}
+
+func sharesDeclarationControlWatch(key collectionWatchKey) bool {
+	return key == (collectionWatchKey{GVR: collectiondeclaration.GVR()})
+}
+
+func (r *collectionControlRegistry) reconcile(specs []collectionWatchSpec) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var declaration *collectionWatchSpec
+	targets := make([]collectionWatchSpec, 0, len(specs))
+	for _, spec := range specs {
+		if sharesDeclarationControlWatch(spec.Key) {
+			copySpec := copyCollectionWatchSpec(spec)
+			declaration = &copySpec
+		} else {
+			targets = append(targets, spec)
+		}
+	}
+	if err := r.target.reconcile(targets); err != nil {
+		return err
+	}
+	r.declaration = declaration
+	return nil
+}
+
+func (r *collectionControlRegistry) snapshot() []collectionWatchSnapshot {
+	return r.readSnapshot(true)
+}
+
+func (r *collectionControlRegistry) healthSnapshot() []collectionWatchSnapshot {
+	return r.readSnapshot(false)
+}
+
+func (r *collectionControlRegistry) readSnapshot(objects bool) []collectionWatchSnapshot {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	result := r.target.readSnapshot(objects)
+	if r.declaration == nil {
+		return result
+	}
+	for _, observation := range r.controls.readSnapshot(objects) {
+		if observation.Spec.Key != r.declaration.Key {
+			continue
+		}
+		observation.Spec = copyCollectionWatchSpec(*r.declaration)
+		transformedObjects := make([]resourceObject, 0, len(observation.Objects))
+		for _, object := range observation.Objects {
+			decoded, err := decodeObject(object)
+			if err == nil {
+				var transformed interface{}
+				transformed, err = r.transform(decoded.DeepCopy())
+				if cached, ok := toResourceObject(transformed); err == nil && ok {
+					transformedObjects = append(transformedObjects, cached)
+					continue
+				}
+			}
+			observation.State, observation.Reason = collectiondeclaration.Pending, "ObservationFailed"
+			observation.Message = "A declaration object could not be read from the cache."
+		}
+		observation.Objects = transformedObjects
+		result = append(result, observation)
+	}
+	return result
+}

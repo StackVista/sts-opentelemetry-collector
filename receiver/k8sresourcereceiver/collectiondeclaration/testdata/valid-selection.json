@@ -1,0 +1,16 @@
+{
+  "apiVersion": "observability.suse.com/v1alpha1",
+  "kind": "CollectionDeclaration",
+  "metadata": {"name": "monitored-widgets"},
+  "spec": {
+    "resources": [
+      {
+        "group": "collection-test.example.com",
+        "resource": "widgets",
+        "namespaces": ["team-a"],
+        "labelSelector": {"matchLabels": {"monitoring": "enabled"}},
+        "fieldSelector": "metadata.namespace=team-a,metadata.name!=paused"
+      }
+    ]
+  }
+}
