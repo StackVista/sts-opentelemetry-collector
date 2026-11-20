@@ -6,7 +6,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter v0.0.0
 	github.com/stretchr/testify v1.12.1
-	github.com/testcontainers/testcontainers-go/modules/kafka v0.44.0
+	github.com/testcontainers/testcontainers-go/modules/kafka v0.45.0
 	github.com/twmb/franz-go v1.22.3
 	github.com/twmb/franz-go/pkg/kadm v1.20.0
 	go.opentelemetry.io/collector/component/componenttest v0.164.0
@@ -26,7 +26,6 @@ require (
 	github.com/containerd/log v0.2.0 // indirect
 	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/cpuguy83/dockercfg v0.3.2 // indirect
-	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/go-connections v0.8.2 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
@@ -37,7 +36,6 @@ require (
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
-	github.com/golang/snappy v1.0.0 // indirect
 	github.com/hashicorp/go-version v1.9.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
@@ -47,6 +45,7 @@ require (
 	github.com/knadh/koanf/v2 v2.4.1 // indirect
 	github.com/lufia/plan9stats v0.0.0-20260330125221-c963978e514e // indirect
 	github.com/magiconair/properties v1.18.12 // indirect
+	github.com/mdelapenya/tlscert v0.2.0 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
@@ -104,6 +103,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d // indirect
 	google.golang.org/grpc v1.84.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
+	software.sslmate.com/src/go-pkcs12 v0.7.3 // indirect
 )
 
 replace github.com/stackvista/sts-opentelemetry-collector/exporter/stskafkaexporter => ..
