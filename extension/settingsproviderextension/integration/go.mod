@@ -81,7 +81,7 @@ require (
 	golang.org/x/crypto v0.59.0 // indirect
 	golang.org/x/mod v0.43.0 // indirect
 	golang.org/x/sys v0.50.0 // indirect
-	software.sslmate.com/src/go-pkcs12 v0.7.3 // indirect
+	software.sslmate.com/src/go-pkcs12 v0.7.4 // indirect
 )
 
 replace github.com/stackvista/sts-opentelemetry-collector/extension/settingsproviderextension => ..
