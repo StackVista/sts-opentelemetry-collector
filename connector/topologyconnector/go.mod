@@ -29,7 +29,7 @@ require (
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/cenkalti/backoff/v7 v7.0.3 // indirect
-	github.com/dprotaso/go-yit v0.0.0-20220510233725-9ba8df137936 // indirect
+	github.com/dprotaso/go-yit v0.0.0-20250804204205-7afe4252a1dd // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/getkin/kin-openapi v0.152.0 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
@@ -55,12 +55,12 @@ require (
 	github.com/onsi/gomega v1.44.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.33 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
-	github.com/speakeasy-api/jsonpath v0.6.3 // indirect
-	github.com/speakeasy-api/openapi v1.24.0 // indirect
+	github.com/speakeasy-api/jsonpath v0.7.0 // indirect
+	github.com/speakeasy-api/openapi v1.25.7-0.20261016002657-683982d5baaf // indirect
+	github.com/speakeasy-api/yaml-jsonpath v0.0.0-20261016002013-07e5f48e6d17 // indirect
 	github.com/twmb/franz-go v1.22.3 // indirect
 	github.com/twmb/franz-go/pkg/kadm v1.20.0 // indirect
 	github.com/twmb/franz-go/pkg/kmsg v1.15.1 // indirect
-	github.com/vmware-labs/yaml-jsonpath v0.3.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/collector/client v1.70.0 // indirect
 	go.opentelemetry.io/collector/config/configoptional v1.70.0 // indirect
@@ -88,7 +88,7 @@ require (
 	golang.org/x/mod v0.43.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
-	golang.org/x/text v0.42.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 	golang.org/x/tools v0.52.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260803160001-6ac0973c030d // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d // indirect
