@@ -53,7 +53,6 @@
       "matchPackageNames": [
         "!github.com/stackvista/sts-opentelemetry-collector/**"
       ],
-      "enabled": true,
       "groupName": "{{depName}}",
       "groupSlug": "{{depNameSanitized}}",
       "separateMinorPatch": false
