@@ -464,7 +464,7 @@ jobs:
 
   collection-declaration:
     name: CollectionDeclaration Go/K3s integration (${{ matrix.kubernetes }})
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions:
       contents: read
