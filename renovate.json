@@ -42,23 +42,6 @@
   ],
   "packageRules": [
     {
-      "description": "Update each external Go module across its module and builder references",
-      "matchManagers": [
-        "gomod",
-        "custom.regex"
-      ],
-      "matchDatasources": [
-        "go"
-      ],
-      "matchPackageNames": [
-        "!github.com/stackvista/sts-opentelemetry-collector/**"
-      ],
-      "enabled": true,
-      "groupName": "{{depName}}",
-      "groupSlug": "{{depNameSanitized}}",
-      "separateMinorPatch": false
-    },
-    {
       "matchManagers": [
         "custom.regex"
       ],
