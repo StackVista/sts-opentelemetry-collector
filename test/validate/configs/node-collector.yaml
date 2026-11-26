@@ -20,6 +20,11 @@ receivers:
       - volume
     extra_metadata_labels:
       - container.id
+    metrics:
+      k8s.container.memory_limit_utilization:
+        enabled: true
+      k8s.container.ephemeral_storage.usage:
+        enabled: true
 
   prometheus/cadvisor:
     config:
@@ -32,6 +37,7 @@ receivers:
             credentials: validate-token
           tls_config:
             insecure_skip_verify: true
+            ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
           static_configs:
             - targets:
                 - 127.0.0.1:10250
@@ -47,6 +53,7 @@ receivers:
             credentials: validate-token
           tls_config:
             insecure_skip_verify: true
+            ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
           static_configs:
             - targets:
                 - 127.0.0.1:10250
@@ -104,6 +111,26 @@ receivers:
               target_label: __name__
               replacement: kubernetes.kubelet.runtime.operations.duration.count
             - source_labels: [__name__]
+              regex: kubelet_network_plugin_operations_duration_seconds_sum
+              target_label: __name__
+              replacement: kubernetes.kubelet.network_plugin.latency.sum
+            - source_labels: [__name__]
+              regex: kubelet_pod_start_duration_seconds_sum
+              target_label: __name__
+              replacement: kubernetes.kubelet.pod.start.duration.sum
+            - source_labels: [__name__]
+              regex: kubelet_pod_worker_duration_seconds_sum
+              target_label: __name__
+              replacement: kubernetes.kubelet.pod.worker.duration.sum
+            - source_labels: [__name__]
+              regex: kubelet_pod_worker_start_duration_seconds_sum
+              target_label: __name__
+              replacement: kubernetes.kubelet.pod.worker.start.duration.sum
+            - source_labels: [__name__]
+              regex: kubelet_runtime_operations_duration_seconds_sum
+              target_label: __name__
+              replacement: kubernetes.kubelet.runtime.operations.duration.sum
+            - source_labels: [__name__]
               regex: kubelet_volume_stats_available_bytes
               target_label: __name__
               replacement: kubernetes.kubelet.volume.stats.available_bytes
@@ -139,6 +166,7 @@ receivers:
             credentials: validate-token
           tls_config:
             insecure_skip_verify: true
+            ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
           static_configs:
             - targets:
                 - 127.0.0.1:10250
@@ -199,6 +227,7 @@ receivers:
             credentials: validate-token
           tls_config:
             insecure_skip_verify: true
+            ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
           static_configs:
             - targets:
                 - 127.0.0.1:10250
@@ -349,6 +378,11 @@ processors:
           - set(metric.name, "kubernetes.network.tx_dropped") where metric.name == "container_network_transmit_packets_dropped_total"
           - set(metric.name, "container.memory.oom_events") where metric.name == "container_oom_events_total"
           - scale_metric(1000000000.0) where metric.name == "container.cpu.usage"
+          - scale_metric(1000000.0) where metric.name == "kubernetes.kubelet.network_plugin.latency.sum"
+          - scale_metric(1000000.0) where metric.name == "kubernetes.kubelet.pod.start.duration.sum"
+          - scale_metric(1000000.0) where metric.name == "kubernetes.kubelet.pod.worker.duration.sum"
+          - scale_metric(1000000.0) where metric.name == "kubernetes.kubelet.pod.worker.start.duration.sum"
+          - scale_metric(1000000.0) where metric.name == "kubernetes.kubelet.runtime.operations.duration.sum"
           - copy_metric(name="kubernetes.cpu.usage.total") where metric.name == "container.cpu.usage"
           - copy_metric(name="kubernetes.memory.usage") where metric.name == "container.memory.usage"
           - copy_metric(name="kubernetes.memory.working_set") where metric.name == "container.memory.working_set"
@@ -376,6 +410,10 @@ processors:
         - container_network_receive_packets_dropped_total
         - container_network_transmit_packets_dropped_total
         - container_oom_events_total
+        - kubernetes.kubelet.evictions
+        - kubernetes.kubelet.pleg.discard_events
+        - kubernetes.kubelet.cpu_manager.pinning_errors_total
+        - kubernetes.kubelet.cpu_manager.pinning_requests_total
       match_type: strict
     initial_value: auto
   deltatorate:
@@ -461,11 +499,11 @@ processors:
         statements:
           - convert_sum_to_gauge() where metric.type == "Sum"
           - set(metric.unit, "")
-  filter/drop-native:
+  filter/contract:
     error_mode: ignore
     metrics:
       metric:
-        - 'IsMatch(metric.name, "^(container_|kubelet_|prober_|kubernetes_|k8s[.])")'
+        - 'not IsMatch(metric.name, "^(container[.]cpu[.]usage|container[.]io[.]read|container[.]io[.]read[.]operations|container[.]io[.]write|container[.]io[.]write[.]operations|container[.]memory[.]cache|container[.]memory[.]limit|container[.]memory[.]oom_events|container[.]memory[.]rss|container[.]memory[.]swap|container[.]memory[.]usage|container[.]memory[.]working_set|kubernetes[.]cpu[.]cfs[.]periods|kubernetes[.]cpu[.]cfs[.]throttled[.]periods|kubernetes[.]cpu[.]cfs[.]throttled[.]seconds|kubernetes[.]cpu[.]load[.]10s[.]avg|kubernetes[.]cpu[.]system[.]total|kubernetes[.]cpu[.]usage[.]total|kubernetes[.]cpu[.]user[.]total|kubernetes[.]ephemeral_storage[.]usage|kubernetes[.]filesystem[.]usage|kubernetes[.]io[.]read_bytes|kubernetes[.]io[.]write_bytes|kubernetes[.]kubelet[.]container[.]log_filesystem[.]used_bytes|kubernetes[.]kubelet[.]cpu_manager[.]pinning_errors_total|kubernetes[.]kubelet[.]cpu_manager[.]pinning_requests_total|kubernetes[.]kubelet[.]evictions|kubernetes[.]kubelet[.]network_plugin[.]latency[.]count|kubernetes[.]kubelet[.]network_plugin[.]latency[.]sum|kubernetes[.]kubelet[.]pleg[.]discard_events|kubernetes[.]kubelet[.]pleg[.]last_seen|kubernetes[.]kubelet[.]pod[.]start[.]duration[.]count|kubernetes[.]kubelet[.]pod[.]start[.]duration[.]sum|kubernetes[.]kubelet[.]pod[.]worker[.]duration[.]count|kubernetes[.]kubelet[.]pod[.]worker[.]duration[.]sum|kubernetes[.]kubelet[.]pod[.]worker[.]start[.]duration[.]count|kubernetes[.]kubelet[.]pod[.]worker[.]start[.]duration[.]sum|kubernetes[.]kubelet[.]runtime[.]errors|kubernetes[.]kubelet[.]runtime[.]operations|kubernetes[.]kubelet[.]runtime[.]operations[.]duration[.]count|kubernetes[.]kubelet[.]runtime[.]operations[.]duration[.]sum|kubernetes[.]kubelet[.]volume[.]stats[.]available_bytes|kubernetes[.]kubelet[.]volume[.]stats[.]capacity_bytes|kubernetes[.]kubelet[.]volume[.]stats[.]inodes|kubernetes[.]kubelet[.]volume[.]stats[.]inodes_free|kubernetes[.]kubelet[.]volume[.]stats[.]inodes_used|kubernetes[.]kubelet[.]volume[.]stats[.]used_bytes|kubernetes[.]liveness_probe[.]failure[.]total|kubernetes[.]liveness_probe[.]success[.]total|kubernetes[.]liveness_probe[.]unknown[.]total|kubernetes[.]memory[.]cache|kubernetes[.]memory[.]limits|kubernetes[.]memory[.]rss|kubernetes[.]memory[.]sw_limit|kubernetes[.]memory[.]swap|kubernetes[.]memory[.]usage|kubernetes[.]memory[.]usage_pct|kubernetes[.]memory[.]working_set|kubernetes[.]network[.]rx_dropped|kubernetes[.]network[.]tx_dropped|kubernetes[.]readiness_probe[.]failure[.]total|kubernetes[.]readiness_probe[.]success[.]total|kubernetes[.]readiness_probe[.]unknown[.]total|kubernetes[.]slis[.]kubernetes_healthcheck|kubernetes[.]slis[.]kubernetes_healthchecks_total|kubernetes[.]startup_probe[.]failure[.]total|kubernetes[.]startup_probe[.]success[.]total|kubernetes[.]startup_probe[.]unknown[.]total)$")'
   transform/self-metrics:
     error_mode: ignore
     metric_statements:
@@ -497,7 +535,7 @@ extensions:
   health_check:
     endpoint: 0.0.0.0:13133
   pprof:
-    endpoint: 0.0.0.0:1777
+    endpoint: 127.0.0.1:1777
   bearertokenauth:
     scheme: SUSEObservability
     token: validate-token
@@ -517,7 +555,7 @@ service:
   pipelines:
     metrics/native:
       receivers: [kubeletstats, prometheus/cadvisor, prometheus/kubelet, prometheus/probes, prometheus/slis, hostmetrics]
-      processors: [memory_limiter, k8sattributes, transform/node-identity, cumulativetodelta, deltatorate, transform/resource-compat, transform/agent-v2-labels, filter/drop-native, batch]
+      processors: [memory_limiter, k8sattributes, transform/node-identity, cumulativetodelta, deltatorate, transform/resource-compat, transform/agent-v2-labels, filter/contract, batch]
       exporters: [otlphttp/suse-observability]
     metrics/self:
       receivers: [prometheus/self]
