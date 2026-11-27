@@ -42,6 +42,10 @@ receivers:
             - targets:
                 - 127.0.0.1:10250
           metric_relabel_configs:
+            # Only the cAdvisor series the chart maps; dropping id below would otherwise merge unmapped node-level series.
+            - source_labels: [__name__]
+              regex: container_cpu_cfs_periods_total|container_cpu_cfs_throttled_periods_total|container_cpu_cfs_throttled_seconds_total|container_cpu_load_average_10s|container_cpu_system_seconds_total|container_cpu_user_seconds_total|container_fs_reads_bytes_total|container_fs_reads_total|container_fs_writes_bytes_total|container_fs_writes_total|container_memory_cache|container_memory_swap|container_network_receive_bytes_total|container_network_receive_errors_total|container_network_receive_packets_dropped_total|container_network_receive_packets_total|container_network_transmit_bytes_total|container_network_transmit_errors_total|container_network_transmit_packets_dropped_total|container_network_transmit_packets_total|container_oom_events_total|container_spec_memory_limit_bytes|container_spec_memory_swap_limit_bytes
+              action: keep
             # Agent V2 reports container series per container and network series per pod; drop the pause and cgroup aggregates.
             - source_labels: [__name__, container]
               regex: container_(cpu|memory|spec|fs|oom)_.+;(POD)?
@@ -548,7 +552,7 @@ processors:
           - set(name, "")
       - context: metric
         statements:
-          - convert_sum_to_gauge() where metric.type == "Sum"
+          - convert_sum_to_gauge() where metric.type == METRIC_DATA_TYPE_SUM
           - set(metric.unit, "")
   filter/contract:
     error_mode: ignore
