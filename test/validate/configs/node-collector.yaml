@@ -55,14 +55,6 @@ receivers:
               action: drop
             - regex: id|image|name
               action: labeldrop
-            - source_labels: [device]
-              regex: /dev/(.+)
-              target_label: device
-              replacement: $$1
-            - source_labels: [device]
-              regex: (.+)
-              target_label: device_name
-              replacement: $$1
 
   prometheus/kubelet:
     config:
@@ -441,6 +433,11 @@ processors:
           - copy_metric(name="container.memory.limit") where metric.name == "kubernetes.memory.limits"
           - copy_metric(name="container.io.read") where metric.name == "kubernetes.io.read_bytes"
           - copy_metric(name="container.io.write") where metric.name == "kubernetes.io.write_bytes"
+      # Agent V2's container check names block devices by kernel name; its kubelet check keeps cAdvisor's /dev path.
+      - context: datapoint
+        statements:
+          - replace_pattern(attributes["device"], "^/dev/", "") where IsMatch(metric.name, "^container[.]io[.]")
+          - set(attributes["device_name"], attributes["device"]) where IsMatch(metric.name, "^container[.]io[.]") and attributes["device"] != nil
   cumulativetodelta:
     include:
       metrics:
